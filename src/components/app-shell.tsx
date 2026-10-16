@@ -17,7 +17,7 @@ import { ReportButton } from "@/components/report-button";
 import type { ChatWidgetProps } from "@/lib/chat";
 import { MemberAvatar } from "@/components/member-avatar";
 
-export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, coachFirst = null, choices = 1, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; children: ReactNode }) {
+export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, loyaltyOn = false, coachFirst = null, choices = 1, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; children: ReactNode }) {
   const tier = tierProgress(points);
   const team = Boolean(viewer.team);
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
@@ -35,7 +35,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
           </div>
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} />
         </div>
         <div className="mt-3 space-y-3 border-t px-5 pt-3">
           {coachFirst && !viewer.switchedInto && !team ? <ReportButton coachFirst={coachFirst} /> : null}

@@ -109,6 +109,10 @@ describe("team access: what is open is named, and everything else is closed by d
     expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/bot-features", "/clients", "/content", "/conversations", "/goals", "/images", "/library", "/tasks", "/today", "/webinars", "/whats-new", "https://academy.evolveomega.com", "https://app.evolveomega.com", "https://communityloyalty.io"]);
     // Without the team flag the same member sees Body, Rewards and the rest.
     expect(NAV.filter((n) => navVisible(n, { ...m, team: false })).some((n) => n.href === "/body")).toBe(true);
+    // The Loyalty leaderboard item (H-140): only where the workspace has a board, and then for a team member too.
+    expect(NAV.filter((n) => navVisible(n, m)).some((n) => n.href === "/loyalty")).toBe(false);
+    expect(NAV.filter((n) => navVisible(n, { ...m, loyaltyOn: true })).some((n) => n.href === "/loyalty")).toBe(true);
+    expect(NAV.filter((n) => navVisible(n, { ...m, team: false, loyaltyOn: true })).some((n) => n.href === "/loyalty")).toBe(true);
   });
 });
 

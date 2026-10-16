@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
+import { hasLeaderboardFeed } from "@/lib/leaderboard";
 import { NAV_GROUPS, navVisible, withPlatformLinks } from "@/components/nav-groups";
 import { ComingSoonItem } from "@/components/coming-soon-item";
 import { DueBadge } from "@/components/nav";
@@ -24,11 +25,12 @@ export default async function MorePage() {
   const unseen = unseenCount(WHATS_NEW, v.role, v.membership.whatsNewSeen);
   const recordingsEnabled = v.role === "client" && (await hasVisibleRecordings(v.workspace.id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role }));
   const coachFirst = v.role === "client" && !v.switchedInto ? await coachFirstName(v.workspace.id) : null;
+  const loyaltyOn = await hasLeaderboardFeed(v.membership.id);
   return (
     <>
       <PageHeader title="Everything" />
       <div className="space-y-4">
-        {NAV_GROUPS.map((g) => ({ ...g, items: withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn })) }))
+        {NAV_GROUPS.map((g) => ({ ...g, items: withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length)
           .map((g) => (

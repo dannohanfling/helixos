@@ -187,6 +187,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </li>
             ))}
           </ul>
+          {leaderboard ? (
+            <p className="mt-2 text-sm" data-testid="switched-loyalty-link">
+              Loyalty leaderboard:{" "}
+              <Link href="/loyalty" className="underline">
+                Open →
+              </Link>
+            </p>
+          ) : null}
         </Card>
         <div className="grid gap-4 lg:grid-cols-2">
           {goalCard}

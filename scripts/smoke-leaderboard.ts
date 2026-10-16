@@ -91,6 +91,7 @@ async function main() {
     must(!check.includes("@") && !check.includes("Santos"), "the check note carries field names, never a value");
     const coachHtml = await page.content();
     must(!coachHtml.includes(ELOYALTY_KEY) && coachHtml.includes(`…${ELOYALTY_KEY.slice(-4)}`), "the coach sees the key's last four only");
+    must((await row().locator('[data-testid="leaderboard-open-page"]').count()) === 1, "the coach row links to the client's leaderboard page");
     const feedRow = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, m.id) }))!;
     must(feedRow.keyEncrypted?.startsWith("enc:v1:") && !feedRow.keyEncrypted.includes(ELOYALTY_KEY), "the key is sealed at rest");
     must(feedRow.lastCheckOk === true && feedRow.host === HOST, "a passed check keeps the host that answered");
@@ -160,6 +161,8 @@ async function main() {
     await page.goto(`${base}/settings#leaderboard`);
     await page.locator('[data-testid="leaderboard-state"]').waitFor();
     must((await page.locator('[data-testid="leaderboard-state"]').innerText()).includes("connected") && (await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith(`/lb/${feedRow.slug}`), "Settings says connected, with the page link");
+    // The menu item (H-140): with a board set up, "Loyalty leaderboard" is in the owner's side menu (the Settings card links there too, so two links at least).
+    must((await page.locator('a[href="/loyalty"]').count()) >= 2 && (await page.getByText("Loyalty leaderboard", { exact: true }).count()) >= 1, "the Loyalty leaderboard menu item shows for the owner");
     must(noKey(await page.content()), "the key is nowhere on the client's Settings");
     await page.click('[data-testid="leaderboard-edit-link"]');
     await page.waitForURL(/\/loyalty/);
@@ -197,22 +200,24 @@ async function main() {
     await submit(page, '[data-testid="lb-slug-save"]');
     must((await page.locator('[data-testid="lb-slug-error"]').innerText()).includes("taken"), "another board's address is refused");
     // The field's own pattern keeps the browser from sending capitals; the server's lowercasing is the unit test's to prove.
-    await fillExact(page, '[data-testid="lb-slug"]', "kindness-walk");
+    // A slug of this run alone (H-171): on a database that ran the walk before the seed cleared aliases, "kindness-walk" stays taken by an orphaned alias row.
+    const newSlug = `kindness-walk-${Date.now().toString(36)}`;
+    await fillExact(page, '[data-testid="lb-slug"]', newSlug);
     await submit(page, '[data-testid="lb-slug-save"]');
     await page.locator('[data-testid="lb-slug-changed"]').waitFor();
     const moved = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feedRow.id) }))!;
-    must(moved.slug === "kindness-walk" && JSON.stringify(moved.hidden) === JSON.stringify(["cus_001"]), `the address changed and the hide list carried over: ${moved.slug}`);
-    must((await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith("/lb/kindness-walk"), "the page link shows the new address");
+    must(moved.slug === newSlug && JSON.stringify(moved.hidden) === JSON.stringify(["cus_001"]), `the address changed and the hide list carried over: ${moved.slug}`);
+    must((await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith(`/lb/${newSlug}`), "the page link shows the new address");
     res = await fetch(`${base}/lb/${oldSlug}`, { redirect: "manual" });
-    must(res.status === 308 && (res.headers.get("location") ?? "").endsWith("/lb/kindness-walk"), `the old address is a permanent redirect: ${res.status} ${res.headers.get("location")}`);
-    must((await fetch(`${base}/lb/kindness-walk`)).status === 200, "the new address serves the page");
+    must(res.status === 308 && (res.headers.get("location") ?? "").endsWith(`/lb/${newSlug}`), `the old address is a permanent redirect: ${res.status} ${res.headers.get("location")}`);
+    must((await fetch(`${base}/lb/${newSlug}`)).status === 200, "the new address serves the page");
     const feedOld = await (await fetch(url)).text();
-    const feedNew = await (await fetch(`${base}/api/public/leaderboard/kindness-walk`)).text();
+    const feedNew = await (await fetch(`${base}/api/public/leaderboard/${newSlug}`)).text();
     must(feedOld === feedNew && (JSON.parse(feedNew) as { members: unknown[] }).members.length > 0, "the feed answers the same on both addresses");
     await db.delete(schema.leaderboardFeeds).where(eq(schema.leaderboardFeeds.id, otherFeed.id));
     console.log("✓ the page address: reserved and taken refused, a new one live at once, the old one a 308 and its feed still answering");
 
-    pageUrl = `${base}/lb/kindness-walk`;
+    pageUrl = `${base}/lb/${newSlug}`;
 
     // The points check (H-102): the coach uploads the CL export once; the table shows First L. and numbers only; the hide list is counted apart; nothing was written.
     await logout(page);
