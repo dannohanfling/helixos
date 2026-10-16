@@ -119,6 +119,11 @@ async function main() {
   if (!(await funnel.evaluate((el) => (el as HTMLDetailsElement).open))) await funnel.locator(":scope > summary").click();
   await page.fill('input[name="webinarRegs"]', "7");
   await submit(page, 'button:has-text("Close the day")');
+  // The evening close (H-327) plays after the first close of the day: jump to its end and close it.
+  if (await page.locator('[data-testid="evening-close"]').waitFor({ timeout: 2500 }).then(() => true, () => false)) {
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+  }
   await expectText(page, "Day closed", "close with optional groups");
 
   // Numbers targets: after the close above, so the month has funnel numbers on any date (the seed's logs can all sit in last month on the 1st).

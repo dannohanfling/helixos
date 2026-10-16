@@ -169,6 +169,11 @@ async function main() {
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button:has-text("Close the day")').first().click()]);
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(600);
+    // The evening close (H-327) plays after the first close of the day: jump to its end and close it.
+    if (await page.locator('[data-testid="evening-close"]').waitFor({ timeout: 2500 }).then(() => true, () => false)) {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+    }
     const value = await db.query.kpiValues.findFirst({ where: and(eq(schema.kpiValues.kpiId, asked.id), eq(schema.kpiValues.date, closeDate)) });
     if (value?.value !== 2) throw new Error(`the close writes the KPI's value for the day: ${JSON.stringify(value)}`);
     await page.goto(`${base}/goals/${primary.id}`);

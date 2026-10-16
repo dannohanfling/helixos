@@ -200,6 +200,11 @@ async function main() {
     await page.fill('input[name="win"]', "Closed the day");
     await submit(page, 'button:has-text("Close the day")');
     await expectText(page, "Day closed", "first close");
+    // The evening close (H-327) plays after the first close of the day: jump to its end and close it.
+    if (await page.locator('[data-testid="evening-close"]').waitFor({ timeout: 2500 }).then(() => true, () => false)) {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+    }
     const before = await points(page);
     const goalBefore = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, maya.id), eq(schema.goals.primary, true)) });
     await page.locator('summary:has-text("Edit today")').click();
@@ -264,6 +269,11 @@ async function main() {
       if (await page.locator('[data-testid="streak-broken"]').count()) throw new Error("yesterday isn't a missed day while it can still be closed");
       await page.fill('input[name="win"]', "Closed after midnight");
       await submit(page, '[data-testid="close-form"] button[type="submit"]');
+      // The evening close (H-327) plays after the first close of the day: jump to its end and close it.
+      if (await page.locator('[data-testid="evening-close"]').waitFor({ timeout: 2500 }).then(() => true, () => false)) {
+        await page.keyboard.press("Escape");
+        await page.keyboard.press("Escape");
+      }
       const yLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, y)) });
       const tLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mt)) });
       if (!yLog?.eveningDoneAt || yLog.win !== "Closed after midnight") throw new Error("the close at 01:00 lands on yesterday");

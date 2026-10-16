@@ -10,6 +10,7 @@ import type { DailyLog } from "@/db/schema";
 import { completeCurriculumDayAction } from "@/lib/actions/pathway";
 import { setContentStatusAction } from "@/lib/actions/content";
 import { todayData } from "@/lib/queries/today";
+import { cookies } from "next/headers";
 import { closeSceneShell } from "@/lib/scenes";
 import { EveningClose } from "@/components/evening-close";
 import { setupFor } from "@/lib/setup-card";
@@ -156,7 +157,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const tools = !v.switchedInto && !v.team ? connectProgress({ ghl: Boolean(toolsConn && toolsConn.accounts.length && !toolsConn.lastError && toolsConn.ghlUserId?.trim()), cl: clTokenSet(v.membership) }) : null;
   // One line per render, times only (H-164 §9): how long the viewer, the reads and the page's shaping took.
   // The evening close (H-327 §2): the scene for the close just written, once per close, from the ledger row's own credit.
-  const closeScene = await closeSceneShell(v, { day: cl.date, closed: eveningDone, streak: d.streak, ladder: d.streakLadder, days: v.membership.workDays });
+  const sealedHere = (await cookies()).get("hx-sealed")?.value === cl.date;
+  const closeScene = await closeSceneShell(v, { day: cl.date, closed: eveningDone && sealedHere, streak: d.streak, ladder: d.streakLadder, days: v.membership.workDays });
   const tRest = tick();
   logTiming("today", [{ name: "viewer", from: t0, to: tViewer }, { name: "reads", from: tViewer, to: tData }, { name: "rest", from: tData, to: tRest }], { switched: v.switchedInto ? 1 : 0 });
   return (
