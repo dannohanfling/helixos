@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CHAIRS, CHAIR_KEYS, MODES, MODE_INFO, clipFor, takesWords, turnMs, type Mode, type SceneLook } from "@/lib/engine/board-view";
-import { PLAQUE_BOX, headlineOf, headlineSize } from "@/lib/engine/headline";
+import { PLAQUE_BOX, headlineOf, headlineSize, plaqueTextOf } from "@/lib/engine/headline";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
@@ -138,8 +138,9 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
       </a>
     </div>
   );
-  // The table's words: "…" while the Board is asked, the speaker's line, or the recommendation. On a phone they sit under the room.
-  const words = (ids: boolean) =>
+  // The table's words: "…" while the Board is asked, the speaker's line, or the recommendation. On a phone they sit under the room,
+  // where the recommendation is the whole text with its first step (H-433, `full`), not the table's short line.
+  const words = (ids: boolean, full = false) =>
     phase === "asking" ? (
       <div className="br-says-line br-quiet" data-testid={ids ? "board-waiting" : undefined}>
         …
@@ -166,7 +167,7 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
     ) : answer && phase === "done" ? (
       <div className="br-says br-rise" data-testid={ids ? "board-table-recommends" : undefined}>
         <div className="br-says-label">THE BOARD RECOMMENDS</div>
-        {plaque(headlineOf(answer.recommendation, answer.headline), "br-turn-recommendation", ids)}
+        {plaque(full ? plaqueTextOf(answer.recommendation, answer.steps[0]?.do) : headlineOf(answer.recommendation, answer.headline), "br-turn-recommendation", ids)}
       </div>
     ) : (
       <div className="br-says-line br-quiet">{answer ? "" : "Say what you're deciding, and the Board will sit."}</div>
@@ -293,8 +294,20 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
           </div>
         </div>
         <div className="br-caption" data-testid="board-caption">
-          {words(false)}
+          {words(false, true)}
         </div>
+        {/* H-433: the whole recommendation and its first step, readable, directly under the scene on a desktop (on a phone the
+            caption above already carries it). The plaque on the table keeps its short line: wider would cover the side statues,
+            which are the seat buttons. */}
+        {answer && phase === "done" ? (
+          <div className="br-rec-card" data-testid="board-recommends-card">
+            <div className="br-says-label">THE BOARD RECOMMENDS</div>
+            <p className="br-rec-text">{plaqueTextOf(answer.recommendation, answer.steps[0]?.do)}</p>
+            <a className="br-more" href="#br-turn-recommendation" data-testid="board-recommends-card-full">
+              Read the full answer ↓
+            </a>
+          </div>
+        ) : null}
         <div role="group" aria-label="Time of day" className="br-looks">
           {LOOKS.map((k) => (
             <button key={k} type="button" className="br-look" aria-pressed={look === k} onClick={() => chooseLook(k)} data-testid={`board-look-${k}`}>

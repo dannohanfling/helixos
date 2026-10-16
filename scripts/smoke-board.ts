@@ -804,6 +804,69 @@ async function main() {
       const rec = await measure();
       must(rec.line === wantRec && rec.overflow <= 1 && !rec.seats.some((s) => overlaps(rec.plaque!, s)) && rec.href === "#br-turn-recommendation", `the recommendation's plaque: ${JSON.stringify({ line: rec.line, href: rec.href, overflow: rec.overflow })}`);
       must((await page.locator("#br-turn-recommendation .br-line").innerText()) === longRec, "the full recommendation is in the discussion below");
+      // H-433: the plaque's type at least 17px with a 12px eyebrow on a desktop, and the card under the scene with the whole
+      // recommendation and the first step (up to 400 characters, cut at a sentence end) at 17px on a desktop, 16px on a phone,
+      // with no overflow and no sideways scroll; on the phone the card replaces the caption's copy.
+      {
+        const { plaqueTextOf, PLAQUE_CHARS } = await import("@/lib/engine/headline");
+        const firstStep = thread.find((r) => r.id === decisionId)!.answer!.steps[0]?.do ?? null;
+        const wantCard = plaqueTextOf(longRec, firstStep);
+        must(wantCard.length <= PLAQUE_CHARS && wantCard.startsWith(longRec) && /[.!?]$/.test(wantCard), `the card's text: ${wantCard}`);
+        type CardMeasure = { shown: boolean; text: string; size: number; lead: number; overflowX: number; overflowY: number; plaqueSize: number; labelSize: number; captionShown: boolean; pageOverflow: number; captionText: string; captionSize: number; captionOverflow: number };
+        const card = (): Promise<CardMeasure> =>
+          page.evaluate(() => {
+            const c = document.querySelector('[data-testid="board-recommends-card"]') as HTMLElement | null;
+            const t = c?.querySelector(".br-rec-text") as HTMLElement | null;
+            const cs = t ? getComputedStyle(t) : null;
+            const pl = document.querySelector('.br-table [data-testid="board-plaque"] .br-says-line') as HTMLElement | null;
+            const lb = document.querySelector(".br-table .br-says-label") as HTMLElement | null;
+            return {
+              shown: Boolean(c?.offsetParent),
+              text: t?.textContent ?? "",
+              size: cs ? parseFloat(cs.fontSize) : 0,
+              lead: cs ? parseFloat(cs.lineHeight) / parseFloat(cs.fontSize) : 0,
+              overflowX: c ? c.scrollWidth - c.clientWidth : 0,
+              overflowY: c ? c.scrollHeight - c.clientHeight : 0,
+              plaqueSize: pl ? parseFloat(getComputedStyle(pl).fontSize) : 0,
+              labelSize: lb ? parseFloat(getComputedStyle(lb).fontSize) : 0,
+              captionShown: Boolean((document.querySelector('[data-testid="board-caption"]') as HTMLElement | null)?.offsetParent),
+              pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
+              captionText: document.querySelector('[data-testid="board-caption"] .br-plaque .br-says-line')?.textContent ?? "",
+              captionSize: (() => {
+                const el = document.querySelector('[data-testid="board-caption"] .br-plaque .br-says-line') as HTMLElement | null;
+                return el ? parseFloat(getComputedStyle(el).fontSize) : 0;
+              })(),
+              captionOverflow: (() => {
+                const el = document.querySelector('[data-testid="board-caption"] .br-plaque') as HTMLElement | null;
+                return el ? el.scrollHeight - el.clientHeight : 0;
+              })(),
+            };
+          });
+        for (const width of [1280, 1568, 390]) {
+          await page.setViewportSize({ width, height: 950 });
+          await page.goto(`${base}/my-board/${decisionId}`);
+          await page.locator(width >= 760 ? '[data-testid="board-recommends-card"]' : '[data-testid="board-caption"] .br-plaque').waitFor({ timeout: 15000 });
+          await page.waitForTimeout(400);
+          const c = await card();
+          must(c.pageOverflow <= 0, `${width}px: no sideways scroll (${c.pageOverflow})`);
+          if (width >= 760) {
+            must(c.shown && c.text === wantCard, `${width}px: the card under the scene shows the whole recommendation and the first step: ${c.text}`);
+            must(c.size >= 17 - 0.01 && c.lead >= 1.45, `${width}px: the card's type is ${c.size}px at ${c.lead} leading`);
+            must(c.overflowX <= 1 && c.overflowY <= 1, `${width}px: the card fits with no overflow (${c.overflowX}, ${c.overflowY})`);
+            must(c.plaqueSize >= 17 - 0.01 && c.labelSize >= 12 - 0.01, `${width}px: the table's plaque reads at ${c.plaqueSize}px with a ${c.labelSize}px eyebrow`);
+            const m = await measure();
+            must(m.overflow <= 1 && !m.seats.some((s) => overlaps(m.plaque!, s)), `${width}px: the bigger plaque still fits and touches no statue`);
+          } else {
+            // On a phone the caption under the picture is the card: the whole text at 16px or more, no second card.
+            must(c.captionShown && !c.shown && c.captionText === wantCard, `${width}px: the caption carries the whole recommendation and the first step: ${c.captionText}`);
+            must(c.captionSize >= 16 - 0.01 && c.captionOverflow <= 1, `${width}px: the caption's type is ${c.captionSize}px with ${c.captionOverflow}px overflow`);
+          }
+        }
+        await page.setViewportSize({ width: 1280, height: 950 });
+        await page.goto(`${base}/my-board/${decisionId}`);
+        await page.locator('[data-testid="board-table-recommends"]').waitFor({ timeout: 15000 });
+        console.log("✓ H-433: the plaque's type at 17px with a 12px eyebrow; the whole recommendation and the first step in the card under the scene at 1280, 1568 and 390, no overflow, no sideways scroll");
+      }
       await page.locator('[data-testid="board-replay"]').click();
       await page.locator('[data-testid="board-speaking"]').waitFor({ timeout: 5000 });
       must((await measure()).line === firstLine, "Play again shows the same line");

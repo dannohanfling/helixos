@@ -82,22 +82,25 @@
    by the room (cqw) so it fits the same at every width; the longest lines step the type down, never below the floor. */
 .br-table { position: absolute; left: 38.6%; top: 34%; width: 23%; height: 18.5%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; pointer-events: none; }
 .br-says { display: flex; flex-direction: column; align-items: center; gap: 0.5cqw; width: 100%; height: 100%; }
-.br-says-label { font-size: clamp(8px, 0.72cqw, 10px); letter-spacing: 3px; color: var(--br-gold-text); white-space: nowrap; }
+/* H-433: the eyebrow at least 12px, the plaque's line at least 17px on a desktop at 1.5 leading, clamped to the lines the band holds. */
+.br-says-label { font-size: clamp(12px, 0.8cqw, 13px); letter-spacing: 3px; color: var(--br-gold-text); white-space: nowrap; }
 .br-says-line { font-family: "Cormorant Garamond", Georgia, serif; font-size: clamp(13px, 1.45cqw, 19px); font-weight: 500; line-height: 1.28; color: var(--br-cream); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
 .br-plaque { width: 100%; min-height: 0; flex: 1 1 auto; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4cqw; padding: 0.7cqw 1.1cqw; border-radius: 1.2cqw; background: rgba(0, 0, 0, 0.7); border: 1px solid var(--br-rim); box-shadow: 0 0.4cqw 1.6cqw rgba(0, 0, 0, 0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); overflow: hidden; }
-.br-plaque .br-says-line { font-size: clamp(10px, 1.22cqw, 19px); line-height: 1.18; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
-.br-plaque.br-size-m .br-says-line { font-size: clamp(10px, 1.06cqw, 17px); }
-.br-plaque.br-size-s .br-says-line { font-size: clamp(10px, 0.92cqw, 15px); }
-.br-more { font-size: clamp(8px, 0.68cqw, 10px); letter-spacing: 1.5px; text-transform: uppercase; color: var(--br-gold-text); text-decoration: none; pointer-events: auto; white-space: nowrap; }
+.br-plaque .br-says-line { font-size: clamp(17px, 1.3cqw, 21px); line-height: 1.5; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.br-plaque.br-size-m .br-says-line, .br-plaque.br-size-s .br-says-line { font-size: clamp(17px, 1.3cqw, 21px); }
+.br-more { font-size: clamp(11px, 0.75cqw, 12px); letter-spacing: 1.5px; text-transform: uppercase; color: var(--br-gold-text); text-decoration: none; pointer-events: auto; white-space: nowrap; }
 .br-more:hover, .br-more:focus-visible { text-decoration: underline; outline: none; }
-/* A narrower room (a tablet): the floors of the type would otherwise outgrow the plaque, so the padding and leading tighten. */
-@container (max-width: 900px) {
+/* A narrower room (a tablet): the type keeps its floors (H-433), so the band holds two lines instead of three and the padding tightens. */
+@container (max-width: 1100px) {
   .br-plaque { padding: 0.45cqw 0.9cqw; gap: 0.3cqw; }
-  .br-plaque .br-says-line { line-height: 1.1; }
-  .br-plaque.br-size-m .br-says-line, .br-plaque.br-size-s .br-says-line { font-size: clamp(9px, 1cqw, 15px); }
-  .br-more { font-size: 8px; letter-spacing: 0.8px; }
+  .br-plaque .br-says-line { -webkit-line-clamp: 2; line-height: 1.4; }
   .br-says { gap: 0.3cqw; }
 }
+/* H-433: the card under the scene with the whole recommendation and the first step, the same dark glass, 17px at 1.5. */
+.br-rec-card { margin-top: 14px; padding: 18px 22px; border-radius: 16px; background: rgba(0, 0, 0, 0.7); border: 1px solid var(--br-rim); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.br-rec-card .br-says-label { font-size: 12px; white-space: normal; }
+.br-rec-text { margin: 0; max-width: 72ch; font-family: "Cormorant Garamond", Georgia, serif; font-size: 17px; font-weight: 500; line-height: 1.5; color: var(--br-cream); overflow-wrap: anywhere; }
+.br-rec-card .br-more { font-size: 11px; }
 .br-caption { display: none; }
 .br-looks { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .br-look { min-height: 44px; padding: 0 18px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; background: none; color: var(--br-gold-text); border: 1px solid var(--br-rim); }
@@ -148,9 +151,12 @@
   .br-caption { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 4px 8px; }
   .br-caption .br-says { gap: 8px; height: auto; }
   .br-caption .br-plaque { padding: 10px 14px; border-radius: 14px; gap: 6px; flex: none; }
-  .br-caption .br-says-line { font-size: 17px; line-height: 1.3; }
-  .br-caption .br-says-label { font-size: 10px; }
-  .br-caption .br-more { font-size: 10px; }
+  .br-caption .br-says-line { font-size: 17px; line-height: 1.4; }
+  .br-caption .br-says-label { font-size: 12px; }
+  .br-caption .br-more { font-size: 11px; }
+  /* H-433 on a phone: the caption under the picture is the card, with the whole recommendation, unclamped, at 17px; no second card. */
+  .br-caption .br-plaque .br-says-line { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  .br-rec-card { display: none; }
   .br-plate { padding: 3px 8px 4px; }
   .br-rl, .br-eq { display: none; }
 }

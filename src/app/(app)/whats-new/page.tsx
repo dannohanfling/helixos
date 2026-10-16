@@ -1,5 +1,5 @@
 import { requireViewer } from "@/lib/auth";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, PageHeader, Tabs } from "@/components/ui";
 import { WHATS_NEW } from "@/content/whats-new";
 import { byWeek, unseenCount, visibleEntries } from "@/lib/engine/whats-new";
 import { formatDate } from "@/lib/dates";
@@ -20,6 +20,8 @@ export default async function WhatsNewPage() {
   return (
     <>
       <PageHeader title="What's new" subtitle={`You're on ${APP_VERSION}.`} />
+      {/* On the horizon (H-385): the second tab, what is coming and a say in it. */}
+      <Tabs items={[{ key: "shipped", label: "Shipped", href: "/whats-new" }, { key: "horizon", label: "On the horizon", href: "/whats-new/horizon" }]} current="shipped" />
       <WhatsNewSeen unseen={unseen} />
       <div className="space-y-5">
         {byWeek(entries).map((w) => (

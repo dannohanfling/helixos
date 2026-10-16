@@ -1,0 +1,38 @@
+/* On the horizon (H-385): the member's board. Colours come from the app's tokens, so night and day both read. */
+.hz { --hz-gold: var(--accent); }
+.hz-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.hz-chip { min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.hz-chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.hz-tabs { display: flex; gap: 4px; margin-bottom: 12px; padding: 4px; border-radius: 12px; background: var(--surface-2); overflow-x: auto; }
+.hz-tab { flex: 1 0 auto; min-height: 44px; padding: 0 10px; border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.hz-tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.hz-tab-n { font-size: 11px; color: var(--ink-3); }
+.hz-lists { display: grid; gap: 16px; }
+.hz-list { display: none; }
+.hz-list[data-active="true"] { display: block; }
+.hz-list-head { margin-bottom: 8px; }
+.hz-list-name { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+.hz-list-sub { font-size: 12px; color: var(--ink-3); }
+.hz-ember { width: 8px; height: 8px; border-radius: 999px; background: #e0742a; box-shadow: 0 0 0 0 rgb(224 116 42 / 0.6); animation: hz-ember 2.4s ease-out infinite; }
+@keyframes hz-ember { 0% { box-shadow: 0 0 0 0 rgb(224 116 42 / 0.6); } 70% { box-shadow: 0 0 0 8px rgb(224 116 42 / 0); } 100% { box-shadow: 0 0 0 0 rgb(224 116 42 / 0); } }
+.hz-cards { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.hz-card { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 14px; min-width: 0; }
+.hz-card-hl { outline: 2px solid var(--hz-gold); outline-offset: 2px; }
+.hz-card-top { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.hz-area { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.hz-asked { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); }
+.hz-title { font-size: 15px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.hz-line { margin-top: 4px; font-size: 13px; color: var(--ink-2); line-height: 1.4; overflow-wrap: anywhere; }
+.hz-want { margin-top: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); font-size: 13px; font-weight: 600; color: var(--ink); }
+.hz-want-on { background: var(--hz-gold); border-color: var(--hz-gold); color: #1a1407; }
+.hz-want:disabled { opacity: 0.7; }
+.hz-empty { font-size: 13px; color: var(--ink-3); padding: 8px 0; }
+.hz-error { margin-top: 6px; font-size: 12px; color: var(--danger, #b00020); }
+@media (min-width: 1024px) {
+  .hz-tabs { display: none; }
+  .hz-lists { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; }
+  .hz-list { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hz-ember { animation: none; box-shadow: 0 0 0 3px rgb(224 116 42 / 0.25); }
+}
