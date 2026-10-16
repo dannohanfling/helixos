@@ -487,3 +487,69 @@ export function buildPlan(src: ImportSource, rules: SkipRules, existing: Set<str
 export function planSummary(plan: ImportPlan): { area: string; create: number; update: number }[] {
   return AREAS.map((a) => ({ area: a, create: plan.lines.filter((l) => l.area === a && l.action === "create").length, update: plan.lines.filter((l) => l.area === a && l.action === "update").length })).filter((x) => x.create + x.update);
 }
+
+/* ───────────────────────── Finding the template's tables (H-297) ───────────────────────── */
+
+/** A table of the base as the metadata API lists it: its id, its name, and its fields when the reader asked for them. */
+export type BaseTable = { id: string; name: string; fields?: { name: string }[] };
+/** A table's name as the page shows it: no leading emoji, single spaces. */
+export const tableLabel = (name: string): string => name.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim();
+/**
+ * One of the template's tables: the names it goes by in a client's base (as keys, so emoji, case and spacing never matter), and
+ * the fields that identify it when the name doesn't (the first is the name field; at least two must be there). Nothing a base
+ * calls something else is refused outright: the coach picks it on the dry run.
+ */
+export type TemplateTable = { key: string; label: string; names: string[]; shape: string[] };
+export const TEMPLATE_TABLES: TemplateTable[] = [
+  { key: "vision", label: "Vision", names: ["vision", "business vision", "my vision", "visionos", "vision os", "our vision", "brand vision"], shape: ["type", "purpose", "tagline", "mission statement", "vision statement", "brand promise", "founders story", "value type", "principle type", "belief type"] },
+  { key: "offersos", label: "OffersOS", names: ["offersos", "offers os", "offers", "offer", "my offers", "offer ladder", "offerings"], shape: ["name", "big promise", "headline", "pif price", "pif", "pathway (true north)", "value ladder tier", "transformation arc", "guarantee", "deliverables", "core components"] },
+  { key: "methodologies", label: "Methodologies", names: ["methodologies", "methodology", "frameworks", "framework", "my frameworks", "methods", "my methodologies"], shape: ["methodology", "core insight", "application", "memorable phrase", "spine element", "delivery format", "architecture domain", "maturity level"] },
+  { key: "buyer readiness", label: "Buyer Readiness", names: ["buyer readiness", "buyer journey", "buyers journey", "buyer's journey", "journey", "readiness", "buyer readiness journey", "customer journey"], shape: ["stage", "outcome", "strategic message", "readiness need"] },
+  { key: "tasksos", label: "TasksOS", names: ["tasksos", "tasks os", "tasks", "task", "my tasks", "to do", "to-do", "todo", "action steps", "actions"], shape: ["tasks", "urgency", "tasks type", "due date", "complete date", "responsible", "initiatives", "goals"] },
+  { key: "groups", label: "Groups", names: ["groups", "group", "communities", "community", "my groups", "facebook groups", "groupsos", "groups os"], shape: ["group name", "link", "engagement", "freedom", "buy-in", "quality"] },
+  { key: "lead magnet", label: "Lead Magnet", names: ["lead magnet", "lead magnets", "magnets", "magnet", "lead magnet os", "lead magnetos", "lead magnets os", "freebies", "freebie"], shape: ["lead magnet name", "asset link", "merged with", "notes"] },
+];
+/** The one table read from the older (fallback) base. */
+export const V1_TEMPLATE_TABLES: TemplateTable[] = [{ key: "value ladder buyer readiness", label: "Value Ladder Buyer Readiness", names: ["value ladder buyer readiness", "value ladder", "buyer readiness", "value ladder readiness"], shape: ["value ladder stage"] }];
+export const templateTable = (key: string): TemplateTable | undefined => [...TEMPLATE_TABLES, ...V1_TEMPLATE_TABLES].find((t) => t.key === key);
+
+export type TableMatch = { id: string; name: string; how: "name" | "shape" | "picked" };
+/** How many of a template table's identifying fields a base table carries, counting only when its name field is among them. */
+function shapeScore(t: TemplateTable, x: BaseTable): number {
+  const keys = new Set((x.fields ?? []).map((f) => fieldKey(f.name)));
+  if (!keys.has(t.shape[0])) return 0;
+  return t.shape.filter((k) => keys.has(k)).length;
+}
+/**
+ * Which of the base's tables is each template table (H-297): the coach's pick first, then the name (any of its variants, emoji,
+ * case and spacing ignored), then the shape (its name field and at least one more of its fields; the best fit wins, a table
+ * already taken by name is never taken by shape). Null when nothing fits: the dry run then offers the coach a pick.
+ */
+export function matchTables(templates: TemplateTable[], tables: BaseTable[], picks: Record<string, string> = {}): Record<string, TableMatch | null> {
+  const out: Record<string, TableMatch | null> = {};
+  const taken = new Set<string>();
+  const found = (x: BaseTable, how: TableMatch["how"]): TableMatch => {
+    taken.add(x.id);
+    return { id: x.id, name: tableLabel(x.name), how };
+  };
+  for (const t of templates) {
+    const p = picks[t.key] ? tables.find((x) => x.id === picks[t.key]) : undefined;
+    if (p) out[t.key] = found(p, "picked");
+  }
+  for (const t of templates) {
+    if (out[t.key]) continue;
+    const x = tables.find((x) => !taken.has(x.id) && t.names.includes(tableKey(x.name)));
+    if (x) out[t.key] = found(x, "name");
+  }
+  for (const t of templates) {
+    if (out[t.key]) continue;
+    let best: { x: BaseTable; n: number } | null = null;
+    for (const x of tables) {
+      if (taken.has(x.id)) continue;
+      const n = shapeScore(t, x);
+      if (n >= 2 && (!best || n > best.n)) best = { x, n };
+    }
+    out[t.key] = best ? found(best.x, "shape") : null;
+  }
+  return out;
+}
