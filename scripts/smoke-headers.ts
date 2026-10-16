@@ -118,7 +118,12 @@ async function main() {
   await page.goto(`${base}/login`, { waitUntil: "networkidle" });
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
-  await visit(PAGES_CLIENT);
+  // 16 Oct: the client's pages alone climbed to 12.8 GB on one server and the kernel killed it mid-walk (the H-312 gate, twice
+  // the 4 GB they took on 12 Oct); so they are walked from two fresh servers, the session cookie carrying over the restart.
+  const half = Math.ceil(PAGES_CLIENT.length / 2);
+  await visit(PAGES_CLIENT.slice(0, half));
+  await fresh();
+  await visit(PAGES_CLIENT.slice(half));
   // Coming soon (rev 816): one greyed item on More (the Colosseum, My Helix and the Aqueduct went live), none a link, each disabled for screen readers and at least 44px tall;
   // a tap shows the subtitle and goes nowhere.
   {
