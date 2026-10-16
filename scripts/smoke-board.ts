@@ -730,6 +730,85 @@ async function main() {
     must(!(await lastUser()).includes("HumanOS"), "a decision that doesn't touch energy, health or time: no HumanOS");
     console.log("✓ HumanOS: nothing with the Board's switch off; with it on, Body's own AI switch still decides; read only for an energy, health or time decision");
 
+    // H-306: the plaque. One short line on the table for each turn and the recommendation (the AI's headline, or the first
+    // sentence of an older answer), inside the oval and clear of every statue at 1440 and 1024, the caption on a phone; the full
+    // text in the discussion below, one tap away; Play again shows the same lines.
+    {
+      const { headlineOf, HEADLINE_WORDS } = await import("@/lib/engine/headline");
+      // The page plays the thread's latest answer, so the fixture goes on the decision and every follow-up of it.
+      const { or } = await import("drizzle-orm");
+      const thread = await db.query.boardDecisions.findMany({ where: or(eq(schema.boardDecisions.id, decisionId), eq(schema.boardDecisions.parentId, decisionId)) });
+      const savedAnswers = thread.map((r) => [r.id, r.answer] as const);
+      const longTurn = Array.from({ length: 15 }, (_, i) => `Sentence ${i + 1} of a long turn says the same thing in slightly different words so the plaque has to choose.`).join(" ");
+      const longRec = "Put this week into DMs to the people already on your list, nothing else. Then, once ten have answered, write the one-line offer and book the three calls, in that order, and tell your coach what you learned on the way.";
+      // An answer saved before H-306: no headline anywhere, the first turn fifteen sentences long.
+      for (const r of thread) {
+        if (!r.answer) continue;
+        const old = { ...r.answer, headline: undefined, recommendation: longRec, advisors: r.answer.advisors.map((a, i) => ({ seat: a.seat, text: i === 0 ? longTurn : a.text, question: a.question ?? null })) };
+        await db.update(schema.boardDecisions).set({ answer: old as typeof r.answer }).where(eq(schema.boardDecisions.id, r.id));
+      }
+      const wantTurn = headlineOf(longTurn);
+      const wantRec = headlineOf(longRec);
+      must(wantTurn.split(/\s+/).length <= HEADLINE_WORDS && wantRec === "Put this week into DMs to the people already on your list, nothing else.", `the engine's lines: ${wantTurn} | ${wantRec}`);
+      type Box = { l: number; t: number; r: number; b: number };
+      type Measure = { plaque: Box | null; plaqueShown: boolean; room: Box; seats: Box[]; overflow: number; line: string; href: string; caption: string; captionShown: boolean };
+      // No named inner function inside evaluate (tsx's keepNames would inject __name): the rects are read inline.
+      const measure = (): Promise<Measure> =>
+        page.evaluate(() => {
+          const plaque = document.querySelector('.br-table [data-testid="board-plaque"]') as HTMLElement | null;
+          const room = document.querySelector(".br-room")!.getBoundingClientRect();
+          const pq = plaque?.getBoundingClientRect();
+          return {
+            plaque: pq ? { l: pq.left, t: pq.top, r: pq.right, b: pq.bottom } : null,
+            plaqueShown: Boolean(plaque?.offsetParent),
+            room: { l: room.left, t: room.top, r: room.right, b: room.bottom },
+            seats: [...document.querySelectorAll(".br-seat")].map((el) => {
+              const q = el.getBoundingClientRect();
+              return { l: q.left, t: q.top, r: q.right, b: q.bottom };
+            }),
+            overflow: plaque ? plaque.scrollHeight - plaque.clientHeight : 0,
+            line: document.querySelector('.br-table [data-testid="board-plaque"] .br-says-line')?.textContent ?? "",
+            href: (document.querySelector('.br-table [data-testid="board-read-full"]') as HTMLAnchorElement | null)?.getAttribute("href") ?? "",
+            caption: document.querySelector('[data-testid="board-caption"] .br-says-line')?.textContent ?? "",
+            captionShown: Boolean((document.querySelector('[data-testid="board-caption"] .br-plaque') as HTMLElement | null)?.offsetParent),
+          };
+        });
+      const overlaps = (a: Box, b: Box) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
+      let firstLine = "";
+      for (const width of [1440, 1024, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base}/my-board/${decisionId}?play=1`);
+        // Under 760px the table is hidden and the caption under the room carries the plaque.
+        await page.locator(width >= 760 ? '[data-testid="board-speaking"]' : '[data-testid="board-caption"] .br-plaque').waitFor({ timeout: 15000 });
+        await page.waitForTimeout(600);
+        const m = await measure();
+        if (width >= 760) {
+          must(m.plaque && m.plaque.l >= m.room.l && m.plaque.r <= m.room.r && m.plaque.t >= m.room.t && m.plaque.b <= m.room.b, `${width}px: the plaque sits inside the room`);
+          must(m.seats.length === 5 && !m.seats.some((s) => overlaps(m.plaque!, s)), `${width}px: the plaque touches no statue: ${JSON.stringify({ plaque: m.plaque, seats: m.seats })}`);
+          must(m.overflow <= 1, `${width}px: the plaque's text fits with no overflow (${m.overflow}px over)`);
+          must(m.line === wantTurn, `${width}px: the table shows the turn's one line: ${m.line}`);
+          must(m.href === "#br-turn-danno", `${width}px: Read the full answer points at the turn: ${m.href}`);
+        } else {
+          must(!m.plaqueShown && m.captionShown && m.caption === wantTurn, `${width}px: on a phone the table is hidden and the caption carries the plaque's line: ${m.caption}`);
+        }
+        must((await page.locator("#br-turn-danno .br-line").innerText()) === longTurn, `${width}px: the full text is in the discussion below`);
+        if (!firstLine) firstLine = width >= 760 ? m.line : m.caption;
+      }
+      await page.setViewportSize({ width: 1280, height: 950 });
+      // Opened without play, the room stands at the end: the recommendation's plaque at once, no playback to wait through.
+      await page.goto(`${base}/my-board/${decisionId}`);
+      await page.locator('[data-testid="board-table-recommends"]').waitFor({ timeout: 15000 });
+      await page.waitForTimeout(600);
+      const rec = await measure();
+      must(rec.line === wantRec && rec.overflow <= 1 && !rec.seats.some((s) => overlaps(rec.plaque!, s)) && rec.href === "#br-turn-recommendation", `the recommendation's plaque: ${JSON.stringify({ line: rec.line, href: rec.href, overflow: rec.overflow })}`);
+      must((await page.locator("#br-turn-recommendation .br-line").innerText()) === longRec, "the full recommendation is in the discussion below");
+      await page.locator('[data-testid="board-replay"]').click();
+      await page.locator('[data-testid="board-speaking"]').waitFor({ timeout: 5000 });
+      must((await measure()).line === firstLine, "Play again shows the same line");
+      for (const [id, answer] of savedAnswers) await db.update(schema.boardDecisions).set({ answer }).where(eq(schema.boardDecisions.id, id));
+      console.log("✓ H-306: the plaque's one line inside the oval, clear of every statue at 1440 and 1024, the caption at 390; the full turn and recommendation below, Read the full answer on each; Play again the same");
+    }
+
     // Choose your council, the library (rev 756): Coach → Board seats, the switch, a council in the room at three widths, the
     // answer sitting with exactly those five, no "I am {Name}", and each answer keeping the version it used.
     {

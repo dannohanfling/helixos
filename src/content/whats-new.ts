@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 209,
+    date: "2026-10-16",
+    title: "Council Chamber: a plaque on the table with one short line; the full answer below",
+    lines: [
+      "Each turn and the recommendation now show one short line on a dark plaque on the table (the seat's point, at most 25 words), with the label above it, so the words never run over a statue or off the marble. The full text is where it was, in the discussion under the room; \"Read the full answer\" on the plaque takes you to that turn. On a phone the plaque's line sits under the room.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 208,
     date: "2026-10-16",
     title: "Coaches: Import from Airtable reads a base whose table names drifted",
