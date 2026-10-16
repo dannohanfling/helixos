@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { setOohListsAction, updateOohRequestAction } from "@/lib/actions/office-hours";
-import { OOH_OUTCOMES, OOH_OUTCOME_LABEL, byStamp } from "@/lib/engine/office-hours";
+import { OOH_OUTCOMES, OOH_OUTCOME_LABEL, attendeeWords, byStamp, oohAttendees, submittedByWords } from "@/lib/engine/office-hours";
 import { OohStamps as Stamps } from "@/components/ooh-stamps";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
@@ -20,8 +20,14 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
   const v = await requireCoach();
   const sp = await searchParams;
   const requests = await db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.workspaceId, v.workspace.id), orderBy: [desc(schema.officeHoursRequests.friday), schema.officeHoursRequests.createdAt] });
-  const users = requests.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(requests.map((r) => r.userId))]) }) : [];
+  // Names for the member, the team member who submitted (H-413) and everyone attending; the live teams say who has since left.
+  const ids = [...new Set(requests.flatMap((r) => [r.userId, r.submittedByUserId ?? "", ...oohAttendees(r)]).filter(Boolean))];
+  const [users, teams] = await Promise.all([
+    ids.length ? db.query.users.findMany({ where: inArray(schema.users.id, ids), columns: { id: true, name: true } }) : [],
+    db.query.teamMembers.findMany({ where: and(eq(schema.teamMembers.workspaceId, v.workspace.id), isNull(schema.teamMembers.removedAt)), columns: { userId: true, teamUserId: true } }),
+  ]);
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
+  const teamOfOwner = (ownerId: string) => new Set(teams.filter((t) => t.userId === ownerId).map((t) => t.teamUserId));
   const fridays = [...new Set(requests.map((r) => r.friday))];
   const upcoming = fridays.filter((f) => f >= v.today).sort();
   const past = fridays.filter((f) => f < v.today).sort().reverse();
@@ -90,6 +96,8 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
                       <Badge tone="neutral">{r.category}</Badge>
                     </div>
                     <Stamps createdAt={r.createdAt} editedAt={r.editedAt} tz={v.tz} today={v.today} />
+                    {submittedByWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId)) ? <p className="text-xs text-ink-3" data-testid="ooh-submitted-by">{submittedByWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId))}</p> : null}
+                    <p className="text-xs text-ink-3" data-testid="ooh-attending">{attendeeWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId))}</p>
                     <dl className="mt-1 space-y-1 text-ink-2">
                       <div>
                         <dt className="inline font-medium text-ink">The issue: </dt>

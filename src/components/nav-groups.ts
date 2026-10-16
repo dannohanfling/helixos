@@ -24,7 +24,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/library", label: "Library", icon: "🗂️", team: true, line: "posts and assets to reuse" },
       { href: "/conversations", label: "DMs", icon: "💬", team: true, line: "every conversation, logged" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
-      { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays" },
+      // Team access (H-413): a team member books office hours for the owner and says who's attending.
+      { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true },
     ],
   },
   {

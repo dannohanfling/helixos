@@ -77,3 +77,66 @@ export function stampLine(word: "Submitted" | "Edited", stored: string | null | 
 }
 /** The coach's list order inside each Friday: newest first unless asked for oldest. */
 export const byStamp = (order: "newest" | "oldest") => (a: { createdAt: string }, b: { createdAt: string }) => ((storedUtc(a.createdAt)?.getTime() ?? 0) - (storedUtc(b.createdAt)?.getTime() ?? 0)) * (order === "oldest" ? 1 : -1);
+
+/*
+ * Team access on Office Hours (H-413): a team member books for the owner, says who's attending, and sees only the requests
+ * they are part of. Pure; the server side is src/lib/office-hours-core.ts and the page.
+ */
+export type OohTeamRow = { userId: string; submittedByUserId: string | null; attendeeUserIds: string[] };
+/** Who is looking: the owner's user id, the person acting (the owner, or the team member), and whether they are on the team. */
+export type OohViewer = { ownerId: string; actorId: string; team: boolean };
+
+/** The attendees as stored read as the owner alone when nobody was picked (older requests, and the voice tool's). */
+export const oohAttendees = (r: Pick<OohTeamRow, "userId" | "attendeeUserIds">): string[] => (r.attendeeUserIds.length ? r.attendeeUserIds : [r.userId]);
+
+/** The owner sees every request on the account; a team member only the ones they submitted or are listed as attending. */
+export function oohVisibleTo(r: OohTeamRow, who: OohViewer): boolean {
+  if (!who.team) return true;
+  return r.submittedByUserId === who.actorId || oohAttendees(r).includes(who.actorId);
+}
+
+/** Who may change a request before its Friday: the owner, or the team member who submitted it. Attending alone does not. */
+export function oohCanEdit(r: OohTeamRow, who: OohViewer, today: string, friday: string): boolean {
+  if (!oohEditable(today, friday)) return false;
+  return !who.team || r.submittedByUserId === who.actorId;
+}
+
+/** The attendees a form may name: the owner and the account's live team, nothing else; repeats dropped; nobody picked means the owner. */
+export function readAttendees(picked: string[], allowed: string[], ownerId: string): string[] {
+  const ok = new Set(allowed.concat(ownerId));
+  const ids = [...new Set(picked.map((p) => p.trim()).filter((p) => p && ok.has(p)))];
+  return ids.length ? ids : [ownerId];
+}
+
+/** The "Others" line holds names only: no email address, no phone number, at most 200 characters. */
+export function readOthers(raw: string): { value: string | null } | { error: string; field: "attendeesOther" } {
+  const s = raw.replace(/\s+/g, " ").trim();
+  if (!s) return { value: null };
+  if (s.length > 200) return { error: "Keep the other names to 200 characters.", field: "attendeesOther" };
+  if (/@/.test(s) || /(?:\d[\s().-]*){7,}/.test(s)) return { error: "Names only here, no email addresses or phone numbers.", field: "attendeesOther" };
+  return { value: s };
+}
+
+/**
+ * "Attending: Maya, Sam Vale; others: Lee". A person no longer on the team keeps their name with "(former team member)";
+ * the owner is never former. `nameOf` resolves a user id; `onTeam` is the account's live team.
+ */
+export function attendeeWords(r: Pick<OohTeamRow, "userId" | "attendeeUserIds"> & { attendeesOther: string | null }, nameOf: (id: string) => string | undefined, onTeam: Set<string>): string {
+  const names = oohAttendees(r).map((id) => {
+    const name = nameOf(id) ?? "Someone";
+    return id === r.userId || onTeam.has(id) ? name : `${name} (former team member)`;
+  });
+  return `Attending: ${names.join(", ")}${r.attendeesOther ? `; others: ${r.attendeesOther}` : ""}`;
+}
+
+/** "Submitted by Sam Vale", or "Submitted by Sam Vale (former team member)" once they have left; nothing for the owner's own. */
+export function submittedByWords(r: Pick<OohTeamRow, "submittedByUserId">, nameOf: (id: string) => string | undefined, onTeam: Set<string>): string | null {
+  if (!r.submittedByUserId) return null;
+  const name = nameOf(r.submittedByUserId) ?? "A team member";
+  return `Submitted by ${onTeam.has(r.submittedByUserId) ? name : `${name} (former team member)`}`;
+}
+
+/** The owner's notice line (H-413): "Sam Vale booked office hours for you, Friday, October 23", shown until they open Office Hours. */
+export function oohNoticeWords(name: string, fridayLabel: string): string {
+  return `${name} booked office hours for you, ${fridayLabel}`;
+}

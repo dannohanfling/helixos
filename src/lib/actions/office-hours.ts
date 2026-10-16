@@ -8,6 +8,14 @@ import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { OOH_OUTCOMES, readList } from "@/lib/engine/office-hours";
 import { saveOohRequest } from "@/lib/office-hours-core";
+import { teamOf } from "@/lib/team";
+
+/** Opening Office Hours clears the owner's "booked for you" line (H-413). A team member or a switched coach never clears it. */
+export async function clearOohNoticeAction(): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "noop", team: "noop" });
+  if (v.switchedInto || v.team || !v.membership.oohNotice) return;
+  await db.update(schema.memberships).set({ oohNotice: null }).where(eq(schema.memberships.id, v.membership.id));
+}
 
 /**
  * A member's Open Office Hours request, new or edited (handoff rev 124). The two gates come first, as on the old form. The
@@ -15,10 +23,14 @@ import { saveOohRequest } from "@/lib/office-hours-core";
  * including its Friday; the coach's fields (who takes it, how it went, notes) are never the member's to write.
  */
 export async function saveOohRequestAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
+  // Team access (H-413): a team member books for the owner; the request is the owner's, with the team member as its submitter.
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write.", team: "allow" });
+  const team = await teamOf(v.membership.id);
   const saved = await saveOohRequest(
-    { workspaceId, userId, today: v.today, categories: v.workspace.oohCategories },
+    { workspaceId, userId, today: v.today, categories: v.workspace.oohCategories, actorId: v.team ? v.actor.id : null, attendeesAllowed: team.map((t) => t.member.teamUserId) },
     {
+      attendees: formData.getAll("attendees").map(String),
+      attendeesOther: str(formData, "attendeesOther"),
       friday: str(formData, "friday"),
       description: str(formData, "description"),
       triedSelf: str(formData, "triedSelf"),
@@ -33,6 +45,8 @@ export async function saveOohRequestAction(formData: FormData): Promise<void> {
   if (!saved.ok && "goBack" in saved) redirect(`/office-hours?back=1#request`);
   if (!saved.ok && saved.field === "edit") redirect(`/office-hours?error=${encodeURIComponent(saved.error)}#mine`);
   if (!saved.ok) redirect(`/office-hours?error=${encodeURIComponent(saved.error)}${saved.field ? `&field=${saved.field}` : ""}#request`);
+  // The owner's notice (H-413): a new request a team member booked for them, until they open Office Hours. Push comes later.
+  if (v.team && !saved.edited) await db.update(schema.memberships).set({ oohNotice: { teamUserId: v.actor.id, friday: saved.value.friday, requestId: saved.id, at: nowIso() } }).where(and(eq(schema.memberships.id, v.membership.id), eq(schema.memberships.workspaceId, workspaceId)));
   refresh();
   redirect(`/office-hours?saved=1#mine`);
 }
