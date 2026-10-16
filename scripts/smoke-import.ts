@@ -139,9 +139,16 @@ async function main() {
       const tablesShown = async () => Object.fromEntries(await page.locator('[data-testid="import-table-row"]').evaluateAll((els) => els.map((e) => [e.getAttribute("data-key") ?? "", `${e.getAttribute("data-how")}: ${e.querySelector('[data-testid="import-table-match"]')?.textContent?.trim() ?? ""}`])));
       const normal = await tablesShown();
       if (Object.values(normal).some((v) => !v.startsWith("name: "))) throw new Error(`the template base is found by name, table by table: ${JSON.stringify(normal)}`);
+      // A preview is already on screen, so a fresh dry run is seen by its key (the plan's hash in the hidden input) changing.
+      const dryAgain = async () => {
+        const before = await page.locator('input[name="key"]').inputValue();
+        await page.locator('[data-testid="import-dry"]').click();
+        await page.waitForFunction((b) => (document.querySelector('input[name="key"]') as HTMLInputElement | null)?.value !== b, before, { timeout: 60000 });
+        await page.waitForLoadState("networkidle");
+      };
       await page.locator('[data-testid="import-source-base"]').fill(RENAMED_BASE);
       await page.locator('[data-testid="import-source-token"]').fill(RENAMED_TOKEN);
-      await press("import-dry", "import-preview");
+      await dryAgain();
       if (await page.locator('[data-testid="import-error"]').count()) throw new Error(`a base with renamed tables is not refused: ${await page.locator('[data-testid="import-error"]').innerText()}`);
       const drifted = await tablesShown();
       const wantTables = { vision: "name: Business Vision, by its name", offersos: "name: Offer, by its name", methodologies: "shape: Playbooks, by its fields", "lead magnet": "none: not found" };
@@ -154,7 +161,7 @@ async function main() {
       if (!(await picker.count())) throw new Error("a table not found gets a pick of her tables");
       await picker.selectOption({ label: "Downloads" });
       if (await page.locator('[data-testid="import-approve"]').isEnabled()) throw new Error("a changed pick waits for a fresh dry run");
-      await press("import-dry", "import-preview");
+      await dryAgain();
       const picked = await tablesShown();
       if (picked["lead magnet"] !== "picked: Downloads, your pick") throw new Error(`the pick is used: ${picked["lead magnet"]}`);
       if (await page.locator('[data-testid="import-error"]').count()) throw new Error("the picked run goes through");
@@ -162,7 +169,7 @@ async function main() {
       await picker.selectOption({ value: "" });
       await page.locator('[data-testid="import-source-base"]').fill(V2_BASE);
       await page.locator('[data-testid="import-source-token"]').fill(SOURCE_TOKEN);
-      await press("import-dry", "import-preview");
+      await dryAgain();
       if (JSON.stringify(await summary()) !== JSON.stringify(want)) throw new Error("the template base reads as before once the form is back");
       console.log("✓ H-297: a base with drifted names is read (Business Vision and Offer by name, Playbooks by its fields), Downloads offered as a pick and then used; nothing written, no token echoed");
     }
