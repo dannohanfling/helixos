@@ -123,6 +123,8 @@ export const memberships = sqliteTable(
     streakRecountSeenAt: text("streak_recount_seen_at"),
     /** The Daily welcome (H-312): the member's own date it last showed, so it shows once a day on any device. */
     welcomeShownOn: text("welcome_shown_on"),
+    /** The first arrival (H-472): when this member saw the welcome ceremony on their first sign-in; the migration stamps everyone before it. */
+    firstArrivalSeenAt: text("first_arrival_seen_at"),
     /** The living scenes' sounds (H-400): the crowd, the applause and the fire loop; one switch, on by default, the member's own. */
     soundsOn: integer("sounds_on", { mode: "boolean" }).notNull().default(true),
     /** Team access (H-413): the newest Office Hours request a team member booked for this owner, until the owner opens Office Hours. */
@@ -4127,6 +4129,8 @@ export const teamMembers = sqliteTable(
     addedBy: text("added_by").notNull(),
     /** The last request they made in this HelixOS, to the hour. */
     lastActiveAt: text("last_active_at"),
+    /** The first arrival (H-472): when this team member saw the welcome ceremony on their first sign-in. */
+    firstArrivalSeenAt: text("first_arrival_seen_at"),
     removedAt: text("removed_at"),
     removedBy: text("removed_by"),
     createdAt: createdAt(),

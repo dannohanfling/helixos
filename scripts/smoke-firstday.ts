@@ -57,6 +57,12 @@ async function main() {
     await page.fill('input[name="password"]', "firstday-pass-123");
     await page.fill('input[name="confirm"]', "firstday-pass-123");
     await Promise.all([page.waitForURL(/\/today/, { timeout: 20000 }), page.click('button[type="submit"]')]);
+    // The first arrival (H-472) plays on a fresh account's first open: Skip, then the button, and the page is theirs.
+    if (await page.locator('[data-testid="first-arrival"]').waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+      await page.locator('[data-testid="arrival-skip"]').click();
+      await page.locator('[data-testid="arrival-cta"]').click();
+      await page.waitForURL(/\/today/);
+    }
 
     // Welcome card, not raw operational data; nothing behind the login is indexable
     await expectText(page, "Welcome to HelixOS", "welcome card");

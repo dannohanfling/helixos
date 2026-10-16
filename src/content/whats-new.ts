@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 222,
+    date: "2026-10-17",
+    title: "A welcome at the gate on your first sign-in",
+    lines: [
+      "New to HelixOS? Your first sign-in opens with a short Roman welcome: a triumphal arch at night carved with your name, the doors swinging open onto the Colosseum at golden hour, a gold laurel wreath growing around a coin with your initial, and your first three steps (lock in today, meet your Board, set your time zone). Take my seat lands you on Today. A team member joining someone's HelixOS gets their own version, with the owner's name and the doors open to them.",
+      "It plays once. Skip jumps to the end, Replay plays it again, and Settings → Your welcome plays it any time. With reduced motion on your device, the finished screen appears straight away.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 221,
     date: "2026-10-17",
     title: "Office Hours comes with Academy and up",

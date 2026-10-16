@@ -5,6 +5,8 @@ import { requireViewer } from "@/lib/auth";
 import { streakFor } from "@/lib/queries/daily";
 import { headers } from "next/headers";
 import { welcomeFor } from "@/lib/welcome";
+import { firstArrivalFor } from "@/lib/first-arrival";
+import { FirstArrival } from "@/components/first-arrival";
 import { DailyWelcome } from "@/components/daily-welcome";
 import { totalPoints } from "@/lib/queries/points";
 import { RankUp } from "@/components/rank-up";
@@ -65,7 +67,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // Office Hours by program level (H-470): the menu item is there only while the account has it.
   const oohOn = (await oohAccessFor(viewer)).open;
   // The Daily welcome (H-312): once a day on first open, over whatever page they opened; never on /coach, never switched in.
-  const welcome = await welcomeFor(viewer, (await headers()).get("x-helixos-path") ?? "");
+  const pathNow = (await headers()).get("x-helixos-path") ?? "";
+  // The first arrival (H-472): once per person on their first open, instead of the daily welcome, which starts the next day.
+  const arrival = await firstArrivalFor(viewer, pathNow);
+  const welcome = arrival ? null : await welcomeFor(viewer, pathNow);
   // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
   const horizon = await horizonShell(viewer);
   return (
@@ -74,6 +79,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         {children}
       </VoiceProvider>
       <SoundsConfig on={viewer.membership.soundsOn} />
+      {arrival ? <FirstArrival card={arrival} /> : null}
       {welcome ? <DailyWelcome card={welcome} /> : null}
       {horizon.notice && !welcome ? <HorizonNotice notice={horizon.notice} /> : null}
       {/* The rank-up ceremony (H-327 §1): once per rank, after the welcome when both are due; never on /coach, never switched in. */}

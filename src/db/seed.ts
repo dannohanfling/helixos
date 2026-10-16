@@ -1,6 +1,8 @@
-import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
+import { isNull, and, eq, inArray, ne, notInArray } from "drizzle-orm";
 /** The Daily welcome (H-312) is "seen" for the demo's members whatever the day, so no walk meets it by surprise; the welcome walk clears the mark for its own run. */
 const WELCOME_SEEN = "9999-12-31";
+/** The seed's members arrived before the first arrival ceremony (H-472): stamped seen, so the walks' logins never get it. */
+const ARRIVED = "2026-10-01T00:00:00.000Z";
 import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
@@ -195,14 +197,16 @@ export async function seedDemo(): Promise<void> {
   ]);
   await db.insert(schema.memberships).values([
     { id: newId(), workspaceId: wsId, userId: coachId, role: "coach", startedAt: addDays(today, -120) },
-    { id: newId(), workspaceId: wsId, userId: clientId, role: "client", programTier: "Elite", passEnabled: true, passName: "Torres Nutrition Community Pass", passHashtag: "#showedup", businessName: "Torres Nutrition Coaching", bigPromise: "I help busy moms drop 15 lbs in 90 days without giving up wine or weekends.", startedAt: addDays(today, -24), welcomeShownOn: WELCOME_SEEN },
-    { id: newId(), workspaceId: wsId, userId: client2Id, role: "client", businessName: "Lee Leadership Lab", startedAt: addDays(today, -50), welcomeShownOn: WELCOME_SEEN },
+    { id: newId(), workspaceId: wsId, userId: clientId, role: "client", programTier: "Elite", passEnabled: true, passName: "Torres Nutrition Community Pass", passHashtag: "#showedup", businessName: "Torres Nutrition Coaching", bigPromise: "I help busy moms drop 15 lbs in 90 days without giving up wine or weekends.", startedAt: addDays(today, -24), welcomeShownOn: WELCOME_SEEN, firstArrivalSeenAt: ARRIVED },
+    { id: newId(), workspaceId: wsId, userId: client2Id, role: "client", businessName: "Lee Leadership Lab", startedAt: addDays(today, -50), welcomeShownOn: WELCOME_SEEN, firstArrivalSeenAt: ARRIVED },
   ]);
 
   await seedClientActivity(wsId, clientId, today, { days: 24, missDays: [addDays(today, -9), addDays(today, -16)], intensity: 1 });
   await seedBusinessAssets(wsId, clientId, today);
   await seedClientActivity(wsId, client2Id, today, { days: 50, missDays: [today, addDays(today, -1), addDays(today, -2), addDays(today, -3), addDays(today, -4)], intensity: 0.6 });
   await seedDemoWave2(wsId, clientId, client2Id, today);
+  // Everyone the seed makes arrived before the first arrival ceremony (H-472): the walks' logins never get it; a fresh sign-up does.
+  await db.update(schema.memberships).set({ firstArrivalSeenAt: ARRIVED }).where(isNull(schema.memberships.firstArrivalSeenAt));
   console.log("Demo workspace ready. Coach: coach@demo.helixos.app / demo1234 · Client: client@demo.helixos.app / demo1234 · Client invite code: ACADEMY1");
 }
 
