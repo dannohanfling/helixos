@@ -64,11 +64,11 @@ describe("late close-outs: which day a close-out is for (rev 731)", () => {
     const closed = new Set(["2026-10-12", "2026-10-13"]);
     // Thursday 01:00, Wednesday still open: read as of Wednesday, the streak is alive.
     expect(streakDayOf(closed, "2026-10-15", 1)).toBe("2026-10-14");
-    expect(runningStreak(closed, streakDayOf(closed, "2026-10-15", 1))).toBe(2);
+    expect(runningStreak(closed, streakDayOf(closed, "2026-10-15", 1), "weekdays")).toBe(2);
     // Without the window, it would read as broken.
-    expect(runningStreak(closed, "2026-10-15")).toBe(0);
+    expect(runningStreak(closed, "2026-10-15", "weekdays")).toBe(0);
     closed.add("2026-10-14");
-    expect(runningStreak(closed, streakDayOf(closed, "2026-10-15", 1))).toBe(3);
+    expect(runningStreak(closed, streakDayOf(closed, "2026-10-15", 1), "weekdays")).toBe(3);
     // After 04:00 the day is read as itself again.
     expect(streakDayOf(new Set(["2026-10-12"]), "2026-10-14", 4)).toBe("2026-10-14");
   });

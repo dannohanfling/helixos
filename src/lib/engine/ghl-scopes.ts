@@ -16,9 +16,7 @@ export const GHL_SCOPES: GhlScope[] = [
   { scope: "socialplanner/oauth.write", noun: "Social Planner OAuth", why: "same as oauth.readonly", use: "next" },
   { scope: "socialplanner/post.readonly", noun: "Social Planner Posts", why: "GET /posts/{id} (Check status) and POST /posts/list (the coach's planner audit)", use: "now" },
   { scope: "socialplanner/post.write", noun: "Social Planner Posts", why: "POST /posts (schedule) and PUT /posts/{id} (edit in place)", use: "now" },
-  { scope: "socialplanner/statistics.readonly", noun: "Social Planner Statistics", why: "POST /social-media-posting/statistics: reactions, comments and shares read back into the app", use: "next" },
-  { scope: "socialplanner/comments.readonly", noun: "Social Planner Comments", why: "the comments endpoints: reading the author comments under a ladder post", use: "next" },
-  { scope: "socialplanner/comments.write", noun: "Social Planner Comments", why: "the comments endpoints: posting a rung as a comment", use: "next" },
+  { scope: "socialplanner/stat.readonly", noun: "Social Planner Stats", why: "POST /social-media-posting/statistics: reactions, comments and shares read back into the app. H-294: GoHighLevel's scope list spells it stat, not statistics; the two comments scopes the list once carried exist nowhere in GoHighLevel's scopes or its public spec, so they are gone", use: "next" },
   { scope: "medias.readonly", noun: "Medias", why: "GET /medias/files: the client's own Media Storage, where rendered graphics would live in their account", use: "next" },
   { scope: "medias.write", noun: "Medias", why: "POST /medias/upload-file: a post's picture (a made graphic, a photo from Images or Proof) into the client's own Media Storage, so the post carries it (rev 840)", use: "now" },
   { scope: "emails/builder.readonly", noun: "Email Builder", why: "GET /emails/builder: the client's email templates", use: "next" },
@@ -39,8 +37,11 @@ export const pickerName = (s: GhlScope): string => `${s.scope.endsWith(".readonl
 /** The text to paste into the picker's search box: the noun without its plural s ("Social Planner Post"), which finds the View and the Edit entry alike; a noun ending in "ies" stays whole. */
 export const searchText = (s: GhlScope): string => (/ies$/.test(s.noun) ? s.noun : s.noun.replace(/s$/, ""));
 
-/** The one line above the rows (H-233): GoHighLevel's picker takes permissions one at a time, so the whole list pasted at once finds nothing. */
-export const ONE_AT_A_TIME = "GoHighLevel adds permissions one at a time: copy one, paste it in the search box there, tick it, then the next.";
+/** The one line above the rows (H-233, H-294): GoHighLevel's picker takes permissions one at a time and its search matches the scope id, so the whole list pasted at once finds nothing. */
+export const ONE_AT_A_TIME = "GoHighLevel adds permissions one at a time: copy one id, paste it in the search box there, tick it, then the next.";
+
+/** "Copy the list" (H-294): every scope id, one a line, no trailing newline. */
+export const scopeList = (scopes: readonly GhlScope[]): string => scopes.map((s) => s.scope).join("\n");
 
 /** The scope names, in the order the client ticks them. */
 export const REQUIRED_SCOPES: readonly string[] = GHL_SCOPES.map((s) => s.scope);

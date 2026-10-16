@@ -22,7 +22,7 @@ const SAVED: Record<string, string> = {
  * My Board → Choose your council (rev 756 §2 and §3): Danno at the head, the member's four chairs, the library to choose from,
  * and their own custom seats (up to two, private to them; their coach sees them on the client page).
  */
-export default async function CouncilPage({ searchParams }: { searchParams: Promise<{ tab?: string; error?: string; saved?: string; edit?: string; make?: string; preset?: string }> }) {
+export default async function CouncilPage({ searchParams }: { searchParams: Promise<{ tab?: string; error?: string; saved?: string; edit?: string; make?: string; preset?: string; chair?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const { seats, chairs, live } = await pickerFor(v);
@@ -98,7 +98,7 @@ export default async function CouncilPage({ searchParams }: { searchParams: Prom
         </section>
       ) : null}
       {!canEdit ? <p className="mb-4 text-sm text-ink-3">{v.user.name.split(" ")[0]} chooses their own council. This is what it is now.</p> : null}
-      <CouncilPicker seats={seats} initial={chairs} live={live} canEdit={canEdit} action={saveCouncilAction} startTab={startTab} customPanel={customPanel} />
+      <CouncilPicker seats={seats} initial={chairs} live={live} canEdit={canEdit} action={saveCouncilAction} startTab={startTab} customPanel={customPanel} startChair={/^[0-3]$/.test(sp.chair ?? "") ? Number(sp.chair) : null} />
     </>
   );
 }

@@ -95,6 +95,13 @@ export function sceneLookFor(setting: "auto" | "day" | "night", hour: number): S
 export const CHAIR_CLIP_NAMES: Record<(typeof CHAIR_KEYS)[number], string> = { head: "danno", left: "alex", right: "jordan", "front-left": "riley", "front-right": "morgan" };
 export const CLIP_FILE = /^council-(day|night)-([a-z-]+)\.(mp4|webm)$/;
 export type CouncilClip = { name: string; mp4: string; webm: string | null };
+/**
+ * A replaced clip keeps its file name, so its URL carries a version (H-304): a browser that holds the old file under the same
+ * address would keep showing it. Bump the number here when a clip is remade; every other clip is version 1.
+ */
+export const CLIP_VERSIONS: Record<string, number> = { "council-night-riley": 2 };
+/** A clip's URL, with its version. */
+export const clipUrl = (file: string): string => `/board/${file}?v=${CLIP_VERSIONS[file.replace(/\.(mp4|webm)$/, "")] ?? 1}`;
 /** The clip for one chair in one look, from the files present (names as in public/board); null without an MP4. */
 export function clipFor(files: readonly string[], look: SceneLook, chair: (typeof CHAIR_KEYS)[number] | null): CouncilClip | null {
   if (!chair) return null;
@@ -102,5 +109,5 @@ export function clipFor(files: readonly string[], look: SceneLook, chair: (typeo
   const mp4 = `council-${look}-${name}.mp4`;
   const webm = `council-${look}-${name}.webm`;
   if (!files.includes(mp4)) return null;
-  return { name, mp4: `/board/${mp4}`, webm: files.includes(webm) ? `/board/${webm}` : null };
+  return { name, mp4: clipUrl(mp4), webm: files.includes(webm) ? clipUrl(webm) : null };
 }

@@ -7,11 +7,12 @@ import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
 import { roadLine, simplePath } from "@/lib/engine/pathway";
-import { closeTargetFor, closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
+import { closeTargetFor, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
 import { ensurePrimaryGoal } from "./plan";
 import { closeKpisOf, primaryGoalBar } from "./kpi";
 import { nowFor, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
-import { brokenStreak, lateOpen, streakDayOf } from "@/lib/engine/streak";
+import { bonusFor, brokenStreak, type DayBonus } from "@/lib/engine/streak";
+import { settleStreak } from "@/lib/streak";
 import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
 import { contextFor, knownFor } from "@/lib/queries/webinar";
 import { deckSlides } from "@/lib/engine/deck";
@@ -67,11 +68,15 @@ export async function todayData(v: Viewer) {
   await settleOldFocus(v);
   // The one goal is the Primary business goal with its KPI (BG1, BG2): made on first read, never while a coach is switched in.
   if (!v.switchedInto) await ensurePrimaryGoal({ workspaceId, userId }, today);
+  const who = { today, hour, tz: v.tz, days: v.membership.workDays };
+  // The streak's settle (H-289 §3): an active day whose bonus never landed (never closed) is paid when Today next loads. The
+  // member's own: never while a coach is switched in or a team member is here.
+  if (!v.switchedInto && !v.team) await settleStreak(workspaceId, userId, who);
 
   const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal, everLockedIn, lastEnergyLog] =
     await Promise.all([
       logFor(workspaceId, userId, today),
-      streakFor(workspaceId, userId, today, hour),
+      streakFor(workspaceId, userId, who),
       totalPoints(workspaceId, userId),
       db.query.tasks.findMany({
         where: and(eq(schema.tasks.userId, userId), inPlay, eq(schema.tasks.focusDate, today)),
@@ -131,13 +136,10 @@ export async function todayData(v: Viewer) {
 
   // The close card's day (rev 731): yesterday before 04:00 while it is open, or the last close-out again within 6 hours with
   // no lock-in since; otherwise today. Its log, activity and KPI boxes are that day's. Independent reads run together (H-164 §9).
-  const [allClosed, used, activity, closeFor, yesterdayLog, clientRecords, building, live, brandKit, upcomingTasks, openTasks] = await Promise.all([
-    closedDates(workspaceId, userId),
+  const [used, activity, closeFor, clientRecords, building, live, brandKit, upcomingTasks, openTasks] = await Promise.all([
     repairsUsed(workspaceId, userId, today.slice(0, 7)),
     todayActivity(workspaceId, userId, today),
     closeTargetFor(workspaceId, userId, today, hour),
-    // Docket #3: yesterday's log, so the streak reads as of yesterday while a day locked in to is still open for its close.
-    logFor(workspaceId, userId, addDays(today, -1)),
     db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.userId, userId), eq(schema.clientRecords.status, "active")) }),
     db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["draft", "building"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) }),
     db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["ready", "scheduled"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) }),
@@ -153,7 +155,10 @@ export async function todayData(v: Viewer) {
       limit: 40,
     }),
   ]);
-  const broken = log?.eveningDoneAt ? null : brokenStreak(allClosed, streakDayOf(allClosed, today, hour, lateOpen([...(yesterdayLog ? [yesterdayLog] : []), ...(log ? [log] : [])], today)));
+  // The break notice (H-289): read as of the streak's day, over the member's active days and their own work days.
+  const broken = log?.eveningDoneAt ? null : brokenStreak(streak.activity.active, streak.asOf, streak.days);
+  // What the close card's day pays as its streak bonus if closed now (the weekday ladder or the weekend's +40).
+  const closeBonus: DayBonus = bonusFor(streak.activity.ladder, closeFor.date, streak.days);
   const [closeLog, closeActivity] = await Promise.all([closeFor.date === today ? log : logFor(workspaceId, userId, closeFor.date), closeFor.date === today ? activity : todayActivity(workspaceId, userId, closeFor.date)]);
   const repairsLeft = Math.max(0, 1 - used);
   const clientsDueCheckin = clientRecords.filter((c) => {
@@ -260,6 +265,7 @@ export async function todayData(v: Viewer) {
     firstSession: !everLockedIn,
     /** When the running streak is 0 and something was lost: what, when, and whether one grace day mends it. */
     broken,
+    closeBonus,
     repairsLeft,
     /** What the app already saw today, to pre-fill the close. */
     activity,

@@ -10,8 +10,8 @@ import type { Viewer } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { POINTS, closeActivityPoints } from "@/lib/engine/points";
-import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
-import { closeTargetFor, closedDates, logFor, streakFor, todayActivity } from "@/lib/queries/daily";
+import { bonusFor } from "@/lib/engine/streak";
+import { activityFor, closeTargetFor, logFor, streakFor, todayActivity } from "@/lib/queries/daily";
 import { award, totalPoints } from "@/lib/queries/points";
 
 /** The five energy words, 1 to 5, as the lock-in's buttons say them. */
@@ -116,8 +116,10 @@ export async function closeDay(v: Viewer, input: Close): Promise<Closed> {
   const numbers = Object.fromEntries(CLOSE_NUMBERS.map((k) => [k, pick(k)])) as Record<(typeof CLOSE_NUMBERS)[number], number>;
   const extra = Object.fromEntries(CLOSE_EXTRA.map((k) => [k, pick(k)])) as Record<(typeof CLOSE_EXTRA)[number], number>;
   const firstClose = !log.eveningDoneAt;
-  const closed = await closedDates(workspaceId, userId, { excludeRepaired: true });
-  const streakDay = firstClose ? weeklyStreakDay(closed, today) : log.streakDay;
+  // The day's bonus (H-289 §3): the weekday ladder over the active days before it (repairs never feed it), or the weekend's +40.
+  const activeDays = await activityFor(workspaceId, userId, v.tz);
+  const bonus = bonusFor(activeDays.ladder, today, v.membership.workDays);
+  const streakDay = firstClose ? bonus.streakDay : log.streakDay;
   const previousCash = log.cashCollected;
 
   await db
@@ -128,8 +130,7 @@ export async function closeDay(v: Viewer, input: Close): Promise<Closed> {
   const points = { close: 0, streak: 0, activity: 0 };
   if (firstClose) {
     if (await award({ workspaceId, userId }, "close", POINTS.close, "Closed the day", today)) points.close = POINTS.close;
-    const bonus = streakBonus(streakDay);
-    if (bonus && (await award({ workspaceId, userId }, "streak", bonus, `Streak day ${streakDay}`, today))) points.streak = bonus;
+    if (bonus.points && (await award({ workspaceId, userId }, "streak", bonus.points, bonus.reason, today))) points.streak = bonus.points;
   }
   const seen = await todayActivity(workspaceId, userId, today);
   const activity = closeActivityPoints(numbers, { posts: seen.posts, dmsStarted: seen.dmsStarted, conversations: seen.conversations });
@@ -167,7 +168,7 @@ export async function monthCash(v: Viewer): Promise<{ month: string; cash: numbe
 
 /** The day as the lock-in card shows it, for the connector's read. */
 export async function lockInState(v: Viewer) {
-  const [log, streak, points] = await Promise.all([logFor(v.workspace.id, v.user.id, v.today), streakFor(v.workspace.id, v.user.id, v.today, v.hour), totalPoints(v.workspace.id, v.user.id)]);
+  const [log, streak, points] = await Promise.all([logFor(v.workspace.id, v.user.id, v.today), streakFor(v.workspace.id, v.user.id, { today: v.today, hour: v.hour, tz: v.tz, days: v.membership.workDays }), totalPoints(v.workspace.id, v.user.id)]);
   const target = await closeTargetFor(v.workspace.id, v.user.id, v.today, v.hour);
   return { log: log ?? null, streak: streak.running, points, target };
 }

@@ -17,7 +17,7 @@ import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
 import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVIDENCE_GLOBAL_BUDGET, lastDays, quotaState, utcDay } from "@/lib/engine/evidence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
-import { runningStreak, streakDayOf } from "@/lib/engine/streak";
+import { activeDaysOf, runningStreak, streakDayOf } from "@/lib/engine/streak";
 import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
 import { setClientHumanosAction } from "@/lib/actions/body";
@@ -64,7 +64,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const [users, logs, points, verified, submitted, library] = await Promise.all([
     userIds.length ? db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [],
     userIds.length ? db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.workspaceId, wsId), inArray(schema.dailyLogs.userId, userIds)) }) : [],
-    userIds.length ? db.select({ userId: schema.pointsLedger.userId, points: schema.pointsLedger.points }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, wsId), inArray(schema.pointsLedger.userId, userIds))) : [],
+    userIds.length ? db.select({ userId: schema.pointsLedger.userId, points: schema.pointsLedger.points, type: schema.pointsLedger.type, refId: schema.pointsLedger.refId, adjustedBy: schema.pointsLedger.adjustedBy, createdAt: schema.pointsLedger.createdAt }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, wsId), inArray(schema.pointsLedger.userId, userIds))) : [],
     userIds.length ? db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), inArray(schema.pathwayProgress.userId, userIds), eq(schema.pathwayProgress.status, "verified")) }) : [],
     db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), eq(schema.pathwayProgress.status, "submitted")), orderBy: desc(schema.pathwayProgress.submittedAt) }),
     db.query.libraryTasks.findMany(),
@@ -107,12 +107,14 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     .map((m) => {
       const u = userById.get(m.userId);
       const mine = logs.filter((l) => l.userId === m.userId);
-      const closed = new Set(mine.filter((l) => l.eveningDoneAt).map((l) => l.date));
       const lastActive = mine.map((l) => l.date).sort().at(-1) ?? null;
-      const pts = points.filter((p) => p.userId === m.userId).reduce((a, p) => a + p.points, 0);
+      const minePoints = points.filter((p) => p.userId === m.userId);
+      const pts = minePoints.reduce((a, p) => a + p.points, 0);
       // Each client's own day and hour (rev 731), not the coach's: a late close-out isn't a missed day on the roster.
       const ctz = m.timezone || v.workspace.timezone;
       const ctoday = todayInTz(ctz);
+      // The streak over the client's active days and their own work days (H-289), the same read as their Today.
+      const { active } = activeDaysOf(minePoints, mine, ctz);
       const todayLog = mine.find((l) => l.date === ctoday);
       const daysSilent = lastActive ? daysBetween(lastActive, ctoday) : 999;
       return {
@@ -120,7 +122,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
         u,
         pts,
         tier: tierFor(pts),
-        streak: runningStreak(closed, streakDayOf(closed, ctoday, hourInTz(ctz))),
+        streak: runningStreak(active, streakDayOf(active, ctoday, hourInTz(ctz)), m.workDays),
         lastActive,
         daysSilent,
         verified: verified.filter((p) => p.userId === m.userId).length,

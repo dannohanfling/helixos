@@ -4,6 +4,7 @@ import { connectProgress } from "@/lib/engine/connect-copy";
 import { clTokenSet } from "@/lib/community-loyalty";
 import { requireViewer } from "@/lib/auth";
 import { eveningCloseAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
+import { streakRecountSeenAction } from "@/lib/actions/streak";
 import type { TodayActivity } from "@/lib/queries/daily";
 import type { DailyLog } from "@/db/schema";
 import { completeCurriculumDayAction } from "@/lib/actions/pathway";
@@ -22,7 +23,6 @@ import { FIELD_TASKS } from "@/lib/engine/pathway";
 import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
 import { addDays, formatDate, relativeDay } from "@/lib/dates";
-import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
 import { COACH_ITEMS_DAYS, coachItems, newRecordings, openItemsFor } from "@/lib/recordings";
@@ -31,7 +31,6 @@ import { ShareButton } from "@/components/share-button";
 import { Top3Picker } from "@/components/top3-picker";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { MoneyInput } from "@/components/money-input";
-import { closedDates } from "@/lib/queries/daily";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
@@ -79,13 +78,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   // The day's data, the intentions, the closed days, Body's line, the coach's notices and the rest of the page's own reads run
   // together (H-164 §9: one after another they held "Loading…" for seconds; the timing line below says what each part cost).
-  const [d, week, month, closed, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup] = await Promise.all([
+  const [d, week, month, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup] = await Promise.all([
     todayData(v),
     // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
     db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) }).then((w) => w ?? null),
     // The monthly intention (rev 129): this month's, if set.
     db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, monthOf(v.today))) }).then((m) => m ?? null),
-    closedDates(v.workspace.id, v.user.id),
     // Body's one line (rev 179): the member's own, only once they've set Body up. It counts toward nothing on this page.
     todayBody(v),
     // Bot Features switched on for this member in the last seven days (rev 618): one line each, to the feature.
@@ -119,8 +117,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const cl = d.close;
   const closeLog = cl.log;
   const closeDayName = formatDate(cl.date, { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
-  const streakDayIfClosedNow = closeLog?.eveningDoneAt ? closeLog.streakDay : weeklyStreakDay(closed, cl.date);
-  const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
+  const bonusIfClosedNow = d.closeBonus.points;
+  const everyDay = v.membership.workDays === "all";
+  const dayWord = everyDay ? "day" : "weekday";
   const morningDone = Boolean(d.log?.morningDoneAt);
   const eveningDone = Boolean(closeLog?.eveningDoneAt);
   const closeTitle = cl.date === v.today ? (eveningDone ? "Day closed" : "Close the day") : eveningDone ? `Yesterday closed (${closeDayName})` : `Close yesterday (${closeDayName})`;
@@ -211,7 +210,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`badge ${d.streak > 0 ? "badge-accent" : ""}`} title="Weekday streak">
+          <span className={`badge ${d.streak > 0 ? "badge-accent" : ""}`} title={everyDay ? "Streak, every day counts" : "Weekday streak"} data-testid="streak-badge">
             🔥 {d.streak}-day streak
           </span>
           <span className="badge">
@@ -279,6 +278,20 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       {/* H-270 §1: the Setup card, the next open steps in dependency order; the video lives in the welcome card on the first session. */}
       <SetupCard steps={setup} video={v.workspace.startHereVideo ?? null} watched={Boolean(v.membership.startHereWatchedAt)} canTick={!v.team} coach={Boolean(v.switchedInto)} withVideo={!d.firstSession} />
 
+      {v.membership.streakRecountPoints !== null && !v.membership.streakRecountSeenAt && !v.switchedInto && !v.team ? (
+        <section className="card mb-5 flex flex-wrap items-center justify-between gap-3 p-4" data-testid="streak-recount-line">
+          <p className="text-sm">
+            Your streak now counts every day you show up, weekends too.
+            {v.membership.streakRecountPoints > 0 ? ` We recounted your history: +${v.membership.streakRecountPoints.toLocaleString()} points.` : ""}
+          </p>
+          <form action={streakRecountSeenAction}>
+            <SubmitButton className="btn btn-ghost btn-sm" pendingText="…">
+              Got it
+            </SubmitButton>
+          </form>
+        </section>
+      ) : null}
+
       {d.broken ? (
         <section className="card mb-5 border-warn p-4" style={{ background: "var(--warn-soft)" }} data-testid="streak-broken">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -288,10 +301,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               </div>
               <div className="text-sm text-ink-2">
                 {d.broken.repairable && d.repairsLeft > 0
-                  ? `One weekday slipped (${formatDate(d.broken.missed[0], { weekday: "long", month: "short", day: "numeric" })}). Mend it and the streak carries on; the weekly bonus still restarts at day 1. One repair a month.`
+                  ? `One ${dayWord} slipped (${formatDate(d.broken.missed[0], { weekday: "long", month: "short", day: "numeric" })}). Mend it and the streak carries on; the weekly bonus still restarts at day 1. One repair a month.`
                   : d.broken.repairable
-                    ? "One weekday slipped, and this month's repair is already used. Day 1 is 10 points. By Friday it's 310."
-                    : `${d.broken.missed.length} weekdays slipped. The system doesn't punish pauses, it just resets. Day 1 is 10 points. By Friday it's 310.`}
+                    ? `One ${dayWord} slipped, and this month's repair is already used. Day 1 is 10 points. By Friday it's 310.`
+                    : `${d.broken.missed.length} ${dayWord}s slipped. The system doesn't punish pauses, it just resets. Day 1 is 10 points. By Friday it's 310.`}
               </div>
             </div>
             {d.broken.repairable && d.repairsLeft > 0 ? (
@@ -535,7 +548,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             since the 6 Oct layout the 30-day build card's tail sat here, so the board and the close rendered inside it). */}
         <div className="space-y-4">
           {/* Evening close */}
-          <Card id="close" title={<span data-testid="close-title">{closeTitle}</span>} action={eveningDone ? <Badge tone="good">Done · streak day {closeLog?.streakDay}</Badge> : <Badge tone="accent">+20 {bonusIfClosedNow ? `+${bonusIfClosedNow} streak` : ""}</Badge>}>
+          <Card id="close" title={<span data-testid="close-title">{closeTitle}</span>} action={eveningDone ? <Badge tone="good">Done{closeLog?.streakDay ? ` · streak day ${closeLog.streakDay}` : ""}</Badge> : <Badge tone="accent">+20 {bonusIfClosedNow ? `+${bonusIfClosedNow} streak` : ""}</Badge>}>
             {eveningDone && closeLog ? (
               <div className="space-y-3 text-sm">
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">

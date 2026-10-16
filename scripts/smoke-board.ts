@@ -337,10 +337,12 @@ async function main() {
             });
           }),
         ) as ClipInfo;
-      for (const width of [1440, 1024, 390]) {
+      // Night at 1440, 1024 and 390 (H-150); Golden hour at 1440 and 390 (H-301): each look plays its own set of clips.
+      // Golden hour first, Night last: the look is remembered, and the tap and reduced-motion checks below read it as Night.
+      for (const [look, width] of [["day", 1440], ["day", 390], ["night", 1440], ["night", 1024], ["night", 390]] as const) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(`${base}/my-board/${decisionId}`);
-        await page.locator('[data-testid="board-look-night"]').click();
+        await page.locator(`[data-testid="board-look-${look}"]`).click();
         await page.waitForTimeout(400);
         await page.goto(`${base}/my-board/${decisionId}?play=1`);
         await page.locator('[data-testid="board-clip"]').waitFor({ timeout: 15000 });
@@ -351,21 +353,24 @@ async function main() {
           const i = await read();
           if (i.videos) {
             const key = (i.seat ?? "").replace("board-seat-", "");
-            must(i.videos === 1, `${width}px: one clip at a time (${i.videos})`);
-            must(i.name === nameOf(key) && i.webm === `/board/council-night-${i.name}.webm` && i.mp4 === `/board/council-night-${i.name}.mp4` && i.poster === "/board/council-night.jpg", `${width}px: ${key}'s turn plays its own clip, WebM then MP4, the still as poster: ${JSON.stringify(i)}`);
-            must(i.clipped && i.lean === "0", `${width}px: the CSS lean is off while ${key}'s clip plays: ${JSON.stringify({ clipped: i.clipped, lean: i.lean })}`);
-            must(i.says === `${shortOf(key)} SAYS`, `${width}px: the table line names the speaker: ${i.says}`);
+            must(i.videos === 1, `${look} ${width}px: one clip at a time (${i.videos})`);
+            // A clip URL carries its version (H-304): council-night-riley is ?v=2 after its remake, the rest ?v=1.
+            const unversioned = (u: string | null) => u?.replace(/\?v=\d+$/, "") ?? null;
+            must(i.name === nameOf(key) && unversioned(i.webm) === `/board/council-${look}-${i.name}.webm` && unversioned(i.mp4) === `/board/council-${look}-${i.name}.mp4` && i.poster === `/board/council-${look}.jpg`, `${look} ${width}px: ${key}'s turn plays its own clip, WebM then MP4, the still as poster: ${JSON.stringify(i)}`);
+            must(/\?v=\d+$/.test(i.mp4 ?? "") && (i.name !== "riley" || look !== "night" || /\?v=2$/.test(i.mp4 ?? "")), `${look} ${width}px: the clip URL carries its version, Riley's evening clip v2: ${i.mp4}`);
+            must(i.clipped && i.lean === "0", `${look} ${width}px: the CSS lean is off while ${key}'s clip plays: ${JSON.stringify({ clipped: i.clipped, lean: i.lean })}`);
+            must(i.says === `${shortOf(key)} SAYS`, `${look} ${width}px: the table line names the speaker: ${i.says}`);
             if (i.paused === false) playing++;
             seen.add(key);
           }
           if (i.done && seen.size) break;
           await page.waitForTimeout(120);
         }
-        must(SEATS.every((x) => seen.has(x.key)), `${width}px: every speaker's clip played in turn; saw ${[...seen].join(", ")}`);
-        must(playing > 0, `${width}px: the clips were playing, not paused`);
+        must(SEATS.every((x) => seen.has(x.key)), `${look} ${width}px: every speaker's clip played in turn; saw ${[...seen].join(", ")}`);
+        must(playing > 0, `${look} ${width}px: the clips were playing, not paused`);
         await page.waitForTimeout(300);
         const after = await read();
-        must(after.videos === 0 && (await page.locator('[data-testid="board-photo-night"]').isVisible()), `${width}px: the last turn over, no video and the still: ${JSON.stringify(after)}`);
+        must(after.videos === 0 && (await page.locator(`[data-testid="board-photo-${look}"]`).isVisible()), `${look} ${width}px: the last turn over, no video and the still: ${JSON.stringify(after)}`);
       }
       await page.setViewportSize({ width: 1280, height: 950 });
       // A tap mid-playback: the clip follows the spotlight to that seat, and a second tap returns to the Board and the still.
@@ -793,6 +798,31 @@ async function main() {
       await db.update(schema.memberships).set({ boardCouncil: null }).where(eq(schema.memberships.id, m.id));
       await db.update(schema.workspaces).set({ expertSeatsLive: false }).where(eq(schema.workspaces.id, ws));
       console.log("✓ the seat library: 66 seats, an edit bumps the version; paused while off, her council's names at 1440, 1024 and 390 once live; the answer sat with exactly her five, no \"I am {Name}\", and keeps the version it used");
+    }
+
+    // H-290: from My Board, one tap reaches the council page at 390 and 1440: the "Choose your council" button beside the chairs,
+    // and a chair itself, which arrives with that chair selected. Settings → You carries a Board seats line to the same page.
+    {
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base}/my-board`);
+        await page.locator('[data-testid="board-council-link"]').waitFor({ timeout: 15000 });
+        must((await page.locator('[data-testid="board-council-link"]').innerText()).trim() === "Choose your council", `${width}px: the button says Choose your council`);
+        await page.locator('[data-testid="board-council-link"]').click();
+        await page.waitForURL(/\/my-board\/council$/);
+        await page.locator('[data-testid="council-picker"]').waitFor();
+        await page.goto(`${base}/my-board`);
+        const chairs = page.locator('[data-testid^="board-seat-"]');
+        await chairs.first().waitFor({ timeout: 15000 });
+        await chairs.nth(2).click();
+        await page.waitForURL(/\/my-board\/council\?chair=1$/);
+        await page.locator('[data-testid="council-picker"]').waitFor();
+        must((await page.locator('[data-testid="council-chair-1-tap"]').getAttribute("aria-pressed")) === "true", `${width}px: the chair tapped in the room arrives selected`);
+      }
+      await page.setViewportSize({ width: 1280, height: 950 });
+      await page.goto(`${base}/settings`);
+      must(await page.locator('[data-testid="board-seats-line"] a[href="/my-board/council"]').count(), "Settings → You: a Board seats line to the council page");
+      console.log("✓ H-290: one tap from My Board to the council page at 390 and 1440 (the button, or a chair with that chair selected); the Board seats line on Settings");
     }
 
     // Choose your council, the member's page (rev 756 §2 and §3, rev 766): the first-visit prompt and "Keep the classic four";

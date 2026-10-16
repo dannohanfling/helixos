@@ -40,7 +40,7 @@ const points = async (page: Page) => Number(((await page.locator("header, main")
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq, isNotNull } = await import("drizzle-orm");
-  const { addDays, isWeekday, todayInTz } = await import("@/lib/dates");
+  const { addDays, todayInTz } = await import("@/lib/dates");
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const today = todayInTz("America/Los_Angeles");
   // Between 00:00 and 04:00 in Los Angeles yesterday can still be closed (rev 731), so the missed-day and close checks below
@@ -58,29 +58,31 @@ async function main() {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
 
-    // Streak state: Maya closed every weekday up to the day before the last weekday, then missed one. Today is open.
-    const lastWeekday = (() => {
-      let d = addDays(today, -1);
-      while (!isWeekday(d)) d = addDays(d, -1);
-      return d;
-    })();
+    // Streak state (H-289: every day counts, Maya's default): Maya was active every day up to the day before yesterday, then
+    // missed yesterday. Today is open. A missed day is one with nothing done: no lock-in, no close, no points earned that day
+    // in her own time, so the fixture clears the log and every ledger row dated that day.
+    const missedDay = addDays(today, -1);
+    const { activityDate } = await import("@/lib/engine/streak");
+    const mayaMembership = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    const mayaTz = mayaMembership.timezone || "America/Los_Angeles";
+    if (mayaMembership.workDays !== "all") throw new Error(`a member starts on every day (H-289 §2), not ${mayaMembership.workDays}`);
     await db.delete(schema.dailyLogs).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, today)));
-    // A missed day is one never begun (docket #3): a day locked in to but not closed stays open for its close until the next
-    // lock-in and breaks nothing yet, so the fixture clears the lock-in as well as the close.
-    await db.update(schema.dailyLogs).set({ eveningDoneAt: null, repairedAt: null, morningDoneAt: null }).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, lastWeekday)));
+    await db.update(schema.dailyLogs).set({ eveningDoneAt: null, repairedAt: null, morningDoneAt: null }).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, missedDay)));
+    for (const r of await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id) })) {
+      const on = activityDate(r, mayaTz);
+      if (on === missedDay || on === today) await db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, r.id));
+    }
     const closedRows = await db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.userId, maya.id), isNotNull(schema.dailyLogs.eveningDoneAt)) });
-    // make sure the run before the missed day is unbroken for at least 2 weekdays
-    let d = addDays(lastWeekday, -1);
+    // make sure the run before the missed day is unbroken for at least 3 days, weekend or not
+    let d = addDays(missedDay, -1);
     let ensured = 0;
     while (ensured < 3) {
-      if (isWeekday(d)) {
-        if (!closedRows.some((r) => r.date === d)) {
-          const ex = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, d)) });
-          if (ex) await db.update(schema.dailyLogs).set({ eveningDoneAt: `${d}T23:00:00.000Z` }).where(eq(schema.dailyLogs.id, ex.id));
-          else await db.insert(schema.dailyLogs).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, date: d, eveningDoneAt: `${d}T23:00:00.000Z` });
-        }
-        ensured++;
+      if (!closedRows.some((r) => r.date === d)) {
+        const ex = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, d)) });
+        if (ex) await db.update(schema.dailyLogs).set({ eveningDoneAt: `${d}T23:00:00.000Z` }).where(eq(schema.dailyLogs.id, ex.id));
+        else await db.insert(schema.dailyLogs).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, date: d, eveningDoneAt: `${d}T23:00:00.000Z` });
       }
+      ensured++;
       d = addDays(d, -1);
     }
 
@@ -95,7 +97,8 @@ async function main() {
     const total = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id) })).reduce((s, r) => s + r.points, 0);
     const nextTier = TIERS.find((t) => t.minPoints > total);
     if (!nextTier) throw new Error("the demo client is already on the top tier; nothing to cross");
-    await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, type: "bonus", points: nextTier.minPoints - total + 1, reason: "Smoke: level up" });
+    // A hand adjustment, so the fixture never makes today an active day (H-289 §1).
+    await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, type: "bonus", points: nextTier.minPoints - total + 1, reason: "Smoke: level up", adjustedBy: "smoke" });
     await page.goto(`${base}/today`);
     const levelUp = page.locator('[data-testid="level-up"]');
     await levelUp.waitFor({ timeout: 10000 });
@@ -109,13 +112,28 @@ async function main() {
     console.log("✓ level up celebrated once, then not again");
     await page.goto(`${base}/today`);
     await expectText(page, "streak ended", "streak break acknowledged");
-    await expectText(page, "One weekday slipped", "repairable");
+    await expectText(page, "One day slipped", "repairable on every day");
     await page.screenshot({ path: "screenshots/lp01-streak-broken.png", fullPage: true });
     await submit(page, 'button:has-text("Repair the streak")');
     if (await page.locator('[data-testid="streak-broken"]').count()) throw new Error("notice still shown after repair");
-    const streakBadge = await page.locator('span[title="Weekday streak"]').innerText();
+    const streakBadge = await page.locator('[data-testid="streak-badge"]').innerText();
     if (!/[1-9]\d*-day streak/.test(streakBadge)) throw new Error(`streak not restored: ${streakBadge}`);
-    console.log(`✓ broken streak acknowledged and repaired (${streakBadge.trim()})`);
+    console.log(`✓ broken streak acknowledged and repaired on every day (${streakBadge.trim()})`);
+
+    // My work days (H-289 §2): every day by default; Monday to Friday brings the weekday rule back; both show on the badge.
+    await page.goto(`${base}/settings`);
+    const workDays = page.locator('[data-testid="work-days"]');
+    if ((await workDays.inputValue()) !== "all") throw new Error("Settings → You starts on every day");
+    await workDays.selectOption("weekdays");
+    await submit(page, 'form:has([data-testid="work-days"]) button[type="submit"]');
+    await page.goto(`${base}/today`);
+    if ((await page.locator('[data-testid="streak-badge"]').getAttribute("title")) !== "Weekday streak") throw new Error("on Monday to Friday the badge says so");
+    await page.goto(`${base}/settings`);
+    await page.locator('[data-testid="work-days"]').selectOption("all");
+    await submit(page, 'form:has([data-testid="work-days"]) button[type="submit"]');
+    await page.goto(`${base}/today`);
+    if ((await page.locator('[data-testid="streak-badge"]').getAttribute("title")) !== "Streak, every day counts") throw new Error("back on every day the badge says so");
+    console.log("✓ My work days: every day by default, Monday to Friday and back, the badge follows");
 
     // Close pre-filled from today's activity: create a contact first (an outbound today), then open the close
     await page.goto(`${base}/conversations?new=1`);
@@ -336,6 +354,74 @@ async function main() {
       if (!/^Late close-outs dry run: \d+ closes? found, \d+ members?, \d+ days? credited/.test(line) || /Maya|Torres|@/.test(line)) throw new Error(`the counts line, counts only: ${line}`);
       if (row?.date !== d1 || row.eveningDoneAt !== lateAt.toISOString() || credited) throw new Error("the dry run changes nothing");
       console.log(`✓ Coach → Late close-outs: the dry run finds a late close, counts only, and changes nothing (${line})`);
+    }
+
+    // The streak recount (H-289 §4): the dry run as a table, Apply pays once through the ledger, a rerun adds nothing, and
+    // the member sees one line on Today until they tap Got it.
+    {
+      const { SEVEN_DAY_STREAK_SINCE } = await import("@/lib/engine/streak");
+      const { sum } = await import("drizzle-orm");
+      const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+      const totalOf = async () => Number((await db.select({ t: sum(schema.pointsLedger.points) }).from(schema.pointsLedger).where(eq(schema.pointsLedger.userId, maya.id)))[0]?.t ?? 0);
+      await page.goto(`${base}/coach/late-closes`);
+      await page.locator('[data-testid="recount-table"]').waitFor({ timeout: 15000 });
+      const recountLine = (await page.locator('[data-testid="recount-line"]').innerText()).trim();
+      if (!/^Streak recount dry run: \d+ members?, \d+ days? to pay, \d+ points? to add, \d+ days? paid by hand and skipped\.$/.test(recountLine) || /Maya|Torres|@/.test(recountLine)) throw new Error(`the recount line, counts only: ${recountLine}`);
+      const rows = page.locator('[data-testid="recount-row"]');
+      if ((await rows.count()) < 1) throw new Error("the dry run lists each client");
+      const toPay = Number((await page.locator('[data-testid="recount-points"]').innerText()).replace(/,/g, ""));
+      const mayaRow = rows.filter({ hasText: "M.T." }).first();
+      const mayaToPay = Number((await mayaRow.getAttribute("data-points")) ?? "0");
+      const before = await totalOf();
+      const streakRowsBefore = (await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.type, "streak")) })).length;
+      if (!(await rows.first().innerText()).match(/🔥 \d+/)) throw new Error("each row shows the new streak");
+      await submit(page, '[data-testid="recount-apply"]');
+      await page.locator('[data-testid="recount-applied"]').waitFor({ timeout: 15000 });
+      const applied = (await page.locator('[data-testid="recount-applied"]').innerText()).trim();
+      if (!applied.startsWith(`Applied: ${toPay.toLocaleString()} points`)) throw new Error(`Apply pays what the dry run showed: ${applied} vs ${toPay}`);
+      const after = await totalOf();
+      if (after - before !== mayaToPay) throw new Error(`the member's ledger grew by their row (${mayaToPay}), not ${after - before}`);
+      const recountRows = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.type, "streak")) });
+      const added = recountRows.filter((r) => /^Streak recount: \d{4}-\d\d-\d\d$/.test(r.reason));
+      if (recountRows.length - streakRowsBefore !== added.length || (mayaToPay > 0 && !added.length)) throw new Error("each paid day is one streak row, reason \"Streak recount: {date}\"");
+      await page.goto(`${base}/coach/late-closes`);
+      if ((await page.locator('[data-testid="recount-points"]').innerText()).trim() !== "0") throw new Error("after Apply the dry run has nothing left to pay");
+      await submit(page, '[data-testid="recount-apply"]');
+      await page.locator('[data-testid="recount-applied"]').waitFor({ timeout: 15000 });
+      if (!(await page.locator('[data-testid="recount-applied"]').innerText()).startsWith("Applied: 0 points over 0 days")) throw new Error("a second Apply adds nothing");
+      if ((await totalOf()) !== after) throw new Error("a second Apply changes no ledger");
+      console.log(`✓ Streak recount: the dry run lists clients by initials, Apply paid ${toPay} points once, a rerun adds nothing`);
+
+      // The member's one line on Today, with their own number, until Got it.
+      await login(page, "client");
+      const lineBox = page.locator('[data-testid="streak-recount-line"]');
+      await lineBox.waitFor({ timeout: 15000 });
+      const lineText = await lineBox.innerText();
+      if (!lineText.includes("Your streak now counts every day you show up, weekends too.")) throw new Error(`the recount line: ${lineText}`);
+      if (mayaToPay > 0 ? !lineText.includes(`+${mayaToPay.toLocaleString()} points`) : /recounted/.test(lineText)) throw new Error(`the line carries the member's own number (${mayaToPay}): ${lineText}`);
+      await submit(page, '[data-testid="streak-recount-line"] button');
+      await page.goto(`${base}/today`);
+      if (await page.locator('[data-testid="streak-recount-line"]').count()) throw new Error("Got it keeps the line away");
+      console.log(`✓ Today's one line about the recount (+${mayaToPay}), gone after Got it`);
+
+      // The settle (H-289 §3): an active day in the last fourteen whose bonus never landed is paid when Today loads, once.
+      const mt = todayInTz(mm.timezone || "America/Los_Angeles");
+      const d2 = addDays(mt, -2);
+      if (d2 >= SEVEN_DAY_STREAK_SINCE) {
+        const active = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, d2)) });
+        if (active?.morningDoneAt || active?.eveningDoneAt) {
+          await db.delete(schema.pointsLedger).where(and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.type, "streak"), eq(schema.pointsLedger.refId, d2)));
+          const b = await totalOf();
+          await page.goto(`${base}/today`);
+          await page.locator('[data-testid="streak-badge"]').waitFor({ timeout: 15000 });
+          const paid = await db.query.pointsLedger.findFirst({ where: and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.type, "streak"), eq(schema.pointsLedger.refId, d2)) });
+          if (!paid || !/^(Streak day [1-5]|Weekend streak \+40)$/.test(paid.reason)) throw new Error(`the settle pays the unpaid active day (${d2}): ${paid?.reason ?? "nothing"}`);
+          await page.goto(`${base}/today`);
+          await page.locator('[data-testid="streak-badge"]').waitFor({ timeout: 15000 });
+          if ((await totalOf()) !== b + paid.points) throw new Error("the settle pays a day once");
+          console.log(`✓ the settle paid ${d2} (${paid.reason}) on Today's load, once`);
+        } else console.log(`· settle check skipped: ${d2} isn't an active day in the demo data`);
+      } else console.log(`· settle check skipped until two days after ${SEVEN_DAY_STREAK_SINCE}`);
     }
   } finally {
     await browser.close();

@@ -14,13 +14,12 @@ import { CopyButton } from "@/components/copy-button";
 import { cookies } from "next/headers";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
-import { runningStreak, streakDayOf } from "@/lib/engine/streak";
 import { simplePath } from "@/lib/engine/pathway";
 import { pillarSummary } from "@/lib/engine/pillars";
 import { catalogue } from "@/lib/engine/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import { totalPoints } from "@/lib/queries/points";
-import { closedDates, logsBetween } from "@/lib/queries/daily";
+import { logsBetween, streakFor } from "@/lib/queries/daily";
 import { tasksFromNotes } from "@/lib/queries/tasks";
 import { AdjustPointsForm } from "@/components/adjust-points-form";
 import { isNotNull } from "drizzle-orm";
@@ -102,9 +101,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const body = await coachBodySummary(v, m.userId, today);
   // B9: the coach's own library to send from, what was sent, and the client's check-ins (sent snapshots; no sharing switch applies).
   const [templateLib, sends, checkins] = await Promise.all([coachTemplateLibrary(ws, v.user.id), coachSendsTo(ws, v.user.id, m.userId), coachCheckins(v, m.userId)]);
-  const [points, closed, recent, monthLogs, goal, stages, library, progress, claims, notes, offers, webinars, ladders, content] = await Promise.all([
+  const [points, streakRead, recent, monthLogs, goal, stages, library, progress, claims, notes, offers, webinars, ladders, content] = await Promise.all([
     totalPoints(ws, m.userId),
-    closedDates(ws, m.userId),
+    streakFor(ws, m.userId, { today, hour: hourInTz(tz), tz, days: m.workDays }),
     logsBetween(ws, m.userId, addDays(today, -20), today),
     logsBetween(ws, m.userId, addDays(`${month}-01`, -150), today),
     db.query.goals.findFirst({ where: and(eq(schema.goals.workspaceId, ws), eq(schema.goals.userId, m.userId), eq(schema.goals.primary, true)) }),
@@ -135,8 +134,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const avatarTop = avatarTree(avatars.rows);
   const adjustments = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, ws), eq(schema.pointsLedger.userId, m.userId), isNotNull(schema.pointsLedger.adjustedBy)), orderBy: desc(schema.pointsLedger.createdAt), limit: 10 });
   const tier = tierProgress(points);
-  // Read as of yesterday before 04:00 their time while yesterday is still open (rev 731): a late close-out isn't a missed day.
-  const streak = runningStreak(closed, streakDayOf(closed, today, hourInTz(tz)));
+  // The streak over their active days and work days (H-289), read as of yesterday before 04:00 their time while yesterday is still open (rev 731).
+  const streak = streakRead.running;
+  const closed = streakRead.closed;
   const todayLog = recent.find((l) => l.date === today);
   const lastActive = [...closed, ...recent.filter((l) => l.morningDoneAt).map((l) => l.date)].sort().at(-1) ?? null;
   const daysSilent = lastActive ? daysBetween(lastActive, today) : null;
@@ -355,7 +355,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6" data-testid="client-strip">
         <Stat label="Brand kit" value={KIT_STATUS_WORDS[kitStatus(clientKit)]} sub={clientKit ? clientKit.name : "set it with them from Switch to client"} />
         <Stat label="Tier" value={`${TIER_ICONS[tier.current.name]} ${tier.current.name}`} sub={`${points.toLocaleString()} pts${tier.next ? ` · ${tier.toNext.toLocaleString()} to ${tier.next.name}` : ""}`} />
-        <Stat label="Streak" value={`🔥 ${streak}`} sub={streak ? "weekday streak alive" : "no streak right now"} />
+        <Stat label="Streak" value={`🔥 ${streak}`} sub={streak ? (m.workDays === "all" ? "streak alive, every day counts" : "weekday streak alive") : "no streak right now"} />
         <Stat label="Today" value={`${todayLog?.morningDoneAt ? "☀️" : "○"} ${todayLog?.eveningDoneAt ? "🌙" : "○"}`} sub={todayLog?.morningDoneAt ? (todayLog.eveningDoneAt ? "locked in and closed" : "locked in, not closed") : "not locked in yet"} />
         <Stat label="Last active" value={daysSilent === null ? "never" : daysSilent === 0 ? "today" : daysSilent === 1 ? "yesterday" : `${daysSilent}d ago`} sub={lastActive ? formatDate(lastActive) : "no lock-in or close yet"} tone={daysSilent !== null && daysSilent >= 3 ? "warn" : undefined} />
         <div className="card p-4">

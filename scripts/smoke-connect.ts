@@ -39,7 +39,10 @@ async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
-    const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    // H-294: the walk reads the clipboard back to check what a Copy put there.
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const page = await context.newPage();
     page.on("response", (r) => {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
@@ -130,13 +133,27 @@ async function main() {
         if (wide > width) throw new Error(`at ${width}px the page never scrolls sideways: ${wide}px`);
         const rows = page.locator('[data-testid="ghl-scope-list"] li');
         const n = await rows.count();
-        if (n < 20 || (await page.locator('[data-testid="ghl-scope-list"] li button:has-text("Copy")').count()) !== n) throw new Error(`at ${width}px every permission row has its own Copy button (${n} rows)`);
+        if (n < 19 || (await page.locator('[data-testid="ghl-scope-list"] li button:has-text("Copy")').count()) !== n) throw new Error(`at ${width}px every permission row has its own Copy button (${n} rows)`);
         if (!(await page.locator('[data-testid="ghl-scope-rows"]').innerText()).includes("GoHighLevel adds permissions one at a time")) throw new Error(`at ${width}px the one-at-a-time line is above the rows`);
         await page.locator('[data-testid="ghl-scope-tick"]').nth(0).check();
         await page.locator('[data-testid="ghl-scope-tick"]').nth(1).check();
         if (!(await page.locator('[data-testid="ghl-scope-count"]').innerText()).startsWith(`2 of ${n} added`)) throw new Error(`at ${width}px the ticks count: ${await page.locator('[data-testid="ghl-scope-count"]').innerText()}`);
         if (await rows.first().evaluate((el) => el.getBoundingClientRect().right > window.innerWidth)) throw new Error(`at ${width}px a row never runs off the screen`);
-        console.log(`✓ at ${width}px: one Copy per permission, the tick count, the one-at-a-time line, nothing wider than the screen`);
+        // H-294: a row's Copy puts the scope id alone on the clipboard, exactly as the row shows it, and says so; the list copy is every id, one a line.
+        const { GHL_SCOPES, scopeList } = await import("@/lib/engine/ghl-scopes");
+        for (const i of [0, 13, n - 1]) {
+          const row = rows.nth(i);
+          const id = (await row.getAttribute("data-scope")) ?? "";
+          if (!id || (await row.locator('[data-testid="ghl-scope-id"]').innerText()).trim() !== id) throw new Error(`at ${width}px row ${i} shows its scope id in monospace`);
+          await row.locator('[data-testid="ghl-scope-copy"]').click();
+          const got = await page.evaluate("navigator.clipboard.readText()");
+          if (got !== id) throw new Error(`at ${width}px row ${i}'s Copy puts the id alone on the clipboard: ${JSON.stringify(got)} vs ${id}`);
+          if ((await row.locator('[data-testid="ghl-scope-copy"]').innerText()).trim() !== `Copied ${id}`) throw new Error(`at ${width}px the button says Copied ${id}`);
+        }
+        await page.locator('[data-testid="ghl-scope-copy-list"]').click();
+        const list = await page.evaluate("navigator.clipboard.readText()");
+        if (list !== scopeList(GHL_SCOPES) || list.split("\n").length !== n || /\n$/.test(list)) throw new Error(`at ${width}px Copy the list is every id, one a line, no trailing newline`);
+        console.log(`✓ at ${width}px: one Copy per permission (the id alone), the id beside the name, the list copy one id a line, the tick count, nothing wider than the screen`);
       }
     } finally {
       if (ghlRow) await db.insert(schema.socialConnections).values(ghlRow);

@@ -26,6 +26,7 @@ export async function lateCloseMembers(workspaceId: string, workspaceTz: string)
     return {
       userId: m.userId,
       tz: m.timezone || workspaceTz,
+      days: m.workDays,
       logs: logs.filter((l) => l.userId === m.userId),
       paid: { close: new Set(mine.filter((p) => p.type === "close").map((p) => p.refId!)), streak: new Set(mine.filter((p) => p.type === "streak").map((p) => p.refId!)) },
       closePaidOn: new Map(mine.filter((p) => p.type === "close").map((p) => [p.refId!, p.points])),

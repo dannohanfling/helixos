@@ -18,24 +18,24 @@ const closedRun = (from: string, to: string) => {
 describe("streak break", () => {
   it("is silent while the streak is alive and when nothing meaningful was lost", () => {
     const alive = closedRun("2026-08-24", "2026-09-04"); // Mon 24 Aug → Fri 4 Sep, today Mon 7 Sep: weekend bridges
-    expect(runningStreak(alive, "2026-09-07")).toBe(10);
-    expect(brokenStreak(alive, "2026-09-07")).toBeNull();
-    expect(brokenStreak(new Set(["2026-09-02"]), "2026-09-07")).toBeNull(); // a one-day streak is not worth a notice
+    expect(runningStreak(alive, "2026-09-07", "weekdays")).toBe(10);
+    expect(brokenStreak(alive, "2026-09-07", "weekdays")).toBeNull();
+    expect(brokenStreak(new Set(["2026-09-02"]), "2026-09-07", "weekdays")).toBeNull(); // a one-day streak is not worth a notice
   });
 
   it("names what was lost and offers a repair for exactly one missed weekday within a week", () => {
     const closed = closedRun("2026-08-24", "2026-09-03"); // through Thu 3 Sep; Fri 4 Sep missed; today Mon 7 Sep
-    const b = brokenStreak(closed, "2026-09-07")!;
+    const b = brokenStreak(closed, "2026-09-07", "weekdays")!;
     expect(b).toMatchObject({ lost: 9, endedOn: "2026-09-03", missed: ["2026-09-04"], repairable: true });
     const twoMissed = closedRun("2026-08-24", "2026-09-02"); // Thu 3 and Fri 4 missed
-    expect(brokenStreak(twoMissed, "2026-09-07")!.repairable).toBe(false);
+    expect(brokenStreak(twoMissed, "2026-09-07", "weekdays")!.repairable).toBe(false);
     const stale = closedRun("2026-08-03", "2026-08-13"); // missed Fri 14 Aug, today 7 Sep: too long ago to mend
-    expect(brokenStreak(stale, "2026-09-07")!.repairable).toBe(false);
+    expect(brokenStreak(stale, "2026-09-07", "weekdays")!.repairable).toBe(false);
     // A weekend close after the missed Friday neither ends nor hides the break (2026-09-06 is a Sunday).
-    expect(brokenStreak(new Set([...closed, "2026-09-06"]), "2026-09-07")).toMatchObject({ lost: 9, endedOn: "2026-09-03", missed: ["2026-09-04"], repairable: true });
+    expect(brokenStreak(new Set([...closed, "2026-09-06"]), "2026-09-07", "weekdays")).toMatchObject({ lost: 9, endedOn: "2026-09-03", missed: ["2026-09-04"], repairable: true });
     // Mending Friday restores the run
     closed.add("2026-09-04");
-    expect(runningStreak(closed, "2026-09-07")).toBe(10);
+    expect(runningStreak(closed, "2026-09-07", "weekdays")).toBe(10);
   });
 });
 
