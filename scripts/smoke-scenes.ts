@@ -114,6 +114,7 @@ async function main() {
     must((await rk.getAttribute("data-state")) === "done", "Escape jumps to the end");
     await page.keyboard.press("Escape");
     must((await rk.count()) === 0, "Escape again closes it");
+    await page.waitForTimeout(800);
     rmSync(fakeClip);
     fakeClip = null;
     console.log("✓ the clip window when a file exists (a broken file strikes the card all the same), no sound before a gesture, Escape twice");
@@ -127,6 +128,8 @@ async function main() {
     await q.waitForFunction(() => document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") === "done", null, { timeout: 3000 });
     must((await q.locator('[data-testid="rank-medal"]').count()) === 1 && (await q.locator('[data-testid="rank-seat"]').evaluate((el) => el === document.activeElement)), "reduced motion: the finished card, focus on the button");
     await q.screenshot({ path: "screenshots/sc01-rankup-quiet.png" });
+    await q.locator('[data-testid="rank-skip"]').click();
+    await q.waitForTimeout(800);
     await quiet.close();
     for (const width of [390, 1440]) {
       await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
@@ -159,7 +162,7 @@ async function main() {
       must((await page.locator('[data-testid="rank-seat"]').boundingBox())!.height >= 44, `${width}px: the buttons are 44px tall`);
       await page.locator('[data-testid="rank-skip"]').click();
       must((await rk.count()) === 0, `${width}px: Close closes it`);
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(800);
     }
     await page.setViewportSize({ width: 1280, height: 900 });
     console.log("✓ reduced motion shows the finished card; 390 and 1440 with the column 390 wide and centred; a hidden tab pauses; Skip then Close");
@@ -181,6 +184,7 @@ async function main() {
     must(!(await sounds(page)).includes("cheer-rankup"), "with the switch off, nothing plays after a gesture either");
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
+    await page.waitForTimeout(800);
     await db.update(schema.memberships).set({ soundsOn: true }).where(eq(schema.memberships.id, mm.id));
     console.log("✓ Settings → Sounds: on by default, off is remembered and silences the strike");
 
