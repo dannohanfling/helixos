@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CHAIRS, CHAIR_KEYS, MODES, MODE_INFO, clipFor, takesWords, turnMs, type Mode, type SceneLook } from "@/lib/engine/board-view";
+import { PLAQUE_BOX, headlineOf, headlineSize } from "@/lib/engine/headline";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
@@ -128,6 +129,15 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
     if (phase === "playing") setPhase("done");
     setSpot((cur) => (cur === k ? null : k));
   };
+  // The plaque (H-306): one short line on a dark panel over the table, the full text one tap away in the discussion below.
+  const plaque = (line: string, fullId: string, ids: boolean) => (
+    <div className={`br-plaque br-size-${headlineSize(line)}`} data-testid={ids ? "board-plaque" : undefined}>
+      <div className="br-says-line">{line}</div>
+      <a className="br-more" href={`#${fullId}`} data-testid={ids ? "board-read-full" : undefined}>
+        Read the full answer ↓
+      </a>
+    </div>
+  );
   // The table's words: "…" while the Board is asked, the speaker's line, or the recommendation. On a phone they sit under the room.
   const words = (ids: boolean) =>
     phase === "asking" ? (
@@ -151,12 +161,12 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
           {`${seatOf(speaker)?.short.toUpperCase()} SAYS`}
           {held ? <span className="br-paused" data-testid={ids ? "board-held" : undefined}>paused</span> : null}
         </div>
-        <div className="br-says-line">{card(speaker)!.text}</div>
+        {plaque(headlineOf(card(speaker)!.text, card(speaker)!.headline), `br-turn-${speaker}`, ids)}
       </div>
     ) : answer && phase === "done" ? (
       <div className="br-says br-rise" data-testid={ids ? "board-table-recommends" : undefined}>
         <div className="br-says-label">THE BOARD RECOMMENDS</div>
-        <div className="br-says-line">{answer.recommendation}</div>
+        {plaque(headlineOf(answer.recommendation, answer.headline), "br-turn-recommendation", ids)}
       </div>
     ) : (
       <div className="br-says-line br-quiet">{answer ? "" : "Say what you're deciding, and the Board will sit."}</div>
@@ -278,7 +288,7 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               </button>
             );
           })}
-          <div className="br-table" aria-live="polite">
+          <div className="br-table" aria-live="polite" style={{ left: `${PLAQUE_BOX.l}%`, top: `${PLAQUE_BOX.t}%`, width: `${PLAQUE_BOX.w}%`, height: `${PLAQUE_BOX.h}%` }}>
             {words(true)}
           </div>
         </div>
@@ -321,7 +331,7 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
             const s = seatOf(k);
             if (!c || !s || !rowShown(k)) return null;
             return (
-              <div key={k} className={`br-minute${speaker && speaker !== k ? " br-dim" : ""}`} data-testid={`board-minute-${k}`}>
+              <div key={k} id={`br-turn-${k}`} className={`br-minute${speaker && speaker !== k ? " br-dim" : ""}`} data-testid={`board-minute-${k}`}>
                 <div className="br-initial">{s.short.replace(/^The /, "").charAt(0)}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <div className="br-who">{s.role === "CHAIR" ? s.short.toUpperCase() : `${s.short.toUpperCase()} · ${s.role}`}</div>
@@ -331,6 +341,16 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               </div>
             );
           })}
+          {showAfter && answer.recommendation ? (
+            // H-306: the full recommendation lives here; the table shows its one line.
+            <div id="br-turn-recommendation" className="br-minute" data-testid="board-recommendation-full">
+              <div className="br-initial">★</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div className="br-who">THE BOARD RECOMMENDS</div>
+                <div className="br-line">{answer.recommendation}</div>
+              </div>
+            </div>
+          ) : null}
           {showAfter && answer.split ? (
             <div className="br-split" data-testid="board-split">
               Where the Board splits: {answer.split}

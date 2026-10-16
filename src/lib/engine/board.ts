@@ -5,6 +5,7 @@
  * Nothing here reads the database or calls the AI.
  */
 import { addDays, weekday } from "@/lib/dates";
+import { headlineOf } from "./headline";
 import { BOARD_PROFILE_MD, BOARD_SKILL_MD, DANNO_SOURCE_PACK_MD } from "@/content/board-spec";
 import { MODE_INFO, takesWords, type Mode } from "@/lib/engine/board-view";
 import { personOf, withoutPersonClaims } from "@/lib/engine/board-seats";
@@ -174,13 +175,16 @@ export function boardSkillFiles(principles: Principle[], seats: Seat[] = SEATS):
 
 export type Step = { do: string; by: string; takesMinutes: number; doneWhen: string; first5: string; dependsOn?: number | null };
 /** One advisor's counsel and the one useful question they leave the member with (the skill's Board Mode). */
-export type Card = { seat: string; text: string; question?: string | null };
+/** `headline` (H-306): the seat's point in one line for the table; the full text stays in the discussion. */
+export type Card = { seat: string; text: string; question?: string | null; headline?: string | null };
 export type BoardAnswer = {
   decision: string;
   assumptions: { text: string; guess: boolean }[];
   advisors: Card[];
   split: string;
   recommendation: string;
+  /** H-306: the recommendation in one line for the table. */
+  headline?: string | null;
   steps: Step[];
   youDecide: string;
   /** Quick Vote: each seat's lean, one sentence. */
@@ -199,7 +203,7 @@ export type BoardAnswer = {
 /** The JSON the AI is asked for (the skill's layout, as fields), with the council's own seat keys. */
 export const answerShape = (keys: string[]) => ANSWER_SHAPE.replace("danno|alex|jordan|morgan|riley", keys.join("|"));
 export const ANSWER_SHAPE = `Reply with JSON only, in this shape:
-{"decision": "...", "assumptions": [{"text": "...", "guess": true}], "advisors": [{"seat": "danno|alex|jordan|morgan|riley", "text": "one short paragraph: the counsel and the reasoning", "question": "the one useful question this advisor asks"}], "split": "...", "recommendation": "...", "steps": [{"do": "...", "by": "YYYY-MM-DD", "takesMinutes": 45, "doneWhen": "...", "first5": "...", "dependsOn": null}], "youDecide": "...", "votes": [], "changed": null, "unresolved": null, "strongestCase": null, "biggestRisk": null, "owner": null, "clarify": []}
+{"decision": "...", "assumptions": [{"text": "...", "guess": true}], "advisors": [{"seat": "danno|alex|jordan|morgan|riley", "text": "one short paragraph: the counsel and the reasoning", "headline": "that seat's point in one line, at most 25 words", "question": "the one useful question this advisor asks"}], "split": "...", "recommendation": "...", "headline": "the recommendation in one line, at most 25 words", "steps": [{"do": "...", "by": "YYYY-MM-DD", "takesMinutes": 45, "doneWhen": "...", "first5": "...", "dependsOn": null}], "youDecide": "...", "votes": [], "changed": null, "unresolved": null, "strongestCase": null, "biggestRisk": null, "owner": null, "clarify": []}
 "votes" only for Quick Vote ({"seat", "option", "why"}); "changed" and "unresolved" only for Debate; "strongestCase", "biggestRisk" and "owner" only for Converge. "clarify" only when a missing fact would change the recommendation, at most three.`;
 
 /**
@@ -292,7 +296,9 @@ export function checkAnswer(raw: unknown, ctx: { mode: Mode; focus?: string | nu
     if (seat === "danno" && PERSONAL.test(ctx.question) && !text.includes(OFFICE_HOURS_LINE)) text = `${text} ${OFFICE_HOURS_LINE}`.trim();
     if (!text) continue;
     seen.add(seat);
-    advisors.push({ seat, text, question: question || null });
+    // H-306: the table's one line. The AI's when it fits the cap (cleaned the same way), else the text's first sentence.
+    const givenHeadline = stripMoney(str((a as Card)?.headline), `${seatName(seat)}'s headline`);
+    advisors.push({ seat, text, question: question || null, headline: headlineOf(text, kind === "expert" || kind === "custom" || kind === "edge" ? withoutPersonClaims(givenHeadline, seatName(seat)).text : givenHeadline) });
   }
   let problem: string | null = null;
   if (ctx.mode === "focus") {
@@ -349,6 +355,7 @@ export function checkAnswer(raw: unknown, ctx: { mode: Mode; focus?: string | nu
       advisors,
       split,
       recommendation,
+      headline: headlineOf(recommendation, stripMoney(str(o.headline), "the recommendation's headline")),
       steps,
       youDecide: str(o.youDecide) || "You decide. This is your call.",
       votes,
