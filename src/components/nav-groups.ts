@@ -9,7 +9,11 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `comingSoon` (rev 816): a page on its way. Shown greyed with a "Coming soon" pill and its subtitle (`line`), never a link: its
  * `href` is only where it will live. The commit that ships the page drops the flag, and the item becomes a normal link.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
+/**
+ * `menuKey` (H-385): the On the horizon item that drives this entry. It reads as Coming soon until that item has shipped
+ * (`withHorizon` below), then becomes a normal link; the coach moves the item, no deploy needed.
+ */
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -88,7 +92,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // The loyalty leaderboard's editor (H-140): for any member whose workspace has a connected board, the owner, their team and a switched-in coach alike.
       { href: "/loyalty", label: "Loyalty leaderboard", icon: "🏅", line: "your members' points and tiers", loyaltyOnly: true, team: true },
       { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak" },
-      { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", comingSoon: true },
+      { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", menuKey: "magic-funnel" },
       { href: "/whats-new", label: "What's new", icon: "✨", team: true, hint: "latest changes" },
       { href: "/connect", label: "Connect to Claude", icon: "🔌", hint: "HelixOS from a chat" },
     ],
@@ -120,6 +124,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/board", label: "Danno's principles", icon: "🧭", coachOnly: true, hint: "Board principles" },
       { href: "/coach/board-seats", label: "Board seats", icon: "🏛️", coachOnly: true, hint: "the council library" },
       { href: "/coach/glossary", label: "Glossary", icon: "📖", coachOnly: true, hint: "Building with AI" },
+      { href: "/coach/horizon", label: "On the horizon", icon: "🔭", coachOnly: true, hint: "what members see coming" },
       { href: "/coach/helix", label: "My Helix rungs", icon: "🌀", coachOnly: true, hint: "the 67 rungs and what each reads" },
       { href: "/coach/setup", label: "Setup steps", icon: "🧭", coachOnly: true, hint: "the 26 setup steps, the Start Here video" },
       { href: "/coach/recordings", label: "Recordings", icon: "🎥", coachOnly: true, hint: "from Fathom" },
@@ -144,6 +149,11 @@ export function withPlatformLinks(items: NavItem[], links: PlatformLinks, ownCom
     const href = platformHref(n.platformKey, links, ownCommunity);
     return href ? [{ ...n, href }] : [];
   });
+}
+
+/** Coming soon from the horizon (H-385): an item with a `menuKey` is greyed until that key has shipped; `shippedKeys` comes from the workspace's items. */
+export function withHorizon(items: NavItem[], shippedKeys: readonly string[]): NavItem[] {
+  return items.map((n) => (n.menuKey ? { ...n, comingSoon: !shippedKeys.includes(n.menuKey) } : n));
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */

@@ -3,6 +3,7 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-or
 import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-hours";
 import { MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
 import { BOT_FEATURE_KEYS, REQUEST_STATES, UNLOCK_TYPES, type Behavior } from "@/lib/engine/bot-features";
+import type { HorizonArea, HorizonStatus } from "@/lib/engine/horizon";
 import { EMPTY_DEFAULTS, type MfAgendaItem, type MfDefaults, type MfObjection, type MfPillar, type MfPitch, type MfProfile, type MfUrgency } from "@/lib/engine/magic-funnel";
 
 const id = () => text("id").primaryKey();
@@ -4668,3 +4669,45 @@ export const setupTicks = sqliteTable(
   (t) => [uniqueIndex("setup_ticks_member_step").on(t.workspaceId, t.userId, t.stepKey)],
 );
 export type SetupTick = typeof setupTicks.$inferSelect;
+
+/**
+ * On the horizon (H-385, plan H-387): what members see of what is coming, per workspace. The coach adds, edits, hides, reorders
+ * and moves items between the four lists; `shipped_at` is stamped when one moves to Just shipped; `menu_key` names the menu
+ * entry an item greys out as Coming soon until it ships (src/lib/engine/horizon.ts HORIZON_MENU_KEYS).
+ */
+export const horizonItems = sqliteTable(
+  "horizon_items",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    title: text("title").notNull(),
+    line: text("line").notNull(),
+    area: text("area").$type<HorizonArea>().notNull(),
+    status: text("status").$type<HorizonStatus>().notNull(),
+    /** "You asked for this": it came from member feedback. */
+    fromFeedback: integer("from_feedback", { mode: "boolean" }).notNull().default(false),
+    sort: integer("sort").notNull().default(0),
+    shippedAt: text("shipped_at"),
+    menuKey: text("menu_key"),
+    hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [index("horizon_items_ws").on(t.workspaceId, t.status)],
+);
+export type HorizonItem = typeof horizonItems.$inferSelect;
+
+/** A member's "Want this" on an item: one per member and item; `notified_at` once the "it shipped" notice was shown and dismissed. */
+export const horizonWants = sqliteTable(
+  "horizon_wants",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    itemId: text("item_id").notNull(),
+    notifiedAt: text("notified_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("horizon_wants_member_item").on(t.workspaceId, t.userId, t.itemId), index("horizon_wants_item").on(t.itemId)],
+);
+export type HorizonWant = typeof horizonWants.$inferSelect;

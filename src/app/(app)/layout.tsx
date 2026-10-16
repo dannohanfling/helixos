@@ -21,6 +21,8 @@ import { coachFirstName, newMonthlyFeedback, unseenReports } from "@/lib/queries
 import { openClaims } from "@/lib/queries/rewards";
 import { waitingFeatures } from "@/lib/bot-features";
 import { choicesFor } from "@/lib/team";
+import { horizonShell } from "@/lib/horizon";
+import { HorizonNotice } from "@/components/horizon-notice";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
@@ -60,12 +62,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
   // The Daily welcome (H-312): once a day on first open, over whatever page they opened; never on /coach, never switched in.
   const welcome = await welcomeFor(viewer, (await headers()).get("x-helixos-path") ?? "");
+  // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
+  const horizon = await horizonShell(viewer);
   return (
-    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
+    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>
       {welcome ? <DailyWelcome card={welcome} /> : null}
+      {horizon.notice && !welcome ? <HorizonNotice notice={horizon.notice} /> : null}
       {viewer.role === "client" && !viewer.team ? <LevelUp tier={{ level: tier.level, name: tier.name, icon: TIER_ICONS[tier.name] ?? "🏅", welcome: tier.welcome }} celebrated={viewer.membership.celebratedTierLevel} /> : null}
     </AppShell>
   );

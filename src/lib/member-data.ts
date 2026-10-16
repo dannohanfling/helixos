@@ -69,6 +69,8 @@ export const MEMBER_TABLES = {
   handoff_files: schema.handoffFiles,
   handoff_audit: schema.handoffAudit,
   handoff_agents: schema.handoffAgents,
+  // On the horizon (H-385): what a member said they want; theirs, exported and erased with them.
+  horizon_wants: schema.horizonWants,
   webinar_signups: schema.webinarSignups,
   pathways: schema.pathways,
   webinars: schema.webinars,
@@ -224,6 +226,8 @@ export const WORKSPACE_TABLES = {
   board_principles: schema.boardPrinciples,
   // Building with AI: the words (rev 768): the coach's edits and additions to the workspace's glossary.
   glossary_entries: schema.glossaryEntries,
+  // On the horizon (H-385): the coach's list of what is shipped, being built, next and explored; no member's own.
+  horizon_items: schema.horizonItems,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */

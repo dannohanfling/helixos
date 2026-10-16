@@ -12,6 +12,25 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 218,
+    date: "2026-10-16",
+    title: "The Board's plaque reads bigger, and the whole recommendation sits under the scene",
+    lines: [
+      "On a Board decision, the words on the table are now at least 17 points, with the eyebrow readable too. Under the scene a card shows the whole recommendation and your first next step, up to a paragraph, cut only at a sentence end, with Read the full answer for the rest. On a phone the same card sits under the picture at 16 points.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 217,
+    date: "2026-10-16",
+    title: "On the horizon: see what's coming and tell us what you'd use",
+    lines: [
+      "What's new has a second tab, On the horizon: what just shipped, what is being built now, what is next up and what we are exploring, each in one plain line with its area. Filter by area, and on a phone swipe the four tabs (Next up opens first).",
+      "On Next up and Exploring, tap Want this to say you would use it; only you see your vote. When something you wanted ships, a small note tells you once, in the app. Items marked \"You asked for this\" came from member feedback. A menu entry for something not built yet reads Coming soon until it ships.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 216,
     date: "2026-10-16",
     title: "Team members can book office hours for you, and say who's attending",

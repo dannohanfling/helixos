@@ -54,6 +54,7 @@ const OPEN_PAGES = [
   "src/app/(app)/today/page.tsx",
   "src/app/(app)/webinars/[id]/page.tsx",
   "src/app/(app)/webinars/page.tsx",
+  "src/app/(app)/whats-new/horizon/page.tsx",
   "src/app/(app)/whats-new/page.tsx",
 ];
 const OPEN_ROUTES = ["src/app/api/deck-images/[id]/route.ts", "src/app/api/deck-images/upload/route.ts", "src/app/api/drafts/route.ts", "src/app/api/webinars/[id]/deck/route.ts"];
