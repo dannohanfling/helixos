@@ -7,7 +7,7 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { AirtableError, airtableProblem, readSource, type BaseAccess } from "@/lib/airtable";
-import { buildPlan, planSummary, type ImportPlan, type NotImported, type PlanLine } from "@/lib/engine/airtable-import";
+import { buildPlan, planSummary, type ImportPlan, type NotImported, type PlanLine, TEMPLATE_TABLES, type TableMatch } from "@/lib/engine/airtable-import";
 import { ESSENCE_CAP } from "@/lib/engine/essence";
 import { newId } from "@/lib/ids";
 import { hashPassword } from "@/lib/password";
@@ -23,6 +23,10 @@ export type ImportPreview = {
   lines: PlanLine[];
   unfilled: string[];
   missing: string[];
+  /** H-297: each template table and the table of hers it was matched to (by the coach's pick, its name or its fields), or null. */
+  tables: { key: string; label: string; match: TableMatch | null }[];
+  /** Her base's tables, for the picks. Ids and names only. */
+  herTables: { id: string; name: string }[];
   notInPhase1: NotImported[];
   otherTables: string[];
   essenceChars: number;
@@ -31,6 +35,8 @@ export type ImportPreview = {
 export type ImportState = { error?: string; changed?: boolean; preview?: ImportPreview } | undefined;
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
+/** The coach's picks (H-297): which of her tables stands for a template table, by table id, one field per template table. */
+const picksFrom = (f: FormData): Record<string, string> => Object.fromEntries(TEMPLATE_TABLES.map((t) => [t.key, s(f, `pick:${t.key}`)]).filter(([, v]) => /^tbl[A-Za-z0-9]+$/.test(v)));
 const newClient = z.object({ name: z.string().min(1, "Give the new client a name.").max(80), email: z.string().email("Give the new client's login email."), businessName: z.string().max(120) });
 
 type Target = { kind: "existing"; membershipId: string; userId: string; who: string } | { kind: "new"; name: string; email: string; businessName: string; who: string };
@@ -70,13 +76,14 @@ async function prepare(workspaceId: string, coachId: string, f: FormData): Promi
   let read: Awaited<ReturnType<typeof readSource>>;
   try {
     const a = access(f);
-    read = await readSource(a.source, a.fallback);
+    read = await readSource(a.source, a.fallback, picksFrom(f));
   } catch (e) {
     if (e instanceof AirtableError) return { error: airtableProblem(e) };
     console.error("[import] read failed", JSON.stringify({ kind: e instanceof Error ? e.name : typeof e }));
     return { error: "Couldn't read the base. Nothing was imported; try again in a minute." };
   }
-  if (!read.source.v2.offersos && !read.source.v2.vision) return { error: "Source base: this doesn't look like a HelixOS-template base (no Vision or OffersOS table). Check the base id." };
+  // H-297: refused only when nothing at all matches; a base with some tables renamed shows them matched or not found, with a pick.
+  if (!TEMPLATE_TABLES.some((t) => read.matched[t.key])) return { error: "Source base: none of its tables look like the HelixOS template's (no Vision, Offers, Methodologies, Buyer Readiness, Tasks, Groups or Lead Magnet table, by name or by fields). Check the base id." };
   const existing = t.kind === "existing" ? await existingRefs(workspaceId, t.userId) : new Set<string>();
   const plan = buildPlan(read.source, { createdSince: since || null }, existing);
   const { chars } = await mergedEssence(plan, workspaceId, t.kind === "existing" ? t.userId : "");
@@ -87,7 +94,20 @@ async function prepare(workspaceId: string, coachId: string, f: FormData): Promi
   return {
     t,
     plan,
-    preview: { key, who: t.who, summary: planSummary(plan), lines: plan.lines, unfilled: plan.unfilled, missing: read.missing, notInPhase1: plan.notInPhase1, otherTables: plan.otherTables, essenceChars: chars, overCap: chars > ESSENCE_CAP },
+    preview: {
+      key,
+      who: t.who,
+      summary: planSummary(plan),
+      lines: plan.lines,
+      unfilled: plan.unfilled,
+      missing: read.missing.filter((m) => m.endsWith("(fallback base)")),
+      tables: TEMPLATE_TABLES.map((tt) => ({ key: tt.key, label: tt.label, match: read.matched[tt.key] ?? null })),
+      herTables: read.tables,
+      notInPhase1: plan.notInPhase1,
+      otherTables: plan.otherTables,
+      essenceChars: chars,
+      overCap: chars > ESSENCE_CAP,
+    },
   };
 }
 

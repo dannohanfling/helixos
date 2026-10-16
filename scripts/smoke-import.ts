@@ -14,7 +14,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { chromium, type Page } from "@playwright/test";
-import { V1_BASE, V1_TABLES, V2_BASE, V2_TABLES } from "./fixtures/airtable-client";
+import { RENAMED_BASE, RENAMED_TOKEN, V1_BASE, V1_TABLES, V2_BASE, V2_TABLES } from "./fixtures/airtable-client";
 import { TESTIMONIALS_TOKEN } from "./fixtures/airtable-testimonials";
 
 const base = process.argv[2] ?? "http://localhost:3000";
@@ -61,7 +61,7 @@ async function main() {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
       if (r.request().method() !== "POST") return;
       const body = await r.text().catch(() => "");
-      for (const t of [SOURCE_TOKEN, FALLBACK_TOKEN, TESTIMONIALS_TOKEN]) if (body.includes(t)) echoed.push(`${t} in ${r.url()}`);
+      for (const t of [SOURCE_TOKEN, FALLBACK_TOKEN, TESTIMONIALS_TOKEN, RENAMED_TOKEN]) if (body.includes(t)) echoed.push(`${t} in ${r.url()}`);
     });
     const signIn = async (who: "coach" | "client") => {
       await page.goto(`${base}/login`);
@@ -132,6 +132,47 @@ async function main() {
     if ((await page.locator('[data-testid="import-source-token"]').inputValue()) !== SOURCE_TOKEN || (await page.locator('[data-testid="import-fallback-token"]').inputValue()) !== FALLBACK_TOKEN) throw new Error("the tokens stay in their boxes for Approve");
     if (!(await page.locator('[data-testid="import-approve"]').isEnabled())) throw new Error("Approve is on after a clean dry run");
     console.log(`✓ dry run for ${name}: ${Object.entries(shown).map(([a, n]) => `${a} ${n.split("/")[0]}`).join(", ")}; nothing written, no one created; the tokens stayed in their boxes`);
+
+    // ── H-297: a base whose table names drifted ("Business Vision", "Offer", "Playbooks", "Downloads"): found by name, by fields,
+    // or picked by the coach; the run never stops on one table; nothing written. ──
+    {
+      const tablesShown = async () => Object.fromEntries(await page.locator('[data-testid="import-table-row"]').evaluateAll((els) => els.map((e) => [e.getAttribute("data-key") ?? "", `${e.getAttribute("data-how")}: ${e.querySelector('[data-testid="import-table-match"]')?.textContent?.trim() ?? ""}`])));
+      const normal = await tablesShown();
+      if (Object.values(normal).some((v) => !v.startsWith("name: "))) throw new Error(`the template base is found by name, table by table: ${JSON.stringify(normal)}`);
+      // A preview is already on screen, so a fresh dry run is seen by its key (the plan's hash in the hidden input) changing.
+      const dryAgain = async () => {
+        const before = await page.locator('input[name="key"]').inputValue();
+        await page.locator('[data-testid="import-dry"]').click();
+        await page.waitForFunction((b) => (document.querySelector('input[name="key"]') as HTMLInputElement | null)?.value !== b, before, { timeout: 60000 });
+        await page.waitForLoadState("networkidle");
+      };
+      await page.locator('[data-testid="import-source-base"]').fill(RENAMED_BASE);
+      await page.locator('[data-testid="import-source-token"]').fill(RENAMED_TOKEN);
+      await dryAgain();
+      if (await page.locator('[data-testid="import-error"]').count()) throw new Error(`a base with renamed tables is not refused: ${await page.locator('[data-testid="import-error"]').innerText()}`);
+      const drifted = await tablesShown();
+      const wantTables = { vision: "name: Business Vision, by its name", offersos: "name: Offer, by its name", methodologies: "shape: Playbooks, by its fields", "lead magnet": "none: not found" };
+      for (const [k, v] of Object.entries(wantTables)) if (drifted[k] !== v) throw new Error(`${k}: want "${v}", got "${drifted[k]}" (all: ${JSON.stringify(drifted)})`);
+      const renamedSummary = await summary();
+      if (renamedSummary.offers !== shown.offers || renamedSummary.brand !== shown.brand || renamedSummary.frameworks !== shown.frameworks) throw new Error(`the renamed tables map the same rows: ${JSON.stringify(renamedSummary)} vs ${JSON.stringify(shown)}`);
+      if (await mine()) throw new Error("the dry run on the renamed base creates no one");
+      // The coach picks her Downloads table for Lead Magnet and runs again: "your pick", and the run goes through.
+      const picker = page.locator('[data-testid="import-pick-lead-magnet"]');
+      if (!(await picker.count())) throw new Error("a table not found gets a pick of her tables");
+      await picker.selectOption({ label: "Downloads" });
+      if (await page.locator('[data-testid="import-approve"]').isEnabled()) throw new Error("a changed pick waits for a fresh dry run");
+      await dryAgain();
+      const picked = await tablesShown();
+      if (picked["lead magnet"] !== "picked: Downloads, your pick") throw new Error(`the pick is used: ${picked["lead magnet"]}`);
+      if (await page.locator('[data-testid="import-error"]').count()) throw new Error("the picked run goes through");
+      // Back to the template base, the pick cleared, for the steps below.
+      await picker.selectOption({ value: "" });
+      await page.locator('[data-testid="import-source-base"]').fill(V2_BASE);
+      await page.locator('[data-testid="import-source-token"]').fill(SOURCE_TOKEN);
+      await dryAgain();
+      if (JSON.stringify(await summary()) !== JSON.stringify(want)) throw new Error("the template base reads as before once the form is back");
+      console.log("✓ H-297: a base with drifted names is read (Business Vision and Offer by name, Playbooks by its fields), Downloads offered as a pick and then used; nothing written, no token echoed");
+    }
 
     // ── The base changes before Approve: nothing written, the new plan shown. ──
     await fetch(`http://localhost:${mockPort}/__edit`, { method: "POST" });

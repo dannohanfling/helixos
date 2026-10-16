@@ -114,6 +114,25 @@ export const V2_TABLES: FixtureTable[] = [
 ];
 
 /** The first base: the review row's full text, joined through its V1 Record ID. */
+/**
+ * H-297: the same client's base with names that drifted, as D.D.'s had: "Business Vision" and "Offer" (name variants), the
+ * methodologies as "Playbooks" (an unknown name, the same fields: found by shape), and the lead magnets as "Downloads" with
+ * their fields renamed too (found by nothing: the coach picks it on the dry run).
+ */
+export const RENAMED_BASE = "appSynthRenamedV2";
+export const RENAMED_TOKEN = "pat-renamed-good";
+export const RENAMED_TABLES: FixtureTable[] = V2_TABLES.map((t) => {
+  const c = structuredClone(t);
+  if (c.name.includes("Vision")) c.name = "🌟 Business Vision";
+  if (c.name.includes("OffersOS")) c.name = "🎁 Offer";
+  if (c.name.includes("Methodologies")) c.name = "🧪 Playbooks";
+  if (c.name.includes("Lead Magnet")) {
+    c.name = "🎀 Downloads";
+    c.records = c.records.map((r) => ({ ...r, fields: Object.fromEntries(Object.entries(r.fields).map(([k, v]) => [k.replace("Lead Magnet Name", "Download title").replace("Asset Link", "File"), v])) }));
+  }
+  return c;
+});
+
 export const V1_TABLES: FixtureTable[] = [
   {
     id: "tblV1READY000001",

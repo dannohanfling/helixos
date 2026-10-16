@@ -7,7 +7,7 @@
  * and never asked for the people tables' rows.
  */
 import { createServer } from "node:http";
-import { V1_BASE, V1_TABLES, V2_BASE, V2_TABLES, type FixtureTable } from "./fixtures/airtable-client";
+import { V1_BASE, V1_TABLES, V2_BASE, V2_TABLES, type FixtureTable, RENAMED_BASE, RENAMED_TOKEN, RENAMED_TABLES } from "./fixtures/airtable-client";
 import { HUMANOS_BASE, HUMANOS_TABLES, HUMANOS_TOKEN } from "./fixtures/airtable-humanos";
 import { OMNI_BASE, OMNI_TABLES, OMNI_TOKEN } from "./fixtures/airtable-omni";
 import { TESTIMONIALS_BASE, TESTIMONIALS_TABLES, TESTIMONIALS_TOKEN } from "./fixtures/airtable-testimonials";
@@ -18,6 +18,8 @@ const port = Number(process.argv[2] ?? 4070);
 const bases: Record<string, { token: string; tables: FixtureTable[] }> = {
   [V2_BASE]: { token: "pat-source-good", tables: structuredClone(V2_TABLES) },
   [V1_BASE]: { token: "pat-fallback-good", tables: structuredClone(V1_TABLES) },
+  // H-297: the same base with drifted names, read with its own token.
+  [RENAMED_BASE]: { token: RENAMED_TOKEN, tables: structuredClone(RENAMED_TABLES) },
   // Body's HumanOS history (rev 237 phase 7): a third base, its own token.
   [HUMANOS_BASE]: { token: HUMANOS_TOKEN, tables: structuredClone(HUMANOS_TABLES) },
   // The coach's backfill (rev 441): the Omnichannel base, its own token.
@@ -69,7 +71,8 @@ createServer((req, res) => {
   const base = bases[baseId];
   if (!base) return json(404, { error: { type: "NOT_FOUND" } });
   if (base.token !== token) return json(403, { error: { type: "INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND" } });
-  if (meta) return json(200, { tables: base.tables.map((t) => ({ id: t.id, name: t.name, ...(t.fields ? { fields: t.fields } : {}) })) });
+  // The metadata API always lists a table's fields; a fixture that names none gets them from its rows, as Airtable would.
+  if (meta) return json(200, { tables: base.tables.map((t) => ({ id: t.id, name: t.name, fields: t.fields ?? [...new Set(t.records.flatMap((r) => Object.keys(r.fields)))].map((name, i) => ({ id: `fld${t.id.slice(3, 10)}${String(i).padStart(4, "0")}`, name })) })) });
   const table = base.tables.find((t) => t.id === decodeURIComponent(data![2]));
   if (!table) return json(404, { error: { type: "TABLE_NOT_FOUND" } });
   // Paged two at a time, so the walk proves the reader follows offset to the end.

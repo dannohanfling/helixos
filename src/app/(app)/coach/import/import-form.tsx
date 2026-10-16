@@ -7,6 +7,7 @@ import { Card } from "@/components/ui";
 
 const EMPTY = { client: "", newName: "", newEmail: "", newBusiness: "", sourceBase: "", sourceToken: "", fallbackBase: "", fallbackToken: "", since: "" };
 type Fields = typeof EMPTY;
+const HOW = { name: "by its name", shape: "by its fields", picked: "your pick" } as const;
 
 /**
  * The import form. Every input is held here, so the tokens pasted for the dry run are still in their boxes for Approve and go
@@ -16,6 +17,8 @@ type Fields = typeof EMPTY;
 export function ImportForm({ clients }: { clients: { id: string; label: string }[] }) {
   const [state, action] = useActionState<ImportState, FormData>(importAction, undefined);
   const [f, setF] = useState<Fields>(EMPTY);
+  // H-297: which of her tables stands for a template table, by table id; empty means HelixOS finds it by name or by fields.
+  const [picks, setPicks] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState(false);
   const [seen, setSeen] = useState(state);
   // A new answer from the server: the form matches what it shows again.
@@ -146,6 +149,42 @@ export function ImportForm({ clients }: { clients: { id: string; label: string }
                 ? " That's over the limit. It goes in whole, with nothing cut, and is marked over the limit: their AI doesn't use it until it's trimmed under. Their Essence page and their client page show what to trim, section by section."
                 : ""}
             </p>
+            {p.tables.length ? (
+              <div data-testid="import-tables">
+                <p className="font-semibold">Her tables</p>
+                <p className="text-xs text-ink-3">Each template table and the table of hers it was read from: found by its name (any spelling, emoji and case ignored), by its fields, or by your pick. For one not found, pick which of her tables to use, then run the dry run again. Nothing is read from a table you leave at &ldquo;not used&rdquo;.</p>
+                <ul className="mt-1 space-y-1">
+                  {p.tables.map((t) => (
+                    <li key={t.key} className="flex flex-wrap items-center gap-2" data-testid="import-table-row" data-key={t.key} data-how={t.match?.how ?? "none"}>
+                      <span className="w-36 font-medium">{t.label}</span>
+                      <span className={t.match ? "text-good" : "text-warn"} data-testid="import-table-match">
+                        {t.match ? `${t.match.name}, ${HOW[t.match.how]}` : "not found"}
+                      </span>
+                      {/* The select stays outside the form's reset (form=""); the hidden input carries the pick. */}
+                      <input type="hidden" name={`pick:${t.key}`} value={picks[t.key] ?? ""} />
+                      <select
+                        className="field w-auto max-w-full text-xs"
+                        value={picks[t.key] ?? ""}
+                        form=""
+                        aria-label={`Her table for ${t.label}`}
+                        data-testid={`import-pick-${t.key.replace(/\s+/g, "-")}`}
+                        onChange={(e) => {
+                          setPicks({ ...picks, [t.key]: e.target.value });
+                          setDirty(true);
+                        }}
+                      >
+                        <option value="">{t.match ? "as found" : "not used"}</option>
+                        {p.herTables.map((h) => (
+                          <option key={h.id} value={h.id}>
+                            {h.name}
+                          </option>
+                        ))}
+                      </select>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {p.missing.length ? (
               <div data-testid="import-missing">
                 <p className="font-semibold">Tables not found in the base</p>

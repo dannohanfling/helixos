@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { V1_TABLES, V2_TABLES } from "../../../../scripts/fixtures/airtable-client";
-import { buildPlan, fieldKey, offerName, planSummary, revenueTargets, sameOffer, tableKey, type ImportSource } from "../airtable-import";
+import { TEMPLATE_TABLES, buildPlan, fieldKey, matchTables, offerName, planSummary, revenueTargets, sameOffer, tableKey, type BaseTable, type ImportSource } from "../airtable-import";
 
 const clean = (n: string) => n.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim();
 // As the reader hands it over: every table named, the people tables never read.
@@ -117,5 +117,45 @@ describe("the dry run of a synthetic client base", () => {
     const again = buildPlan(source(), rules, existing);
     expect(planSummary(again).every((s) => s.create === 0)).toBe(true);
     expect(planSummary(first).find((s) => s.area === "tasks")).toEqual({ area: "tasks", create: 3, update: 0 });
+  });
+});
+
+describe("finding the template's tables in a base whose names drifted (H-297)", () => {
+  const fieldsOf = (t: { records: { fields: Record<string, unknown> }[] }): { name: string }[] => [...new Set(t.records.flatMap((r) => Object.keys(r.fields)))].map((name) => ({ name }));
+  const base = (): BaseTable[] => V2_TABLES.map((t) => ({ id: t.id, name: t.name, fields: fieldsOf(t) }));
+  const byKey = (tables: BaseTable[], picks?: Record<string, string>) => matchTables(TEMPLATE_TABLES, tables, picks);
+
+  it("the template's own names, every table by name", () => {
+    const m = byKey(base());
+    for (const t of TEMPLATE_TABLES) expect(m[t.key]?.how, t.key).toBe("name");
+    expect(m.vision?.name).toBe("Vision");
+  });
+  it("\"Business Vision\" and \"Offer\" pass the check and map, whatever the emoji, case and spacing", () => {
+    const tables = base().map((t) => (t.name.includes("Vision") ? { ...t, name: "🌟  business VISION" } : t.name.includes("OffersOS") ? { ...t, name: "Offer" } : t));
+    const m = byKey(tables);
+    expect(m.vision).toMatchObject({ id: tables.find((t) => t.name.includes("VISION"))!.id, name: "business VISION", how: "name" });
+    expect(m.offersos).toMatchObject({ name: "Offer", how: "name" });
+    // The plan reads them as the template's tables.
+    const src: ImportSource = { v2: Object.fromEntries(Object.entries(m).filter(([, v]) => v).map(([k, v]) => [k, { name: v!.name, records: V2_TABLES.find((t) => t.id === v!.id)!.records }])), v1: {} };
+    expect(planSummary(buildPlan(src, rules, new Set())).find((r) => r.area === "offers")?.create).toBeGreaterThan(0);
+  });
+  it("an unknown name with the template's fields is found by shape; unknown fields are not found; a table taken by name is never taken by shape", () => {
+    const tables = base().map((t) => (t.name.includes("Methodologies") ? { ...t, name: "🧪 Playbooks" } : t.name.includes("Lead Magnet") ? { ...t, name: "Downloads", fields: [{ name: "Download title" }, { name: "File" }, { name: "Status" }] } : t));
+    const m = byKey(tables);
+    expect(m.methodologies).toMatchObject({ name: "Playbooks", how: "shape" });
+    expect(m["lead magnet"]).toBeNull();
+    // The name field alone is not a shape: a table with just "Name" and "Status" is nobody's.
+    const bare = byKey([{ id: "tblX", name: "Things", fields: [{ name: "Name" }, { name: "Status" }] }]);
+    expect(Object.values(bare).every((v) => v === null)).toBe(true);
+    // Vision by name keeps its table even though its fields would fit a shape search.
+    expect(m.vision?.how).toBe("name");
+  });
+  it("the coach's pick wins, by table id, and stands in for a table not found", () => {
+    const tables = base().map((t) => (t.name.includes("Lead Magnet") ? { ...t, name: "Downloads", fields: [{ name: "Download title" }] } : t));
+    const downloads = tables.find((t) => t.name === "Downloads")!;
+    const m = byKey(tables, { "lead magnet": downloads.id });
+    expect(m["lead magnet"]).toEqual({ id: downloads.id, name: "Downloads", how: "picked" });
+    // A pick that names no table of hers is ignored.
+    expect(byKey(tables, { "lead magnet": "tblNOPE" })["lead magnet"]).toBeNull();
   });
 });

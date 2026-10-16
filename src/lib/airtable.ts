@@ -4,7 +4,7 @@
  * tables are found by name through the metadata API, then only the Phase 1 tables are read, paged. AIRTABLE_API_URL points the
  * walk at scripts/mock-airtable.ts; production uses api.airtable.com.
  */
-import { COUNTED, tableKey, type AirtableRecord, type ImportSource, type SourceTable } from "@/lib/engine/airtable-import";
+import { COUNTED, TEMPLATE_TABLES, V1_TEMPLATE_TABLES, matchTables, tableKey, tableLabel, type AirtableRecord, type BaseTable, type ImportSource, type SourceTable, type TableMatch } from "@/lib/engine/airtable-import";
 
 const API = () => process.env.AIRTABLE_API_URL || "https://api.airtable.com";
 
@@ -51,10 +51,10 @@ async function get(token: string, which: Which, path: string): Promise<unknown> 
   return res.json();
 }
 
-/** The base's tables by name, from the metadata API. */
-async function tables(token: string, which: Which, baseId: string): Promise<{ id: string; name: string }[]> {
-  const body = (await get(token, which, `/v0/meta/bases/${encodeURIComponent(baseId)}/tables`)) as { tables?: { id: string; name: string }[] };
-  return body.tables ?? [];
+/** The base's tables by name, with their field names, from the metadata API. */
+async function tables(token: string, which: Which, baseId: string): Promise<BaseTable[]> {
+  const body = (await get(token, which, `/v0/meta/bases/${encodeURIComponent(baseId)}/tables`)) as { tables?: { id: string; name: string; fields?: { name: string }[] }[] };
+  return (body.tables ?? []).map((t) => ({ id: t.id, name: t.name, fields: (t.fields ?? []).map((f) => ({ name: f.name })) }));
 }
 
 /** Every row of one table, paged 100 at a time; with `fieldIds`, only those fields of each row, keyed by field id. */
@@ -73,20 +73,27 @@ async function rows(token: string, which: Which, baseId: string, tableId: string
   return out;
 }
 
-async function read(token: string, which: Which, baseId: string, wanted: string[], counted: string[] = []): Promise<{ found: Record<string, SourceTable | undefined>; missing: string[]; names: Record<string, string> }> {
+type Read = { found: Record<string, SourceTable | undefined>; missing: string[]; names: Record<string, string>; tables: { id: string; name: string }[]; matched: Record<string, TableMatch | null> };
+/**
+ * The tables wanted, by key. A template table (H-297) is found by the coach's pick, its name variants or its shape (the engine's
+ * matchTables); any other key by its exact name. `counted` tables are read for their count only.
+ */
+async function read(token: string, which: Which, baseId: string, wanted: string[], counted: string[] = [], picks: Record<string, string> = {}): Promise<Read> {
   const all = await tables(token, which, baseId);
-  const names = Object.fromEntries(all.map((t) => [tableKey(t.name), t.name.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim()]));
+  const names = Object.fromEntries(all.map((t) => [tableKey(t.name), tableLabel(t.name)]));
+  const templates = [...TEMPLATE_TABLES, ...V1_TEMPLATE_TABLES].filter((t) => wanted.includes(t.key));
+  const matched = matchTables(templates, all, picks);
   const found: Record<string, SourceTable | undefined> = {};
   const missing: string[] = [];
   for (const key of [...wanted, ...counted]) {
-    const t = all.find((x) => tableKey(x.name) === key);
+    const t = key in matched ? (matched[key] ? all.find((x) => x.id === matched[key]!.id) : undefined) : all.find((x) => tableKey(x.name) === key);
     if (!t) {
       if (wanted.includes(key)) missing.push(key);
       continue;
     }
-    found[key] = { name: t.name.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim(), records: await rows(token, which, baseId, t.id) };
+    found[key] = { name: tableLabel(t.name), records: await rows(token, which, baseId, t.id) };
   }
-  return { found, missing, names };
+  return { found, missing, names, tables: all.map((t) => ({ id: t.id, name: tableLabel(t.name) })), matched };
 }
 
 const BASE_ID = /^app[A-Za-z0-9]{14}$/;
@@ -95,15 +102,15 @@ export type BaseAccess = { baseId: string; token: string };
  * The client's base, and the older one it was migrated from when given, each with its own read-only token (27 Sep: Danno made one
  * per base), read for Phase 1.
  */
-export async function readSource(source: BaseAccess, fallback: BaseAccess | null): Promise<{ source: ImportSource; missing: string[] }> {
+export async function readSource(source: BaseAccess, fallback: BaseAccess | null, picks: Record<string, string> = {}): Promise<{ source: ImportSource; missing: string[]; tables: { id: string; name: string }[]; matched: Record<string, TableMatch | null> }> {
   if (!BASE_ID.test(source.baseId.trim())) throw new AirtableError("base_id", "source");
   if (!source.token.trim()) throw new AirtableError("no_token", "source");
   if (fallback && !BASE_ID.test(fallback.baseId.trim())) throw new AirtableError("base_id", "fallback");
   if (fallback && !fallback.token.trim()) throw new AirtableError("no_token", "fallback");
   // The Phase 1 tables, and the other tables of hers read for their count only (never the people tables).
-  const v2 = await read(source.token.trim(), "source", source.baseId.trim(), V2_TABLES, COUNTED);
-  const v1 = fallback ? await read(fallback.token.trim(), "fallback", fallback.baseId.trim(), V1_TABLES) : { found: {}, missing: [] };
-  return { source: { v2: v2.found, v1: v1.found, names: v2.names }, missing: [...v2.missing, ...v1.missing.map((m) => `${m} (fallback base)`)] };
+  const v2 = await read(source.token.trim(), "source", source.baseId.trim(), V2_TABLES, COUNTED, picks);
+  const v1 = fallback ? await read(fallback.token.trim(), "fallback", fallback.baseId.trim(), V1_TABLES) : { found: {}, missing: [], matched: {} };
+  return { source: { v2: v2.found, v1: v1.found, names: v2.names }, missing: [...v2.missing, ...v1.missing.map((m) => `${m} (fallback base)`)], tables: v2.tables, matched: { ...v2.matched, ...v1.matched } };
 }
 
 /**

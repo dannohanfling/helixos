@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 208,
+    date: "2026-10-16",
+    title: "Coaches: Import from Airtable reads a base whose table names drifted",
+    lines: [
+      "Coach → Import from Airtable no longer stops when a client's tables carry other names (\"Business Vision\", \"Offer\"). Each template table is found by its name in any spelling (emoji, case and spacing ignored), then by its fields when the name is new, and the dry run lists them: her table beside each, and how it was found.",
+      "A table still not found gets a pick of her tables right there; choose one and run the dry run again. The run is refused only when nothing in the base looks like the template at all.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 207,
     date: "2026-10-16",
     title: "Council Chamber: Golden hour has its speaking clips too",
