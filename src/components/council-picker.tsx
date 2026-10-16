@@ -25,6 +25,7 @@ export function CouncilPicker({
   action,
   startTab,
   customPanel,
+  startChair = null,
 }: {
   seats: PickerSeat[];
   initial: string[];
@@ -33,10 +34,12 @@ export function CouncilPicker({
   action: (fd: FormData) => Promise<void>;
   startTab: string;
   customPanel: ReactNode;
+  /** H-290: the chair tapped in the room, selected on arrival so the next Add fills it. */
+  startChair?: number | null;
 }) {
   const byId = useMemo(() => new Map(seats.map((s) => [s.id, s])), [seats]);
   const [chairs, setChairs] = useState<(string | null)[]>(initial);
-  const [picked, setPicked] = useState<number | null>(null);
+  const [picked, setPicked] = useState<number | null>(startChair);
   const [tab, setTab] = useState(startTab);
   const [query, setQuery] = useState("");
   const [detail, setDetail] = useState<string | null>(null);

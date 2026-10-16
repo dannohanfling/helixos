@@ -92,15 +92,19 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
           </form>
         </div>
       ) : (
-        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} clips={councilClipFiles()} seats={seats} answer={null} question={(sp.ask ?? "").slice(0, 300)} used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} exampleTick={exampleTick} />
+        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} clips={councilClipFiles()} seats={seats} answer={null} question={(sp.ask ?? "").slice(0, 300)} used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} exampleTick={exampleTick} councilHref={preset === "standard" ? "/my-board/council" : undefined} />
       )}
       {hours ? <BoardCouncilNote seats={seats} /> : null}
       {hours && preset === "standard" ? (
-        <p className="br-wrap" style={{ fontSize: 14, marginTop: 8 }}>
-          <Link href="/my-board/council" className="br-muted" style={{ textDecoration: "underline" }} data-testid="board-council-link">
+        // H-290: a clear way to the council page beside the chairs (members and Danno couldn't find it); a tap on a chair goes there too.
+        <div className="br-wrap br-askrow" style={{ marginTop: 8, alignItems: "center" }}>
+          <Link href="/my-board/council" className="br-pill" data-testid="board-council-link">
             {canAsk ? "Choose your council" : "Their council"}
           </Link>
-        </p>
+          <span className="br-muted" style={{ fontSize: 13 }}>
+            {canAsk ? "Tap a chair to change who sits in it." : "Tap a chair to see who sits in it."}
+          </span>
+        </div>
       ) : null}
       {!canAsk ? <p className="br-wrap br-muted">The Board answers {v.user.name.split(" ")[0]} on their own AI key, so only they can ask it. Their decisions are below.</p> : null}
 

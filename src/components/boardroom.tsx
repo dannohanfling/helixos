@@ -8,6 +8,7 @@
  * lean, breathing or bars: the speaker keeps the glow and the others dim. "Golden hour / Night" is the member's own look.
  */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CHAIRS, CHAIR_KEYS, MODES, MODE_INFO, clipFor, takesWords, turnMs, type Mode, type SceneLook } from "@/lib/engine/board-view";
 import { setSceneLookAction } from "@/lib/actions/scene";
@@ -39,6 +40,8 @@ type Props = {
   initialLook?: SceneLook;
   /** The speaking clips in the repo, by file name (H-150): the page reads public/board; none means the CSS motion alone. */
   clips?: string[];
+  /** H-290: on the idle room (no answer), a tap on a chair opens this page with that chair selected (?chair=N), Danno's head chair without one. */
+  councilHref?: string;
 };
 
 const LOOKS: SceneLook[] = ["day", "night"];
@@ -50,7 +53,8 @@ const plateName = (s: Seat) => s.short.replace(/ Advisor$/, "");
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
 const dayWords = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", DATE_FMT);
 
-export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day", clips = [], exampleTick = false }: Props) {
+export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day", clips = [], exampleTick = false, councilHref }: Props) {
+  const router = useRouter();
   const spoken = useMemo(() => (answer ? seats.filter((s) => answer.advisors.some((a) => a.seat === s.key)).map((s) => s.key) : []), [seats, answer]);
   const [phase, setPhase] = useState<"idle" | "asking" | "playing" | "done">(answer ? (autoplay ? "playing" : "done") : "idle");
   const [idx, setIdx] = useState(0);
@@ -114,6 +118,12 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
     setPhase("playing");
   };
   const tapSeat = (k: string) => {
+    // H-290: with nothing playing, a chair is the way to the council page, that chair selected.
+    if (councilHref && !answer) {
+      const at = seats.findIndex((s) => s.key === k);
+      router.push(at > 0 ? `${councilHref}?chair=${at - 1}` : councilHref);
+      return;
+    }
     if (timer.current) clearTimeout(timer.current);
     if (phase === "playing") setPhase("done");
     setSpot((cur) => (cur === k ? null : k));

@@ -329,6 +329,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               Save
             </SubmitButton>
           </form>
+          {/* H-290: the way to the council page from here too. */}
+          <p className="mt-3 text-sm text-ink-2" data-testid="board-seats-line">
+            Board seats: the four who sit with Danno on every decision.{" "}
+            <Link href="/my-board/council" className="underline">
+              Choose your council
+            </Link>
+          </p>
         </Card>
         <Card id="your-bot" title="What your bot says about your business">
           <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/brain" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>

@@ -795,6 +795,31 @@ async function main() {
       console.log("✓ the seat library: 66 seats, an edit bumps the version; paused while off, her council's names at 1440, 1024 and 390 once live; the answer sat with exactly her five, no \"I am {Name}\", and keeps the version it used");
     }
 
+    // H-290: from My Board, one tap reaches the council page at 390 and 1440: the "Choose your council" button beside the chairs,
+    // and a chair itself, which arrives with that chair selected. Settings → You carries a Board seats line to the same page.
+    {
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base}/my-board`);
+        await page.locator('[data-testid="board-council-link"]').waitFor({ timeout: 15000 });
+        must((await page.locator('[data-testid="board-council-link"]').innerText()).trim() === "Choose your council", `${width}px: the button says Choose your council`);
+        await page.locator('[data-testid="board-council-link"]').click();
+        await page.waitForURL(/\/my-board\/council$/);
+        await page.locator('[data-testid="council-picker"]').waitFor();
+        await page.goto(`${base}/my-board`);
+        const chairs = page.locator('[data-testid^="board-seat-"]');
+        await chairs.first().waitFor({ timeout: 15000 });
+        await chairs.nth(2).click();
+        await page.waitForURL(/\/my-board\/council\?chair=1$/);
+        await page.locator('[data-testid="council-picker"]').waitFor();
+        must((await page.locator('[data-testid="council-chair-1-tap"]').getAttribute("aria-pressed")) === "true", `${width}px: the chair tapped in the room arrives selected`);
+      }
+      await page.setViewportSize({ width: 1280, height: 950 });
+      await page.goto(`${base}/settings`);
+      must(await page.locator('[data-testid="board-seats-line"] a[href="/my-board/council"]').count(), "Settings → You: a Board seats line to the council page");
+      console.log("✓ H-290: one tap from My Board to the council page at 390 and 1440 (the button, or a chair with that chair selected); the Board seats line on Settings");
+    }
+
     // Choose your council, the member's page (rev 756 §2 and §3, rev 766): the first-visit prompt and "Keep the classic four";
     // with expert seats off only the archetypes and her own seats; two custom seats (a real person with no sources runs as "my
     // read"); Save held until four seats and an operator; Add, tap to swap, drag to swap; the room's plates at three widths; once
