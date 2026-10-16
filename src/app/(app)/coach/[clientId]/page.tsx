@@ -215,7 +215,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
           <div className="font-semibold">Program level</div>
           <form action={setClientTierAction} className="flex flex-wrap items-center gap-2" data-testid="level-form">
             <input type="hidden" name="membershipId" value={m.id} />
-            <select className="field w-auto py-1 text-sm" name="programTier" defaultValue={m.programTier} aria-label="Program level" data-testid="level-select">
+            {/* Keyed on the level: a form action resets its fields to the first render's default, so the saved level needs a fresh mount to show. */}
+            <select key={m.programTier} className="field w-auto py-1 text-sm" name="programTier" defaultValue={m.programTier} aria-label="Program level" data-testid="level-select">
               {PROGRAM_ORDER.map((t) => (
                 <option key={t}>{t}</option>
               ))}
