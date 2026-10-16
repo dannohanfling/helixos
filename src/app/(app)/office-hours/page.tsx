@@ -135,9 +135,13 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
       ) : null}
       <OohNoticeSeen pending={Boolean(notice)} />
       {open ? null : (
-        <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="ooh-locked">
-          {OOH_LOCKED_LINE}
-        </p>
+        <>
+          {/* A refused booking lands here with its reason (the same line) when the form itself is gone. */}
+          {sp.error ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="ooh-error">{sp.error}</p> : null}
+          <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="ooh-locked">
+            {OOH_LOCKED_LINE}
+          </p>
+        </>
       )}
       {/* When and where (friction walk OH1, 7 Oct): the time in the workspace's zone and the link, as the coach set them. */}
       {open ? (
