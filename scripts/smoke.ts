@@ -182,6 +182,11 @@ async function main() {
   if ((await page.locator('[data-testid="close-form"] [data-testid="money-read"]').first().innerText()).trim() !== "Reads as $1,200") throw new Error("the box says what it understood before Save");
   await submit(page, 'button:has-text("Close the day")');
   await expectText(page, "Day closed", "close");
+  // The evening close (H-327) plays after the first close of the day: jump to its end and close it.
+  if (await page.locator('[data-testid="evening-close"]').waitFor({ timeout: 2500 }).then(() => true, () => false)) {
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+  }
   {
     const { todayInTz } = await import("@/lib/dates");
     const closedLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, todayInTz(mayaM.timezone || ws.timezone))) });

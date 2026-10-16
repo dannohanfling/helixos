@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 219,
+    date: "2026-10-16",
+    title: "A ceremony when you rise a rank, and the arena lights up when you close the day",
+    lines: [
+      "Reach a new rank (Philosopher at 100 points, Sage at 500, and so on up to Olympian) and a short ceremony plays once: a gold window with that rank's relic, your new name struck in gold, your points, where your seat moves in the Colosseum, the nine-step ladder and the next rank. See my seat opens the Colosseum; Share saves a picture of the card or opens your share sheet. If it lands on the same open as your daily welcome, it plays after it. Ranks whose relic clip is still being made show a struck gold medal instead.",
+      "Close the day and the night Colosseum lights up, lamp by lamp, with your +20 for the close and what tomorrow is worth, then Good night. It plays once per close. Skip or Escape jumps to the end of either, and a device set to reduced motion shows the finished card straight away.",
+      "Sounds: a crowd cheer under the rank-up, the arena's murmur at the close, applause on a milestone day and a quiet fire under the welcome's flame. Nothing plays until you have tapped or typed on the page. One switch under Settings → Sounds turns them all off.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 218,
     date: "2026-10-16",
     title: "The Board's plaque reads bigger, and the whole recommendation sits under the scene",

@@ -1163,6 +1163,13 @@
       "when": 1792183562986,
       "tag": "0186_horizon",
       "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "6",
+      "when": 1792190030188,
+      "tag": "0187_scenes_sounds",
+      "breakpoints": true
     }
   ]
 }

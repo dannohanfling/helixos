@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `sounds_on` integer DEFAULT true NOT NULL;

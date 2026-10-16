@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aqueduct: water and the repair</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Manrope:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#100D09}
+a{color:#F0CF86}a:hover{color:#F1E6CF}
+.scene{position:relative;width:100%;aspect-ratio:1680/944;border-radius:20px;overflow:hidden;background:#2A2A26}
+.scene img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.full{opacity:0}
+.rep .full{animation:fadeIn 1.4s ease 1.6s both}
+.scene svg{position:absolute;inset:0;width:100%;height:100%}
+.wglow{fill:none;stroke:#8FD3F0;stroke-opacity:.45;stroke-linecap:round}
+.wdash{fill:none;stroke:#FFFFFF;stroke-opacity:.8;stroke-linecap:round;stroke-dasharray:10 18;animation:flow 1.6s linear infinite}
+.after{stroke-width:7}
+.after.wdash{stroke-width:2.5}
+.rep .after.wglow{animation:widen 1.2s ease 1.2s both}
+.rep .after.wdash{animation:flow 1.6s linear infinite,widenD 1.2s ease 1.2s both}
+.leakfall{fill:none;stroke:#E6FBFF;stroke-opacity:.85;stroke-width:5;stroke-dasharray:6 10;stroke-linecap:round;animation:fall .5s linear infinite}
+.leakg{transform-box:fill-box;transform-origin:50% 0%}
+.rep .leakg{animation:stopLeak .9s ease-in .5s both}
+.rip{fill:none;stroke:#E6FBFF;stroke-width:2;transform-box:fill-box;transform-origin:50% 50%;animation:ripple 2.4s ease-out infinite}
+.rip.b{animation-delay:1.2s}
+.rep .ripg{animation:fadeOut .8s ease 1s both}
+.burst{opacity:0;transform-box:fill-box;transform-origin:50% 50%}
+.rep .burst{animation:burst 1s ease-out .3s both}
+.fallg{opacity:0}
+.rep .fallg{animation:fadeIn .8s ease 2.2s both}
+.wf{fill:none;stroke:#FFFFFF;stroke-opacity:.55;stroke-width:3;stroke-dasharray:14 22;stroke-linecap:round;mix-blend-mode:screen;animation:fallFast .7s linear infinite}
+.mist{animation:mist 3s ease-in-out infinite}
+.spray{animation:spray 1.4s ease-out infinite}
+.tag{position:absolute;left:47.02%;top:49.79%;transform:translate(-50%,-50%);padding:8px 14px;border-radius:999px;font:700 13px/1.2 Manrope,sans-serif;white-space:nowrap;color:#FFF6E8}
+.tag.leak{background:rgba(150,78,22,.88)}
+.tag.ok{background:rgba(58,92,50,.92);opacity:0}
+.rep .tag.leak{animation:fadeOut .5s ease 1.4s both}
+.rep .tag.ok{animation:popIn .5s cubic-bezier(.3,1.5,.5,1) 1.6s both}
+.toast{position:absolute;left:3%;bottom:5%;width:360px;padding:18px 20px;border-radius:16px;background:rgba(16,13,9,.94);border:1px solid #5E4C27;color:#F1E6CF;display:flex;flex-direction:column;gap:10px;opacity:0}
+.rep .toast{animation:rise .6s ease 3s both}
+.eb{font-size:12px;line-height:16px;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:#F0CF86}
+.tt{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:26px;line-height:1.1}
+.tl{font-size:14px;line-height:1.5;color:#A7997F}
+.cta{align-self:flex-start;position:relative;overflow:hidden;min-height:44px;padding:0 20px;border:1px solid #7A4E1C;border-radius:999px;background:linear-gradient(180deg,#FBE7A6 0%,#E8C26A 30%,#C9973F 62%,#9A6526 100%);color:#3A230A;font:800 13px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,240,200,.6);box-shadow:inset 0 1px 0 rgba(255,250,225,.9),inset 0 -2px 0 rgba(90,56,16,.35);cursor:pointer}
+.paused *{animation-play-state:paused !important}
+@media (prefers-reduced-motion: reduce){.scene *{animation:none !important}.rep .full,.rep .fallg,.rep .toast,.rep .tag.ok{opacity:1}.rep .leakg,.rep .tag.leak,.rep .ripg{opacity:0}}
+.pill{min-height:44px;padding:0 18px;border-radius:999px;border:1px solid #5E4C27;background:transparent;color:#A7997F;font:700 13px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer}
+.pill.on{background:#C9A24A;border-color:#C9A24A;color:#0E0C09}
+@keyframes flow{to{stroke-dashoffset:-28}}
+@keyframes fall{to{stroke-dashoffset:-16}}
+@keyframes fallFast{to{stroke-dashoffset:-36}}
+@keyframes ripple{from{transform:scale(.4);opacity:.9}to{transform:scale(1.5);opacity:0}}
+@keyframes stopLeak{from{transform:scaleY(1);opacity:1}to{transform:scaleY(0);opacity:0}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+@keyframes widen{from{stroke-width:7}to{stroke-width:12}}
+@keyframes widenD{from{stroke-width:2.5}to{stroke-width:4.2}}
+@keyframes burst{0%{opacity:0;transform:scale(.3)}30%{opacity:1}100%{opacity:0;transform:scale(1.6)}}
+@keyframes mist{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:.6;transform:scale(1.08)}}
+@keyframes spray{0%{transform:translateY(0);opacity:0}20%{opacity:.9}100%{transform:translateY(-26px);opacity:0}}
+@keyframes popIn{from{opacity:0;transform:translate(-50%,-50%) scale(.7)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 40px 80px; display: flex; flex-direction: column; gap: 20px; background: #100D09; color: #F1E6CF; font-family: Manrope, 'Segoe UI', system-ui, sans-serif">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 6px; max-width: 760px">
+<div style="font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; color: #F0CF86">THE AQUEDUCT: WATER, LEAK AND REPAIR</div>
+<div style="font-size: 15px; line-height: 1.5; color: #A7997F">Water flows along the channel and spills at the weakest arch. When the member's numbers recover, play the repair: the leak stops, the channel fills, the waterfall and fountain come back, and the arch is marked repaired. All in code, no video.</div>
+</div>
+<div style="display: flex; gap: 8px; flex: none">
+<button class="{{leakCls}}" onClick="{{setLeak}}">Leaking now</button>
+<button class="{{repCls}}" onClick="{{playRepair}}">Play the repair</button>
+<button class="pill" onClick="{{togglePause}}">{{pauseLabel}}</button>
+</div>
+</div>
+<sc-if value="{{show}}" hint-placeholder-val="{{true}}">
+<div class="scene {{modeCls}} {{pausedCls}}">
+<img src="/_blob/0f0a8d4b62d40e3a7c65a6b09584b159" alt="The aqueduct, leaking at the third arch">
+<img class="full" src="/_blob/164ae2442bf72b93a9ffb260c293a907" alt="">
+<svg viewBox="0 0 1680 944" preserveAspectRatio="none" aria-hidden="true">
+<path class="wglow" stroke-width="12" d="M185,266 C240,280 300,293 360,300 C420,305 470,307 520,309 L700,312"></path>
+<path class="wdash" stroke-width="4.2" d="M185,266 C240,280 300,293 360,300 C420,305 470,307 520,309 L700,312"></path>
+<path class="wglow after" d="M700,312 L880,312 L1060,310 L1240,306 L1378,303"></path>
+<path class="wdash after" d="M700,312 L880,312 L1060,310 L1240,306 L1378,303"></path>
+<g class="leakg"><path class="leakfall" d="M735,505 L735,750"></path></g>
+<g class="ripg"><ellipse class="rip" cx="750" cy="768" rx="90" ry="26"></ellipse><ellipse class="rip b" cx="750" cy="768" rx="90" ry="26"></ellipse></g>
+<g class="burst"><circle cx="735" cy="505" r="26" fill="#F0CF86" fill-opacity=".55"></circle><g stroke="#FFE7A8" stroke-width="3" stroke-linecap="round"><path d="M735,465 L735,449"></path><path d="M735,545 L735,561"></path><path d="M695,505 L679,505"></path><path d="M775,505 L791,505"></path><path d="M707,477 L696,466"></path><path d="M763,477 L774,466"></path><path d="M707,533 L696,544"></path><path d="M763,533 L774,544"></path></g></g>
+<g class="fallg">
+<path class="wf" d="M1392,392 C1410,450 1425,520 1430,612"></path>
+<path class="wf" d="M1408,388 C1428,450 1442,525 1448,618" style="animation-delay: -.2s"></path>
+<path class="wf" d="M1424,392 C1444,455 1456,530 1462,622" style="animation-delay: -.45s"></path>
+<path class="wf" d="M1440,400 C1458,460 1468,535 1472,620" style="animation-delay: -.3s"></path>
+<ellipse class="mist" cx="1452" cy="628" rx="60" ry="18" fill="#FFFFFF" fill-opacity=".35"></ellipse>
+<g fill="#FFFFFF"><circle class="spray" cx="1528" cy="598" r="2.4"></circle><circle class="spray" cx="1522" cy="600" r="2" style="animation-delay: .35s"></circle><circle class="spray" cx="1534" cy="600" r="2" style="animation-delay: .7s"></circle><circle class="spray" cx="1528" cy="602" r="1.8" style="animation-delay: 1.05s"></circle></g>
+<ellipse class="rip" cx="1530" cy="636" rx="46" ry="11"></ellipse>
+</g>
+</svg>
+<span class="tag leak">18% to conversations · leaking here</span>
+<span class="tag ok">31% to conversations · repaired</span>
+<div class="toast">
+<div class="eb">Arch repaired</div>
+<div class="tt">Your water is flowing again.</div>
+<div class="tl">DMs to conversations is back to 31%, up from 18%. The fountain is full.</div>
+<button class="cta">See what changed</button>
+</div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const mode = st.mode || 'leak';
+    const paused = !!st.paused;
+    return {
+      show: !st.hidden,
+      modeCls: mode === 'repair' ? 'rep' : '',
+      leakCls: 'pill' + (mode === 'leak' ? ' on' : ''),
+      repCls: 'pill' + (mode === 'repair' ? ' on' : ''),
+      setLeak: () => this.setState({ mode: 'leak' }),
+      playRepair: () => {
+        this.setState({ hidden: true, mode: 'repair' });
+        setTimeout(() => this.setState({ hidden: false }), 60);
+      },
+      togglePause: () => this.setState({ paused: !paused }),
+      pauseLabel: paused ? 'Play the water' : 'Pause the water',
+      pausedCls: paused ? 'paused' : ''
+    };
+  }
+}
+</script>
+</body>
+</html>

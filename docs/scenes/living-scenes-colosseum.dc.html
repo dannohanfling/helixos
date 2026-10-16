@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Colosseum ambience</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Manrope:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#100D09}
+a{color:#F0CF86}a:hover{color:#F1E6CF}
+.scene{position:relative;width:100%;aspect-ratio:1680/944;border-radius:20px;overflow:hidden;background:#1A150F}
+.scene img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.fl{mix-blend-mode:screen;filter:contrast(2.3) brightness(.8);opacity:.16}
+.fl.a{clip-path:inset(0 64% 0 0);animation:flick 2.1s ease-in-out infinite}
+.fl.b{clip-path:inset(0 34% 0 34%);animation:flick 1.7s ease-in-out .4s infinite}
+.fl.c{clip-path:inset(0 0 0 64%);animation:flick 2.6s ease-in-out .9s infinite}
+.tw{position:absolute;width:3px;height:3px;border-radius:50%;background:#FFD9A0;box-shadow:0 0 6px 2px rgba(255,200,120,.6);animation:twinkle 3s ease-in-out infinite}
+.haze{position:absolute;left:30%;top:30%;width:42%;height:44%;border-radius:50%;background:radial-gradient(ellipse,rgba(255,200,140,.14),rgba(255,200,140,0) 65%);animation:hazeDrift 16s ease-in-out infinite alternate}
+.cloud{position:absolute;top:-10%;width:70%;height:90%;left:-75%;border-radius:50%;background:radial-gradient(ellipse,rgba(25,16,6,.32),rgba(25,16,6,0) 62%);animation:cloud 48s linear infinite}
+.mote{position:absolute;width:3px;height:3px;border-radius:50%;background:rgba(255,242,215,.75);filter:blur(.4px);animation:mote 9s ease-in-out infinite}
+.bird{position:absolute;left:-4%;width:26px;height:12px;animation:fly 24s linear infinite}
+.bird svg{width:100%;height:100%;overflow:visible}
+.wing{transform-box:fill-box;transform-origin:50% 100%;animation:flap .45s ease-in-out infinite alternate}
+.paused *{animation-play-state:paused !important}
+@media (prefers-reduced-motion: reduce){.scene *{animation:none !important}}
+.pill{min-height:44px;padding:0 18px;border-radius:999px;border:1px solid #5E4C27;background:transparent;color:#A7997F;font:700 13px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer}
+.pill.on{background:#C9A24A;border-color:#C9A24A;color:#0E0C09}
+@keyframes flick{0%,100%{opacity:.16}18%{opacity:.26}40%{opacity:.1}63%{opacity:.22}82%{opacity:.13}}
+@keyframes twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes hazeDrift{from{transform:translate(-4%,2%) scale(1)}to{transform:translate(4%,-2%) scale(1.08)}}
+@keyframes cloud{from{left:-75%}to{left:110%}}
+@keyframes mote{0%{opacity:0;transform:translate(0,0)}25%{opacity:.9}75%{opacity:.6}100%{opacity:0;transform:translate(var(--dx),var(--dy))}}
+@keyframes fly{from{left:-4%}to{left:104%}}
+@keyframes flap{from{transform:scaleY(1)}to{transform:scaleY(-.5)}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 40px 80px; display: flex; flex-direction: column; gap: 20px; background: #100D09; color: #F1E6CF; font-family: Manrope, 'Segoe UI', system-ui, sans-serif">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; color: #F0CF86">THE COLOSSEUM, ALIVE</div>
+<div style="font-size: 15px; line-height: 1.5; color: #A7997F">Night: the arches flicker like real torchlight and the city twinkles. Golden hour: cloud shadows pass, dust drifts on the sand, birds cross. It all sits under the orbiting member avatars.</div>
+</div>
+<div style="display: flex; gap: 8px; flex: none">
+<button class="{{dayCls}}" onClick="{{setDay}}">Golden hour</button>
+<button class="{{nightCls}}" onClick="{{setNight}}">Night</button>
+<button class="pill" onClick="{{togglePause}}">{{pauseLabel}}</button>
+</div>
+</div>
+<div class="scene {{pausedCls}}">
+<sc-if value="{{isNight}}" hint-placeholder-val="{{true}}">
+<img src="/_blob/410922bac4f2be271a3277af4676a359" alt="The Colosseum at night">
+<img class="fl a" src="/_blob/410922bac4f2be271a3277af4676a359" alt="">
+<img class="fl b" src="/_blob/410922bac4f2be271a3277af4676a359" alt="">
+<img class="fl c" src="/_blob/410922bac4f2be271a3277af4676a359" alt="">
+<div class="haze"></div>
+<sc-for list="{{twinkles}}" as="t" hint-placeholder-count="12">
+<span class="tw" style="left: {{t.x}}; top: {{t.y}}; animation-duration: {{t.d}}; animation-delay: {{t.dl}}"></span>
+</sc-for>
+</sc-if>
+<sc-if value="{{isDay}}" hint-placeholder-val="{{false}}">
+<img src="/_blob/8ae58aec3464e2b75bacc2271f0d1976" alt="The Colosseum at golden hour">
+<div class="cloud"></div>
+<sc-for list="{{motes}}" as="m" hint-placeholder-count="16">
+<span class="mote" style="left: {{m.x}}; top: {{m.y}}; --dx: {{m.dx}}; --dy: {{m.dy}}; animation-duration: {{m.d}}; animation-delay: {{m.dl}}"></span>
+</sc-for>
+<sc-for list="{{birds}}" as="b" hint-placeholder-count="3">
+<span class="bird" style="top: {{b.y}}; animation-duration: {{b.d}}; animation-delay: {{b.dl}}"><svg viewBox="0 0 24 12" aria-hidden="true"><g class="wing"><path d="M0 7 Q6 0 12 7 Q18 0 24 7" fill="none" stroke="#2A1E10" stroke-width="1.6" stroke-linecap="round"></path></g></svg></span>
+</sc-for>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const look = st.look || 'night';
+    const paused = !!st.paused;
+    const tw = [[6,8],[14,4],[22,12],[31,3],[40,6],[62,4],[70,7],[78,11],[86,4],[93,13],[97,24],[3,26]];
+    const twinkles = tw.map((p, i) => ({ x: p[0] + '%', y: p[1] + '%', d: (2.2 + (i % 5) * 0.7).toFixed(1) + 's', dl: (i * 0.37).toFixed(2) + 's' }));
+    const motes = [];
+    for (let i = 0; i < 16; i++) {
+      const ang = i * 2.4;
+      const r = 0.25 + ((i * 37) % 70) / 100;
+      motes.push({
+        x: (50.6 + Math.cos(ang) * 11 * r).toFixed(2) + '%',
+        y: (54.2 + Math.sin(ang) * 13 * r).toFixed(2) + '%',
+        dx: (14 + (i % 4) * 9) + 'px',
+        dy: (-10 - (i % 3) * 8) + 'px',
+        d: (7 + (i % 5) * 1.6).toFixed(1) + 's',
+        dl: (-(i * 0.9)).toFixed(1) + 's'
+      });
+    }
+    const birds = [
+      { y: '9%', d: '22s', dl: '0s' },
+      { y: '13%', d: '26s', dl: '-6s' },
+      { y: '7%', d: '30s', dl: '-15s' }
+    ];
+    return {
+      isNight: look === 'night', isDay: look === 'day',
+      dayCls: 'pill' + (look === 'day' ? ' on' : ''),
+      nightCls: 'pill' + (look === 'night' ? ' on' : ''),
+      setDay: () => this.setState({ look: 'day' }),
+      setNight: () => this.setState({ look: 'night' }),
+      togglePause: () => this.setState({ paused: !paused }),
+      pauseLabel: paused ? 'Play' : 'Pause',
+      pausedCls: paused ? 'paused' : '',
+      twinkles: twinkles, motes: motes, birds: birds
+    };
+  }
+}
+</script>
+</body>
+</html>

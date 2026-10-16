@@ -239,6 +239,8 @@ export async function todayData(v: Viewer) {
     lastEnergy: lastEnergyLog?.energy ?? null,
     log: log ?? null,
     streak: streak.running,
+    /** The weekday ladder the streak engine counts from, for the evening close's line about tomorrow (H-327). */
+    streakLadder: streak.activity.ladder,
     points,
     tier: tierProgress(points),
     focusTasks,

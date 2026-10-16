@@ -1,5 +1,7 @@
 "use server";
 
+import { cookies } from "next/headers";
+
 import { and, eq, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
@@ -37,7 +39,9 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
   }
   for (const k of CLOSE_TEXT) input[k] = opt(formData, k);
   // The day it lands on (rev 731) is closeDay's to decide; the KPI boxes follow it.
-  const { date } = await closeDay(v, input);
+  const { date, firstClose } = await closeDay(v, input);
+  // The evening close (H-327 §2) plays in the browser that made the first close of the day: a short-lived mark Today reads.
+  if (firstClose) (await cookies()).set("hx-sealed", date, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 600 });
   // The KPIs the close asks for (BG2): each box is the day's value for one of the member's own close-asked KPIs.
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
   const asked = await closeKpisOf(m, date);

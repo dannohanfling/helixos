@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Forum ambience</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Manrope:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#100D09}
+a{color:#F0CF86}a:hover{color:#F1E6CF}
+.scene{position:relative;width:100%;aspect-ratio:1680/944;border-radius:20px;overflow:hidden;background:#1A150F}
+.scene img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.fl{mix-blend-mode:screen;filter:contrast(2.4) brightness(.8);opacity:.18}
+.fl.a{clip-path:inset(0 64% 0 0);animation:flick 2.3s ease-in-out infinite}
+.fl.b{clip-path:inset(0 34% 0 34%);animation:flick 1.9s ease-in-out .5s infinite}
+.fl.c{clip-path:inset(0 0 0 64%);animation:flick 2.7s ease-in-out 1s infinite}
+.pool{position:absolute;left:38%;top:36%;width:24%;height:26%;border-radius:50%;background:radial-gradient(ellipse,rgba(255,200,120,.22),rgba(255,200,120,0) 65%);mix-blend-mode:screen;animation:breathe 3.2s ease-in-out infinite}
+.beacon{position:absolute;left:49.2%;top:39.6%;width:1.6%;height:3.6%}
+.beacon svg{width:100%;height:100%;overflow:visible}
+.lv{transform-box:fill-box;transform-origin:50% 100%}
+.l1{animation:fk1 1.1s ease-in-out infinite}
+.l2{animation:fk2 .8s ease-in-out infinite}
+.l3{animation:fk3 1.4s ease-in-out infinite}
+.ff{position:absolute;width:4px;height:4px;border-radius:50%;background:#FFE7A0;box-shadow:0 0 8px 3px rgba(255,220,120,.6);animation:ffly 6s ease-in-out infinite}
+.cloud{position:absolute;top:-10%;width:70%;height:90%;left:-75%;border-radius:50%;background:radial-gradient(ellipse,rgba(25,16,6,.28),rgba(25,16,6,0) 62%);animation:cloud 52s linear infinite}
+.ox{position:absolute;top:0;width:0;height:100%;animation:ox 13s ease-in-out infinite alternate}
+.oy{position:absolute;left:0;width:0;height:0;animation:oy 13s ease-in-out infinite alternate}
+.dove{position:absolute;left:-12px;top:-6px;width:24px;height:12px}
+.dove svg{width:100%;height:100%;overflow:visible}
+.wing{transform-box:fill-box;transform-origin:50% 100%;animation:flap .4s ease-in-out infinite alternate}
+.paused *{animation-play-state:paused !important}
+@media (prefers-reduced-motion: reduce){.scene *{animation:none !important}}
+.pill{min-height:44px;padding:0 18px;border-radius:999px;border:1px solid #5E4C27;background:transparent;color:#A7997F;font:700 13px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer}
+.pill.on{background:#C9A24A;border-color:#C9A24A;color:#0E0C09}
+@keyframes flick{0%,100%{opacity:.18}18%{opacity:.28}40%{opacity:.11}63%{opacity:.24}82%{opacity:.14}}
+@keyframes breathe{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+@keyframes fk1{0%,100%{transform:scale(1,1) skewX(0)}25%{transform:scale(.95,1.07) skewX(-3deg)}55%{transform:scale(1.04,.95) skewX(2deg)}80%{transform:scale(.98,1.03) skewX(-1deg)}}
+@keyframes fk2{0%,100%{transform:scale(1,1) skewX(0)}35%{transform:scale(1.03,.96) skewX(2.5deg)}70%{transform:scale(.96,1.06) skewX(-2deg)}}
+@keyframes fk3{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.82;transform:scale(.94,1.04)}}
+@keyframes ffly{0%,100%{opacity:0;transform:translate(0,0)}30%{opacity:1}50%{transform:translate(var(--dx),var(--dy))}70%{opacity:.8}}
+@keyframes cloud{from{left:-75%}to{left:110%}}
+@keyframes ox{from{left:32.1%}to{left:67.9%}}
+@keyframes oy{from{top:32.8%}to{top:64.6%}}
+@keyframes flap{from{transform:scaleY(1)}to{transform:scaleY(-.5)}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 40px 80px; display: flex; flex-direction: column; gap: 20px; background: #100D09; color: #F1E6CF; font-family: Manrope, 'Segoe UI', system-ui, sans-serif">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap">
+<div style="display: flex; flex-direction: column; gap: 6px; max-width: 760px">
+<div style="font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; color: #F0CF86">THE FORUM, ALIVE</div>
+<div style="font-size: 15px; line-height: 1.5; color: #A7997F">Night: lamplit windows flicker, a flame burns on the centre column and fireflies drift in the gardens. Golden hour: doves circle the plaza and cloud shadows pass. The messengers already walk the streets on top of this.</div>
+</div>
+<div style="display: flex; gap: 8px; flex: none">
+<button class="{{dayCls}}" onClick="{{setDay}}">Golden hour</button>
+<button class="{{nightCls}}" onClick="{{setNight}}">Night</button>
+<button class="pill" onClick="{{togglePause}}">{{pauseLabel}}</button>
+</div>
+</div>
+<div class="scene {{pausedCls}}">
+<sc-if value="{{isNight}}" hint-placeholder-val="{{true}}">
+<img src="/_blob/17944dc25a85a350d791ff0b1a95fb04" alt="The Forum at night">
+<img class="fl a" src="/_blob/17944dc25a85a350d791ff0b1a95fb04" alt="">
+<img class="fl b" src="/_blob/17944dc25a85a350d791ff0b1a95fb04" alt="">
+<img class="fl c" src="/_blob/17944dc25a85a350d791ff0b1a95fb04" alt="">
+<div class="pool"></div>
+<div class="beacon"><svg viewBox="0 0 80 96" aria-hidden="true"><defs><linearGradient id="bgOuter" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#8E2F0C"></stop><stop offset=".25" stop-color="#D2531A"></stop><stop offset=".6" stop-color="#F28C2E"></stop><stop offset="1" stop-color="#FFB040" stop-opacity="0"></stop></linearGradient><linearGradient id="bgMid" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#F59A34"></stop><stop offset=".5" stop-color="#FFC45C"></stop><stop offset="1" stop-color="#FFD98A" stop-opacity="0"></stop></linearGradient><radialGradient id="bgCore" cx=".5" cy=".7" r=".5"><stop offset="0" stop-color="#FFFBEF"></stop><stop offset=".5" stop-color="#FFE7A8"></stop><stop offset="1" stop-color="#FFD27A" stop-opacity="0"></stop></radialGradient></defs><g class="lv l1"><path d="M40 4C43 17 58 26 63 42C68 60 63 76 53 85C47 91 33 91 27 85C17 76 12 60 17 44C20 34 29 28 32 18C35 26 36 31 38 34C39 24 37 13 40 4Z" fill="url(#bgOuter)"></path></g><g class="lv l2"><path d="M40 28C43 38 53 45 55 58C57 71 51 81 40 86C29 81 23 71 25 58C27 49 33 45 35 39C37 43 38 45 39 47C39 41 39 34 40 28Z" fill="url(#bgMid)"></path></g><g class="lv l3"><ellipse cx="40" cy="72" rx="13" ry="14" fill="url(#bgCore)"></ellipse></g></svg></div>
+<sc-for list="{{flies}}" as="f" hint-placeholder-count="10">
+<span class="ff" style="left: {{f.x}}; top: {{f.y}}; --dx: {{f.dx}}; --dy: {{f.dy}}; animation-duration: {{f.d}}; animation-delay: {{f.dl}}"></span>
+</sc-for>
+</sc-if>
+<sc-if value="{{isDay}}" hint-placeholder-val="{{false}}">
+<img src="/_blob/e991fe50555437887f4dd23195440f98" alt="The Forum at golden hour">
+<div class="cloud"></div>
+<sc-for list="{{doves}}" as="d" hint-placeholder-count="5">
+<div class="ox" style="animation-delay: {{d.dx}}"><div class="oy" style="animation-delay: {{d.dy}}"><span class="dove"><svg viewBox="0 0 24 12" aria-hidden="true"><g class="wing" style="animation-delay: {{d.fl}}"><path d="M0 7 Q6 0 12 7 Q18 0 24 7" fill="none" stroke="#FBF6EC" stroke-width="2" stroke-linecap="round"></path></g></svg></span></div></div>
+</sc-for>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const look = st.look || 'night';
+    const paused = !!st.paused;
+    const fp = [[620,280],[1050,300],[470,430],[1180,420],[560,620],[1120,600],[900,250],[700,700],[1000,700],[380,330]];
+    const flies = fp.map((p, i) => ({
+      x: (p[0] / 16.8).toFixed(2) + '%', y: (p[1] / 9.44).toFixed(2) + '%',
+      dx: ((i % 2 ? 1 : -1) * (10 + i * 2)) + 'px', dy: (-8 - (i % 3) * 6) + 'px',
+      d: (5 + (i % 4) * 1.3).toFixed(1) + 's', dl: (-(i * 0.8)).toFixed(1) + 's'
+    }));
+    const doves = [0, 1, 2, 3, 4].map((i) => ({
+      dx: (-(i * 2.6)).toFixed(1) + 's',
+      dy: (-(i * 2.6) - 6.5).toFixed(1) + 's',
+      fl: (-(i * 0.13)).toFixed(2) + 's'
+    }));
+    return {
+      isNight: look === 'night', isDay: look === 'day',
+      dayCls: 'pill' + (look === 'day' ? ' on' : ''),
+      nightCls: 'pill' + (look === 'night' ? ' on' : ''),
+      setDay: () => this.setState({ look: 'day' }),
+      setNight: () => this.setState({ look: 'night' }),
+      togglePause: () => this.setState({ paused: !paused }),
+      pauseLabel: paused ? 'Play' : 'Pause',
+      pausedCls: paused ? 'paused' : '',
+      flies: flies, doves: doves
+    };
+  }
+}
+</script>
+</body>
+</html>

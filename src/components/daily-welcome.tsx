@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { FIRE_STAGES, FLAME_GLOW, FLAME_SCALE, SPARKS_FROM_STAGE, arenaProgress, type WelcomeCard } from "@/lib/engine/welcome";
 import { lbSerif } from "@/components/leaderboard/fonts";
+import { armSounds, playSound, startFireLoop, stopFireLoop } from "@/lib/sounds";
+import { WELCOME_CLOSED } from "@/components/rank-up";
 import "./daily-welcome.css";
 
 /** The sequence's length (docs/welcome/daily-welcome-v1.dc.html): 3.3 s, 4 s on a milestone day. */
@@ -133,6 +135,22 @@ export function DailyWelcome({ card }: { card: WelcomeCard }) {
     const t = setTimeout(() => setEnded(true), total);
     return () => clearTimeout(t);
   }, [quiet, total]);
+  // The sounds (H-400): the fire loop under the flame, quiet, faded out when the card closes; the applause on a milestone day.
+  // Nothing before a gesture on the page: the fire waits for the first tap and starts then.
+  useEffect(() => {
+    if (!open || quiet) return;
+    armSounds();
+    startFireLoop(0.25);
+    const t = card.milestone ? setTimeout(() => playSound("applause-milestone"), 3000) : null;
+    return () => {
+      stopFireLoop(1200);
+      if (t) clearTimeout(t);
+    };
+  }, [open, quiet, card.milestone]);
+  // Closed: a rank-up due on the same open plays now.
+  useEffect(() => {
+    if (!open) window.dispatchEvent(new Event(WELCOME_CLOSED));
+  }, [open]);
   useEffect(() => {
     if (finished) ctaRef.current?.focus();
   }, [finished]);

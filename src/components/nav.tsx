@@ -79,7 +79,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                     )
                   ) : n.external ? (
                     // An outbound platform (Danno, 7 Oct): a new tab, the ↗ mark, never the active page.
-                    <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className={itemClass(false)} title={rail ? `${n.label} (opens in a new tab)` : undefined} aria-label={rail ? `${n.label}, opens in a new tab` : undefined}>
+                    <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className={itemClass(false)} title={rail ? `${n.label} (opens in a new tab)` : undefined} aria-label={rail ? `${n.label}, opens in a new tab` : undefined} data-testid="nav-platform">
                       <span className="w-5 text-center text-base">{n.icon}</span>
                       {rail ? null : (
                         <>
