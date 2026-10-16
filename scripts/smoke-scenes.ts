@@ -195,7 +195,8 @@ async function main() {
     const s = await streakFor(mm.workspaceId, maya.id, { today, hour: 12, tz, days: mm.workDays });
     await page.goto(`${base}/today#close`);
     const early = page.locator('[data-testid="close-early"]');
-    if (await early.count()) await early.locator("summary").click();
+    // The close's optional groups are details of their own: the outer summary is the first.
+    if (await early.count()) await early.locator("summary").first().click();
     const form = page.locator('[data-testid="close-form"]');
     await form.waitFor({ timeout: 15000 });
     await form.locator('button[type="submit"]').last().click();

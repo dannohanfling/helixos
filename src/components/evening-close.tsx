@@ -10,6 +10,21 @@ import "./evening-close.css";
 /** The sequence's length (docs/scenes/living-scenes-closeout.dc.html): the lamps over 3 s, then the card. */
 const SEQUENCE_MS = 4300;
 const seenKey = (id: string) => `hx-close-${id}`;
+/** Each close row decided once per page load (an effect may run twice in development): plays, or was already seen. */
+const decided = new Map<string, boolean>();
+function playsOnce(id: string): boolean {
+  const earlier = decided.get(id);
+  if (earlier !== undefined) return earlier;
+  let plays = true;
+  try {
+    if (localStorage.getItem(seenKey(id))) plays = false;
+    else localStorage.setItem(seenKey(id), "1");
+  } catch {
+    // No storage (a private window that refuses it): the scene still plays this once.
+  }
+  decided.set(id, plays);
+  return plays;
+}
 
 /**
  * The evening close (H-327 §2): after the day's close, the night Colosseum unlit, the lamps lighting one by one around the ring
@@ -28,12 +43,7 @@ export function EveningClose({ scene }: { scene: CloseScene }) {
   const finished = done || ended || quiet;
   useEffect(() => {
     armSounds();
-    try {
-      if (localStorage.getItem(seenKey(scene.id))) return;
-      localStorage.setItem(seenKey(scene.id), "1");
-    } catch {
-      // No storage (a private window that refuses it): the scene still plays this once.
-    }
+    if (!playsOnce(scene.id)) return;
     const t = setTimeout(() => setOpen(true), 0);
     return () => clearTimeout(t);
   }, [scene.id]);
