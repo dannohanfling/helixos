@@ -44,10 +44,14 @@ export async function setClientTierAction(formData: FormData): Promise<void> {
   const membershipId = str(formData, "membershipId");
   const tier = PROGRAM_ORDER.find((t) => t === str(formData, "programTier"));
   if (!tier) return;
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)) });
+  if (!m) return;
   await db
     .update(schema.memberships)
     .set({ programTier: tier })
     .where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
+  // Logged as the coach's action (H-470): the level decides Office Hours unless the coach's switch says otherwise.
+  if (m.programTier !== tier) await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: "program_tier.set", payload: { by: coach.user.name, from: m.programTier, to: tier }, status: "sent", note: `Program level set to ${tier} by ${coach.user.name}` });
   refresh();
 }
 
@@ -221,4 +225,21 @@ export async function sendClientEmailChangeAction(formData: FormData): Promise<v
   if (!m) redirect("/coach");
   const r = await startEmailChange({ userId: m.userId, newEmail: str(formData, "email"), by: coach.user.id, byName: coach.user.name });
   redirect(`/coach/${membershipId}?email=${encodeURIComponent(r.ok ? "sent" : r.text)}#login-email`);
+}
+
+/**
+ * Office Hours by program level (H-470): the coach's own switch on one client. "on" or "off" holds until reset; "" clears it,
+ * so the client follows their level again. Every flip is logged as the coach's action, like the level change.
+ */
+export async function setOohOverrideAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  const membershipId = str(formData, "membershipId");
+  const raw = str(formData, "override");
+  const override = raw === "on" || raw === "off" ? raw : null;
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id), eq(schema.memberships.role, "client")) });
+  if (!m) return;
+  await db.update(schema.memberships).set({ officeHoursOverride: override }).where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
+  await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: `office_hours.${override ?? "follow_level"}`, payload: { by: coach.user.name, override, level: m.programTier }, status: "sent", note: `Office Hours ${override ? `set ${override}` : "set to follow the level"} by ${coach.user.name}` });
+  refresh();
 }

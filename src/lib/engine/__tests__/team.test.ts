@@ -106,9 +106,11 @@ describe("team access: what is open is named, and everything else is closed by d
     expect(read(path.join(root, "src/lib/chat.ts"))).toMatch(/if \(v\.switchedInto \|\| v\.team\) return null/);
   });
   it("the menu shows a team member only the open sections", () => {
-    const m = { role: "client" as const, passEnabled: true, bodyEnabled: true, recordingsEnabled: true, team: true };
+    // Office Hours by level (H-470): the owner's access carries to the team; without it the item is gone for them too.
+    const m = { role: "client" as const, passEnabled: true, bodyEnabled: true, recordingsEnabled: true, team: true, oohOn: true };
     // The Platforms links (Danno, 7 Oct) are outbound and open no HelixOS data: a team member sees them too.
     expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/bot-features", "/clients", "/content", "/conversations", "/goals", "/images", "/library", "/office-hours", "/tasks", "/today", "/webinars", "/whats-new", "https://academy.evolveomega.com", "https://app.evolveomega.com", "https://communityloyalty.io"]);
+    expect(NAV.filter((n) => navVisible(n, { ...m, oohOn: false })).some((n) => n.href === "/office-hours")).toBe(false);
     // Without the team flag the same member sees Body, Rewards and the rest.
     expect(NAV.filter((n) => navVisible(n, { ...m, team: false })).some((n) => n.href === "/body")).toBe(true);
     // The Loyalty leaderboard item (H-140): only where the workspace has a board, and then for a team member too.

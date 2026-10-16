@@ -2,6 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { totalPoints } from "@/lib/queries/points";
 import { ctx, refresh, str } from "@/lib/action-helpers";
@@ -49,6 +50,7 @@ export async function setClaimDoneAction(formData: FormData): Promise<void> {
   const v = await requireCoach();
   if (v.switchedInto) return;
   const status = str(formData, "done") === "1" ? "fulfilled" : "requested";
-  await db.update(schema.rewardClaims).set({ status }).where(and(eq(schema.rewardClaims.id, str(formData, "id")), eq(schema.rewardClaims.workspaceId, v.workspace.id)));
+  // The fulfilled stamp (H-470): the 30-day access rewards open Office Hours from it; reopening clears it.
+  await db.update(schema.rewardClaims).set({ status, fulfilledAt: status === "fulfilled" ? nowIso() : null }).where(and(eq(schema.rewardClaims.id, str(formData, "id")), eq(schema.rewardClaims.workspaceId, v.workspace.id)));
   refresh();
 }

@@ -16,13 +16,14 @@ const DOORS: { href: string; label: string; icon: string; line: string }[] = [
  * Team access (Danno, 6 Oct): what Today is to a team member. The owner's own day (lock-in, close, streak, goal, Body) is not
  * theirs to see or do, so Today shows the six doors open to them and the quick task form instead.
  */
-export function TeamHome({ v }: { v: Viewer }) {
+export function TeamHome({ v, oohOn = true }: { v: Viewer; /** Office Hours by level (H-470): the owner's access; off, the door is gone. */ oohOn?: boolean }) {
   const first = v.team!.ownerName.split(" ")[0];
+  const doors = DOORS.filter((d) => d.href !== "/office-hours" || oohOn);
   return (
     <>
       <PageHeader title={`${first}'s HelixOS`} subtitle={`You're on ${v.team!.ownerName}'s team as ${v.actor.name}. ${first} sees every change you make as yours.`} />
       <div className="grid gap-3 sm:grid-cols-2" data-testid="team-home">
-        {DOORS.map((d) => (
+        {doors.map((d) => (
           <Link key={d.href} href={d.href} className="card flex items-start gap-3 p-4 hover:bg-surface-2">
             <span className="text-2xl">{d.icon}</span>
             <span>

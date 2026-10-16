@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 221,
+    date: "2026-10-17",
+    title: "Office Hours comes with Academy and up",
+    lines: [
+      "Office Hours now follows your program level: Academy, Elite and Luxe have it; Accelerator does not. Your coach can turn it on or off for you either way, and a 30-day access reward opens it while it runs. Without it, the menu item and the Today door are simply not there, and your past requests and their answers stay readable on the Office Hours page.",
+      "For coaches: on each client's page, the program level sits beside an Office Hours switch that says \"Following level\" or \"Set by you\", with Reset to level. The OOH requests page marks a request from a client who no longer has Office Hours; the request stays.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 220,
     date: "2026-10-17",
     title: "Loyalty leaderboards: the Kindness Koins tiers and rewards, with what each tier brings",

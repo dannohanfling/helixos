@@ -3,8 +3,9 @@ import { db, schema } from "@/db";
 import type { OfficeHoursRequest } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { saveOohRequestAction } from "@/lib/actions/office-hours";
-import { GO_BACK, OOH_OUTCOME_LABEL, attendeeWords, oohAttendees, oohCanEdit, oohNoticeWords, oohVisibleTo, submittedByWords, upcomingFridays } from "@/lib/engine/office-hours";
+import { GO_BACK, OOH_LOCKED_LINE, OOH_OUTCOME_LABEL, attendeeWords, oohAttendees, oohCanEdit, oohNoticeWords, oohVisibleTo, submittedByWords, upcomingFridays } from "@/lib/engine/office-hours";
 import { teamOf } from "@/lib/team";
+import { oohAccessFor } from "@/lib/office-hours-access";
 import { OohNoticeSeen } from "@/components/ooh-notice-seen";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
@@ -107,10 +108,13 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const fridays = upcomingFridays(v.today);
   const who = { ownerId: v.user.id, actorId: v.actor.id, team: Boolean(v.team) };
-  const [all, team] = await Promise.all([
+  const [all, team, access] = await Promise.all([
     db.query.officeHoursRequests.findMany({ where: and(eq(schema.officeHoursRequests.workspaceId, v.workspace.id), eq(schema.officeHoursRequests.userId, v.user.id)), orderBy: [desc(schema.officeHoursRequests.friday), desc(schema.officeHoursRequests.createdAt)] }),
     teamOf(v.membership.id),
+    // Office Hours by program level (H-470): without access the page keeps the history readable and offers nothing new.
+    oohAccessFor(v),
   ]);
+  const open = access.open;
   const mine = all.filter((r) => oohVisibleTo(r, who));
   const people: Person[] = [{ id: v.user.id, name: v.user.name }, ...team.map((t) => ({ id: t.member.teamUserId, name: t.name }))];
   const onTeam = new Set(team.map((t) => t.member.teamUserId));
@@ -119,7 +123,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
   const missing = [...new Set(mine.flatMap((r) => [...oohAttendees(r), r.submittedByUserId ?? ""]).concat(v.membership.oohNotice?.teamUserId ?? ""))].filter((id) => id && !known.has(id));
   for (const u of missing.length ? await db.query.users.findMany({ where: inArray(schema.users.id, missing), columns: { id: true, name: true } }) : []) known.set(u.id, u.name);
   const nameOf = (id: string) => known.get(id);
-  const notice = !v.team && !v.switchedInto ? v.membership.oohNotice : null;
+  const notice = open && !v.team && !v.switchedInto ? v.membership.oohNotice : null;
   const ownerFirst = v.user.name.split(" ")[0];
   return (
     <>
@@ -130,7 +134,13 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
         </p>
       ) : null}
       <OohNoticeSeen pending={Boolean(notice)} />
+      {open ? null : (
+        <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="ooh-locked">
+          {OOH_LOCKED_LINE}
+        </p>
+      )}
       {/* When and where (friction walk OH1, 7 Oct): the time in the workspace's zone and the link, as the coach set them. */}
+      {open ? (
       <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" data-testid="ooh-when">
         {v.workspace.oohTime || v.workspace.oohLink ? (
           <>
@@ -146,7 +156,9 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
           <span>Your coach hasn&apos;t set the call&apos;s time and link here yet. Ask them, or check the Academy.</span>
         )}
       </p>
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+      ) : null}
+      <div className={open ? "grid gap-4 lg:grid-cols-[1.2fr_1fr]" : "grid gap-4"}>
+        {open ? (
         <div id="request">
           <Card title="Ask for help on a Friday">
             {sp.error ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="ooh-error">{sp.error}</p> : null}
@@ -158,6 +170,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
             <RequestForm fridays={fridays} categories={v.workspace.oohCategories} owner={v.actor.id} people={people} />
           </Card>
         </div>
+        ) : null}
         <div id="mine">
           <Card title={v.team ? "Requests you're part of" : "Your requests"} action={<span className="text-xs text-ink-3">{mine.length}</span>}>
             {sp.saved ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="ooh-saved">Got it. Your request is in for that Friday. You can change it here until then.</p> : null}
@@ -177,7 +190,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                     <p className="text-xs text-ink-3" data-testid="ooh-attending">{attendeeWords(r, nameOf, onTeam)}</p>
                     <p className="mt-1 whitespace-pre-line text-ink-2">{r.description}</p>
                     {r.responsible ? <p className="mt-1 text-xs text-ink-3">With {r.responsible}</p> : null}
-                    {oohCanEdit(r, who, v.today, r.friday) ? (
+                    {open && oohCanEdit(r, who, v.today, r.friday) ? (
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs underline" data-testid="ooh-edit">Change this request</summary>
                         <div className="mt-2">
@@ -189,7 +202,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-ink-2">No requests yet.</p>
+              <p className="text-sm text-ink-2">{open ? "No requests yet." : "No past requests."}</p>
             )}
           </Card>
         </div>

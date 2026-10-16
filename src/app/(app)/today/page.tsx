@@ -12,6 +12,7 @@ import { setContentStatusAction } from "@/lib/actions/content";
 import { todayData } from "@/lib/queries/today";
 import { cookies } from "next/headers";
 import { closeSceneShell } from "@/lib/scenes";
+import { oohAccessFor } from "@/lib/office-hours-access";
 import { EveningClose } from "@/components/evening-close";
 import { setupFor } from "@/lib/setup-card";
 import { SetupCard } from "@/components/setup-card";
@@ -78,7 +79,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const v = await requireViewer({ team: "allow" });
   const tViewer = tick();
   // A team member (Danno, 6 Oct) sees the doors open to them, not the owner's day.
-  if (v.team) return <TeamHome v={v} />;
+  // Office Hours by program level (H-470): a team member's door follows the owner's access.
+  if (v.team) return <TeamHome v={v} oohOn={(await oohAccessFor(v)).open} />;
   const sp = await searchParams;
   // The day's data, the intentions, the closed days, Body's line, the coach's notices and the rest of the page's own reads run
   // together (H-164 §9: one after another they held "Loading…" for seconds; the timing line below says what each part cost).
@@ -153,7 +155,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     if (n) recLines.push({ key: "rec-coach", title: `Action items from your calls: ${n}`, href: "/coach/recordings?tab=items" });
   }
   // Office hours a team member booked for the owner (H-413): one line, until the owner opens Office Hours.
-  const oohNotice = !v.switchedInto && v.membership.oohNotice ? await (async (n) => ({ ...n, name: (await db.query.users.findFirst({ where: eq(schema.users.id, n.teamUserId), columns: { name: true } }))?.name ?? "A team member" }))(v.membership.oohNotice) : null;
+  const oohNotice = !v.switchedInto && v.membership.oohNotice && (await oohAccessFor(v)).open ? await (async (n) => ({ ...n, name: (await db.query.users.findFirst({ where: eq(schema.users.id, n.teamUserId), columns: { name: true } }))?.name ?? "A team member" }))(v.membership.oohNotice) : null;
   const tools = !v.switchedInto && !v.team ? connectProgress({ ghl: Boolean(toolsConn && toolsConn.accounts.length && !toolsConn.lastError && toolsConn.ghlUserId?.trim()), cl: clTokenSet(v.membership) }) : null;
   // One line per render, times only (H-164 §9): how long the viewer, the reads and the page's shaping took.
   // The evening close (H-327 §2): the scene for the close just written, once per close, from the ledger row's own credit.

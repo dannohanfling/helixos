@@ -75,6 +75,8 @@ export const memberships = sqliteTable(
     userId: text("user_id").notNull().references(() => users.id),
     role: text("role", { enum: ["coach", "client"] }).notNull(),
     programTier: text("program_tier").notNull().default("Academy"),
+    /** Office Hours by level (H-470): null follows the program level (Academy and up); "on" or "off" is the coach's own choice and holds until reset. */
+    officeHoursOverride: text("office_hours_override", { enum: ["on", "off"] }),
     businessName: text("business_name"),
     bigPromise: text("big_promise"),
     /** Who the Big Promise is for. One field for the whole business; offers and webinars refine it, nothing else copies it. */
@@ -1078,6 +1080,8 @@ export const rewardClaims = sqliteTable("reward_claims", {
   rewardName: text("reward_name").notNull(),
   pointsSpent: integer("points_spent").notNull().default(0),
   status: text("status", { enum: ["requested", "fulfilled"] }).notNull().default("requested"),
+  /** When the coach marked it fulfilled (H-470): the 30-day access rewards open Office Hours from this stamp. */
+  fulfilledAt: text("fulfilled_at"),
   /** First time the client followed the booking link. */
   bookingOpenedAt: text("booking_opened_at"),
   /** Set when an inbound GoHighLevel appointment is matched to this claim: the call is actually on the calendar. */

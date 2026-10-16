@@ -9,6 +9,7 @@ import { DailyWelcome } from "@/components/daily-welcome";
 import { totalPoints } from "@/lib/queries/points";
 import { RankUp } from "@/components/rank-up";
 import { rankUpShell } from "@/lib/scenes";
+import { oohAccessFor } from "@/lib/office-hours-access";
 import { SoundsConfig } from "@/components/sounds-config";
 import { VoiceProvider } from "@/components/voice-context";
 import { voiceState } from "@/lib/queries/essence";
@@ -61,12 +62,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const rank = rankUpShell(viewer, points);
   // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
+  // Office Hours by program level (H-470): the menu item is there only while the account has it.
+  const oohOn = (await oohAccessFor(viewer)).open;
   // The Daily welcome (H-312): once a day on first open, over whatever page they opened; never on /coach, never switched in.
   const welcome = await welcomeFor(viewer, (await headers()).get("x-helixos-path") ?? "");
   // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
   const horizon = await horizonShell(viewer);
   return (
-    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
+    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

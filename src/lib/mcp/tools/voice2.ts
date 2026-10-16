@@ -21,7 +21,8 @@ import { createContentItem } from "@/lib/content-core";
 import { followUpTask as sharedFollowUp } from "@/lib/tasks-core";
 import { addStepTask, stepGroupsFor, visibleRecordings } from "@/lib/recordings";
 import { saveOohRequest } from "@/lib/office-hours-core";
-import { OOH_OUTCOME_LABEL, upcomingFridays } from "@/lib/engine/office-hours";
+import { OOH_LOCKED_LINE, OOH_OUTCOME_LABEL, upcomingFridays } from "@/lib/engine/office-hours";
+import { oohAccessFor } from "@/lib/office-hours-access";
 import { assemble, callSheet } from "@/lib/engine/socrates";
 import { fillsFor, visibleQuestions } from "@/lib/queries/socrates";
 import { itemMoment } from "@/lib/engine/recording-members";
@@ -348,6 +349,8 @@ defineTool({
   },
   handler: async (v, input): Promise<ToolResult> => {
     ownerOnly(v, "ask for Office Hours");
+    // Office Hours by program level (H-470): the connector refuses the same way the page does, no prices.
+    if (!(await oohAccessFor(v)).open) throw new Error(OOH_LOCKED_LINE);
     const fridays = upcomingFridays(v.today);
     const friday = fridayFrom(input.friday as string | undefined, fridays);
     if (!friday) throw new Error(`Pick one of the next four Fridays: ${fridays.map(fridayWords).join(", ")}.`);
@@ -370,10 +373,11 @@ defineTool({
   input: {},
   handler: async (v): Promise<ToolResult> => {
     ownerOnly(v, "read Office Hours requests");
+    const locked = (await oohAccessFor(v)).open ? "" : ` ${OOH_LOCKED_LINE} Past requests stay readable; new ones can't be sent.`;
     const rows = await db.query.officeHoursRequests.findMany({ where: and(eq(schema.officeHoursRequests.workspaceId, v.workspace.id), eq(schema.officeHoursRequests.userId, v.user.id)), orderBy: [desc(schema.officeHoursRequests.friday), desc(schema.officeHoursRequests.createdAt)], limit: 10 });
-    if (!rows.length) return { text: "You haven't asked for Office Hours yet.", data: { requests: [] } };
+    if (!rows.length) return { text: `You haven't asked for Office Hours yet.${locked}`, data: { requests: [], locked: Boolean(locked) } };
     const how = (r: schema.OfficeHoursRequest) => (r.outcome ? OOH_OUTCOME_LABEL[r.outcome] : "pending");
     const lines = rows.map((r) => `${fridayWords(r.friday)}, ${r.category}: ${r.description.replace(/\s+/g, " ").slice(0, 120)} (${how(r)})`);
-    return { text: `${rows.length} request${rows.length === 1 ? "" : "s"}:\n${numbered(lines)}`, data: { requests: rows.map((r, i) => ({ n: i + 1, id: r.id, friday: r.friday, category: r.category, outcome: r.outcome ?? "pending", submitted: r.createdAt, edited: r.editedAt })) } };
+    return { text: `${rows.length} request${rows.length === 1 ? "" : "s"}:\n${numbered(lines)}${locked}`, data: { locked: Boolean(locked), requests: rows.map((r, i) => ({ n: i + 1, id: r.id, friday: r.friday, category: r.category, outcome: r.outcome ?? "pending", submitted: r.createdAt, edited: r.editedAt })) } };
   },
 });

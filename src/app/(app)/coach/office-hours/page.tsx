@@ -9,6 +9,8 @@ import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { sharedDecisionsFor } from "@/lib/board-steps";
+import { oohAccess } from "@/lib/engine/office-hours";
+import { oohClaimsFor } from "@/lib/office-hours-access";
 
 export const metadata = { title: "Office Hours requests" };
 
@@ -27,6 +29,11 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
     db.query.teamMembers.findMany({ where: and(eq(schema.teamMembers.workspaceId, v.workspace.id), isNull(schema.teamMembers.removedAt)), columns: { userId: true, teamUserId: true } }),
   ]);
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
+  // Office Hours by program level (H-470): a request from a client who has no access today is marked, never removed.
+  const ownerIds = [...new Set(requests.map((r) => r.userId))];
+  const owners = ownerIds.length ? await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), inArray(schema.memberships.userId, ownerIds)), columns: { userId: true, role: true, programTier: true, officeHoursOverride: true } }) : [];
+  const offFor = new Set<string>();
+  for (const o of owners) if (!oohAccess(o, await oohClaimsFor(v.workspace.id, o.userId), v.today).open) offFor.add(o.userId);
   const teamOfOwner = (ownerId: string) => new Set(teams.filter((t) => t.userId === ownerId).map((t) => t.teamUserId));
   const fridays = [...new Set(requests.map((r) => r.friday))];
   const upcoming = fridays.filter((f) => f >= v.today).sort();
@@ -98,6 +105,7 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
                     <Stamps createdAt={r.createdAt} editedAt={r.editedAt} tz={v.tz} today={v.today} />
                     {submittedByWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId)) ? <p className="text-xs text-ink-3" data-testid="ooh-submitted-by">{submittedByWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId))}</p> : null}
                     <p className="text-xs text-ink-3" data-testid="ooh-attending">{attendeeWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId))}</p>
+                    {offFor.has(r.userId) ? <p className="text-xs text-accent-ink" data-testid="ooh-off-mark">Office Hours off for this client now; the request stays.</p> : null}
                     <dl className="mt-1 space-y-1 text-ink-2">
                       <div>
                         <dt className="inline font-medium text-ink">The issue: </dt>

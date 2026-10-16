@@ -13,7 +13,7 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `menuKey` (H-385): the On the horizon item that drives this entry. It reads as Coming soon until that item has shipped
  * (`withHorizon` below), then becomes a normal link; the coach moves the item, no deploy needed.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -29,7 +29,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/conversations", label: "DMs", icon: "💬", team: true, line: "every conversation, logged" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
       // Team access (H-413): a team member books office hours for the owner and says who's attending.
-      { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true },
+      // Office Hours by program level (H-470): Academy and up, or the coach's switch; gone otherwise, no card, no prices.
+      { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true, oohOnly: true },
     ],
   },
   {
@@ -157,9 +158,10 @@ export function withHorizon(items: NavItem[], shippedKeys: readonly string[]): N
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean };
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
   (!n.loyaltyOnly || Boolean(m.loyaltyOn)) &&
+  (!n.oohOnly || m.role === "coach" || Boolean(m.oohOn)) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 

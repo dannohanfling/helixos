@@ -172,6 +172,107 @@ async function main() {
     must(cardText.includes(maya.name) && cardText.includes("Submitted by Sam Vale") && cardText.includes(`Attending: ${maya.name}, Sam Vale; others: Lee`), `the coach's card names the member, the submitter and the attendees: ${cardText.slice(0, 200)}`);
     console.log("✓ the coach's queue shows the request under the owner with Submitted by and the attendees");
 
+    // ── 5b. Office Hours by program level (H-470): the level's default, the coach's switch both ways, earned access, the team follows the owner. ──
+    const { OOH_LOCKED_LINE } = await import("@/lib/engine/office-hours");
+    const level = async (want: string) => {
+      await coachPage.goto(`${base}/coach/${mayaM.id}`);
+      await coachPage.locator('[data-testid="level-select"]').waitFor({ timeout: 20000 });
+      await coachPage.locator('[data-testid="level-select"]').selectOption(want);
+      await submit(coachPage, '[data-testid="level-save"]');
+      await coachPage.waitForFunction((w) => (document.querySelector('[data-testid="level-select"]') as HTMLSelectElement | null)?.value === w, want, { timeout: 20000 });
+    };
+    const state = async () => {
+      await coachPage.goto(`${base}/coach/${mayaM.id}`);
+      const el = coachPage.locator('[data-testid="client-level"]');
+      await el.waitFor({ timeout: 20000 });
+      return { on: (await el.getAttribute("data-ooh")) === "on", reason: await el.getAttribute("data-ooh-reason"), words: (await coachPage.locator('[data-testid="ooh-switch-words"]').innerText()).trim() };
+    };
+    const menuHas = async (page: Page) => {
+      await page.goto(`${base}/today`);
+      await page.locator("h1").first().waitFor({ timeout: 20000 });
+      return (await page.locator('nav a[href="/office-hours"]').count()) > 0;
+    };
+    // Maya opens the form while she still has access; the coach then moves her to Accelerator; her stale submit is refused on the server.
+    await owner.goto(`${base}/office-hours`);
+    await owner.locator('[data-testid="ooh-form"]').first().waitFor({ timeout: 20000 });
+    await level("Accelerator");
+    let st = await state();
+    must(!st.on && st.reason === "locked" && st.words === "Following level (Accelerator)", `Accelerator follows its level: off (${JSON.stringify(st)})`);
+    await fill(owner, "");
+    await submit(owner, '[data-testid="ooh-submit"]');
+    await owner.locator('[data-testid="ooh-error"]').waitFor({ timeout: 20000 });
+    must((await owner.locator('[data-testid="ooh-error"]').innerText()).trim() === OOH_LOCKED_LINE, "the server refuses the stale form with the one plain line");
+    const requestsAfter = (await db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.userId, maya.id) })).length;
+    must(requestsAfter === 2, `nothing new was saved: ${requestsAfter}`);
+    must(!(await menuHas(owner)), "Accelerator: the menu has no Office Hours");
+    must(!(await owner.locator('[data-testid="today-ooh-notice"]').count()), "and Today carries no Office Hours line");
+    await owner.goto(`${base}/office-hours`);
+    await owner.locator('[data-testid="ooh-locked"]').waitFor({ timeout: 20000 });
+    must((await owner.locator('[data-testid="ooh-locked"]').innerText()).trim() === OOH_LOCKED_LINE && !(await owner.locator('[data-testid="ooh-form"]').count()) && !(await owner.locator('[data-testid="ooh-when"]').count()), "the page by address: the one line, no form, no prices");
+    must((await owner.locator('[data-testid="ooh-mine"]').count()) === 2 && (await owner.locator("main").innerText()).includes(privateWord) && !(await owner.locator('[data-testid="ooh-edit"]').count()), "history stays readable, nothing editable");
+    must(!(await owner.locator("main").innerText()).match(/\$\d|price/i), "no prices anywhere on the locked page");
+    // The team follows the owner: no door, no menu item, history kept.
+    must(!(await menuHas(sam)), "a team member of an Accelerator owner has no Office Hours in the menu");
+    must(!(await sam.locator('[data-testid="team-home"] a[href="/office-hours"]').count()), "and no door on the team home");
+    await sam.goto(`${base}/office-hours`);
+    await sam.locator('[data-testid="ooh-locked"]').waitFor({ timeout: 20000 });
+    must((await sam.locator('[data-testid="ooh-mine"]').count()) === 1, "the team member's past request stays readable");
+    // The coach's queue marks the request; the coach always gets in.
+    await coachPage.goto(`${base}/coach/office-hours`);
+    await card.waitFor({ timeout: 20000 });
+    must(await card.locator('[data-testid="ooh-off-mark"]').count(), "the coach's queue marks a request from a client who has no Office Hours now");
+    await coachPage.goto(`${base}/office-hours`);
+    await coachPage.locator('[data-testid="ooh-form"]').first().waitFor({ timeout: 20000 });
+    // The switch on: an Accelerator client gets it; Set by you; the team's door is back.
+    await coachPage.goto(`${base}/coach/${mayaM.id}`);
+    await submit(coachPage, '[data-testid="ooh-switch"]');
+    await coachPage.waitForFunction(() => document.querySelector('[data-testid="client-level"]')?.getAttribute("data-ooh") === "on", null, { timeout: 20000 });
+    st = await state();
+    must(st.on && st.reason === "set_on" && st.words === "Set by you" && (await coachPage.locator('[data-testid="ooh-reset"]').count()) === 1, `the switch on: ${JSON.stringify(st)}`);
+    must(await menuHas(owner), "the switch on gives an Accelerator client the menu item");
+    must(await menuHas(sam) && (await sam.locator('[data-testid="team-home"] a[href="/office-hours"]').count()) === 1, "and the team its door");
+    await coachPage.goto(`${base}/coach/office-hours`);
+    await card.waitFor({ timeout: 20000 });
+    must(!(await card.locator('[data-testid="ooh-off-mark"]').count()), "the mark goes when access is back");
+    // Reset to level: Accelerator again, off. The level to Academy: on by level. The switch off on Academy: off, Set by you. Reset: on.
+    await coachPage.goto(`${base}/coach/${mayaM.id}`);
+    await submit(coachPage, '[data-testid="ooh-reset"]');
+    await coachPage.waitForFunction(() => document.querySelector('[data-testid="client-level"]')?.getAttribute("data-ooh") === "off", null, { timeout: 20000 });
+    st = await state();
+    must(!st.on && st.reason === "locked" && st.words === "Following level (Accelerator)", `reset to level: ${JSON.stringify(st)}`);
+    await level("Academy");
+    st = await state();
+    must(st.on && st.reason === "level" && st.words === "Following level (Academy)", `a level change with no override follows the new level: ${JSON.stringify(st)}`);
+    await submit(coachPage, '[data-testid="ooh-switch"]');
+    await coachPage.waitForFunction(() => document.querySelector('[data-testid="client-level"]')?.getAttribute("data-ooh") === "off", null, { timeout: 20000 });
+    st = await state();
+    must(!st.on && st.reason === "set_off" && st.words === "Set by you", `the switch off on Academy: ${JSON.stringify(st)}`);
+    must(!(await menuHas(owner)), "off by the switch: the menu item is gone for an Academy client");
+    await level("Luxe");
+    st = await state();
+    must(!st.on && st.reason === "set_off", "with an override the override holds across a level change");
+    await submit(coachPage, '[data-testid="ooh-reset"]');
+    await coachPage.waitForFunction(() => document.querySelector('[data-testid="client-level"]')?.getAttribute("data-ooh") === "on", null, { timeout: 20000 });
+    // Earned access: a fulfilled 30-day reward opens it for an Accelerator client, then expires.
+    await level("Accelerator");
+    const claimId = newId();
+    await db.insert(schema.rewardClaims).values({ id: claimId, workspaceId: ws, userId: maya.id, rewardName: "30 Days Access to Evolve Omega Academy", status: "fulfilled", fulfilledAt: new Date().toISOString() });
+    st = await state();
+    must(st.on && st.reason === "earned" && (await coachPage.locator('[data-testid="ooh-access-words"]').innerText()).includes("earned access until"), `earned access opens it: ${JSON.stringify(st)}`);
+    must(await menuHas(owner), "earned access shows the menu item");
+    await db.update(schema.rewardClaims).set({ fulfilledAt: new Date(Date.now() - 40 * 86400000).toISOString() }).where(eq(schema.rewardClaims.id, claimId));
+    st = await state();
+    must(!st.on && st.reason === "locked", "and it closes once the 30 days are over");
+    const logged = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, maya.id), eq(schema.syncEvents.provider, "account")) });
+    must(logged.filter((l) => l.event.startsWith("office_hours.")).length >= 4 && logged.some((l) => l.event === "program_tier.set"), `every flip and level change is logged as the coach's action: ${logged.map((l) => l.event).join(",")}`);
+    must(!logged.some((l) => JSON.stringify(l.payload ?? "").includes("@")), "the log carries no email address");
+    // Back to the seed's shape for the walks after this one.
+    await db.delete(schema.rewardClaims).where(eq(schema.rewardClaims.id, claimId));
+    await level("Elite");
+    st = await state();
+    must(st.on && st.reason === "level", "Elite: on by level again");
+    console.log("✓ Office Hours by level: Accelerator off with the one plain line and history kept, the team follows the owner, the coach's switch both ways and Reset to level, a level change honours an override, earned access opens then expires, the coach always gets in, every change logged");
+
     // ── 6. Maya removes Sam: the request stays, Sam reads as a former team member. ──
     await owner.goto(`${base}/settings`);
     await owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" }).locator('[data-testid="team-remove"]').click();
