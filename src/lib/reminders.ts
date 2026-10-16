@@ -2,7 +2,8 @@ import { siteUrl } from "@/lib/app-url";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays, hourInTz, nowIso, todayInTz } from "@/lib/dates";
-import { closeTarget, runningStreak, streakBonus, streakDayOf, weeklyStreakDay } from "@/lib/engine/streak";
+import { bonusFor, closeTarget, prevCountingDay } from "@/lib/engine/streak";
+import { streakFor } from "@/lib/queries/daily";
 import { nextTier } from "@/lib/engine/tiers";
 import { comebackCopy, eveningCopy, morningCopy } from "@/lib/engine/reminder-copy";
 import { brandedEmail } from "@/lib/branded-email";
@@ -54,9 +55,11 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
       if (!(await canEmail(m.id))) continue;
       const log = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, m.userId), eq(schema.dailyLogs.date, today)) });
       const logs = await db.query.dailyLogs.findMany({ where: eq(schema.dailyLogs.userId, m.userId) });
-      const closed = new Set(logs.filter((l) => l.eveningDoneAt).map((l) => l.date));
-      // Read the way Today reads it (rev 731): before 04:00 with yesterday open, as of yesterday, so a late close-out isn't missed.
-      const streak = runningStreak(closed, streakDayOf(closed, today, hour));
+      // Read the way Today reads it (H-289, rev 731): over the member's active days and work days, as of yesterday before 04:00
+      // with yesterday open, so a late close-out isn't missed.
+      const read = await streakFor(ws.id, m.userId, { today, hour, tz, days: m.workDays });
+      const streak = read.running;
+      const active = read.activity.active;
       const first = user.name.split(" ")[0];
       const hours = { morning: m.reminderHour, evening: m.eveningReminderHour };
 
@@ -80,7 +83,8 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
         // One true line the client does not already know: the streak, a streak that broke yesterday, or a rank within reach.
         const points = await totalPoints(ws.id, m.userId);
         const next = nextTier(points);
-        const brokenYesterday = streak === 0 && closed.has(addDays(today, -2)) && !closed.has(addDays(today, -1));
+        const yesterday = prevCountingDay(today, m.workDays);
+        const brokenYesterday = streak === 0 && active.has(prevCountingDay(yesterday, m.workDays)) && !active.has(yesterday);
         const e = brandedEmail(morningCopy({ first, streak, brokenYesterday, points, nextTier: next ? { name: next.name, minPoints: next.minPoints } : null, hours }), { base: appUrl });
         await deliver(out, m, user.email, "morning", e.subject, e.text, e.html);
       }
@@ -90,7 +94,7 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
       const targetLog = logs.find((l) => l.date === target.date);
       if (wantsEvening && !target.same && !targetLog?.eveningDoneAt) {
         // The days already closed; the copy says what tonight's close makes it. The bonus is the weekly escalation for that close.
-        const bonus = streakBonus(weeklyStreakDay(closed, target.date));
+        const bonus = bonusFor(read.activity.ladder, target.date, m.workDays).points;
         const e = brandedEmail(eveningCopy({ first, streak, bonus, hours }), { base: appUrl });
         await deliver(out, m, user.email, "evening", e.subject, e.text, e.html);
       }

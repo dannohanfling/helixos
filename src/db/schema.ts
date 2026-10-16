@@ -111,6 +111,11 @@ export const memberships = sqliteTable(
     /** The Setup card (H-270 §1): when the Start Here video played to the end (S1a), and when Settings → You was last saved by the member (S2: the time zone and reminder hours, chosen rather than defaulted). */
     startHereWatchedAt: text("start_here_watched_at"),
     profileSavedAt: text("profile_saved_at"),
+    /** The streak's week (H-289 §2): every day (the default) or Monday to Friday, the member's own choice under Settings → You. */
+    workDays: text("work_days", { enum: ["weekdays", "all"] }).notNull().default("all"),
+    /** The streak recount (H-289 §4): the points it added for this member, null until the coach applied it; and when the member saw Today's one line about it. */
+    streakRecountPoints: integer("streak_recount_points"),
+    streakRecountSeenAt: text("streak_recount_seen_at"),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     /** My Board's memory (H-257): "Start fresh" stamps this; the Board then reads only decisions made after it (a database stamp, UTC). Undo for seven days clears it. */

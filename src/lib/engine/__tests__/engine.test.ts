@@ -39,9 +39,9 @@ describe("streak", () => {
   });
   it("running streak bridges weekends and survives an unclosed today", () => {
     const closed = new Set(["2026-09-03", "2026-09-04", "2026-09-07"]); // Thu, Fri, Mon
-    expect(runningStreak(closed, "2026-09-07")).toBe(3);
-    expect(runningStreak(closed, "2026-09-08")).toBe(3); // Tuesday morning, not closed yet
-    expect(runningStreak(closed, "2026-09-09")).toBe(0); // missed Tuesday
+    expect(runningStreak(closed, "2026-09-07", "weekdays")).toBe(3);
+    expect(runningStreak(closed, "2026-09-08", "weekdays")).toBe(3); // Tuesday morning, not closed yet
+    expect(runningStreak(closed, "2026-09-09", "weekdays")).toBe(0); // missed Tuesday
   });
 });
 

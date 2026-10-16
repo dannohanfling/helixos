@@ -304,6 +304,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
               </select>
             </Field>
+            <Field label="My work days" hint="Every day: a day with nothing done breaks the streak, weekends too, and an active Saturday or Sunday pays +40. Monday to Friday: weekends never count, either way.">
+              <select className="field" name="workDays" defaultValue={v.membership.workDays} data-testid="work-days">
+                <option value="all">Every day</option>
+                <option value="weekdays">Monday to Friday</option>
+              </select>
+            </Field>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Morning reminder (hour)">
                 <input className="field" name="reminderHour" type="number" min={0} max={23} defaultValue={v.membership.reminderHour} />

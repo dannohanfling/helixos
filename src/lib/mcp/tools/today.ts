@@ -115,7 +115,7 @@ export const todayClose = defineTool({
     const scored = r.points.close + r.points.streak;
     const lines = [
       `${r.firstClose ? "Closed" : "Updated"} ${r.date === v.today ? v.today : dayName(r.date)}: ${CLOSE_NUMBERS.map((k) => `${k === "cashCollected" ? money(r.log.cashCollected) : r.log[k]} ${CLOSE_WORDS[k]}`).join(", ")}.`,
-      r.firstClose ? `+${r.points.close} for closing${r.points.streak ? `, +${r.points.streak} for streak day ${r.streakDay}` : ""}${r.points.activity ? `, and ${r.points.activity} for the day's activity (${r.activityLines.join(", ")})` : ""}.` : `The close was already scored; activity points now total ${r.points.activity} for the day.`,
+      r.firstClose ? `+${r.points.close} for closing${r.points.streak ? (r.streakDay ? `, +${r.points.streak} for streak day ${r.streakDay}` : `, +${r.points.streak} for the weekend streak`) : ""}${r.points.activity ? `, and ${r.points.activity} for the day's activity (${r.activityLines.join(", ")})` : ""}.` : `The close was already scored; activity points now total ${r.points.activity} for the day.`,
       `${m.month}: ${money(m.cash)} collected${m.goal ? ` toward "${m.goal.title}", ${money(m.goal.actual)} of ${money(m.goal.target)}` : ""}.`,
     ];
     if (r.log.win) lines.push(`Win: ${r.log.win}.`);

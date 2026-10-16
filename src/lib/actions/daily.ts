@@ -3,12 +3,11 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
-import { addDays, nowIso } from "@/lib/dates";
+import { nowIso } from "@/lib/dates";
 import { POINTS } from "@/lib/engine/points";
-import { closedDates, logsBetween, repairsUsed } from "@/lib/queries/daily";
+import { repairsUsed, streakFor } from "@/lib/queries/daily";
 import { CLOSE_EXTRA, CLOSE_MONEY, CLOSE_NUMBERS, CLOSE_TEXT, closeDay, lockIn, upsertLog, type Close } from "@/lib/daily-core";
-import { brokenStreak, lateOpen, streakDayOf } from "@/lib/engine/streak";
-import { isWeekday } from "@/lib/dates";
+import { brokenStreak, countsDay } from "@/lib/engine/streak";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { redirect } from "next/navigation";
 import { readMoney } from "@/lib/engine/money";
@@ -61,9 +60,9 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
 export async function repairStreakAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   const date = str(formData, "date");
-  const [closed, logs] = await Promise.all([closedDates(workspaceId, userId), logsBetween(workspaceId, userId, addDays(v.today, -1), v.today)]);
-  const broken = brokenStreak(closed, streakDayOf(closed, v.today, v.hour, lateOpen(logs, v.today)));
-  if (!broken || !broken.repairable || broken.missed[0] !== date || !isWeekday(date)) return;
+  const s = await streakFor(workspaceId, userId, { today: v.today, hour: v.hour, tz: v.tz, days: v.membership.workDays });
+  const broken = brokenStreak(s.activity.active, s.asOf, s.days);
+  if (!broken || !broken.repairable || broken.missed[0] !== date || !countsDay(date, s.days)) return;
   if ((await repairsUsed(workspaceId, userId, v.today.slice(0, 7))) >= 1) return;
   const log = await upsertLog(workspaceId, userId, date);
   if (log.eveningDoneAt) return;

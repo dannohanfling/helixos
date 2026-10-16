@@ -15,12 +15,14 @@
  */
 import { addDays, todayInTz, hourInTz } from "@/lib/dates";
 import { POINTS } from "./points";
-import { LATE_CLOSE_UNTIL_HOUR, runningStreak, streakBonus, streakDayOf, weeklyStreakDay } from "./streak";
+import { LATE_CLOSE_UNTIL_HOUR, runningStreak, streakBonus, streakDayOf, weeklyStreakDay, type WorkDays } from "./streak";
 
 export type LateLog = { id: string; date: string; eveningDoneAt: string | null; morningDoneAt: string | null; repairedAt: string | null; streakDay: number };
 export type LateMember = {
   userId: string;
   tz: string;
+  /** The member's work days (H-289 §2) for the running streak counts; Monday to Friday when not given. */
+  days?: WorkDays;
   logs: LateLog[];
   /** The days already paid, by ledger type: "close" and "streak" rows' refIds (a date). */
   paid: { close: Set<string>; streak: Set<string> };
@@ -112,8 +114,8 @@ export function planLateCloses(members: LateMember[], now: Date): LatePlan {
     }
     const today = todayInTz(m.tz, now);
     const hour = hourInTz(m.tz, now);
-    const before = runningStreak(closedBefore, streakDayOf(closedBefore, today, hour));
-    const after = runningStreak(closed, streakDayOf(closed, today, hour));
+    const before = runningStreak(closedBefore, streakDayOf(closedBefore, today, hour), m.days ?? "weekdays");
+    const after = runningStreak(closed, streakDayOf(closed, today, hour), m.days ?? "weekdays");
     if (after > before) c.streaksUp++;
     if (after < before) c.streaksDown++;
     credits.push(...mine);

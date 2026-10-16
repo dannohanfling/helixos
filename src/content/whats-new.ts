@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 204,
+    date: "2026-10-16",
+    title: "Your streak counts every day you show up, weekends too",
+    lines: [
+      "A day counts when you did something that earned points: a lock-in, a close, a task ticked, a post, a conversation, your 3-1-3 shared, a pathway step. A close is no longer required. The week is now seven days: a day with nothing done breaks the streak, Saturday and Sunday included. An active Saturday or Sunday that carries the streak on pays +40 (a full week is 390). Weekdays pay as before: 10, 20, 40, 80, 160, back to day 1 every Monday.",
+      "Settings → You → My work days: pick Monday to Friday and weekends never count, either way, as before. A day you were active on but never closed is paid when Today next loads.",
+      "Coaches: Coach → Late close-outs has the Streak recount. The dry run shows each client's days to pay and the new streak; Apply pays the missing days (\"Streak recount: {date}\"), once, never twice, never taking anything back; a day you already credited by hand (\"credited to {date}\" in the reason) is skipped. Each client then sees one line on Today.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 201,
     date: "2026-10-15",
     title: "Setup first: a Setup card on Today, with Start Here",

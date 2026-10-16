@@ -1,7 +1,7 @@
 import { and, eq, gte, isNotNull, isNull, like, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays } from "@/lib/dates";
-import { closeTarget, lateOpen, runningStreak, streakDayOf, type CloseTarget } from "@/lib/engine/streak";
+import { activeDaysOf, closeTarget, lateOpen, runningStreak, streakDayOf, type ActiveDays, type CloseTarget, type WorkDays } from "@/lib/engine/streak";
 
 /** Every read here is scoped to (workspace, user): a user can belong to more than one workspace and days never cross over. */
 export async function closedDates(workspaceId: string, userId: string, opts: { excludeRepaired?: boolean } = {}): Promise<Set<string>> {
@@ -34,10 +34,52 @@ export async function todayActivity(workspaceId: string, userId: string, today: 
   return { dmsStarted: Math.max(started.length, created.length), conversations: replied.length, posts: posted.length, newLeads: created.length };
 }
 
-/** The running streak, read as of yesterday inside the late close-out window while yesterday is still open (rev 731). */
-export async function streakFor(workspaceId: string, userId: string, today: string, hour: number): Promise<{ running: number; closed: Set<string> }> {
-  const [closed, logs] = await Promise.all([closedDates(workspaceId, userId), logsBetween(workspaceId, userId, addDays(today, -1), today)]);
-  return { running: runningStreak(closed, streakDayOf(closed, today, hour, lateOpen(logs, today))), closed };
+/**
+ * The member's active days (H-289 §1): every day with a log begun or closed, or points earned in their own time. The one read
+ * every streak comes from; the engine decides which ledger rows count (never a streak bonus or a coach's adjustment).
+ */
+export async function activityFor(workspaceId: string, userId: string, tz: string): Promise<ActiveDays> {
+  const [rows, logs] = await Promise.all([
+    db
+      .select({ type: schema.pointsLedger.type, points: schema.pointsLedger.points, refId: schema.pointsLedger.refId, adjustedBy: schema.pointsLedger.adjustedBy, createdAt: schema.pointsLedger.createdAt })
+      .from(schema.pointsLedger)
+      .where(and(eq(schema.pointsLedger.workspaceId, workspaceId), eq(schema.pointsLedger.userId, userId))),
+    db
+      .select({ date: schema.dailyLogs.date, morningDoneAt: schema.dailyLogs.morningDoneAt, eveningDoneAt: schema.dailyLogs.eveningDoneAt, repairedAt: schema.dailyLogs.repairedAt })
+      .from(schema.dailyLogs)
+      .where(and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId))),
+  ]);
+  return activeDaysOf(rows, logs, tz);
+}
+
+/** The days a streak bonus was already paid for (the ledger's "streak" rows, one a day, whatever the reason says). */
+export async function paidStreakDays(workspaceId: string, userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ refId: schema.pointsLedger.refId })
+    .from(schema.pointsLedger)
+    .where(and(eq(schema.pointsLedger.workspaceId, workspaceId), eq(schema.pointsLedger.userId, userId), eq(schema.pointsLedger.type, "streak")));
+  return new Set(rows.map((r) => r.refId).filter((r): r is string => Boolean(r)));
+}
+
+/** Who the streak is read for: their day and hour, their zone (to date what they did) and their work days. */
+export type StreakWho = { today: string; hour: number; tz: string; days: WorkDays };
+export type StreakRead = {
+  running: number;
+  /** The day it is read as of: yesterday inside the late close-out window while yesterday is still open (rev 731), else today. */
+  asOf: string;
+  activity: ActiveDays;
+  closed: Set<string>;
+  days: WorkDays;
+};
+
+/**
+ * The running streak (H-289): every reader (Today, the badge, the coach's roster and client page, the reminders, the connector)
+ * comes through here, so they all count the same days the same way.
+ */
+export async function streakFor(workspaceId: string, userId: string, who: StreakWho): Promise<StreakRead> {
+  const [activity, closed, logs] = await Promise.all([activityFor(workspaceId, userId, who.tz), closedDates(workspaceId, userId), logsBetween(workspaceId, userId, addDays(who.today, -1), who.today)]);
+  const asOf = streakDayOf(activity.active, who.today, who.hour, lateOpen(logs, who.today));
+  return { running: runningStreak(activity.active, asOf, who.days), asOf, activity, closed, days: who.days };
 }
 
 /** The day a close-out made now is for (rev 731): the same close-out as the last, yesterday inside the window, or today. */

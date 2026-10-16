@@ -67,6 +67,8 @@ async function updateProfile(formData: FormData): Promise<void> {
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",
       scoreboardEmail: formData.get("scoreboardEmail") === "on",
       timezone: validTimezone(str(formData, "timezone")),
+      // The streak's week (H-289 §2): every day unless the member picks Monday to Friday.
+      workDays: str(formData, "workDays") === "weekdays" ? "weekdays" : "all",
       // The Setup card (H-270 §1, S2): the time zone and reminder hours chosen by the member, not defaulted.
       profileSavedAt: nowIso(),
     })

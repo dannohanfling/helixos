@@ -403,8 +403,9 @@ async function seedClientActivity(
   for (let d = opts.days; d >= 0; d--) {
     const date = addDays(today, -d);
     // Yesterday is always there and closed, weekend or not: near midnight the late close-out window (rev 731) would otherwise
-    // send a walk's close to an open Sunday.
-    if (!isWeekday(date) && d > 1) continue;
+    // send a walk's close to an open Sunday. Other weekend days are locked in to and never closed (H-289: an active day with
+    // no close), so the seven-day streak runs through them and the demo shows what a weekend looks like.
+    const weekendOnly = !isWeekday(date) && d > 1;
     if (opts.missDays.includes(date)) continue;
     const isToday = d === 0;
     const seed = (d * 7919) % 13;
@@ -422,7 +423,7 @@ async function seedClientActivity(
     // Never later than now: a lock-in can't be in the future (today's 15:05 UTC is still ahead in the small hours).
     const morningAt = [`${date}T15:05:00.000Z`, new Date().toISOString()].sort()[0];
     const eveningAt = `${date}T01:10:00.000Z`;
-    const closeIt = !isToday;
+    const closeIt = !isToday && !weekendOnly;
     const streakDay = closeIt ? weeklyStreakDay(closed, date) : 0;
     if (closeIt) closed.add(date);
     await db.insert(schema.dailyLogs).values({
