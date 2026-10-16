@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 207,
+    date: "2026-10-16",
+    title: "Council Chamber: Golden hour has its speaking clips too",
+    lines: ["In the Council Chamber's Golden hour look, each seat now moves on its turn the way it does at Night: the speaker's own clip over the still, the other four still. Nothing plays with reduced motion on."],
+    audience: "everyone",
+  },
+  {
     n: 205,
     date: "2026-10-16",
     title: "My Board: Choose your council beside the chairs; GoHighLevel permissions: Copy copies the scope id",
