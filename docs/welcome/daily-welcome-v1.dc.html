@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Daily welcome</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#100D09}
+a{color:#F0CF86}a:hover{color:#F1E6CF}
+.ph{position:relative;width:390px;height:844px;border-radius:40px;overflow:hidden;background:#1A150F;outline:1px solid #3A3022;font-family:Manrope,"Segoe UI",system-ui,sans-serif}
+.ph img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 35%}
+.scrim{position:absolute;inset:0;background:rgba(10,8,5,.42);animation:fadeIn .5s ease both}
+.day .scrim{background:rgba(31,26,20,.18)}
+.skip{position:absolute;top:16px;right:16px;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid rgba(241,230,207,.4);background:rgba(16,13,9,.6);color:#F1E6CF;font:700 13px/1 Manrope,sans-serif;letter-spacing:1.5px;cursor:pointer;animation:fadeIn .4s ease .3s both}
+.card{position:absolute;left:16px;right:16px;bottom:16px;border-radius:20px;padding:24px 22px 20px;display:flex;flex-direction:column;gap:16px;animation:unroll .7s cubic-bezier(.2,.8,.2,1) .15s both}
+.night .card{background:rgba(16,13,9,.95);border:1px solid #5E4C27;color:#F1E6CF}
+.day .card{background:#F7F2E8;border:1px solid #D7C39A;color:#1F1A14}
+.eb,.lb{font-weight:700;text-transform:uppercase}
+.eb{font-size:12px;line-height:16px;letter-spacing:5px}
+.lb{font-size:11px;line-height:14px;letter-spacing:2px}
+.night .eb,.night .gold{color:#F0CF86}
+.day .eb,.day .gold{color:#7E5A12}
+.night .lb{color:#A7997F}.day .lb{color:#6B6253}
+.night .lb.gold{color:#F0CF86}.day .lb.gold{color:#7E5A12}
+.ttl{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:34px;line-height:1.05;margin:8px 0 6px}
+.ln{margin:0;font-size:15px;line-height:1.5}
+.night .ln,.night .cap{color:#A7997F}.day .ln,.day .cap{color:#6B6253}
+.head{animation:rise .5s ease .45s both}
+.stats{display:flex;align-items:center;gap:14px;padding:12px 0;animation:rise .5s ease .7s both}
+.night .stats{border-top:1px solid #3A3022;border-bottom:1px solid #3A3022}
+.day .stats{border-top:1px solid #E4DACA;border-bottom:1px solid #E4DACA}
+.fl{position:relative;width:57px;height:68px;flex:none}
+.glow{position:absolute;left:-14px;right:-14px;top:-6px;bottom:-14px;border-radius:50%;background:radial-gradient(circle at 50% 70%,rgba(255,190,90,.55),rgba(255,190,90,0) 65%)}
+.day .glow{background:radial-gradient(circle at 50% 70%,rgba(214,140,50,.35),rgba(214,140,50,0) 65%)}
+.flame{position:absolute;inset:0;width:100%;height:100%;transform-origin:50% 100%;transform:scale(var(--f1));animation:grow .7s cubic-bezier(.3,1.6,.5,1) 2.0s both}
+.lv{transform-box:fill-box;transform-origin:50% 100%}
+.l1{animation:fk1 1.1s ease-in-out infinite}
+.l2{animation:fk2 .8s ease-in-out infinite}
+.l3{animation:fk3 1.4s ease-in-out infinite}
+.sparks{position:absolute;left:0;right:0;bottom:34px;height:0}
+.spark{position:absolute;bottom:0;width:3px;height:3px;border-radius:50%;background:#FFD27A;box-shadow:0 0 4px #FFB347;opacity:0;animation:spark 1.8s ease-out infinite}
+.st{flex:1}
+.pt{text-align:right}
+.num{font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:32px;line-height:1.1}
+.roll{position:relative;display:inline-block;overflow:hidden;height:1.15em;vertical-align:bottom}
+.roll .n{display:block;animation:rollIn .45s ease var(--d) both}
+.roll .o{position:absolute;top:0;right:0;opacity:0;animation:rollOut .45s ease var(--d) both}
+.st .roll .o{right:auto;left:0}
+.wk{animation:rise .4s ease .8s both;display:flex;flex-direction:column;gap:10px}
+.wk-top,.life-top{display:flex;justify-content:space-between;align-items:baseline}
+.coins{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cn{display:flex;flex-direction:column;align-items:center;gap:6px}
+.cd{font-size:10px;font-weight:700;letter-spacing:1.5px}
+.night .cd{color:#A7997F}.day .cd{color:#6B6253}
+.night .s-today .cd{color:#F0CF86}.day .s-today .cd{color:#7E5A12}
+.coin{position:relative;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;font-family:"Cormorant Garamond",Georgia,serif;font-size:15px;font-weight:700}
+.cv{position:relative;z-index:3}
+.s-done .coin,.s-today .coin{background:radial-gradient(circle at 32% 28%,#FFF3C8 0%,#F3D47E 16%,#D9AC4E 40%,#B07A2C 68%,#7E501C 100%);color:#4A2E0C;text-shadow:0 1px 0 rgba(255,236,180,.6);box-shadow:inset 0 0 0 1.5px #8C5A1E,inset 0 0 0 3px rgba(255,236,180,.45),0 2px 4px rgba(0,0,0,.35);animation:pop .35s cubic-bezier(.3,1.6,.5,1) var(--d) both}
+.s-done .coin::before,.s-today .coin::before{content:"";position:absolute;inset:2px;border-radius:50%;z-index:2;background:conic-gradient(from 200deg,rgba(255,250,225,0) 0deg,rgba(255,250,225,.5) 40deg,rgba(255,250,225,0) 90deg,rgba(255,250,225,0) 210deg,rgba(255,240,200,.28) 250deg,rgba(255,250,225,0) 290deg);mix-blend-mode:screen;pointer-events:none}
+.s-done .coin::after,.s-today .coin::after{content:"";position:absolute;inset:5px;border-radius:50%;z-index:2;border:1px solid rgba(110,70,20,.45);box-shadow:0 1px 0 rgba(255,240,200,.35);pointer-events:none}
+.s-today .coin{box-shadow:inset 0 0 0 1.5px #8C5A1E,inset 0 0 0 3px rgba(255,236,180,.45),0 0 0 2px #100D09,0 0 0 4px #F0CF86,0 3px 8px rgba(0,0,0,.45)}
+.day .s-today .coin{box-shadow:inset 0 0 0 1.5px #8C5A1E,inset 0 0 0 3px rgba(255,236,180,.45),0 0 0 2px #F7F2E8,0 0 0 4px #A87B24,0 3px 8px rgba(0,0,0,.25)}
+.s-next .coin{background:radial-gradient(circle at 32% 28%,#E2B488 0%,#B97E48 35%,#8C5631 70%,#5E3820 100%);color:#FBE9D2;text-shadow:0 1px 0 rgba(60,30,10,.5);box-shadow:inset 0 0 0 1.5px #5E3820,inset 0 0 0 3px rgba(255,220,180,.25);opacity:.45}
+.day .s-next .coin{opacity:.6}
+.bz{position:absolute;inset:0;border-radius:50%;z-index:1;background:radial-gradient(circle at 32% 28%,#E2B488 0%,#B97E48 35%,#8C5631 70%,#5E3820 100%);opacity:0;animation:bzOut .4s ease 1.55s both}
+.shine{position:absolute;inset:0;border-radius:50%;overflow:hidden;z-index:2;pointer-events:none}
+.shine::before{content:"";position:absolute;top:-20%;bottom:-20%;width:45%;left:-70%;background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,252,230,.9),rgba(255,255,255,0));transform:skewX(-15deg);animation:sweep .7s ease-out 1.9s both}
+.night .s-missed .coin{border:1px dashed #5E4C27}
+.day .s-missed .coin{border:1px dashed #D7C39A}
+.seal{position:absolute;z-index:4;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;animation:stamp .45s cubic-bezier(.3,1.4,.5,1) 1.55s both}
+.night .seal{color:#F0CF86}.day .seal{color:#A87B24}
+.burst{position:absolute;z-index:4;left:50%;top:50%;width:0;height:0}
+.ray{position:absolute;left:-1px;top:-5px;width:2px;height:10px;border-radius:2px;opacity:0;animation:ray .7s ease-out 1.6s both}
+.night .ray{background:#F0CF86}.day .ray{background:#A87B24}
+.fly{position:absolute;left:50%;top:-8px;opacity:0;font-size:15px;font-weight:800;white-space:nowrap;animation:fly 1s ease-out 1.7s both}
+.night .fly{color:#F0CF86}.day .fly{color:#7E5A12}
+.life{display:flex;flex-direction:column;gap:8px;animation:rise .4s ease 2.15s both}
+.bar{position:relative;height:6px;border-radius:3px}
+.night .bar{background:#3A3022}.day .bar{background:#E4DACA}
+.fill{height:100%;border-radius:3px;transform-origin:left center;animation:fillx .7s ease 2.3s both}
+.night .fill{background:#D4AE5A}.day .fill{background:#A87B24}
+.cap{font-size:13px;line-height:1.45}
+.ms{display:flex;gap:14px;align-items:center;padding:12px 14px;border-radius:14px;animation:msIn .6s cubic-bezier(.3,1.5,.5,1) 3.0s both}
+.night .ms{border:1px solid #D4AE5A;background:rgba(212,174,90,.1)}
+.day .ms{border:1px solid #A87B24;background:#EFE5D0}
+.ms-w{position:relative;width:58px;height:58px;flex:none;border-radius:50%;color:#FFE6BC;background:radial-gradient(circle at 32% 28%,#F2C998 0%,#C88A4E 35%,#9A5F2E 70%,#6B3E1E 100%);box-shadow:inset 0 0 0 2px #5E3820,inset 0 0 0 4px rgba(255,220,180,.35),0 2px 6px rgba(0,0,0,.4)}
+.ms-w svg{position:absolute;inset:4px;width:50px;height:50px}
+.ms-n{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:20px;color:#FFF3DE;text-shadow:0 1px 0 rgba(60,30,10,.6)}
+.ms-t{font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:22px;line-height:1.1}
+.ms-l{font-size:13px;line-height:1.45;margin-top:2px}
+.night .ms-l{color:#A7997F}.day .ms-l{color:#6B6253}
+.cta{position:relative;overflow:hidden;min-height:50px;border:1px solid #7A4E1C;border-radius:999px;background:linear-gradient(180deg,#FBE7A6 0%,#E8C26A 30%,#C9973F 62%,#9A6526 100%);color:#3A230A;font:800 14px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,240,200,.6);box-shadow:inset 0 1px 0 rgba(255,250,225,.9),inset 0 -2px 0 rgba(90,56,16,.35),0 2px 6px rgba(0,0,0,.35);cursor:pointer;animation:rise .4s ease 2.8s both}
+.cta::before{content:"";position:absolute;top:-30%;bottom:-30%;width:30%;left:-40%;background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,252,230,.85),rgba(255,255,255,0));transform:skewX(-15deg);animation:sweep2 6s ease-in-out 3.6s infinite;pointer-events:none}
+.cta:hover{filter:brightness(1.05)}
+.cta:active{transform:translateY(1px)}
+.done *:not(.lv),.done{animation:none !important}
+@media (prefers-reduced-motion: reduce){.ph *,.ph,.ph *::before{animation:none !important}}
+@keyframes fk1{0%,100%{transform:scale(1,1) skewX(0)}25%{transform:scale(.95,1.07) skewX(-3deg)}55%{transform:scale(1.04,.95) skewX(2deg)}80%{transform:scale(.98,1.03) skewX(-1deg)}}
+@keyframes fk2{0%,100%{transform:scale(1,1) skewX(0)}35%{transform:scale(1.03,.96) skewX(2.5deg)}70%{transform:scale(.96,1.06) skewX(-2deg)}}
+@keyframes fk3{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.82;transform:scale(.94,1.04)}}
+@keyframes spark{0%{opacity:0;transform:translate(0,0)}15%{opacity:1}100%{opacity:0;transform:translate(var(--sx),-46px)}}
+@keyframes bzOut{from{opacity:1}to{opacity:0}}
+@keyframes sweep{from{left:-70%}to{left:130%}}
+@keyframes sweep2{0%{left:-40%}14%{left:130%}100%{left:130%}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes unroll{from{clip-path:inset(0 0 100% 0 round 20px);transform:translateY(16px)}to{clip-path:inset(0 0 0 0 round 20px);transform:none}}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{opacity:0;transform:scale(.4)}100%{opacity:1;transform:scale(1)}}
+@keyframes stamp{0%{opacity:0;transform:scale(2.2) rotate(-25deg)}60%{opacity:1;transform:scale(.92) rotate(3deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes ray{0%{opacity:0;transform:rotate(var(--a)) translateY(-20px) scaleY(.4)}30%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(-40px) scaleY(1)}}
+@keyframes fly{0%{opacity:0;transform:translate(-50%,0)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-70px)}}
+@keyframes rollIn{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:none}}
+@keyframes rollOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-100%)}}
+@keyframes grow{from{transform:scale(var(--f0))}to{transform:scale(var(--f1))}}
+@keyframes flick{0%,100%{transform:scale(1,1) skewX(0)}30%{transform:scale(.97,1.05) skewX(-2deg)}60%{transform:scale(1.03,.97) skewX(1.5deg)}}
+@keyframes fillx{from{transform:scaleX(var(--from))}to{transform:scaleX(1)}}
+@keyframes msIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+.rp{min-height:44px;padding:0 22px;border-radius:999px;border:1px solid #5E4C27;background:transparent;color:#F0CF86;font:700 13px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer}
+.rp:hover{border-color:#D4AE5A}
+</style>
+</helmet>
+<div style="width: 1824px; height: 1080px; box-sizing: border-box; padding: 48px; display: flex; gap: 56px; background: #100D09; font-family: Manrope, 'Segoe UI', system-ui, sans-serif">
+<sc-for list="{{phones}}" as="p" hint-placeholder-count="4">
+<div style="width: 390px; display: flex; flex-direction: column; gap: 16px; align-items: center">
+<div style="width: 100%; display: flex; flex-direction: column; gap: 6px; min-height: 52px">
+<div style="font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; color: #F0CF86">{{p.label}}</div>
+<div style="font-size: 15px; line-height: 1.5; color: #A7997F">{{p.sub}}</div>
+</div>
+<div style="width: 390px; height: 844px">
+<sc-if value="{{p.show}}" hint-placeholder-val="{{true}}">
+<div class="ph {{p.look}} {{p.doneCls}}">
+<img class="bg" src="{{p.bg}}" alt="">
+<div class="scrim"></div>
+<button class="skip" onClick="{{p.skip}}">Skip</button>
+<div class="card">
+<div class="head">
+<div class="eb">{{p.eyebrow}}</div>
+<h2 class="ttl">{{p.title}}</h2>
+<p class="ln">{{p.line}}</p>
+</div>
+<div class="stats">
+<div class="fl" style="--f0: {{p.f0}}; --f1: {{p.f1}}">
+<div class="glow" style="opacity: {{p.glow}}"></div>
+<svg class="flame" viewBox="0 0 80 96" aria-hidden="true"><defs><linearGradient id="fgOuter" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#8E2F0C"></stop><stop offset=".25" stop-color="#D2531A"></stop><stop offset=".6" stop-color="#F28C2E"></stop><stop offset="1" stop-color="#FFB040" stop-opacity="0"></stop></linearGradient><linearGradient id="fgMid" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#F59A34"></stop><stop offset=".5" stop-color="#FFC45C"></stop><stop offset="1" stop-color="#FFD98A" stop-opacity="0"></stop></linearGradient><radialGradient id="fgCore" cx=".5" cy=".7" r=".5"><stop offset="0" stop-color="#FFFBEF"></stop><stop offset=".5" stop-color="#FFE7A8"></stop><stop offset="1" stop-color="#FFD27A" stop-opacity="0"></stop></radialGradient><radialGradient id="fgBlue" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#6F8CFF" stop-opacity=".55"></stop><stop offset="1" stop-color="#6F8CFF" stop-opacity="0"></stop></radialGradient><filter id="fWisp" x="-30%" y="-30%" width="160%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.06 0.12" numOctaves="2" seed="3" result="n"><animate attributeName="baseFrequency" dur="3s" values="0.06 0.12;0.07 0.16;0.06 0.12" repeatCount="indefinite"></animate></feTurbulence><feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap><feGaussianBlur stdDeviation="0.9"></feGaussianBlur></filter><filter id="fSoft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.6"></feGaussianBlur></filter></defs><g class="lv l1"><path d="M40 4C43 17 58 26 63 42C68 60 63 76 53 85C47 91 33 91 27 85C17 76 12 60 17 44C20 34 29 28 32 18C35 26 36 31 38 34C39 24 37 13 40 4Z" fill="url(#fgOuter)" filter="url(#fWisp)"></path></g><g class="lv l2"><path d="M40 28C43 38 53 45 55 58C57 71 51 81 40 86C29 81 23 71 25 58C27 49 33 45 35 39C37 43 38 45 39 47C39 41 39 34 40 28Z" fill="url(#fgMid)" filter="url(#fWisp)"></path></g><g class="lv l3"><ellipse cx="40" cy="72" rx="13" ry="14" fill="url(#fgCore)" filter="url(#fSoft)"></ellipse></g><ellipse cx="40" cy="86" rx="12" ry="4" fill="url(#fgBlue)"></ellipse></svg>
+<div class="sparks" style="opacity: {{p.sparks}}"><span class="spark lv" style="left: 40%; --sx: -6px; animation-delay: .2s"></span><span class="spark lv" style="left: 56%; --sx: 5px; animation-delay: .9s"></span><span class="spark lv" style="left: 48%; --sx: -2px; animation-delay: 1.4s"></span></div>
+</div>
+<div class="st">
+<div class="num"><span class="roll" style="--d: 2.0s"><span class="o">{{p.streakOld}}</span><span class="n">{{p.streak}}</span></span></div>
+<div class="lb">Day streak</div>
+</div>
+<div class="pt">
+<div class="num gold"><span class="roll" style="--d: 1.9s"><span class="o">{{p.ptsOld}}</span><span class="n">{{p.ptsNew}}</span></span></div>
+<div class="lb">Points</div>
+</div>
+</div>
+<div class="wk">
+<div class="wk-top"><span class="lb">This week</span><span class="lb gold">{{p.gainLine}}</span></div>
+<div class="coins">
+<sc-for list="{{p.coins}}" as="c" hint-placeholder-count="7">
+<div class="{{c.cls}}">
+<div class="cd">{{c.day}}</div>
+<div class="coin" style="--d: {{c.delay}}">
+<span class="cv">{{c.txt}}</span>
+<sc-if value="{{c.today}}" hint-placeholder-val="{{false}}">
+<span class="bz"></span>
+<span class="shine"></span>
+<svg class="seal" viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M18 42C8 37 4 26 9 13"></path><path d="M30 42C40 37 44 26 39 13"></path></g><g fill="currentColor"><ellipse cx="10" cy="15" rx="1.8" ry="3.6" transform="rotate(-35 10 15)"></ellipse><ellipse cx="7" cy="21.5" rx="1.8" ry="3.6" transform="rotate(-15 7 21.5)"></ellipse><ellipse cx="7.5" cy="28.5" rx="1.8" ry="3.6" transform="rotate(10 7.5 28.5)"></ellipse><ellipse cx="10.5" cy="34.5" rx="1.8" ry="3.6" transform="rotate(35 10.5 34.5)"></ellipse><ellipse cx="15.5" cy="39" rx="1.8" ry="3.6" transform="rotate(60 15.5 39)"></ellipse><ellipse cx="38" cy="15" rx="1.8" ry="3.6" transform="rotate(35 38 15)"></ellipse><ellipse cx="41" cy="21.5" rx="1.8" ry="3.6" transform="rotate(15 41 21.5)"></ellipse><ellipse cx="40.5" cy="28.5" rx="1.8" ry="3.6" transform="rotate(-10 40.5 28.5)"></ellipse><ellipse cx="37.5" cy="34.5" rx="1.8" ry="3.6" transform="rotate(-35 37.5 34.5)"></ellipse><ellipse cx="32.5" cy="39" rx="1.8" ry="3.6" transform="rotate(-60 32.5 39)"></ellipse></g></svg>
+<span class="burst"><span class="ray" style="--a: 0deg"></span><span class="ray" style="--a: 45deg"></span><span class="ray" style="--a: 90deg"></span><span class="ray" style="--a: 135deg"></span><span class="ray" style="--a: 180deg"></span><span class="ray" style="--a: 225deg"></span><span class="ray" style="--a: 270deg"></span><span class="ray" style="--a: 315deg"></span></span>
+<span class="fly">{{c.gain}}</span>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div class="life">
+<div class="life-top"><span class="lb">Days in the arena</span><span class="num"><span class="roll" style="--d: 2.3s"><span class="o">{{p.lifeOld}}</span><span class="n">{{p.lifeNew}}</span></span></span></div>
+<div class="bar"><div class="fill" style="width: {{p.barW}}; --from: {{p.barFrom}}"></div></div>
+<div class="cap">{{p.caption}}</div>
+</div>
+<sc-if value="{{p.milestone}}" hint-placeholder-val="{{false}}">
+<div class="ms">
+<div class="ms-w"><svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M18 42C8 37 4 26 9 13"></path><path d="M30 42C40 37 44 26 39 13"></path></g><g fill="currentColor"><ellipse cx="10" cy="15" rx="1.8" ry="3.6" transform="rotate(-35 10 15)"></ellipse><ellipse cx="7" cy="21.5" rx="1.8" ry="3.6" transform="rotate(-15 7 21.5)"></ellipse><ellipse cx="7.5" cy="28.5" rx="1.8" ry="3.6" transform="rotate(10 7.5 28.5)"></ellipse><ellipse cx="10.5" cy="34.5" rx="1.8" ry="3.6" transform="rotate(35 10.5 34.5)"></ellipse><ellipse cx="15.5" cy="39" rx="1.8" ry="3.6" transform="rotate(60 15.5 39)"></ellipse><ellipse cx="38" cy="15" rx="1.8" ry="3.6" transform="rotate(35 38 15)"></ellipse><ellipse cx="41" cy="21.5" rx="1.8" ry="3.6" transform="rotate(15 41 21.5)"></ellipse><ellipse cx="40.5" cy="28.5" rx="1.8" ry="3.6" transform="rotate(-10 40.5 28.5)"></ellipse><ellipse cx="37.5" cy="34.5" rx="1.8" ry="3.6" transform="rotate(-35 37.5 34.5)"></ellipse><ellipse cx="32.5" cy="39" rx="1.8" ry="3.6" transform="rotate(-60 32.5 39)"></ellipse></g></svg><span class="ms-n">50</span></div>
+<div>
+<div class="ms-t">Bronze laurel earned</div>
+<div class="ms-l">+250 bonus points. It now shows on your seat in the Colosseum.</div>
+</div>
+</div>
+</sc-if>
+<button class="cta" style="animation-delay: {{p.ctaDelay}}">Lock in today</button>
+</div>
+</div>
+</sc-if>
+</div>
+<button class="rp" onClick="{{p.replay}}">Replay</button>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1824,"height":1080}}'>
+class Component extends DCLogic {
+  replay(id) {
+    const st = this.state || {};
+    const h = Object.assign({}, st.hidden || {}); h[id] = true;
+    const d = Object.assign({}, st.done || {}); d[id] = false;
+    this.setState({ hidden: h, done: d });
+    setTimeout(() => {
+      const h2 = Object.assign({}, (this.state || {}).hidden || {}); h2[id] = false;
+      this.setState({ hidden: h2 });
+    }, 60);
+  }
+  skip(id) {
+    const d = Object.assign({}, (this.state || {}).done || {}); d[id] = true;
+    this.setState({ done: d });
+  }
+  renderVals() {
+    const st = this.state || {};
+    const hid = st.hidden || {};
+    const dn = st.done || {};
+    const NIGHT = '/_blob/7266d678ff8ff6e8c7ba1b32d1da443d';
+    const DAY = '/_blob/f9d834dfc98aef63949d159223f85b17';
+    const F = [0.22, 0.45, 0.55, 0.66, 0.76, 0.86, 0.94, 1];
+    const G = [0.15, 0.3, 0.4, 0.5, 0.6, 0.72, 0.86, 1];
+    const D = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const V = [10, 20, 40, 80, 160, 40, 40];
+    const cfgs = [
+      { id: 'n1', look: 'night', label: 'NIGHT · FRIDAY', sub: 'A streak day. Friday is worth the most.',
+        eyebrow: 'Ave, Jamie', title: 'Day 12 of your streak.', line: 'Your fire is at full strength. Friday is the biggest day of the week.',
+        streakOld: '11', streak: '12', f0: 6, f1: 7, ptsOld: '2,340', ptsNew: '2,500', gain: '+160',
+        states: ['done', 'done', 'done', 'done', 'today', 'next', 'next'], vals: V,
+        lifeOld: '47', lifeNew: '48', from: 17, to: 18, span: 20, caption: '2 days to your Day 50 laurel.', milestone: false },
+      { id: 'd1', look: 'day', label: 'GOLDEN HOUR · SATURDAY', sub: 'Weekends count too: +40 each.',
+        eyebrow: 'Ave, Jamie', title: 'Day 13. Weekends count too.', line: 'Saturday adds 40 points and keeps your fire lit.',
+        streakOld: '12', streak: '13', f0: 7, f1: 7, ptsOld: '2,500', ptsNew: '2,540', gain: '+40',
+        states: ['done', 'done', 'done', 'done', 'done', 'today', 'next'], vals: V,
+        lifeOld: '48', lifeNew: '49', from: 18, to: 19, span: 20, caption: '1 day to your Day 50 laurel.', milestone: false },
+      { id: 'c1', look: 'night', label: 'NIGHT · AFTER A GAP', sub: 'Missed Wednesday and Thursday. Welcomed back, never scolded.',
+        eyebrow: 'Welcome back, Jamie', title: 'Back in the arena.', line: 'Day 1 starts now. Your days in the arena never reset.',
+        streakOld: '0', streak: '1', f0: 0, f1: 1, ptsOld: '1,210', ptsNew: '1,220', gain: '+10',
+        states: ['done', 'done', 'missed', 'missed', 'today', 'next', 'next'], vals: [10, 20, 40, 80, 10, 40, 40],
+        lifeOld: '31', lifeNew: '32', from: 1, to: 2, span: 20, caption: '18 days to your Day 50 laurel.', milestone: false },
+      { id: 'm1', look: 'night', label: 'NIGHT · DAY 50', sub: 'A lifetime milestone unlocks a laurel.',
+        eyebrow: 'Ave, Jamie', title: 'Day 50 in the arena.', line: 'Fifty days of showing up. This is how it compounds.',
+        streakOld: '3', streak: '4', f0: 3, f1: 4, ptsOld: '4,980', ptsNew: '5,310', gain: '+80',
+        states: ['done', 'done', 'done', 'today', 'next', 'next', 'next'], vals: V,
+        lifeOld: '49', lifeNew: '50', from: 19, to: 20, span: 20, caption: 'Next: your Day 100 laurel.', milestone: true }
+    ];
+    const phones = cfgs.map((c) => {
+      const coins = c.states.map((s, i) => ({
+        day: D[i],
+        txt: s === 'missed' ? '' : String(c.vals[i]),
+        cls: 'cn s-' + s,
+        delay: s === 'today' ? '1.35s' : (0.85 + i * 0.07).toFixed(2) + 's',
+        today: s === 'today',
+        gain: c.gain
+      }));
+      return {
+        label: c.label, sub: c.sub, look: c.look,
+        bg: c.look === 'day' ? DAY : NIGHT,
+        show: !hid[c.id],
+        doneCls: dn[c.id] ? 'done' : '',
+        skip: () => this.skip(c.id),
+        replay: () => this.replay(c.id),
+        eyebrow: c.eyebrow, title: c.title, line: c.line,
+        streakOld: c.streakOld, streak: c.streak,
+        f0: F[c.f0], f1: F[c.f1], glow: G[c.f1], sparks: c.f1 >= 5 ? 1 : 0,
+        ptsOld: c.ptsOld, ptsNew: c.ptsNew,
+        gainLine: c.gain + ' today',
+        coins: coins,
+        lifeOld: c.lifeOld, lifeNew: c.lifeNew,
+        barW: Math.round((c.to / c.span) * 100) + '%',
+        barFrom: (c.from / c.to).toFixed(3),
+        caption: c.caption,
+        milestone: c.milestone,
+        ctaDelay: c.milestone ? '3.5s' : '2.8s'
+      };
+    });
+    return { phones: phones };
+  }
+}
+</script>
+</body>
+</html>

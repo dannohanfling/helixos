@@ -1,4 +1,6 @@
 import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
+/** The Daily welcome (H-312) is "seen" for the demo's members whatever the day, so no walk meets it by surprise; the welcome walk clears the mark for its own run. */
+const WELCOME_SEEN = "9999-12-31";
 import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
@@ -193,8 +195,8 @@ export async function seedDemo(): Promise<void> {
   ]);
   await db.insert(schema.memberships).values([
     { id: newId(), workspaceId: wsId, userId: coachId, role: "coach", startedAt: addDays(today, -120) },
-    { id: newId(), workspaceId: wsId, userId: clientId, role: "client", programTier: "Elite", passEnabled: true, passName: "Torres Nutrition Community Pass", passHashtag: "#showedup", businessName: "Torres Nutrition Coaching", bigPromise: "I help busy moms drop 15 lbs in 90 days without giving up wine or weekends.", startedAt: addDays(today, -24) },
-    { id: newId(), workspaceId: wsId, userId: client2Id, role: "client", businessName: "Lee Leadership Lab", startedAt: addDays(today, -50) },
+    { id: newId(), workspaceId: wsId, userId: clientId, role: "client", programTier: "Elite", passEnabled: true, passName: "Torres Nutrition Community Pass", passHashtag: "#showedup", businessName: "Torres Nutrition Coaching", bigPromise: "I help busy moms drop 15 lbs in 90 days without giving up wine or weekends.", startedAt: addDays(today, -24), welcomeShownOn: WELCOME_SEEN },
+    { id: newId(), workspaceId: wsId, userId: client2Id, role: "client", businessName: "Lee Leadership Lab", startedAt: addDays(today, -50), welcomeShownOn: WELCOME_SEEN },
   ]);
 
   await seedClientActivity(wsId, clientId, today, { days: 24, missDays: [addDays(today, -9), addDays(today, -16)], intensity: 1 });

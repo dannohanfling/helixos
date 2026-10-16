@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 210,
+    date: "2026-10-16",
+    title: "Your daily welcome: the first open of the day",
+    lines: [
+      "The first time you open HelixOS each day, a short welcome plays over the Colosseum: your fire grows a stage, today's coin is struck with the streak bonus the day just earned you, this week's coins show what each day paid or will pay, and your days in the arena count up with the bar to your next laurel. Skip, Escape or a tap jumps to the end; with reduced motion on it shows finished.",
+      "Opening the app counts as showing up: the day is active and its streak bonus lands then, through your points as always. Nothing else changes: lock-in and close pay what they did.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 209,
     date: "2026-10-16",
     title: "Council Chamber: a plaque on the table with one short line; the full answer below",

@@ -3,6 +3,9 @@ import { AppShell } from "@/components/app-shell";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
 import { requireViewer } from "@/lib/auth";
 import { streakFor } from "@/lib/queries/daily";
+import { headers } from "next/headers";
+import { welcomeFor } from "@/lib/welcome";
+import { DailyWelcome } from "@/components/daily-welcome";
 import { totalPoints } from "@/lib/queries/points";
 import { LevelUp } from "@/components/level-up";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
@@ -55,11 +58,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const tier = tierFor(points);
   // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
+  // The Daily welcome (H-312): once a day on first open, over whatever page they opened; never on /coach, never switched in.
+  const welcome = await welcomeFor(viewer, (await headers()).get("x-helixos-path") ?? "");
   return (
     <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>
+      {welcome ? <DailyWelcome card={welcome} /> : null}
       {viewer.role === "client" && !viewer.team ? <LevelUp tier={{ level: tier.level, name: tier.name, icon: TIER_ICONS[tier.name] ?? "🏅", welcome: tier.welcome }} celebrated={viewer.membership.celebratedTierLevel} /> : null}
     </AppShell>
   );

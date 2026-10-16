@@ -20,11 +20,14 @@ async function main() {
     await page.waitForURL(/\/today/, { timeout: WARM_TIMEOUT_MS });
     await page.waitForLoadState("networkidle");
     await page.goto(`${base}/settings`);
+    // The connector's consent page compiles cold too, and the headers walk has met a 404 from it on a fresh server.
+    await page.goto(`${base}/oauth/authorize`).catch(() => undefined);
+    await page.goto(`${base}/settings`);
     if (await page.locator('button:has-text("Log out")').count()) {
       await page.click('button:has-text("Log out")');
       await page.waitForURL(/\/login/, { timeout: WARM_TIMEOUT_MS });
     }
-    console.log(`warm-up: login, sign-in, Today and settings responded in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+    console.log(`warm-up: login, sign-in, Today, settings and the consent page responded in ${((Date.now() - started) / 1000).toFixed(1)}s`);
   } finally {
     await browser.close();
   }

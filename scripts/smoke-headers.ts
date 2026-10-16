@@ -82,7 +82,12 @@ async function main() {
   let visited = 0;
   const visit = async (paths: string[]) => {
     for (const p of paths) {
-      const res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      let res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      // A dev server compiling a route cold has answered 404 once and 200 a moment later: one second try, then the answer is real.
+      if (res && res.status() === 404) {
+        await page.waitForTimeout(2000);
+        res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      }
       // No violations on a page that did not load is no finding: every page must answer 200 before its console counts.
       if (!res || res.status() !== 200) throw new Error(`${p} answered ${res?.status() ?? "nothing"}; a page that did not load cannot be checked`);
       // The camera is allowed on Find a food alone (Body, rev 237 phase 13), where a barcode is scanned; every other page says none.

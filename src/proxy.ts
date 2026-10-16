@@ -28,7 +28,10 @@ export function proxy(request: NextRequest) {
   if (pathname === "/login" && hasSession) {
     return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get("next")), request.url));
   }
-  return NextResponse.next();
+  // The path, for the app shell (H-312): the Daily welcome never shows a coach on /coach pages, and a layout can't see the URL.
+  const headers = new Headers(request.headers);
+  headers.set("x-helixos-path", pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {
