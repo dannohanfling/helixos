@@ -140,8 +140,9 @@ export async function joinAction(_prev: AuthState, formData: FormData): Promise<
   });
   if (!existing) {
     const membershipId = newId();
-    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, businessName, timezone: browserTimezone(String(formData.get("timezone") ?? "")) });
-    if (role === "client") await seedNewClient(workspace.id, user.id);
+    const timezone = browserTimezone(String(formData.get("timezone") ?? ""));
+    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, businessName, timezone });
+    if (role === "client") await seedNewClient(workspace.id, user.id, timezone);
   }
   await markSignedIn(user.id);
   await writeSession({ userId: user.id, workspaceId: workspace.id, role: existing?.role ?? role, sv: user.sessionVersion });
