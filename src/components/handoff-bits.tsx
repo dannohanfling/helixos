@@ -5,7 +5,7 @@
  * token, shown once when it's made.
  */
 import { useActionState, useState } from "react";
-import { decideHandoffAction, makeAgentTokenAction, noteDecisionAction, type HandoffFormState } from "@/lib/actions/handoff";
+import { decideHandoffAction, holdHandoffAction, makeAgentTokenAction, noteDecisionAction, releaseHandoffAction, supersedeHandoffAction, type HandoffFormState } from "@/lib/actions/handoff";
 import { CopyButton } from "@/components/copy-button";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -114,5 +114,72 @@ export function DecisionNote({ id, refLabel }: { id: string; refLabel: string })
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * H-351: Danno's own Hold / Release / Supersede on a post. Hold asks for the one-line reason; Supersede asks for the newer
+ * post's H-number. A held or superseded post shows no Approve, and the server refuses a decision on it too.
+ */
+export function HoldButtons({ refLabel, held, superseded }: { refLabel: string; held: boolean; superseded: boolean }) {
+  const [holdState, hold] = useActionState<HandoffFormState, FormData>(holdHandoffAction, null);
+  const [releaseState, release] = useActionState<HandoffFormState, FormData>(releaseHandoffAction, null);
+  const [supState, supersede] = useActionState<HandoffFormState, FormData>(supersedeHandoffAction, null);
+  const [mode, setMode] = useState<"idle" | "hold" | "supersede">("idle");
+  const done = holdState?.ok ?? releaseState?.ok ?? supState?.ok;
+  const error = holdState?.error ?? releaseState?.error ?? supState?.error;
+  if (done) return <p className="mt-1 text-xs text-good" role="status" data-testid="handoff-hold-done">{done}</p>;
+  if (superseded) return null;
+  return (
+    <div className="mt-2 space-y-2 text-xs" data-testid="handoff-hold-controls">
+      {mode === "hold" ? (
+        <form action={hold} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="ref" value={refLabel} />
+          <label className="min-w-0 flex-1">
+            <span className="label">Why it&apos;s on hold</span>
+            <input name="reason" className="field" required maxLength={200} placeholder="waiting on your H-336 decision" data-testid="handoff-hold-reason" />
+          </label>
+          <SubmitButton className="btn btn-soft btn-xs" pendingText="Holding…" data-testid="handoff-hold-send">
+            Hold it
+          </SubmitButton>
+          <button type="button" className="btn btn-ghost btn-xs" onClick={() => setMode("idle")}>
+            Cancel
+          </button>
+        </form>
+      ) : mode === "supersede" ? (
+        <form action={supersede} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="ref" value={refLabel} />
+          <label>
+            <span className="label">Replaced by</span>
+            <input name="by" className="field w-28" required maxLength={20} placeholder="H-___" data-testid="handoff-supersede-by" />
+          </label>
+          <SubmitButton className="btn btn-soft btn-xs" pendingText="Marking…" data-testid="handoff-supersede-send">
+            Mark superseded
+          </SubmitButton>
+          <button type="button" className="btn btn-ghost btn-xs" onClick={() => setMode("idle")}>
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {held ? (
+            <form action={release}>
+              <input type="hidden" name="ref" value={refLabel} />
+              <SubmitButton className="btn btn-soft btn-xs" pendingText="Releasing…" data-testid="handoff-release">
+                Release the hold
+              </SubmitButton>
+            </form>
+          ) : (
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => setMode("hold")} data-testid="handoff-hold">
+              Hold
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost btn-xs" onClick={() => setMode("supersede")} data-testid="handoff-supersede">
+            Superseded by…
+          </button>
+        </div>
+      )}
+      {error ? <p className="text-danger" role="alert">{error}</p> : null}
+    </div>
   );
 }

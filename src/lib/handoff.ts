@@ -6,7 +6,7 @@
  * handoff_inbox. Every post, file, ack, decision and token change is in the audit.
  */
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { appUrl } from "@/lib/branded-email";
 import { hashSecret, safeEqual } from "@/lib/crypto";
@@ -40,6 +40,8 @@ import {
   zipCentral,
   type CheckinAct,
   type HandoffKind,
+  decidable,
+  holdReason,
 } from "@/lib/engine/handoff";
 
 export type Owner = { workspaceId: string; userId: string };
@@ -161,6 +163,8 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   const reasons = approvalNeeds(p.kind, p.needsApproval, text);
   const row = await insertMessage(o, { fromAgentId: from.id, toIds: [...new Set(to)], kind: p.kind, title: p.title, body: p.body, replyToId, threadId, fileIds: p.files, needsApproval: reasons.length > 0, approvalReasons: reasons, claimsApproval: claimsApproval(text) }, [...new Set(to)]);
   await audit(o, from.id, "post", hId(row.seq), p.title);
+  // H-351: a replacement marks the post it replaces in the same call (the agent's own post only).
+  if (p.supersedes !== null) await supersedeHandoff(o, from.id, hId(p.supersedes), hId(row.seq));
   // A status message updates the sender's Forum building.
   if (p.kind === "status") await reportToForum(o, { agent: from.name, status: "working", now: p.title }, "agent");
   // The road lights on its own (H-19): a flow to each recipient, the title as its label; a reply walks back the same road.
@@ -181,7 +185,7 @@ export async function alertOwner(o: Owner, row: schema.HandoffMessage, fromName:
   await sendEmail(u.email, `${hId(row.seq)} needs your approval`, `${fromName} posted ${hId(row.seq)}, "${row.title}", and it needs your approval (${row.approvalReasons.join(", ")}).\n\nOpen your inbox: ${appUrl()}/coach/inbox\n\nTurn these emails off on Coach → Inbox.`);
 }
 
-export type InboxItem = { id: string; ref: string; kind: string; from: string; to: string[]; title: string; body: string; replyTo: string | null; files: { id: string; name: string; size: number }[]; needsApproval: boolean; reasons: string[]; claimsApproval: boolean; decision: string | null; decisionFor: string | null; decidedAt: string | null; fromDanno: boolean; at: string };
+export type InboxItem = { id: string; ref: string; kind: string; from: string; to: string[]; title: string; body: string; replyTo: string | null; files: { id: string; name: string; size: number }[]; needsApproval: boolean; reasons: string[]; claimsApproval: boolean; decision: string | null; decisionFor: string | null; decidedAt: string | null; fromDanno: boolean; at: string; /** H-351 */ hold: { reason: string; at: string } | null; supersededBy: string | null; /** H-356: when the agent's inbox read took Danno's decision on this post; null until then. */ decisionReadAt: string | null; /** H-356: more than three minutes since the decision with no read. */ decisionLate: boolean; /** H-356: the deciding agent's last inbox read and its session link, for "not read yet" and Nudge. */ agentSeenAt: string | null; agentSessionUrl: string | null };
 
 async function describe(o: Owner, rows: schema.HandoffMessage[]): Promise<InboxItem[]> {
   const agents = await agentsOf(o);
@@ -189,8 +193,29 @@ async function describe(o: Owner, rows: schema.HandoffMessage[]): Promise<InboxI
   const fileIds = [...new Set(rows.flatMap((r) => r.fileIds))];
   const files = fileIds.length ? await db.query.handoffFiles.findMany({ where: and(eq(schema.handoffFiles.workspaceId, o.workspaceId), eq(schema.handoffFiles.userId, o.userId), inArray(schema.handoffFiles.id, fileIds)) }) : [];
   const parents = new Map<string, number>();
-  const parentIds = [...new Set(rows.map((r) => r.replyToId ?? r.decisionForId).filter(Boolean) as string[])];
+  const parentIds = [...new Set(rows.flatMap((r) => [r.replyToId ?? r.decisionForId, r.supersededById]).filter(Boolean) as string[])];
   if (parentIds.length) for (const p of await db.query.handoffMessages.findMany({ where: inArray(schema.handoffMessages.id, parentIds), columns: { id: true, seq: true } })) parents.set(p.id, p.seq);
+  // H-356: for a decided post, the owner's answer row and its delivery to the agent say when the agent read the decision.
+  const decidedIds = rows.filter((r) => r.decision && r.fromAgentId).map((r) => r.id);
+  const answers = decidedIds.length ? await db.query.handoffMessages.findMany({ where: and(mine(o), inArray(schema.handoffMessages.decisionForId, decidedIds)), columns: { id: true, decisionForId: true } }) : [];
+  const answerDeliveries = answers.length ? await db.query.handoffDeliveries.findMany({ where: inArray(schema.handoffDeliveries.messageId, answers.map((a) => a.id)) }) : [];
+  const readAt = new Map<string, string>();
+  for (const a of answers) {
+    const d = answerDeliveries.find((x) => x.messageId === a.id && x.recipient !== DANNO && x.deliveredAt);
+    if (d?.deliveredAt && a.decisionForId) readAt.set(a.decisionForId, d.deliveredAt);
+  }
+  const agentIds = [...new Set(rows.map((r) => r.fromAgentId).filter((x): x is string => Boolean(x)))];
+  const settings = agentIds.length ? await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, o.workspaceId), eq(schema.handoffAgents.userId, o.userId), inArray(schema.handoffAgents.agentId, agentIds)) }) : [];
+  const seenAt = new Map<string, string>();
+  if (agentIds.length) {
+    const lastReads = await db
+      .select({ recipient: schema.handoffDeliveries.recipient, at: sql<string>`max(${schema.handoffDeliveries.deliveredAt})` })
+      .from(schema.handoffDeliveries)
+      .innerJoin(schema.handoffMessages, eq(schema.handoffMessages.id, schema.handoffDeliveries.messageId))
+      .where(and(mine(o), inArray(schema.handoffDeliveries.recipient, agentIds)))
+      .groupBy(schema.handoffDeliveries.recipient);
+    for (const l of lastReads) if (l.at) seenAt.set(l.recipient, l.at);
+  }
   return rows.map((r) => ({
     id: r.id,
     ref: hId(r.seq),
@@ -208,6 +233,12 @@ async function describe(o: Owner, rows: schema.HandoffMessage[]): Promise<InboxI
     decisionFor: r.decisionForId && parents.has(r.decisionForId) ? hId(parents.get(r.decisionForId)!) : null,
     decidedAt: r.decidedAt,
     fromDanno: r.fromAgentId === null,
+    hold: r.holdReason ? { reason: r.holdReason, at: r.heldAt ?? r.createdAt } : null,
+    supersededBy: r.supersededById && parents.has(r.supersededById) ? hId(parents.get(r.supersededById)!) : null,
+    decisionReadAt: readAt.get(r.id) ?? null,
+    decisionLate: !readAt.has(r.id) && !!r.decidedAt && Date.now() - new Date(r.decidedAt).getTime() > 3 * 60 * 1000,
+    agentSeenAt: r.fromAgentId ? (seenAt.get(r.fromAgentId) ?? settings.find((x) => x.agentId === r.fromAgentId)?.lastCheckinAt ?? null) : null,
+    agentSessionUrl: r.fromAgentId ? (settings.find((x) => x.agentId === r.fromAgentId)?.sessionUrl ?? null) : null,
     at: r.createdAt,
   }));
 }
@@ -258,6 +289,9 @@ export async function ackHandoff(o: Owner, agentId: string, ref: unknown, note: 
 export async function decideHandoff(o: Owner, actorUserId: string, messageId: string, decision: "approved" | "changed" | "declined", note: string): Promise<{ ok: boolean; text: string }> {
   const row = await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.id, messageId)) });
   if (!row || !row.needsApproval) return { ok: false, text: "That message isn't waiting for a decision." };
+  // H-351: a held or superseded post takes no decision, whatever a button sent.
+  const can = decidable(await holdStateOf(o, row));
+  if (!can.ok) return can;
   if (decision === "changed" && !note.trim()) return { ok: false, text: "Say what to change." };
   const now = nowIso();
   // One tap per decision: only the first lands.
@@ -267,7 +301,7 @@ export async function decideHandoff(o: Owner, actorUserId: string, messageId: st
   const to = row.fromAgentId ? [row.fromAgentId] : [];
   await insertMessage(o, { fromAgentId: null, toIds: to, kind: "answer", title: `${word}: ${hId(row.seq)} ${row.title}`.slice(0, HANDOFF_MAX.title), body: scrubText(note.slice(0, HANDOFF_MAX.change)).text, replyToId: row.id, threadId: row.threadId ?? row.id, decision, decidedAt: now, decidedBy: actorUserId, decisionForId: row.id }, to);
   await audit(o, null, decision === "approved" ? "approve" : decision === "changed" ? "change" : "decline", hId(row.seq), note || null);
-  return { ok: true, text: `${word}: ${hId(row.seq)}. ${row.fromAgentId ? "It reaches the agent in its next inbox check." : ""}` };
+  return { ok: true, text: `${word}: ${hId(row.seq)}. ${row.fromAgentId ? "The agent reads its inbox every few minutes; this post says when it has." : ""}` };
 }
 
 /** Danno's own answer to a message, without a decision. */
@@ -299,12 +333,82 @@ export async function noteDecision(o: Owner, messageId: string, note: string): P
 /** The owner's view: messages newest first, the waiting decisions, and the menu count (waiting decisions and unread for Danno). */
 export async function ownerInbox(o: Owner, limit = 60): Promise<{ items: InboxItem[]; waiting: InboxItem[]; acks: Map<string, { recipient: string; note: string | null; at: string }[]> }> {
   const rows = await db.query.handoffMessages.findMany({ where: mine(o), orderBy: desc(schema.handoffMessages.seq), limit });
-  const waitingRows = await db.query.handoffMessages.findMany({ where: and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision)), orderBy: asc(schema.handoffMessages.seq) });
+  const waitingRows = await db.query.handoffMessages.findMany({ where: and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)), orderBy: asc(schema.handoffMessages.seq) });
   const deliveries = rows.length ? await db.query.handoffDeliveries.findMany({ where: inArray(schema.handoffDeliveries.messageId, rows.map((r) => r.id)) }) : [];
   const agents = await agentsOf(o);
   const acks = new Map<string, { recipient: string; note: string | null; at: string }[]>();
   for (const d of deliveries) if (d.ackedAt) acks.set(d.messageId, [...(acks.get(d.messageId) ?? []), { recipient: d.recipient === DANNO ? "Danno" : (agents.find((a) => a.id === d.recipient)?.name ?? "An agent"), note: d.ackNote, at: d.ackedAt }]);
   return { items: await describe(o, rows), waiting: await describe(o, waitingRows), acks };
+}
+
+/** The Superseded tab (H-351): every replaced post, newest first, never deleted; `q` narrows by H-number, title or body. */
+export async function supersededInbox(o: Owner, q = "", limit = 200): Promise<InboxItem[]> {
+  const rows = await db.query.handoffMessages.findMany({ where: and(mine(o), isNotNull(schema.handoffMessages.supersededById)), orderBy: desc(schema.handoffMessages.seq), limit });
+  const needle = q.trim().toLowerCase();
+  const kept = needle ? rows.filter((r) => hId(r.seq).toLowerCase() === needle || r.title.toLowerCase().includes(needle) || r.body.toLowerCase().includes(needle)) : rows;
+  return describe(o, kept);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// H-351: HOLD and SUPERSEDED. The writing agent (through the tools) or the owner (signed in) sets them; nobody else.
+
+/** A refusal the inbox says in its own words (H-351): the one kind of error a coach's screen may show; anything else is ours to log. */
+export class HandoffRefusal extends Error {}
+export const refusalOf = (e: unknown): string | null => (e instanceof HandoffRefusal ? e.message : null);
+
+async function holdStateOf(o: Owner, row: schema.HandoffMessage): Promise<{ held: { reason: string; at: string } | null; supersededBy: string | null }> {
+  let supersededBy: string | null = null;
+  if (row.supersededById) {
+    const by = await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.id, row.supersededById)), columns: { seq: true } });
+    supersededBy = by ? hId(by.seq) : "a newer post";
+  }
+  return { held: row.holdReason ? { reason: row.holdReason, at: row.heldAt ?? row.createdAt } : null, supersededBy };
+}
+
+/** The post, when it is this agent's own (or the caller is the owner, agentId null). */
+async function ownPost(o: Owner, agentId: string | null, ref: unknown): Promise<schema.HandoffMessage> {
+  const seq = parseHId(ref);
+  const row = seq === null ? null : await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.seq, seq)) });
+  if (!row) throw new HandoffRefusal(`There's no ${seq === null ? String(ref) : hId(seq)} in the inbox.`);
+  if (agentId !== null && row.fromAgentId !== agentId) throw new HandoffRefusal(`${hId(row.seq)} isn't yours to change: only the agent that wrote it, or Danno, can.`);
+  return row;
+}
+
+/** Hold: the post keeps its place in the list with "HOLD · Don't approve yet" and the reason; Approve goes until it is released. */
+export async function holdHandoff(o: Owner, agentId: string | null, ref: unknown, reason: unknown): Promise<string> {
+  const row = await ownPost(o, agentId, ref);
+  const why = holdReason(reason);
+  if (!why) throw new HandoffRefusal("Say why it's on hold, in one line (\"waiting on your H-336 decision\").");
+  if (row.decision) throw new HandoffRefusal(`${hId(row.seq)} was already decided (${row.decision}); a hold changes nothing now.`);
+  if (row.supersededById) throw new HandoffRefusal(`${hId(row.seq)} was replaced; hold the newer post instead.`);
+  await db.update(schema.handoffMessages).set({ holdReason: why, heldAt: nowIso() }).where(eq(schema.handoffMessages.id, row.id));
+  await audit(o, agentId, "hold", hId(row.seq), why);
+  return `${hId(row.seq)} is on hold: ${why}. Danno can't approve it until it is released.`;
+}
+
+/** Release: Approve comes back, and Danno is told it is ready. */
+export async function releaseHandoff(o: Owner, agentId: string | null, ref: unknown): Promise<string> {
+  const row = await ownPost(o, agentId, ref);
+  if (!row.holdReason) throw new HandoffRefusal(`${hId(row.seq)} isn't on hold.`);
+  await db.update(schema.handoffMessages).set({ holdReason: null, heldAt: null }).where(eq(schema.handoffMessages.id, row.id));
+  await audit(o, agentId, "release", hId(row.seq), null);
+  if (row.needsApproval && !row.decision) {
+    const agents = await agentsOf(o);
+    await alertOwner(o, row, agents.find((a) => a.id === row.fromAgentId)?.name ?? "An agent");
+  }
+  return `${hId(row.seq)} is released${row.needsApproval && !row.decision ? " and back in Danno's Waiting list" : ""}.`;
+}
+
+/** Supersede: the old post moves to the Superseded tab, pointing at the newer one; it is never deleted. */
+export async function supersedeHandoff(o: Owner, agentId: string | null, ref: unknown, byRef: unknown): Promise<string> {
+  const row = await ownPost(o, agentId, ref);
+  const bySeq = parseHId(byRef);
+  const by = bySeq === null ? null : await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.seq, bySeq)) });
+  if (!by) throw new HandoffRefusal(`There's no ${bySeq === null ? String(byRef) : hId(bySeq)} to point at.`);
+  if (by.id === row.id) throw new HandoffRefusal("A post can't replace itself.");
+  await db.update(schema.handoffMessages).set({ supersededById: by.id, holdReason: null, heldAt: null }).where(eq(schema.handoffMessages.id, row.id));
+  await audit(o, agentId, "supersede", hId(row.seq), `by ${hId(by.seq)}`);
+  return `${hId(row.seq)} is superseded by ${hId(by.seq)}: it moved to the Superseded tab with no Approve.`;
 }
 
 export async function markOwnerRead(o: Owner): Promise<void> {
@@ -313,7 +417,7 @@ export async function markOwnerRead(o: Owner): Promise<void> {
 }
 
 export async function inboxCount(o: Owner): Promise<number> {
-  const [waiting] = await db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision)));
+  const [waiting] = await db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)));
   const [unread] = await db
     .select({ n: sql<number>`count(*)` })
     .from(schema.handoffDeliveries)

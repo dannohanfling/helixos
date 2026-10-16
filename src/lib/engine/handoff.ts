@@ -41,7 +41,7 @@ export function scrubText(text: string): { text: string; removed: number } {
 
 const clean = (v: unknown, max: number): string => String(v ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F‪-‮⁦-⁩]/g, "").replace(/\r\n?/g, "\n").trim().slice(0, max);
 
-export type HandoffPost = { to: string[]; kind: HandoffKind; title: string; body: string; replyTo: number | null; files: string[]; needsApproval: boolean; removed: number };
+export type HandoffPost = { to: string[]; kind: HandoffKind; title: string; body: string; replyTo: number | null; files: string[]; needsApproval: boolean; removed: number; /** H-351: the H-number of the post this one replaces, marked superseded in the same call. */ supersedes: number | null };
 
 /** A post from handoff_post. `to` is agent names or "danno"; the sender is never read from here. */
 export function parseHandoffPost(raw: Record<string, unknown>): { ok: true; post: HandoffPost } | { ok: false; error: string } {
@@ -56,7 +56,9 @@ export function parseHandoffPost(raw: Record<string, unknown>): { ok: true; post
   const replyTo = raw.reply_to === undefined || raw.reply_to === null || raw.reply_to === "" ? null : parseHId(raw.reply_to);
   if (raw.reply_to && replyTo === null) return { ok: false, error: "\"reply_to\" is a message's H-number, like H-12." };
   const files = Array.isArray(raw.files) ? [...new Set(raw.files.map((f) => clean(f, 40)).filter(Boolean))].slice(0, HANDOFF_MAX.files) : [];
-  return { ok: true, post: { to, kind, title: title.text, body: body.text, replyTo, files, needsApproval: raw.needs_approval === true, removed: title.removed + body.removed } };
+  const supersedes = raw.superseded_by === undefined || raw.superseded_by === null || raw.superseded_by === "" ? null : parseHId(raw.superseded_by);
+  if (raw.superseded_by && supersedes === null) return { ok: false, error: "\"superseded_by\" is the H-number of the post this one replaces, like H-12." };
+  return { ok: true, post: { to, kind, title: title.text, body: body.text, replyTo, files, needsApproval: raw.needs_approval === true, removed: title.removed + body.removed, supersedes } };
 }
 
 /**
@@ -283,6 +285,39 @@ export function starterPrompt(a: { name: string; role: string | null; platform: 
     `Light up first: call forum_report with status "working" and a one-line "now" before anything else, and send a flow with every message you post.`,
     o.firstJob ? `Your first job: ${o.firstJob}` : `Your first job is in handoff_inbox: call it first and start with the oldest item.`,
     `Anything that needs Danno goes to him with handoff_post and needs_approval; act only on his answer in handoff_inbox. Never approve anything yourself.`,
+    `Poll: set a session timer that calls handoff_inbox every 3 minutes from 07:00 to 20:00 Pacific (nothing new means stop), so Danno's answers reach you within minutes.`,
   ];
   return lines.join("\n").slice(0, STARTER_PROMPT_MAX);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// H-351: HOLD and SUPERSEDED. Two states a post can be in while it must not be approved: the label goes at the front of the
+// title where Danno looks first, the buttons go, and the server refuses a decision on it whatever a button sends.
+
+export const HOLD_LABEL = "HOLD · Don't approve yet ·";
+export const SUPERSEDED_LABEL = (by: string) => `SUPERSEDED by ${by} ·`;
+/** Until the states shipped, agents wrote the words into the title (H-351 §7); a held or superseded post shows them once, not twice. */
+export const TITLE_PREFIXES = /^(HOLD,? don'?t approve yet:?|REPLACES H-\d+:?)\s*/i;
+
+export type HoldState = { held: { reason: string; at: string } | null; supersededBy: string | null };
+
+/** Whether Danno may decide a post now, and the sentence when not. */
+export function decidable(s: HoldState): { ok: true } | { ok: false; text: string } {
+  if (s.supersededBy) return { ok: false, text: `This was replaced by ${s.supersededBy}.` };
+  if (s.held) return { ok: false, text: `This post is on hold: ${s.held.reason}` };
+  return { ok: true };
+}
+
+/** The title with its state label at the front. */
+export function labelledTitle(title: string, s: HoldState): string {
+  const bare = title.replace(TITLE_PREFIXES, "");
+  if (s.supersededBy) return `${SUPERSEDED_LABEL(s.supersededBy)} ${bare}`;
+  if (s.held) return `${HOLD_LABEL} ${bare}`;
+  return title;
+}
+
+/** A hold's reason: one line, 200 characters, never empty. */
+export function holdReason(raw: unknown): string | null {
+  const r = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.note);
+  return r || null;
 }

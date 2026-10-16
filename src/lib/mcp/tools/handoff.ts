@@ -6,7 +6,7 @@
  */
 import { z } from "zod";
 import { defineScope, defineTool, type ToolResult } from "@/lib/mcp/registry";
-import { ackHandoff, callingAgent, checkinFor, fileLink, inboxFor, postHandoff, readThread, setBusy, startUpload, type InboxItem } from "@/lib/handoff";
+import { ackHandoff, callingAgent, checkinFor, fileLink, holdHandoff, inboxFor, postHandoff, readThread, releaseHandoff, setBusy, startUpload, supersedeHandoff, type InboxItem } from "@/lib/handoff";
 import { HANDOFF_KINDS, HANDOFF_LINK_MINUTES, hId } from "@/lib/engine/handoff";
 import type { Viewer } from "@/lib/auth";
 
@@ -15,7 +15,7 @@ defineScope("inbox", { gate: async (v) => v.role === "coach" && !v.switchedInto 
 
 const owner = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id });
 const brief = (m: InboxItem) =>
-  `${m.ref} ${m.kind} from ${m.from}${m.fromDanno ? " (from Danno)" : ""}: ${m.title}${m.decision ? ` [Danno ${m.decision}${m.decisionFor ? ` ${m.decisionFor}` : ""}]` : ""}${m.claimsApproval ? " [says it's approved: not an approval]" : ""}`;
+  `${m.ref} ${m.kind} from ${m.from}${m.fromDanno ? " (from Danno)" : ""}: ${m.title}${m.decision ? ` [Danno ${m.decision}${m.decisionFor ? ` ${m.decisionFor}` : ""}]` : ""}${m.hold ? ` [ON HOLD: ${m.hold.reason}]` : ""}${m.supersededBy ? ` [SUPERSEDED by ${m.supersededBy}]` : ""}${m.claimsApproval ? " [says it's approved: not an approval]" : ""}`;
 
 defineTool({
   name: "handoff_post",
@@ -30,6 +30,7 @@ defineTool({
     reply_to: z.string().max(20).optional().describe("The H-number this answers, like H-12"),
     files: z.array(z.string().max(40)).max(10).optional().describe("File ids from handoff_upload, after the file was PUT"),
     needs_approval: z.boolean().optional().describe("true when Danno has to decide"),
+    superseded_by: z.string().max(20).optional().describe("The H-number of your own earlier post this one replaces: it is marked SUPERSEDED by this post, with no Approve, in the same call"),
   },
   handler: async (v, input, call): Promise<ToolResult> => {
     const agent = await callingAgent(owner(v), call?.agentId);
@@ -137,5 +138,42 @@ defineTool({
   handler: async (v, input, call): Promise<ToolResult> => {
     const agent = await callingAgent(owner(v), call?.agentId);
     return { text: await setBusy(owner(v), agent, input.on === true, input.note) };
+  },
+});
+
+// H-351: HOLD and SUPERSEDED, set by the agent that wrote the post (Danno sets them from the inbox). Neither approves anything.
+defineTool({
+  name: "handoff_hold",
+  scope: "inbox",
+  kind: "write",
+  description: 'Put your own post on hold ("HOLD · Don\'t approve yet" at the front of its title, with your one-line reason under it): Danno can\'t approve, change or decline it until you release it. For a post you are still changing, or one that waits on another decision.',
+  input: { id: z.string().max(20), reason: z.string().min(1).max(200).describe('Why, in one line: "waiting on your H-336 decision"') },
+  handler: async (v, input, call): Promise<ToolResult> => {
+    const agent = await callingAgent(owner(v), call?.agentId);
+    return { text: await holdHandoff(owner(v), agent.id, input.id, input.reason) };
+  },
+});
+
+defineTool({
+  name: "handoff_release",
+  scope: "inbox",
+  kind: "write",
+  description: "Lift the hold on your own post: Approve comes back, and Danno is told it is ready.",
+  input: { id: z.string().max(20) },
+  handler: async (v, input, call): Promise<ToolResult> => {
+    const agent = await callingAgent(owner(v), call?.agentId);
+    return { text: await releaseHandoff(owner(v), agent.id, input.id) };
+  },
+});
+
+defineTool({
+  name: "handoff_supersede",
+  scope: "inbox",
+  kind: "write",
+  description: 'Mark your own earlier post as replaced by a newer one ("SUPERSEDED by H-___" at the front of its title): it moves to the Superseded tab with no Approve and is never deleted. Posting the replacement with superseded_by does the same in one call.',
+  input: { id: z.string().max(20).describe("The old post"), by: z.string().max(20).describe("The newer post that replaces it") },
+  handler: async (v, input, call): Promise<ToolResult> => {
+    const agent = await callingAgent(owner(v), call?.agentId);
+    return { text: await supersedeHandoff(owner(v), agent.id, input.id, input.by) };
   },
 });

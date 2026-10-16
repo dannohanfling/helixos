@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { refresh, str } from "@/lib/action-helpers";
-import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner } from "@/lib/handoff";
+import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner, refusalOf, holdHandoff, releaseHandoff, supersedeHandoff } from "@/lib/handoff";
 import { CHECKIN_DEFAULTS, CHECKIN_EVERY, hhmm } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
 
@@ -143,4 +143,44 @@ export async function noteDecisionAction(_prev: HandoffFormState, formData: Form
   const r = await noteDecision({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "id"), String(formData.get("note") ?? ""));
   refresh();
   return r.ok ? { ok: r.text } : { error: r.text };
+}
+
+// H-351: Danno's own Hold, Release and Supersede on any post, from the inbox.
+export async function holdHandoffAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
+  const coach = await requireCoach();
+  try {
+    const text = await holdHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, null, str(formData, "ref"), str(formData, "reason"));
+    refresh();
+    return { ok: text };
+  } catch (e) {
+    const said = refusalOf(e);
+    if (said) return { error: said };
+    throw e;
+  }
+}
+
+export async function releaseHandoffAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
+  const coach = await requireCoach();
+  try {
+    const text = await releaseHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, null, str(formData, "ref"));
+    refresh();
+    return { ok: text };
+  } catch (e) {
+    const said = refusalOf(e);
+    if (said) return { error: said };
+    throw e;
+  }
+}
+
+export async function supersedeHandoffAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
+  const coach = await requireCoach();
+  try {
+    const text = await supersedeHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, null, str(formData, "ref"), str(formData, "by"));
+    refresh();
+    return { ok: text };
+  } catch (e) {
+    const said = refusalOf(e);
+    if (said) return { error: said };
+    throw e;
+  }
 }
