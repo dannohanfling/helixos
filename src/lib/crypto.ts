@@ -6,6 +6,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, createPublicK
 
 const PREFIX = "enc:v1:";
 
+/** The key the app runs with: ENCRYPTION_KEY, else SESSION_SECRET (the fallback the rotation runbook warns about). */
 function key(): Buffer {
   const src = process.env.ENCRYPTION_KEY || process.env.SESSION_SECRET;
   if (!src || src.length < 32) {
@@ -14,23 +15,43 @@ function key(): Buffer {
   }
   return createHash("sha256").update(src).digest();
 }
+/** A key from a given source (H-349, the re-seal script): the old key and the new one side by side, never from the environment's choice. */
+const keyFrom = (src: string): Buffer => createHash("sha256").update(src).digest();
 
 export function seal(plain: string | null | undefined): string | null {
+  return sealWithKey(plain, key());
+}
+
+export function open(value: string | null | undefined): string | null {
+  return openWithKey(value, key());
+}
+
+/** Seal under an explicit key source (32+ characters). The re-seal script's way in; the app itself always uses seal(). */
+export function sealWith(plain: string | null | undefined, src: string): string | null {
+  return sealWithKey(plain, keyFrom(src));
+}
+
+/** Open under an explicit key source; null when the value was sealed under another key. */
+export function openWith(value: string | null | undefined, src: string): string | null {
+  return openWithKey(value, keyFrom(src));
+}
+
+function sealWithKey(plain: string | null | undefined, k: Buffer): string | null {
   if (plain === null || plain === undefined || plain === "") return plain ?? null;
   if (plain.startsWith(PREFIX)) return plain;
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key(), iv);
+  const cipher = createCipheriv("aes-256-gcm", k, iv);
   const ct = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${PREFIX}${iv.toString("base64url")}.${tag.toString("base64url")}.${ct.toString("base64url")}`;
 }
 
-export function open(value: string | null | undefined): string | null {
+function openWithKey(value: string | null | undefined, k: Buffer): string | null {
   if (!value) return value ?? null;
   if (!value.startsWith(PREFIX)) return value;
   try {
     const [iv, tag, ct] = value.slice(PREFIX.length).split(".");
-    const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64url"));
+    const decipher = createDecipheriv("aes-256-gcm", k, Buffer.from(iv, "base64url"));
     decipher.setAuthTag(Buffer.from(tag, "base64url"));
     return Buffer.concat([decipher.update(Buffer.from(ct, "base64url")), decipher.final()]).toString("utf8");
   } catch {
