@@ -6,6 +6,7 @@ import { readMoney } from "@/lib/engine/money";
 import { queueProgress } from "@/lib/chat-progress";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { nowIso } from "@/lib/dates";
 import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { inviteCode } from "@/lib/ids";
@@ -66,6 +67,8 @@ async function updateProfile(formData: FormData): Promise<void> {
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",
       scoreboardEmail: formData.get("scoreboardEmail") === "on",
       timezone: validTimezone(str(formData, "timezone")),
+      // The Setup card (H-270 §1, S2): the time zone and reminder hours chosen by the member, not defaulted.
+      profileSavedAt: nowIso(),
     })
     .where(eq(schema.memberships.id, v.membership.id));
   refresh();

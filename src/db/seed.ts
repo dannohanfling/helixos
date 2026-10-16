@@ -3,6 +3,7 @@ import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
 import rungs from "@/data/seed/rungs.json";
+import setup from "@/data/seed/setup.json";
 import curriculum from "@/data/seed/curriculum.json";
 import dmLibrary from "@/data/seed/dm_library.json";
 import { newId } from "@/lib/ids";
@@ -50,6 +51,10 @@ export async function seedLibrary(): Promise<void> {
   }  // My Helix's 67 rungs (rev 710): seeded once, then the coach's to edit, so a reseed keeps their labels, links and signals.
   for (const r of rungs as { key: string; phase: number; order: number; label: string; signal: string; href: string }[]) {
     await db.insert(schema.helixRungs).values(r).onConflictDoNothing();
+  }
+  // The Setup card's 26 steps (H-270 §1): seeded once, then the coach's to edit.
+  for (const s of setup as { key: string; group: string; order: number; label: string; href: string; signal: string; needs: string[]; minutes: number }[]) {
+    await db.insert(schema.setupSteps).values(s).onConflictDoNothing();
   }
 
   for (const c of curriculum) {

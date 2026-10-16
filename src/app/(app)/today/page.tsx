@@ -9,6 +9,9 @@ import type { DailyLog } from "@/db/schema";
 import { completeCurriculumDayAction } from "@/lib/actions/pathway";
 import { setContentStatusAction } from "@/lib/actions/content";
 import { todayData } from "@/lib/queries/today";
+import { setupFor } from "@/lib/setup-card";
+import { SetupCard } from "@/components/setup-card";
+import { StartHere } from "@/components/start-here";
 import { TeamHome } from "@/components/team-home";
 import { NewTaskForm } from "@/components/new-task-form";
 import { SubmitButton } from "@/components/submit-button";
@@ -76,7 +79,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   // The day's data, the intentions, the closed days, Body's line, the coach's notices and the rest of the page's own reads run
   // together (H-164 §9: one after another they held "Loading…" for seconds; the timing line below says what each part cost).
-  const [d, week, month, closed, body, featuresOn, boardDue, toolsConn, coachNew, recParts] = await Promise.all([
+  const [d, week, month, closed, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup] = await Promise.all([
     todayData(v),
     // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
     db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) }).then((w) => w ?? null),
@@ -99,6 +102,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       : !v.switchedInto
         ? coachItems(v.workspace.id, addDays(v.today, -COACH_ITEMS_DAYS))
         : Promise.resolve(null),
+    // H-270 §1: the Setup card's steps, evaluated from what HelixOS already holds.
+    setupFor(v),
   ]);
   const tData = tick();
   const [share, goals, workout] = await Promise.all([
@@ -260,12 +265,19 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </li>
           </ol>
           <p className="mt-3 text-sm text-ink-2">Points, streaks and your pathway all come from that loop. Your top 3 for today are already ticked: one button and you&apos;re in.</p>
+          {/* H-270 §1, S1a: the Start Here orientation sits in the welcome card, above the first lock-in. */}
+          <div className="mt-3 rounded-lg bg-surface p-3">
+            <StartHere url={v.workspace.startHereVideo ?? null} watched={Boolean(v.membership.startHereWatchedAt)} canMark={!v.switchedInto && !v.team} />
+          </div>
           {/* H-164 §1: the welcome is the only card until the first lock-in, and the lock-in itself sits inside it. */}
           <div id="checkin">
             <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention="" defaultEnergy={d.lastEnergy} firstDay />
           </div>
         </section>
       ) : null}
+
+      {/* H-270 §1: the Setup card, the next open steps in dependency order; the video lives in the welcome card on the first session. */}
+      <SetupCard steps={setup} video={v.workspace.startHereVideo ?? null} watched={Boolean(v.membership.startHereWatchedAt)} canTick={!v.team} coach={Boolean(v.switchedInto)} withVideo={!d.firstSession} />
 
       {d.broken ? (
         <section className="card mb-5 border-warn p-4" style={{ background: "var(--warn-soft)" }} data-testid="streak-broken">

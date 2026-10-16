@@ -1,0 +1,309 @@
+[
+  {
+    "key": "s1",
+    "group": "day-one",
+    "order": 1,
+    "label": "Accept the invite and set a password",
+    "href": "/today",
+    "signal": "signed-in",
+    "needs": [],
+    "minutes": 2
+  },
+  {
+    "key": "s1a",
+    "group": "day-one",
+    "order": 2,
+    "label": "Watch the Start Here orientation",
+    "href": "/today#start-here",
+    "signal": "start-here",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 10
+  },
+  {
+    "key": "s2",
+    "group": "day-one",
+    "order": 3,
+    "label": "Set your time zone and reminder hours",
+    "href": "/settings#you",
+    "signal": "profile-saved",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 1
+  },
+  {
+    "key": "s3",
+    "group": "day-one",
+    "order": 4,
+    "label": "Add your photo",
+    "href": "/settings#photo",
+    "signal": "photo",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 2
+  },
+  {
+    "key": "s4",
+    "group": "day-one",
+    "order": 5,
+    "label": "Lock in your first day",
+    "href": "/today#checkin",
+    "signal": "first-lockin",
+    "needs": [
+      "s2"
+    ],
+    "minutes": 2
+  },
+  {
+    "key": "s5",
+    "group": "foundation",
+    "order": 1,
+    "label": "Write your Big Promise and who it's for",
+    "href": "/settings#you",
+    "signal": "big-promise",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 15
+  },
+  {
+    "key": "s6",
+    "group": "foundation",
+    "order": 2,
+    "label": "Set your 90-day revenue goal",
+    "href": "/settings#goal",
+    "signal": "goal",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 5
+  },
+  {
+    "key": "s7",
+    "group": "foundation",
+    "order": 3,
+    "label": "Fill in Essence",
+    "href": "/essence",
+    "signal": "essence",
+    "needs": [
+      "s5"
+    ],
+    "minutes": 75
+  },
+  {
+    "key": "s8",
+    "group": "foundation",
+    "order": 4,
+    "label": "Upload your logo and photos",
+    "href": "/images",
+    "signal": "logo",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 10
+  },
+  {
+    "key": "s9",
+    "group": "foundation",
+    "order": 5,
+    "label": "Set your brand kit (colours, fonts, logo)",
+    "href": "/settings#brand",
+    "signal": "brand-kit",
+    "needs": [
+      "s8"
+    ],
+    "minutes": 15
+  },
+  {
+    "key": "s10",
+    "group": "foundation",
+    "order": 6,
+    "label": "Add your AI drafting key",
+    "href": "/settings#ai",
+    "signal": "ai-key",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 10
+  },
+  {
+    "key": "s11",
+    "group": "foundation",
+    "order": 7,
+    "label": "Choose your council",
+    "href": "/my-board/council",
+    "signal": "council",
+    "needs": [
+      "s7"
+    ],
+    "minutes": 5
+  },
+  {
+    "key": "s12",
+    "group": "tools",
+    "order": 1,
+    "label": "Confirm your GoHighLevel access",
+    "href": "/connect-tools",
+    "signal": "coach-tick",
+    "needs": [],
+    "minutes": 2
+  },
+  {
+    "key": "s13",
+    "group": "tools",
+    "order": 2,
+    "label": "Connect your Facebook Page and Instagram",
+    "href": "/connect-tools",
+    "signal": "ghl-pages",
+    "needs": [
+      "s12"
+    ],
+    "minutes": 10
+  },
+  {
+    "key": "s14",
+    "group": "tools",
+    "order": 3,
+    "label": "Connect GoHighLevel to HelixOS",
+    "href": "/connect-tools",
+    "signal": "ghl-connected",
+    "needs": [
+      "s12"
+    ],
+    "minutes": 10
+  },
+  {
+    "key": "s15",
+    "group": "tools",
+    "order": 4,
+    "label": "Choose which pages get which posts",
+    "href": "/settings#publishing",
+    "signal": "ghl-mapped",
+    "needs": [
+      "s13",
+      "s14"
+    ],
+    "minutes": 5
+  },
+  {
+    "key": "s16",
+    "group": "tools",
+    "order": 5,
+    "label": "Set up your booking calendar",
+    "href": "/settings#your-bot",
+    "signal": "booking-link",
+    "needs": [
+      "s12"
+    ],
+    "minutes": 20
+  },
+  {
+    "key": "s17",
+    "group": "tools",
+    "order": 6,
+    "label": "Bot installed from the template",
+    "href": "/connect-tools",
+    "signal": "coach-tick",
+    "needs": [],
+    "minutes": 0
+  },
+  {
+    "key": "s18",
+    "group": "tools",
+    "order": 7,
+    "label": "Connect your bot",
+    "href": "/connect-tools",
+    "signal": "bot-connected",
+    "needs": [
+      "s17"
+    ],
+    "minutes": 5
+  },
+  {
+    "key": "s19",
+    "group": "tools",
+    "order": 8,
+    "label": "Tell your bot about your business",
+    "href": "/settings#your-bot",
+    "signal": "bot-facts",
+    "needs": [
+      "s7",
+      "s16",
+      "s18"
+    ],
+    "minutes": 15
+  },
+  {
+    "key": "s20",
+    "group": "when-needed",
+    "order": 1,
+    "label": "Invite your VA or team (team seats)",
+    "href": "/settings#team",
+    "signal": "team",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 5
+  },
+  {
+    "key": "s21",
+    "group": "when-needed",
+    "order": 2,
+    "label": "Connect Claude (voice and phone)",
+    "href": "/connect",
+    "signal": "claude",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 5
+  },
+  {
+    "key": "s22",
+    "group": "when-needed",
+    "order": 3,
+    "label": "Add your Fathom key (testimonials from calls)",
+    "href": "/settings#fathom",
+    "signal": "fathom",
+    "needs": [],
+    "minutes": 5
+  },
+  {
+    "key": "s23",
+    "group": "when-needed",
+    "order": 4,
+    "label": "Add your Magic funnel domains",
+    "href": "/settings#magic-funnel",
+    "signal": "mf-domains",
+    "needs": [
+      "s14"
+    ],
+    "minutes": 5
+  },
+  {
+    "key": "s24",
+    "group": "when-needed",
+    "order": 5,
+    "label": "Share progress with your coach's assistant",
+    "href": "/settings#assistant",
+    "signal": "assistant",
+    "needs": [
+      "s18"
+    ],
+    "minutes": 1
+  },
+  {
+    "key": "s25",
+    "group": "when-needed",
+    "order": 6,
+    "label": "Turn on HumanOS (optional)",
+    "href": "/settings#humanos",
+    "signal": "humanos",
+    "needs": [
+      "s1"
+    ],
+    "minutes": 1
+  }
+]

@@ -3,10 +3,14 @@ import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { addDays, todayInTz } from "@/lib/dates";
 
-/** Gives a brand-new client a pathway, a first goal, and a few starter tasks so day one is never empty. */
-export async function seedNewClient(workspaceId: string, userId: string): Promise<void> {
+/**
+ * Gives a brand-new client a pathway, a first goal, and a few starter tasks so day one is never empty. The starters are dated in
+ * the member's own zone when the join form named one (the same zone Today reads), else the workspace's: dated in the coach's
+ * zone, a client joining after their own midnight saw "Reach out to 3 people" already late on their first screen.
+ */
+export async function seedNewClient(workspaceId: string, userId: string, timezone?: string | null): Promise<void> {
   const workspace = await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId) });
-  const today = todayInTz(workspace?.timezone ?? "America/Los_Angeles");
+  const today = todayInTz(timezone || workspace?.timezone || "America/Los_Angeles");
   const library = await db.query.libraryTasks.findMany();
   if (library.length) {
     await db
