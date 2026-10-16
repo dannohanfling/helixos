@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 205,
+    date: "2026-10-16",
+    title: "My Board: Choose your council beside the chairs; GoHighLevel permissions: Copy copies the scope id",
+    lines: [
+      "My Board now has a \"Choose your council\" button right beside the chairs, and a tap on a chair opens the council page with that chair selected, so changing who sits with Danno is one tap. Settings → You has a Board seats line to the same page.",
+      "GoHighLevel connect steps: each permission's Copy now puts the scope id alone on the clipboard (GoHighLevel's search matches the id, not the name), the id shows beside the name, and \"Copy the list\" copies every id, one a line. The list is 19 ids: two that GoHighLevel never offered are gone and one is spelled as GoHighLevel spells it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 204,
     date: "2026-10-16",
     title: "Your streak counts every day you show up, weekends too",
