@@ -45,11 +45,20 @@ export async function activityFor(workspaceId: string, userId: string, tz: strin
       .from(schema.pointsLedger)
       .where(and(eq(schema.pointsLedger.workspaceId, workspaceId), eq(schema.pointsLedger.userId, userId))),
     db
-      .select({ date: schema.dailyLogs.date, morningDoneAt: schema.dailyLogs.morningDoneAt, eveningDoneAt: schema.dailyLogs.eveningDoneAt, repairedAt: schema.dailyLogs.repairedAt })
+      .select({ date: schema.dailyLogs.date, morningDoneAt: schema.dailyLogs.morningDoneAt, eveningDoneAt: schema.dailyLogs.eveningDoneAt, repairedAt: schema.dailyLogs.repairedAt, openedAt: schema.dailyLogs.openedAt })
       .from(schema.dailyLogs)
       .where(and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId))),
   ]);
   return activeDaysOf(rows, logs, tz);
+}
+
+/** The streak bonus paid per day between two dates (the ledger's "streak" rows), for the week's coins (H-312). */
+export async function streakPaidBetween(workspaceId: string, userId: string, from: string, to: string): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ refId: schema.pointsLedger.refId, points: schema.pointsLedger.points })
+    .from(schema.pointsLedger)
+    .where(and(eq(schema.pointsLedger.workspaceId, workspaceId), eq(schema.pointsLedger.userId, userId), eq(schema.pointsLedger.type, "streak"), gte(schema.pointsLedger.refId, from), lte(schema.pointsLedger.refId, to)));
+  return new Map(rows.filter((r): r is { refId: string; points: number } => Boolean(r.refId)).map((r) => [r.refId, r.points]));
 }
 
 /** The days a streak bonus was already paid for (the ledger's "streak" rows, one a day, whatever the reason says). */

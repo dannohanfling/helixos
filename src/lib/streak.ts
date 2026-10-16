@@ -14,9 +14,10 @@ import { paidStreakDays, streakFor, type StreakWho } from "@/lib/queries/daily";
  * Pays the bonus for each active day in the last SETTLE_DAYS (never before the seven-day streak began, never the day the streak
  * is read as of) that has no streak row yet: a day the member was active on but never closed. Returns the points paid.
  */
-export async function settleStreak(workspaceId: string, userId: string, who: StreakWho): Promise<number> {
+export async function settleStreak(workspaceId: string, userId: string, who: StreakWho, opts: { includeToday?: boolean } = {}): Promise<number> {
   const [s, paid] = await Promise.all([streakFor(workspaceId, userId, who), paidStreakDays(workspaceId, userId)]);
-  const through = addDays(s.asOf, -1);
+  // The Daily welcome (H-312, reading A): the first open of the day makes it active and pays its bonus right then.
+  const through = opts.includeToday ? s.asOf : addDays(s.asOf, -1);
   const from = [SEVEN_DAY_STREAK_SINCE, addDays(through, -(SETTLE_DAYS - 1))].sort().at(-1)!;
   if (through < from) return 0;
   let total = 0;

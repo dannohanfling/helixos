@@ -140,7 +140,7 @@ export function bestStreak(active: Set<string>, days: WorkDays): number {
 /** A points ledger row as the streak reads it. */
 export type ActivityRow = { type: string; points: number; refId: string | null; adjustedBy: string | null; createdAt: string };
 /** A daily log as the streak reads it. */
-export type ActivityLog = { date: string; morningDoneAt: string | null; eveningDoneAt: string | null; repairedAt: string | null };
+export type ActivityLog = { date: string; morningDoneAt: string | null; eveningDoneAt: string | null; repairedAt: string | null; /** H-312: the first open of the app that day counts as showing up. */ openedAt?: string | null };
 export type ActiveDays = {
   /** Every day the member showed up: a log begun or closed, or points earned that day in their own time. */
   active: Set<string>;
@@ -171,7 +171,7 @@ export function activeDaysOf(rows: ActivityRow[], logs: ActivityLog[], tz: strin
   const active = new Set<string>();
   const repaired = new Set<string>();
   for (const l of logs) {
-    if (l.morningDoneAt || l.eveningDoneAt) active.add(l.date);
+    if (l.morningDoneAt || l.eveningDoneAt || l.openedAt) active.add(l.date);
     if (l.repairedAt) repaired.add(l.date);
   }
   for (const r of rows) {

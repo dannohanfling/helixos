@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The fire, day by day</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Manrope:wght@400;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#100D09}
+a{color:#F0CF86}a:hover{color:#F1E6CF}
+.fbox{position:relative;width:107px;height:128px}
+.fglow{position:absolute;left:-26px;right:-26px;top:-10px;bottom:-24px;border-radius:50%;background:radial-gradient(circle at 50% 72%,rgba(255,190,90,.55),rgba(255,190,90,0) 65%)}
+.fsvg{position:absolute;inset:0;width:100%;height:100%;transform-origin:50% 100%}
+.lv{transform-box:fill-box;transform-origin:50% 100%}
+.l1{animation:fk1 1.1s ease-in-out infinite}
+.l2{animation:fk2 .8s ease-in-out infinite}
+.l3{animation:fk3 1.4s ease-in-out infinite}
+.sparks{position:absolute;left:0;right:0;bottom:64px;height:0}
+.spark{position:absolute;bottom:0;width:4px;height:4px;border-radius:50%;background:#FFD27A;box-shadow:0 0 5px #FFB347;opacity:0;animation:spark 1.8s ease-out infinite}
+@keyframes fk1{0%,100%{transform:scale(1,1) skewX(0)}25%{transform:scale(.95,1.07) skewX(-3deg)}55%{transform:scale(1.04,.95) skewX(2deg)}80%{transform:scale(.98,1.03) skewX(-1deg)}}
+@keyframes fk2{0%,100%{transform:scale(1,1) skewX(0)}35%{transform:scale(1.03,.96) skewX(2.5deg)}70%{transform:scale(.96,1.06) skewX(-2deg)}}
+@keyframes fk3{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.82;transform:scale(.94,1.04)}}
+@keyframes spark{0%{opacity:0;transform:translate(0,0)}15%{opacity:1}100%{opacity:0;transform:translate(var(--sx),-70px)}}
+@media (prefers-reduced-motion: reduce){.lv{animation:none}}
+</style>
+</helmet>
+<div style="width: 1280px; height: 460px; box-sizing: border-box; padding: 44px 48px; display: flex; flex-direction: column; gap: 28px; background: #100D09; color: #F1E6CF; font-family: Manrope, 'Segoe UI', system-ui, sans-serif">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; color: #F0CF86">THE FIRE STREAK</div>
+<h2 style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 34px; line-height: 1.1">One stage bigger for every active day</h2>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #A7997F">Any activity counts, weekends included. A missed day returns the fire to an ember. The welcome grows it one stage while the member watches.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 16px; align-items: end; flex-grow: 1">
+<sc-for list="{{stages}}" as="s" hint-placeholder-count="7">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 14px">
+<div class="fbox">
+<div class="fglow" style="opacity: {{s.glow}}"></div>
+<svg class="fsvg" viewBox="0 0 80 96" aria-hidden="true" style="transform: scale({{s.scale}})"><defs><linearGradient id="fgOuter" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#8E2F0C"></stop><stop offset=".25" stop-color="#D2531A"></stop><stop offset=".6" stop-color="#F28C2E"></stop><stop offset="1" stop-color="#FFB040" stop-opacity="0"></stop></linearGradient><linearGradient id="fgMid" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#F59A34"></stop><stop offset=".5" stop-color="#FFC45C"></stop><stop offset="1" stop-color="#FFD98A" stop-opacity="0"></stop></linearGradient><radialGradient id="fgCore" cx=".5" cy=".7" r=".5"><stop offset="0" stop-color="#FFFBEF"></stop><stop offset=".5" stop-color="#FFE7A8"></stop><stop offset="1" stop-color="#FFD27A" stop-opacity="0"></stop></radialGradient><radialGradient id="fgBlue" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#6F8CFF" stop-opacity=".55"></stop><stop offset="1" stop-color="#6F8CFF" stop-opacity="0"></stop></radialGradient><filter id="fWisp" x="-30%" y="-30%" width="160%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.06 0.12" numOctaves="2" seed="3" result="n"><animate attributeName="baseFrequency" dur="3s" values="0.06 0.12;0.07 0.16;0.06 0.12" repeatCount="indefinite"></animate></feTurbulence><feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap><feGaussianBlur stdDeviation="0.9"></feGaussianBlur></filter><filter id="fSoft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.6"></feGaussianBlur></filter></defs><g class="lv l1"><path d="M40 4C43 17 58 26 63 42C68 60 63 76 53 85C47 91 33 91 27 85C17 76 12 60 17 44C20 34 29 28 32 18C35 26 36 31 38 34C39 24 37 13 40 4Z" fill="url(#fgOuter)" filter="url(#fWisp)"></path></g><g class="lv l2"><path d="M40 28C43 38 53 45 55 58C57 71 51 81 40 86C29 81 23 71 25 58C27 49 33 45 35 39C37 43 38 45 39 47C39 41 39 34 40 28Z" fill="url(#fgMid)" filter="url(#fWisp)"></path></g><g class="lv l3"><ellipse cx="40" cy="72" rx="13" ry="14" fill="url(#fgCore)" filter="url(#fSoft)"></ellipse></g><ellipse cx="40" cy="86" rx="12" ry="4" fill="url(#fgBlue)"></ellipse></svg>
+<div class="sparks" style="opacity: {{s.sparks}}"><span class="spark lv" style="left: 40%; --sx: -8px; animation-delay: .2s"></span><span class="spark lv" style="left: 56%; --sx: 7px; animation-delay: .9s"></span><span class="spark lv" style="left: 48%; --sx: -3px; animation-delay: 1.4s"></span></div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+<div style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 22px; line-height: 1.1">{{s.name}}</div>
+<div style="font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: 2px; color: #A7997F">{{s.day}}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":460}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const names = ['Ember', 'Spark', 'Kindling', 'Flame', 'Blaze', 'Bonfire', 'Beacon'];
+    const F = [0.45, 0.55, 0.66, 0.76, 0.86, 0.94, 1];
+    const G = [0.3, 0.4, 0.5, 0.6, 0.72, 0.86, 1];
+    const stages = names.map((n, i) => ({
+      name: n,
+      day: i === 6 ? 'DAY 7 AND UP' : 'DAY ' + (i + 1),
+      scale: F[i],
+      glow: G[i],
+      sparks: i >= 4 ? 1 : 0
+    }));
+    return { stages: stages };
+  }
+}
+</script>
+</body>
+</html>

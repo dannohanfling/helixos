@@ -82,7 +82,12 @@ async function main() {
   let visited = 0;
   const visit = async (paths: string[]) => {
     for (const p of paths) {
-      const res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      let res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      // A dev server compiling a route cold has answered 404 once and 200 a moment later: one second try, then the answer is real.
+      if (res && res.status() === 404) {
+        await page.waitForTimeout(2000);
+        res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      }
       // No violations on a page that did not load is no finding: every page must answer 200 before its console counts.
       if (!res || res.status() !== 200) throw new Error(`${p} answered ${res?.status() ?? "nothing"}; a page that did not load cannot be checked`);
       // The camera is allowed on Find a food alone (Body, rev 237 phase 13), where a barcode is scanned; every other page says none.
@@ -113,7 +118,12 @@ async function main() {
   await page.goto(`${base}/login`, { waitUntil: "networkidle" });
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
-  await visit(PAGES_CLIENT);
+  // 16 Oct: the client's pages alone climbed to 12.8 GB on one server and the kernel killed it mid-walk (the H-312 gate, twice
+  // the 4 GB they took on 12 Oct); so they are walked from two fresh servers, the session cookie carrying over the restart.
+  const half = Math.ceil(PAGES_CLIENT.length / 2);
+  await visit(PAGES_CLIENT.slice(0, half));
+  await fresh();
+  await visit(PAGES_CLIENT.slice(half));
   // Coming soon (rev 816): one greyed item on More (the Colosseum, My Helix and the Aqueduct went live), none a link, each disabled for screen readers and at least 44px tall;
   // a tap shows the subtitle and goes nowhere.
   {

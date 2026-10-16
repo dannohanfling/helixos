@@ -34,7 +34,27 @@ main() {
     rm -rf .next/dev .next/cache/turbopack
     start
   }
+  # One cold start in about five (16 Oct, five starts in a row) comes up without the /oauth subtree in its route tree: every
+  # page and handler under it answers 404 until a file changes, and the headers walk failed on /oauth/authorize three gates
+  # running. The subtree's handlers answer 405 to a GET when the tree is whole, so that one request tells the two apart
+  # before any walk starts; a server missing it is stopped, its caches cleared, and started again, up to three times.
+  routes_whole() {
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/oauth/revoke")" == "405" ]]
+  }
   start() {
+    for attempt in 1 2 3; do
+      boot
+      if routes_whole; then
+        return
+      fi
+      echo "dev-server: up but /oauth answers 404 (route tree incomplete, attempt $attempt of 3); starting again with caches cleared"
+      stop
+      rm -rf .next/dev .next/cache/turbopack
+    done
+    echo "dev-server: three starts in a row came up without the /oauth routes; see $LOG" >&2
+    exit 1
+  }
+  boot() {
     mkdir -p "$(dirname "$LOG")"
     if curl -sf -o /dev/null "http://localhost:$PORT/login"; then
       echo "dev-server: already up on :$PORT"

@@ -116,6 +116,8 @@ export const memberships = sqliteTable(
     /** The streak recount (H-289 §4): the points it added for this member, null until the coach applied it; and when the member saw Today's one line about it. */
     streakRecountPoints: integer("streak_recount_points"),
     streakRecountSeenAt: text("streak_recount_seen_at"),
+    /** The Daily welcome (H-312): the member's own date it last showed, so it shows once a day on any device. */
+    welcomeShownOn: text("welcome_shown_on"),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     /** My Board's memory (H-257): "Start fresh" stamps this; the Board then reads only decisions made after it (a database stamp, UTC). Undo for seven days clears it. */
@@ -807,6 +809,8 @@ export const dailyLogs = sqliteTable(
     date: text("date").notNull(),
     morningDoneAt: text("morning_done_at"),
     eveningDoneAt: text("evening_done_at"),
+    /** The Daily welcome (H-312, reading A): the first open of the app that day. Opening counts as showing up, so this makes the day active. */
+    openedAt: text("opened_at"),
     energy: integer("energy"),
     intention: text("intention"),
     dmsStarted: integer("dms_started").notNull().default(0),
