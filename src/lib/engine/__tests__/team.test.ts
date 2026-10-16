@@ -23,7 +23,7 @@ function walk(dir: string, keep: (f: string) => boolean, out: string[] = []): st
 const rel = (f: string) => path.relative(root, f).replaceAll("\\", "/");
 const read = (f: string) => readFileSync(f, "utf8");
 
-/** What a team member may reach: content, DMs, tasks, webinars, contacts and the business plan (BG1: a VA works its tasks), the shell's own pages, and nothing else. */
+/** What a team member may reach: content, DMs, tasks, webinars, contacts, the business plan (BG1: a VA works its tasks), Office Hours for the owner (H-413), the shell's own pages, and nothing else. */
 const OPEN_PAGES = [
   "src/app/(app)/bot-features/[key]/page.tsx",
   "src/app/(app)/bot-features/page.tsx",
@@ -48,6 +48,7 @@ const OPEN_PAGES = [
   "src/app/(app)/library/page.tsx",
   "src/app/(app)/loyalty/page.tsx",
   "src/app/(app)/more/page.tsx",
+  "src/app/(app)/office-hours/page.tsx",
   "src/app/(app)/settings/page.tsx",
   "src/app/(app)/tasks/page.tsx",
   "src/app/(app)/today/page.tsx",
@@ -56,7 +57,7 @@ const OPEN_PAGES = [
   "src/app/(app)/whats-new/page.tsx",
 ];
 const OPEN_ROUTES = ["src/app/api/deck-images/[id]/route.ts", "src/app/api/deck-images/upload/route.ts", "src/app/api/drafts/route.ts", "src/app/api/webinars/[id]/deck/route.ts"];
-const OPEN_ACTION_FILES = ["account.ts", "clients.ts", "compose.ts", "contacts.ts", "content.ts", "deck-images.ts", "drip.ts", "kpi.ts", "ladders.ts", "leaderboard.ts", "library.ts", "outcomes.ts", "plan.ts", "social.ts", "tasks.ts", "tiers.ts", "variants.ts", "webinars.ts", "whats-new.ts"];
+const OPEN_ACTION_FILES = ["account.ts", "clients.ts", "compose.ts", "contacts.ts", "content.ts", "deck-images.ts", "drip.ts", "kpi.ts", "ladders.ts", "leaderboard.ts", "library.ts", "office-hours.ts", "outcomes.ts", "plan.ts", "social.ts", "tasks.ts", "tiers.ts", "variants.ts", "webinars.ts", "whats-new.ts"];
 /** In an open action file, the actions that stay closed: the owner's own settings, and the connections. */
 const CLOSED_IN_OPEN_FILES = ["account.ts:changePasswordAction", "clients.ts:updatePassAction", "leaderboard.ts:saveLeaderboardHiddenAction", "ladders.ts:pushKeywordsAction", "social.ts:connectGhlAction", "social.ts:refreshGhlAccountsAction", "social.ts:setGhlMappingAction", "social.ts:disconnectGhlAction", "social.ts:coachDisconnectGhlAction", "social.ts:replayContactSyncAction"];
 
@@ -106,7 +107,7 @@ describe("team access: what is open is named, and everything else is closed by d
   it("the menu shows a team member only the open sections", () => {
     const m = { role: "client" as const, passEnabled: true, bodyEnabled: true, recordingsEnabled: true, team: true };
     // The Platforms links (Danno, 7 Oct) are outbound and open no HelixOS data: a team member sees them too.
-    expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/bot-features", "/clients", "/content", "/conversations", "/goals", "/images", "/library", "/tasks", "/today", "/webinars", "/whats-new", "https://academy.evolveomega.com", "https://app.evolveomega.com", "https://communityloyalty.io"]);
+    expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/bot-features", "/clients", "/content", "/conversations", "/goals", "/images", "/library", "/office-hours", "/tasks", "/today", "/webinars", "/whats-new", "https://academy.evolveomega.com", "https://app.evolveomega.com", "https://communityloyalty.io"]);
     // Without the team flag the same member sees Body, Rewards and the rest.
     expect(NAV.filter((n) => navVisible(n, { ...m, team: false })).some((n) => n.href === "/body")).toBe(true);
     // The Loyalty leaderboard item (H-140): only where the workspace has a board, and then for a team member too.

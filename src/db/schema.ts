@@ -120,6 +120,8 @@ export const memberships = sqliteTable(
     streakRecountSeenAt: text("streak_recount_seen_at"),
     /** The Daily welcome (H-312): the member's own date it last showed, so it shows once a day on any device. */
     welcomeShownOn: text("welcome_shown_on"),
+    /** Team access (H-413): the newest Office Hours request a team member booked for this owner, until the owner opens Office Hours. */
+    oohNotice: text("ooh_notice", { mode: "json" }).$type<{ teamUserId: string; friday: string; requestId: string; at: string }>(),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     /** My Board's memory (H-257): "Start fresh" stamps this; the Board then reads only decisions made after it (a database stamp, UTC). Undo for seven days clears it. */
@@ -628,6 +630,12 @@ export const officeHoursRequests = sqliteTable(
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
     /** When the member last changed their own request (rev 625): "Edited …". The coach's own notes never set it. */
     editedAt: text("edited_at"),
+    /** Team access (H-413): the team member who submitted this request for the owner; null when the owner did. */
+    submittedByUserId: text("submitted_by_user_id"),
+    /** Who's attending (H-413): user ids of the owner and team members; an empty list reads as the owner alone. */
+    attendeeUserIds: text("attendee_user_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Attendees not on HelixOS, names only (H-413); never an email or a phone number. */
+    attendeesOther: text("attendees_other"),
     createdAt: createdAt(),
   },
   (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday), uniqueIndex("office_hours_requests_airtable").on(t.workspaceId, t.airtableId)],

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 216,
+    date: "2026-10-16",
+    title: "Team members can book office hours for you, and say who's attending",
+    lines: [
+      "Office Hours is now open to your team. A request a team member sends lands on your account, in the same queue your coach sees, marked \"Submitted by\" them. You see a line on Today and at the top of Office Hours until you open it. A team member sees only the requests they sent or are attending, never your other ones, and they can't delete any.",
+      "Every request has \"Who's attending\": you and your team to tick (you are ticked by default) and an Others line for names only. It shows on the request, in your coach's view, and can be changed until the Friday by you or whoever sent it. Someone who has since left your team still shows on old requests, as a former team member.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 213,
     date: "2026-10-16",
     title: "The menu folds the way you like, on your phone too",

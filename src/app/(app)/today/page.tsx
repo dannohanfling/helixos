@@ -23,6 +23,7 @@ import { FIELD_TASKS } from "@/lib/engine/pathway";
 import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
 import { addDays, formatDate, relativeDay } from "@/lib/dates";
+import { oohNoticeWords } from "@/lib/engine/office-hours";
 import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
 import { COACH_ITEMS_DAYS, coachItems, newRecordings, openItemsFor } from "@/lib/recordings";
@@ -148,6 +149,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     const n = items.reduce((a, x) => a + x.open.length, 0);
     if (n) recLines.push({ key: "rec-coach", title: `Action items from your calls: ${n}`, href: "/coach/recordings?tab=items" });
   }
+  // Office hours a team member booked for the owner (H-413): one line, until the owner opens Office Hours.
+  const oohNotice = !v.switchedInto && v.membership.oohNotice ? await (async (n) => ({ ...n, name: (await db.query.users.findFirst({ where: eq(schema.users.id, n.teamUserId), columns: { name: true } }))?.name ?? "A team member" }))(v.membership.oohNotice) : null;
   const tools = !v.switchedInto && !v.team ? connectProgress({ ghl: Boolean(toolsConn && toolsConn.accounts.length && !toolsConn.lastError && toolsConn.ghlUserId?.trim()), cl: clTokenSet(v.membership) }) : null;
   // One line per render, times only (H-164 §9): how long the viewer, the reads and the page's shaping took.
   const tRest = tick();
@@ -177,6 +180,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Link>
           ) : null}
         </div>
+      ) : null}
+      {oohNotice ? (
+        <Link href="/office-hours#mine" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-ooh-notice">
+          🙋 {oohNoticeWords(oohNotice.name, formatDate(oohNotice.friday, { weekday: "long", month: "long", day: "numeric" }))} →
+        </Link>
       ) : null}
       {featuresOn.length ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="features-on">

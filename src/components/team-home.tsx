@@ -9,11 +9,12 @@ const DOORS: { href: string; label: string; icon: string; line: string }[] = [
   { href: "/conversations", label: "DMs", icon: "💬", line: "Conversations and the playbook" },
   { href: "/webinars", label: "Webinars", icon: "🎤", line: "The wizard, scripts and the deck" },
   { href: "/clients", label: "Contacts", icon: "🤝", line: "Their clients and check-ins" },
+  { href: "/office-hours", label: "Office Hours", icon: "🙋", line: "Book a Friday session for them, and say who's attending" },
 ];
 
 /**
  * Team access (Danno, 6 Oct): what Today is to a team member. The owner's own day (lock-in, close, streak, goal, Body) is not
- * theirs to see or do, so Today shows the five doors open to them and the quick task form instead.
+ * theirs to see or do, so Today shows the six doors open to them and the quick task form instead.
  */
 export function TeamHome({ v }: { v: Viewer }) {
   const first = v.team!.ownerName.split(" ")[0];

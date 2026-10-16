@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GO_BACK, OOH_CATEGORIES_DEFAULT, oohEditable, readList, readOohRequest, upcomingFridays } from "../office-hours";
+import { GO_BACK, OOH_CATEGORIES_DEFAULT, attendeeWords, oohAttendees, oohCanEdit, oohEditable, oohNoticeWords, oohVisibleTo, readAttendees, readList, readOohRequest, readOthers, submittedByWords, upcomingFridays } from "../office-hours";
 
 const base = { friday: "2026-09-25", description: "My bot books the wrong calendar.", triedSelf: "Re-read the setup lesson.", tools: "Community Loyalty", goal: "Bookings land on the right calendar.", category: "Chatbot", triedGate: "yes", promise: true };
 
@@ -33,5 +33,57 @@ describe("Open Office Hours requests (handoff rev 124)", () => {
   });
   it("the coach's lists: one per line, trimmed, no blanks or repeats", () => {
     expect(readList(" Chatbot \n\nFunnels\nChatbot\n")).toEqual(["Chatbot", "Funnels"]);
+  });
+});
+
+describe("Office Hours for a team (H-413): who sees, who edits, who attends", () => {
+  const owner = { ownerId: "u-owner", actorId: "u-owner", team: false };
+  const sam = { ownerId: "u-owner", actorId: "u-sam", team: true };
+  const tess = { ownerId: "u-owner", actorId: "u-tess", team: true };
+  const ownersOwn = { userId: "u-owner", submittedByUserId: null, attendeeUserIds: [] as string[] };
+  const samsForOwner = { userId: "u-owner", submittedByUserId: "u-sam", attendeeUserIds: ["u-owner", "u-sam"] };
+  const ownersWithTess = { userId: "u-owner", submittedByUserId: null, attendeeUserIds: ["u-owner", "u-tess"] };
+  it("the owner sees every request; a team member only the ones they submitted or attend", () => {
+    expect([ownersOwn, samsForOwner, ownersWithTess].map((r) => oohVisibleTo(r, owner))).toEqual([true, true, true]);
+    expect([ownersOwn, samsForOwner, ownersWithTess].map((r) => oohVisibleTo(r, sam))).toEqual([false, true, false]);
+    expect([ownersOwn, samsForOwner, ownersWithTess].map((r) => oohVisibleTo(r, tess))).toEqual([false, false, true]);
+  });
+  it("nobody picked reads as the owner alone", () => {
+    expect(oohAttendees(ownersOwn)).toEqual(["u-owner"]);
+    expect(oohAttendees(samsForOwner)).toEqual(["u-owner", "u-sam"]);
+  });
+  it("the owner or the submitter may change a request until its Friday; attending alone does not, and nothing after", () => {
+    expect(oohCanEdit(samsForOwner, owner, "2026-10-20", "2026-10-23")).toBe(true);
+    expect(oohCanEdit(samsForOwner, sam, "2026-10-20", "2026-10-23")).toBe(true);
+    expect(oohCanEdit(samsForOwner, tess, "2026-10-20", "2026-10-23")).toBe(false);
+    expect(oohCanEdit(ownersWithTess, tess, "2026-10-20", "2026-10-23")).toBe(false);
+    expect(oohCanEdit(samsForOwner, sam, "2026-10-24", "2026-10-23")).toBe(false);
+    expect(oohCanEdit(ownersOwn, owner, "2026-10-24", "2026-10-23")).toBe(false);
+  });
+  it("the attendees a form may name are the owner and the account's live team, nothing else; nobody picked means the owner", () => {
+    expect(readAttendees(["u-sam", "u-owner", "u-sam", "u-stranger", " "], ["u-sam", "u-tess"], "u-owner")).toEqual(["u-sam", "u-owner"]);
+    expect(readAttendees(["u-stranger"], ["u-sam"], "u-owner")).toEqual(["u-owner"]);
+    expect(readAttendees([], ["u-sam"], "u-owner")).toEqual(["u-owner"]);
+  });
+  it("the Others line is names only: no email address, no phone number, 200 characters at most", () => {
+    expect(readOthers("  Lee Park,  Ana ")).toEqual({ value: "Lee Park, Ana" });
+    expect(readOthers("")).toEqual({ value: null });
+    expect(readOthers("Lee lee@example.com")).toMatchObject({ error: "Names only here, no email addresses or phone numbers.", field: "attendeesOther" });
+    expect(readOthers("Lee (555) 123-4567")).toMatchObject({ field: "attendeesOther" });
+    expect(readOthers("Lee +1 555 123 4567")).toMatchObject({ field: "attendeesOther" });
+    expect(readOthers("Lee, the 3rd")).toEqual({ value: "Lee, the 3rd" });
+    expect(readOthers("x".repeat(201))).toMatchObject({ error: "Keep the other names to 200 characters." });
+  });
+  it("the words on a card: who attends (a leaver as a former team member, the owner never), who submitted, and the owner's notice", () => {
+    const names: Record<string, string> = { "u-owner": "Maya Chen", "u-sam": "Sam Vale", "u-tess": "Tess Lane" };
+    const nameOf = (id: string) => names[id];
+    const live = new Set(["u-sam"]);
+    expect(attendeeWords({ ...ownersWithTess, attendeesOther: "Lee" }, nameOf, live)).toBe("Attending: Maya Chen, Tess Lane (former team member); others: Lee");
+    expect(attendeeWords({ ...samsForOwner, attendeesOther: null }, nameOf, live)).toBe("Attending: Maya Chen, Sam Vale");
+    expect(attendeeWords({ ...ownersOwn, attendeesOther: null }, nameOf, new Set())).toBe("Attending: Maya Chen");
+    expect(submittedByWords(samsForOwner, nameOf, live)).toBe("Submitted by Sam Vale");
+    expect(submittedByWords(samsForOwner, nameOf, new Set())).toBe("Submitted by Sam Vale (former team member)");
+    expect(submittedByWords(ownersOwn, nameOf, live)).toBeNull();
+    expect(oohNoticeWords("Sam Vale", "Friday, October 23")).toBe("Sam Vale booked office hours for you, Friday, October 23");
   });
 });
