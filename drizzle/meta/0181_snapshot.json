@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0e284d42-6e19-4f51-afd6-25b6b4d36df2",
-  "prevId": "606c87bd-e657-44b3-90a4-1a5551ee1c5f",
+  "id": "023152f1-325e-4080-b887-d66e8ac2170a",
+  "prevId": "601d6e15-924a-468a-ab8d-af38b67fdf97",
   "tables": {
     "agent_tokens": {
       "name": "agent_tokens",
@@ -20405,6 +20405,53 @@
           "name": "workspaces_coach_invite_code_unique",
           "columns": [
             "coach_invite_code"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "hermes_contact_links": {
+      "name": "hermes_contact_links",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "signup_id": {
+          "name": "signup_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ghl_contact_id": {
+          "name": "ghl_contact_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "hermes_contact_links_signup": {
+          "name": "hermes_contact_links_signup",
+          "columns": [
+            "signup_id"
           ],
           "isUnique": true
         }
