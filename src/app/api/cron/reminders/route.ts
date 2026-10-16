@@ -3,6 +3,7 @@ import { runReminders } from "@/lib/reminders";
 import { runCommunity } from "@/lib/community";
 import { runScoreboards } from "@/lib/scoreboard";
 import { safeEqual } from "@/lib/crypto";
+import { reportError } from "@/lib/report-error";
 
 /**
  * Hourly cron: GET /api/cron/reminders with `Authorization: Bearer $CRON_SECRET`.
@@ -20,11 +21,11 @@ export async function GET(request: Request) {
   const results = await runReminders(new Date(), force === "morning" || force === "evening" ? force : undefined);
   // A community failure never stops the reminders, and the reverse: each has its own result.
   const community = await runCommunity(new Date()).catch((e: unknown) => {
-    console.error("[community] run failed", e instanceof Error ? e.name : "error");
+    reportError(e, { job: "cron:community" });
     return [{ workspaceId: "", action: "error", ok: false, note: "The community run failed; the reason is in the server log." }];
   });
   const scoreboards = await runScoreboards(new Date()).catch((e: unknown) => {
-    console.error("[scoreboard] run failed", e instanceof Error ? e.name : "error");
+    reportError(e, { job: "cron:scoreboards" });
     return [];
   });
   return NextResponse.json({ ok: true, community, scoreboards: scoreboards.map((r) => ({ kind: r.kind, delivery: r.delivery })), count: results.length, results: results.map((r) => ({ kind: r.kind, delivery: r.delivery, email: r.email.replace(/(.).+(@.*)/, "$1***$2"), ...(r.error ? { error: r.error.slice(0, 300) } : {}) })) });

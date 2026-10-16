@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { reportError } from "@/lib/report-error";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
@@ -14,7 +15,16 @@ import { FATHOM_PROVIDER, ingestMeeting } from "@/lib/recordings";
  * accepted unsigned. The payload is the meeting with its summary and action items; the transcript is never in it.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ connectionId: string }> }) {
-  const { connectionId } = await params;
+  try {
+    return await handle(request, (await params).connectionId);
+  } catch (e) {
+    // A failed inbound (H-349 §2): Danno is told under this job's name; Fathom retries on its own schedule.
+    reportError(e, { job: "webhook:fathom" });
+    return NextResponse.json({ error: "failed" }, { status: 500 });
+  }
+}
+
+async function handle(request: Request, connectionId: string) {
   if (!/^[\w-]+$/.test(connectionId)) return NextResponse.json({ error: "unknown connection" }, { status: 404 });
   const conn = await db.query.fathomWorkspaceConnections.findFirst({ where: eq(schema.fathomWorkspaceConnections.id, connectionId) });
   if (!conn) return NextResponse.json({ error: "unknown connection" }, { status: 404 });

@@ -425,6 +425,24 @@ Data export: every member can download everything they own from Settings → You
 
 Deletion on request: the coach opens a client, "Delete their data…" (`/coach/[clientId]/delete`), and sees every table's count and every stored file that would go before the button. The member's email typed back confirms it; it cannot be undone, and the coach cannot delete their own account there. Stored files go first, each followed at once by the row that pointed at it; a file the store refuses stops the run and is named beside the button, and running it again finishes. Then the rows, one transaction per table group, the membership, the account when the person belongs to no other workspace, and the workspace when they were its last member. Each run leaves one audit row (`deletion_audits`: who ran it, the email, when, the counts, and where a stopped run stopped), with no content. The tables come from the same list the export reads. Walk: `scripts/smoke-erase.ts`.
 
+## Staging, error alerts, uptime, backups and key rotation (H-349)
+
+**Staging.** Vercel scopes variables per environment. Production keeps the live `DATABASE_URL` and `DATABASE_AUTH_TOKEN`; Preview gets a second pair pointing at a separate Turso database (`helixos-staging`), so branch previews never read or write live member data. Migrations run on every deploy (`vercel-build`), so the first preview migrates staging. To seed the demo workspace there, and only there: set `ALLOW_DEMO_SEED=1`, `DEMO_LOGIN=1` and a long `SETUP_TOKEN` for **Preview only**, open `https://<preview>/api/setup/seed-staging?token=THAT_STRING` once (it answers 404 anywhere else and 409 beside a real workspace), then remove `SETUP_TOKEN`. From a laptop, `ALLOW_DEMO_SEED=1 DATABASE_URL=libsql://… DATABASE_AUTH_TOKEN=… npx tsx --tsconfig tsconfig.json scripts/seed-staging.ts` does the same. Production must never carry `ALLOW_DEMO_SEED` or `DEMO_LOGIN`.
+
+**Error alerts.** Server errors go to Sentry when `SENTRY_DSN` is set (Production and Preview). `src/instrumentation.ts` initialises it with no personal data, no tracing and a scrub (`src/lib/engine/scrub.ts`) on every event: no request bodies, headers, cookies or query strings, the user as an id only, and any key named like a name, email, phone, body, token or secret dropped; addresses and long numbers inside messages are redacted. Crons and webhooks that catch their own failures call `reportError(e, { job })` (`src/lib/report-error.ts`), so one failing job is one Sentry issue. In Sentry → Alerts, one rule emails on a new issue and one on 10 events in an hour. To prove the wiring on a preview, set `SENTRY_SMOKE=1` for Preview: the first `/api/health` after the deploy throws one known error, then behaves; remove the variable after. Never on Production.
+
+**Uptime.** `/api/health` answers `200 { ok: true }` when the database answers and `503 { ok: false }` when it does not. Point a free monitor (UptimeRobot or Better Stack) at `https://helixos.evolveomega.com/api/health` every 5 minutes with an email alert.
+
+**Restore from a point in time (the runbook, done once on 2026-10-16 as a test).** Turso keeps a point-in-time window per plan (the database's Settings page shows it; the free plan keeps about a day, paid plans 10 to 30 days; keep at least 10).
+1. `turso db create helixos-restore-test --from-db <live database> --timestamp <ISO time, for example an hour ago>`.
+2. `turso db tokens create helixos-restore-test` and `turso db show helixos-restore-test --url`.
+3. Vercel → Preview → point `DATABASE_URL` and `DATABASE_AUTH_TOKEN` at it (note the staging values first), redeploy an open preview.
+4. Check counts only against production: members (`memberships` rows), points (`points_ledger` rows), the newest What's new seen mark; a restore from an hour ago is at most an hour behind.
+5. Put the Preview variables back to staging, redeploy, and `turso db destroy helixos-restore-test`.
+For a real restore the same steps apply, with Production's variables swapped to the restored database and the old one kept until the day is over.
+
+**Key rotation.** `docs/runbooks/keys.md`: `SESSION_SECRET`, the Turso token, and `ENCRYPTION_KEY` with `scripts/reseal.ts` (`--dry-run` reports counts only).
+
 ## Deploying
 
 - **Database**: keep `DATABASE_URL=file:./data/helixos.db` on a persistent disk (Fly, Railway, a VPS), or point it at

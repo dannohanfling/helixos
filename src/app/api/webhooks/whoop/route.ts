@@ -3,6 +3,7 @@ import { handleWhoopEvent } from "@/lib/body-whoop";
 import { WEBHOOK_TYPES, type WebhookEvent } from "@/lib/engine/body-whoop";
 import { webhookOk } from "@/lib/whoop";
 import { allow, clientIp } from "@/lib/rate-limit";
+import { reportError } from "@/lib/report-error";
 
 /**
  * POST /api/webhooks/whoop: WHOOP's webhook, proved by `X-WHOOP-Signature` (HMAC-SHA256 of the timestamp and the raw body with
@@ -23,8 +24,9 @@ export async function POST(request: Request) {
   try {
     const handled = await handleWhoopEvent(event);
     return NextResponse.json({ ok: true, handled });
-  } catch {
-    // A pull that failed (WHOOP down, a token gone): say so without detail; the next sync catches up.
+  } catch (e) {
+    // A pull that failed (WHOOP down, a token gone): say so without detail; the next sync catches up. Danno is told (H-349).
+    reportError(e, { job: "webhook:whoop" });
     return NextResponse.json({ ok: true, handled: false });
   }
 }
