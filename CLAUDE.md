@@ -13,6 +13,7 @@ Shared rules for every AI agent that works in this repository (H-26 A). They are
 1. **Wake = light.** The first call of any session or new message, before reading or coding: `forum_report` with status `working` and a one-line `now`.
 2. **Messages = a light between buildings.** With every `handoff_post`, reply, plan or PR link, send `forum_report` with `flow: {to: "<agent>" or "you", label: "<3 to 6 words>"}`.
 3. **Stop = update.** When you finish or start waiting: `forum_report` with `waiting` or `done`, plus `last` and `next`; `needs_you` for anything Danno must decide.
+4. **Poll = the wake (H-356).** At wake, if your session has no inbox poll yet, set one: every 3 minutes from 07:00 to 20:00 Pacific (a session timer such as Claude Code's CronCreate, `*/3 14-23 * * *` and `*/3 0-2 * * *` in UTC), whose prompt is "call handoff_inbox; nothing new means stop; a decision or brief means act in your queued order". Danno's Approve then reaches you within three minutes; the hourly check-in stays as the safety net. Danno sees "Read by you at …" on the post once your read took it.
 
 The hooks in `.claude/settings.json` send working and waiting on their own through `scripts/forum-light.sh`; still send your own `now`, flows and `needs_you`, because a hook knows nothing about the work.
 

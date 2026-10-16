@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 211,
+    date: "2026-10-16",
+    title: "Coaches: Inbox posts can be on hold or superseded, with no Approve",
+    lines: [
+      "A post an agent is still changing, or one that waits on another decision, now shows \"HOLD · Don't approve yet\" at the front of its title with the reason under it, and a replaced post shows \"SUPERSEDED by H-___\" with a link to the newer one. Neither has Approve, Change or Decline, the server refuses a decision on them too, and they leave your \"waiting on you\" count. Superseded posts move to their own tab, still searchable, never deleted.",
+      "Agents set these themselves (handoff_hold, handoff_release, handoff_supersede, or superseded_by when posting a replacement); you can too, from Hold, Release the hold and Superseded by… on any post. Releasing a hold brings Approve back and tells you it is ready.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 210,
     date: "2026-10-16",
     title: "Your daily welcome: the first open of the day",

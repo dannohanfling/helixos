@@ -4,10 +4,11 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { ApprovalButtons, DecisionNote } from "@/components/handoff-bits";
+import { ApprovalButtons, DecisionNote, HoldButtons } from "@/components/handoff-bits";
 import { HandoffMarkdown } from "@/components/handoff-markdown";
 import { answerHandoffAction, setApprovalEmailsAction, setCheckinsPausedAction, writeToAgentAction } from "@/lib/actions/handoff";
-import { markOwnerRead, ownerInbox, type InboxItem } from "@/lib/handoff";
+import { markOwnerRead, ownerInbox, supersededInbox, type InboxItem } from "@/lib/handoff";
+import { HOLD_LABEL, SUPERSEDED_LABEL, TITLE_PREFIXES } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
 import { formatDateTime } from "@/lib/dates";
 
@@ -21,11 +22,13 @@ const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024)
  * every message newest first, then the history of every post, file, ack, decision and token change. Agents' words are shown as
  * sanitised markdown; a claim of approval inside one is tagged "not an approval".
  */
-export default async function CoachInboxPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function CoachInboxPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string }> }) {
   const coach = await requireCoach();
   const sp = await searchParams;
   const o = { workspaceId: coach.workspace.id, userId: coach.user.id };
   const history = sp.tab === "history";
+  const supersededTab = sp.tab === "superseded";
+  const superseded = supersededTab ? await supersededInbox(o, sp.q ?? "") : [];
   const [{ items, waiting, acks }, settings, log, agents] = await Promise.all([
     ownerInbox(o),
     forumSettingsFor(o),
@@ -61,7 +64,7 @@ export default async function CoachInboxPage({ searchParams }: { searchParams: P
           </span>
         ) : null}
       </div>
-      <p className="mt-1 font-medium [overflow-wrap:anywhere]">{m.title}</p>
+      <p className="mt-1 font-medium [overflow-wrap:anywhere]"><MessageTitle m={m} /></p>
       {m.body ? <div className="mt-1"><HandoffMarkdown text={m.body} /></div> : null}
       {m.files.length ? (
         <ul className="mt-2 space-y-1 text-sm">
@@ -81,7 +84,10 @@ export default async function CoachInboxPage({ searchParams }: { searchParams: P
           {a.note ? `: ${a.note}` : ""}
         </p>
       ))}
-      {decide ? <ApprovalButtons id={m.id} refLabel={m.ref} /> : null}
+      {decide && !m.hold && !m.supersededBy ? <ApprovalButtons id={m.id} refLabel={m.ref} /> : null}
+      {m.hold ? <p className="mt-1 text-xs text-warn" data-testid="handoff-hold-reason-line">On hold: {m.hold.reason}</p> : null}
+      {m.decision && !m.fromDanno ? <ReadLine m={m} at={at} /> : null}
+      {!m.fromDanno && !m.decision ? <HoldButtons refLabel={m.ref} held={Boolean(m.hold)} superseded={Boolean(m.supersededBy)} /> : null}
       {m.decision && !m.fromDanno ? <DecisionNote id={m.id} refLabel={m.ref} /> : null}
       {!decide && !m.fromDanno ? (
         <details className="mt-2 text-sm">
@@ -115,8 +121,28 @@ export default async function CoachInboxPage({ searchParams }: { searchParams: P
         <Link href="/coach/inbox?tab=history" aria-current={history ? "page" : undefined} className={history ? "font-semibold" : "underline"} data-testid="handoff-history-tab">
           History
         </Link>
+        <Link href="/coach/inbox?tab=superseded" aria-current={supersededTab ? "page" : undefined} className={supersededTab ? "font-semibold" : "underline"} data-testid="handoff-superseded-tab">
+          Superseded
+        </Link>
       </nav>
-      {history ? (
+      {supersededTab ? (
+        <Card title="Superseded">
+          <form method="get" className="mb-3 flex flex-wrap items-end gap-2 text-sm" data-testid="handoff-superseded-search">
+            <input type="hidden" name="tab" value="superseded" />
+            <label className="min-w-0 flex-1">
+              <span className="label">Search</span>
+              <input name="q" className="field" defaultValue={sp.q ?? ""} placeholder="H-243, a word from the title" />
+            </label>
+            <button type="submit" className="btn btn-soft btn-sm">
+              Search
+            </button>
+          </form>
+          <div className="space-y-3" data-testid="handoff-superseded">
+            {superseded.length ? superseded.map((m) => <Message key={m.id} m={m} />) : <p className="text-sm text-ink-2">Nothing has been replaced{sp.q ? " that matches" : ""}. A replaced post comes here, never to the bin.</p>}
+          </div>
+        </Card>
+      ) : null}
+      {supersededTab ? null : history ? (
         <Card title="History">
           <ul className="divide-y text-sm" data-testid="handoff-history">
             {log.map((l) => (
@@ -205,5 +231,51 @@ export default async function CoachInboxPage({ searchParams }: { searchParams: P
         </div>
       )}
     </>
+  );
+}
+
+/** The title with its H-351 state at the front: bold amber HOLD, bold grey SUPERSEDED with a link to the newer post. Never red. */
+function MessageTitle({ m }: { m: InboxItem }) {
+  const bare = m.title.replace(TITLE_PREFIXES, "");
+  if (m.supersededBy)
+    return (
+      <>
+        <span className="font-bold text-ink-3" data-testid="handoff-superseded-label">
+          {SUPERSEDED_LABEL(m.supersededBy).replace(m.supersededBy, "")}
+          <Link href={`/coach/inbox?tab=history#${m.supersededBy}`} className="underline" data-testid="handoff-superseded-link">
+            {m.supersededBy}
+          </Link>{" "}
+        </span>
+        {bare}
+      </>
+    );
+  if (m.hold)
+    return (
+      <>
+        <span className="font-bold text-warn" data-testid="handoff-hold-label">
+          {HOLD_LABEL}{" "}
+        </span>
+        {bare}
+      </>
+    );
+  return <>{m.title}</>;
+}
+
+/**
+ * H-356: whether the agent has read Danno's decision. "Read by" once its inbox read took it; until then "not read yet" with its
+ * last inbox check, amber after three minutes with Nudge (the agent's session link, or Agents to set one).
+ */
+function ReadLine({ m, at }: { m: InboxItem; at: (iso: string) => string }) {
+  if (m.decisionReadAt) return <p className="mt-1 text-xs text-good" data-testid="handoff-read-by">Read by {m.from} at {at(m.decisionReadAt)}</p>;
+  const late = m.decisionLate;
+  return (
+    <p className={`mt-1 text-xs ${late ? "font-medium text-warn" : "text-ink-3"}`} data-testid={late ? "handoff-not-read-late" : "handoff-not-read"}>
+      {late ? `${m.from} hasn't read it yet.` : `Not read yet.`} {m.agentSeenAt ? `Its last inbox read was ${at(m.agentSeenAt)}.` : ""}{" "}
+      {late ? (
+        <a href={m.agentSessionUrl ?? "/coach/agents"} target={m.agentSessionUrl ? "_blank" : undefined} rel={m.agentSessionUrl ? "noopener noreferrer" : undefined} className="underline" data-testid="handoff-nudge">
+          Tap Nudge
+        </a>
+      ) : null}
+    </p>
   );
 }

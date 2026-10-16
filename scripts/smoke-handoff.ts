@@ -92,7 +92,7 @@ async function main() {
     // ── No tool can approve. ──
     const tools = await listTools(mainToken);
     const names = tools.map((t) => t.name).sort();
-    must(JSON.stringify(names) === JSON.stringify(["forum_read", "forum_report", "handoff_ack", "handoff_busy", "handoff_checkin", "handoff_file", "handoff_inbox", "handoff_post", "handoff_read", "handoff_upload", "whoami"]), `an agent token sees only The Forum and the inbox: ${names}`);
+    must(JSON.stringify(names) === JSON.stringify(["forum_read", "forum_report", "handoff_ack", "handoff_busy", "handoff_checkin", "handoff_file", "handoff_hold", "handoff_inbox", "handoff_post", "handoff_read", "handoff_release", "handoff_supersede", "handoff_upload", "whoami"]), `an agent token sees only The Forum and the inbox: ${names}`);
     must(!tools.some((t) => /approv|decid|declin/i.test(t.name) || Object.keys(t.inputSchema?.properties ?? {}).some((k) => /decision|approved|decided/i.test(k))), "no tool takes a decision, by name or by field");
 
     // ── Main posts to Body; Medicus's inbox shows it once; ack; the thread. ──
@@ -169,7 +169,76 @@ async function main() {
     must(!(await tool(mainToken, "handoff_inbox")).data || ((await tool(mainToken, "handoff_inbox")).data?.messages as unknown[] | undefined)?.length === 0, "and only once");
     const after = (await db.query.handoffMessages.findFirst({ where: eq(schema.handoffMessages.id, planRow.id) }))!;
     must(after.decision === "approved" && after.decidedBy === coach.id, "the decision is Danno's signed-in action");
+    // H-356: once Main's read took the decision, the post says so; before that it said not read yet.
+    await page.goto(`${base}/coach/inbox`, { waitUntil: "networkidle" });
+    must((await page.locator(`[data-testid="handoff-messages"] [data-ref="${plan}"] [data-testid="handoff-read-by"]`).innerText()).startsWith("Read by Architectus at"), "the decided post says when the agent read it");
     console.log("✓ 'Danno approved' in a message stays unapproved and tagged; Danno's Approve arrives once in Main's next read");
+
+    // ── H-351: HOLD and SUPERSEDED, with no Approve, refused by the server too. ──
+    {
+      const { decideHandoff, inboxCount } = await import("@/lib/handoff");
+      const countBefore = await inboxCount(O);
+      r = await tool(mainToken, "handoff_post", { to: "danno", kind: "plan", title: "Plan: the aqueduct's second picker", body: "A plan that waits on H-1." });
+      const held = r.data!.id as string;
+      must((await inboxCount(O)) === countBefore + 1, "a new plan counts as waiting");
+      must((await tool(bodyToken, "handoff_hold", { id: held, reason: "not mine" })).isError, "another agent can't hold it");
+      r = await tool(mainToken, "handoff_hold", { id: held, reason: "waiting on your H-1 decision" });
+      must(!r.isError && r.text.includes("on hold"), `the writer holds it: ${r.text}`);
+      must((await inboxCount(O)) === countBefore, "a held post leaves the waiting count");
+      const heldRow = (await db.query.handoffMessages.findFirst({ where: and(eq(schema.handoffMessages.workspaceId, ws), eq(schema.handoffMessages.seq, Number(held.slice(2)))) }))!;
+      let d = await decideHandoff(O, coach.id, heldRow.id, "approved", "");
+      must(!d.ok && d.text === "This post is on hold: waiting on your H-1 decision", `the server refuses a decision on a held post: ${d.text}`);
+      must((await db.query.handoffMessages.findFirst({ where: eq(schema.handoffMessages.id, heldRow.id) }))!.decision === null, "and nothing was decided");
+      await page.goto(`${base}/coach/inbox`, { waitUntil: "networkidle" });
+      must((await page.locator(`[data-testid="handoff-waiting"] [data-ref="${held}"]`).count()) === 0, "a held post is not in Waiting");
+      const heldCard = page.locator(`[data-testid="handoff-messages"] [data-ref="${held}"]`);
+      must((await heldCard.locator('[data-testid="handoff-hold-label"]').innerText()).startsWith("HOLD · Don't approve yet") && (await heldCard.locator('[data-testid="handoff-hold-reason-line"]').innerText()).includes("waiting on your H-1 decision"), "the label is at the front of the title with the reason under it");
+      must((await heldCard.locator('[data-testid="handoff-approve"]').count()) === 0, "no Approve on a held post");
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.reload({ waitUntil: "networkidle" });
+      must((await heldCard.locator('[data-testid="handoff-hold-label"]').isVisible()) && (await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)), "the label reads at 390 with nothing wider than the screen");
+      await page.screenshot({ path: "screenshots/hd01-hold-390.png" });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.reload({ waitUntil: "networkidle" });
+      // Danno releases it from the inbox: Approve comes back and it is waiting again.
+      await page.locator(`[data-ref="${held}"] [data-testid="handoff-release"]`).first().click();
+      await page.locator('[data-testid="handoff-hold-done"]').first().waitFor();
+      await page.reload({ waitUntil: "networkidle" });
+      must((await page.locator(`[data-testid="handoff-waiting"] [data-ref="${held}"] [data-testid="handoff-approve"]`).count()) === 1, "releasing a hold restores Approve");
+      must((await inboxCount(O)) === countBefore + 1, "and the waiting count");
+      // A replacement posted with superseded_by marks the old post: no Approve, the Superseded tab, search finds it, the count drops.
+      r = await tool(mainToken, "handoff_post", { to: "danno", kind: "plan", title: "Plan: the aqueduct's second picker, v2", body: "The same plan, corrected.", superseded_by: held });
+      must(!r.isError, `the replacement posts: ${r.text}`);
+      const v2 = r.data!.id as string;
+      const old = (await db.query.handoffMessages.findFirst({ where: eq(schema.handoffMessages.id, heldRow.id) }))!;
+      must(old.supersededById !== null, "the old post is marked superseded");
+      d = await decideHandoff(O, coach.id, heldRow.id, "approved", "");
+      must(!d.ok && d.text === `This was replaced by ${v2}.`, `the server refuses a decision on a superseded post: ${d.text}`);
+      must((await inboxCount(O)) === countBefore + 1, "the old post left the count, the new one is in it");
+      await page.goto(`${base}/coach/inbox`, { waitUntil: "networkidle" });
+      must((await page.locator(`[data-testid="handoff-waiting"] [data-ref="${held}"]`).count()) === 0 && (await page.locator(`[data-testid="handoff-waiting"] [data-ref="${v2}"]`).count()) === 1, "Waiting shows the new post, not the old");
+      await page.goto(`${base}/coach/inbox?tab=superseded`, { waitUntil: "networkidle" });
+      const supCard = page.locator(`[data-testid="handoff-superseded"] [data-ref="${held}"]`);
+      must((await supCard.count()) === 1 && (await supCard.locator('[data-testid="handoff-superseded-label"]').innerText()).startsWith("SUPERSEDED by") && (await supCard.locator('[data-testid="handoff-superseded-link"]').innerText()) === v2 && (await supCard.locator('[data-testid="handoff-approve"]').count()) === 0, "the Superseded tab lists it with the link to the new post and no Approve");
+      await page.goto(`${base}/coach/inbox?tab=superseded&q=second%20picker`, { waitUntil: "networkidle" });
+      must((await page.locator(`[data-testid="handoff-superseded"] [data-ref="${held}"]`).count()) === 1, "search finds it");
+      await page.goto(`${base}/coach/inbox?tab=superseded&q=nothing-like-this`, { waitUntil: "networkidle" });
+      must((await page.locator(`[data-testid="handoff-superseded"] [data-ref="${held}"]`).count()) === 0, "and a search that matches nothing shows nothing");
+      // Danno's own Hold from the inbox on the new post, then Danno's Superseded by…: the tools are not the only way.
+      await page.goto(`${base}/coach/inbox`, { waitUntil: "networkidle" });
+      await page.locator(`[data-ref="${v2}"] [data-testid="handoff-hold"]`).first().click();
+      await page.fill(`[data-ref="${v2}"] [data-testid="handoff-hold-reason"]`, "Danno: hold for the call");
+      await page.locator(`[data-ref="${v2}"] [data-testid="handoff-hold-send"]`).click();
+      // The card tapped sits in Waiting and leaves it once held; the proof is the label on the post in the list below.
+      await page.locator(`[data-testid="handoff-messages"] [data-ref="${v2}"] [data-testid="handoff-hold-label"]`).waitFor();
+      must((await inboxCount(O)) === countBefore, "Danno's own hold takes it out of the count");
+      r = await tool(mainToken, "handoff_release", { id: v2 });
+      must(!r.isError, `the writer releases Danno's hold: ${r.text}`);
+      await page.goto(`${base}/coach/inbox`, { waitUntil: "networkidle" });
+      await submit(page, `[data-testid="handoff-waiting"] [data-ref="${v2}"] [data-testid="handoff-approve"]`);
+      must((await db.query.handoffMessages.findFirst({ where: and(eq(schema.handoffMessages.workspaceId, ws), eq(schema.handoffMessages.seq, Number(v2.slice(2)))) }))!.decision === "approved", "the released post can be approved");
+      console.log("✓ H-351: a held post shows HOLD · Don't approve yet with its reason, has no Approve, is refused by the server and leaves the count; Release restores Approve; superseded_by marks the old post, refused too, in the Superseded tab with its link and search; Danno's own Hold and Release work from the inbox; the labels read at 390");
+    }
     // A note after the decision (H-47): to the sender, from Danno, tied to the decision; the decision itself unchanged.
     await page.goto(`${base}/coach/inbox`, { waitUntil: "networkidle" });
     const decided = page.locator(`[data-testid="handoff-messages"] [data-ref="${plan}"]`);

@@ -4496,6 +4496,11 @@ export const handoffMessages = sqliteTable(
     decisionForId: text("decision_for_id"),
     /** Danno's own message marked urgent (13 Oct): it gets past an agent's busy check-in. Only the owner can set it. */
     urgent: integer("urgent", { mode: "boolean" }).notNull().default(false),
+    /** H-351: on hold (the writer is still changing it, or it waits on another decision): the reason, shown under the title; null when not held. */
+    holdReason: text("hold_reason"),
+    heldAt: text("held_at"),
+    /** H-351: replaced by a newer post; the post never leaves, it moves to the Superseded tab. */
+    supersededById: text("superseded_by_id"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("handoff_messages_seq").on(t.workspaceId, t.userId, t.seq), index("handoff_messages_thread").on(t.threadId)],

@@ -39,7 +39,7 @@ describe("the Handoff inbox (rev 769): a post", () => {
     expect(parseHandoffPost({ to: "main", kind: "memo", title: "x" }).ok).toBe(false);
     expect(parseHandoffPost({ to: "main", kind: "brief", title: "  " }).ok).toBe(false);
     const r = parseHandoffPost({ to: ["Main", "danno", "Main"], kind: "plan", title: "Forum plan", body: "Build it", reply_to: "H-7", files: ["f1"], from: "Danno", needs_approval: true });
-    expect(r.ok && r.post).toEqual({ to: ["Main", "danno"], kind: "plan", title: "Forum plan", body: "Build it", replyTo: 7, files: ["f1"], needsApproval: true, removed: 0 });
+    expect(r.ok && r.post).toEqual({ to: ["Main", "danno"], kind: "plan", title: "Forum plan", body: "Build it", replyTo: 7, files: ["f1"], needsApproval: true, removed: 0, supersedes: null });
     expect(parseHandoffPost({ to: "main", kind: "brief", title: "x", reply_to: "yesterday" }).ok).toBe(false);
   });
 
