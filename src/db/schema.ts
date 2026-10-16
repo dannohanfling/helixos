@@ -121,6 +121,8 @@ export const memberships = sqliteTable(
     streakRecountSeenAt: text("streak_recount_seen_at"),
     /** The Daily welcome (H-312): the member's own date it last showed, so it shows once a day on any device. */
     welcomeShownOn: text("welcome_shown_on"),
+    /** The living scenes' sounds (H-400): the crowd, the applause and the fire loop; one switch, on by default, the member's own. */
+    soundsOn: integer("sounds_on", { mode: "boolean" }).notNull().default(true),
     /** Team access (H-413): the newest Office Hours request a team member booked for this owner, until the owner opens Office Hours. */
     oohNotice: text("ooh_notice", { mode: "json" }).$type<{ teamUserId: string; friday: string; requestId: string; at: string }>(),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */

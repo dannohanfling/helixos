@@ -87,7 +87,7 @@ async function main() {
     }
 
     await login(page, "client");
-    if (await page.locator('[data-testid="level-up"]').count()) throw new Error("a member is congratulated for the tier they already had");
+    if (await page.locator('[data-testid="rank-up"]').count()) throw new Error("a member is congratulated for the rank they already had");
     await page.waitForTimeout(1200); // the first visit stamps the current tier silently; let that land before crossing a tier
     const stamped = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
     if (stamped?.celebratedTierLevel === null) throw new Error("the first visit did not stamp the member's current tier");
@@ -100,16 +100,18 @@ async function main() {
     // A hand adjustment, so the fixture never makes today an active day (H-289 §1).
     await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, type: "bonus", points: nextTier.minPoints - total + 1, reason: "Smoke: level up", adjustedBy: "smoke" });
     await page.goto(`${base}/today`);
-    const levelUp = page.locator('[data-testid="level-up"]');
-    await levelUp.waitFor({ timeout: 10000 });
-    await expectText(page, "You reached", "level up shown");
-    await page.screenshot({ path: "screenshots/lp00-level-up.png" });
-    await page.click('[data-testid="level-up"] button:has-text("Keep going")');
-    if (await levelUp.count()) throw new Error("the celebration did not close");
+    // The rank-up ceremony (H-327 §1): Skip jumps to the end, Close closes it and records the rank seen.
+    const rankUp = page.locator('[data-testid="rank-up"]');
+    await rankUp.waitFor({ timeout: 10000 });
+    await expectText(page, "You have risen to", "rank-up shown");
+    await page.click('[data-testid="rank-skip"]');
+    await page.screenshot({ path: "screenshots/lp00-rank-up.png" });
+    await page.click('[data-testid="rank-skip"]');
+    if (await rankUp.count()) throw new Error("the ceremony did not close");
     await page.waitForTimeout(600);
     await page.reload();
-    if (await page.locator('[data-testid="level-up"]').count()) throw new Error("the celebration showed twice");
-    console.log("✓ level up celebrated once, then not again");
+    if (await page.locator('[data-testid="rank-up"]').count()) throw new Error("the ceremony showed twice");
+    console.log("✓ rank-up celebrated once, then not again");
     await page.goto(`${base}/today`);
     await expectText(page, "streak ended", "streak break acknowledged");
     await expectText(page, "One day slipped", "repairable on every day");

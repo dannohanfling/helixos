@@ -7,8 +7,9 @@ import { headers } from "next/headers";
 import { welcomeFor } from "@/lib/welcome";
 import { DailyWelcome } from "@/components/daily-welcome";
 import { totalPoints } from "@/lib/queries/points";
-import { LevelUp } from "@/components/level-up";
-import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
+import { RankUp } from "@/components/rank-up";
+import { rankUpShell } from "@/lib/scenes";
+import { SoundsConfig } from "@/components/sounds-config";
 import { VoiceProvider } from "@/components/voice-context";
 import { voiceState } from "@/lib/queries/essence";
 import { intentionsDueFor } from "@/lib/queries/intentions";
@@ -57,7 +58,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   ]);
   // The Handoff inbox (rev 769): what waits for the coach's decision and what's new for them, on the Inbox item.
   const inboxNew = coachView ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
-  const tier = tierFor(points);
+  const rank = rankUpShell(viewer, points);
   // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
   // The Daily welcome (H-312): once a day on first open, over whatever page they opened; never on /coach, never switched in.
@@ -69,9 +70,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>
+      <SoundsConfig on={viewer.membership.soundsOn} />
       {welcome ? <DailyWelcome card={welcome} /> : null}
       {horizon.notice && !welcome ? <HorizonNotice notice={horizon.notice} /> : null}
-      {viewer.role === "client" && !viewer.team ? <LevelUp tier={{ level: tier.level, name: tier.name, icon: TIER_ICONS[tier.name] ?? "🏅", welcome: tier.welcome }} celebrated={viewer.membership.celebratedTierLevel} /> : null}
+      {/* The rank-up ceremony (H-327 §1): once per rank, after the welcome when both are due; never on /coach, never switched in. */}
+      {rank ? <RankUp {...(rank.stampOnly ? rank : { ...rank, afterWelcome: Boolean(welcome) })} /> : null}
     </AppShell>
   );
 }

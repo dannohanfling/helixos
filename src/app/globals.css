@@ -426,49 +426,6 @@ details > summary::-webkit-details-marker {
     opacity: 0.6;
   }
 }
-/* Level up: a card that lands, and a short fall of confetti. Nothing moves under reduced motion. */
-.level-up-card {
-  animation: land 0.35s ease-out;
-}
-.level-up-confetti {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.level-up-confetti span {
-  position: absolute;
-  top: -4vh;
-  width: 0.6rem;
-  height: 0.9rem;
-  border-radius: 2px;
-  opacity: 0;
-  animation: confetti 2.6s ease-in forwards;
-}
-@keyframes land {
-  from {
-    transform: translateY(12px) scale(0.96);
-    opacity: 0;
-  }
-}
-@keyframes confetti {
-  0% {
-    opacity: 1;
-    transform: translateY(0) rotate(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(105vh) rotate(540deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .level-up-card {
-    animation: none;
-  }
-  .level-up-confetti {
-    display: none;
-  }
-}
 /* The tick box: 28px on a phone with room to hit, 20px beside a mouse. */
 .task-toggle {
   width: 1.75rem;

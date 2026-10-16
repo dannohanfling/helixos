@@ -1,0 +1,35 @@
+/* The evening close (H-327 §2): the design's CSS (docs/scenes/living-scenes-closeout.dc.html), prefixed ec-. The lamps light through a conic mask on a registered angle; -webkit-mask stays for Safari. */
+@property --ec-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.ec { position: fixed; inset: 0; z-index: 60; overflow: hidden; background: #1a150f; color: #f1e6cf; font-family: Manrope, "Segoe UI", system-ui, sans-serif; }
+.ec img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; }
+.ec-unlit { --ec-a: 400deg; filter: brightness(0.28) saturate(0.45); -webkit-mask-image: conic-gradient(from 200deg at 50% 52%, transparent 0deg, transparent var(--ec-a), #000 calc(var(--ec-a) + 16deg), #000 360deg); mask-image: conic-gradient(from 200deg at 50% 52%, transparent 0deg, transparent var(--ec-a), #000 calc(var(--ec-a) + 16deg), #000 360deg); animation: ec-light 3s cubic-bezier(0.45, 0, 0.4, 1) 0.4s both; }
+.ec-glow { mix-blend-mode: screen; filter: contrast(2.3) brightness(0.8); opacity: 0; animation: ec-fadeIn 0.6s ease 3.2s both, ec-flick 2.4s ease-in-out 3.8s infinite; }
+.ec-top { position: absolute; inset: 0 0 auto 0; height: 140px; background: linear-gradient(rgba(10, 8, 5, 0.65), rgba(10, 8, 5, 0)); }
+.ec-skip { position: absolute; z-index: 5; top: max(16px, env(safe-area-inset-top)); right: 16px; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(241, 230, 207, 0.4); background: rgba(16, 13, 9, 0.6); color: #f1e6cf; font: 700 13px/1 Manrope, "Segoe UI", system-ui, sans-serif; letter-spacing: 1.5px; cursor: pointer; }
+.ec-skip:focus-visible, .ec-cta:focus-visible { outline: 2px solid #f0cf86; outline-offset: 3px; }
+.ec-card { position: absolute; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); border-radius: 20px; padding: 24px 22px 20px; display: flex; flex-direction: column; gap: 16px; background: rgba(16, 13, 9, 0.95); border: 1px solid #5e4c27; animation: ec-rise 0.6s ease 3s both; box-sizing: border-box; max-height: calc(100% - 32px); overflow: auto; }
+@media (min-width: 480px) { .ec-card { left: 50%; right: auto; width: 390px; transform: translateX(-50%); } }
+.ec-eb { font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; text-transform: uppercase; color: #f0cf86; }
+.ec-ttl { font-family: var(--lb-serif), "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 34px; line-height: 1.05; margin: 8px 0 6px; }
+.ec-ln { margin: 0; font-size: 15px; line-height: 1.5; color: #a7997f; }
+.ec-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid #3a3022; border-bottom: 1px solid #3a3022; }
+.ec-coin { position: relative; flex: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--lb-serif), "Cormorant Garamond", Georgia, serif; font-weight: 700; font-size: 17px; color: #4a2e0c; text-shadow: 0 1px 0 rgba(255, 236, 180, 0.6); background: radial-gradient(circle at 32% 28%, #fff3c8 0%, #f3d47e 16%, #d9ac4e 40%, #b07a2c 68%, #7e501c 100%); box-shadow: inset 0 0 0 1.5px #8c5a1e, inset 0 0 0 3px rgba(255, 236, 180, 0.45), 0 2px 4px rgba(0, 0, 0, 0.35); animation: ec-pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1) 3.4s both; }
+.ec-row-t { flex: 1; font-size: 15px; line-height: 1.4; }
+.ec-row-t b { color: #f0cf86; }
+.ec-row-s { font-size: 13px; color: #a7997f; }
+.ec-cta { position: relative; overflow: hidden; min-height: 50px; border: 1px solid #7a4e1c; border-radius: 999px; background: linear-gradient(180deg, #fbe7a6 0%, #e8c26a 30%, #c9973f 62%, #9a6526 100%); color: #3a230a; font: 800 14px/1 Manrope, "Segoe UI", system-ui, sans-serif; letter-spacing: 1.5px; text-transform: uppercase; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6); box-shadow: inset 0 1px 0 rgba(255, 250, 225, 0.9), inset 0 -2px 0 rgba(90, 56, 16, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35); cursor: pointer; animation: ec-rise 0.4s ease 3.8s both; }
+.ec-cta:hover { filter: brightness(1.05); }
+/* The finished state: Skip, Escape, and reduced motion: the arena lit, the torches at their soft glow. */
+.ec-done *:not(.sc-live), .ec-done { animation: none !important; }
+.ec-done .ec-glow { opacity: 0.18; }
+@media (prefers-reduced-motion: reduce) {
+  .ec *, .ec { animation: none !important; }
+  .ec .ec-glow { opacity: 0.18; }
+}
+.ec.sc-paused, .ec.sc-paused * { animation-play-state: paused !important; }
+@keyframes ec-light { from { --ec-a: 0deg; } to { --ec-a: 400deg; } }
+@keyframes ec-fadeIn { from { opacity: 0; } to { opacity: 0.18; } }
+@keyframes ec-flick { 0%, 100% { opacity: 0.18; } 20% { opacity: 0.26; } 45% { opacity: 0.12; } 70% { opacity: 0.22; } 85% { opacity: 0.15; } }
+@keyframes ec-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (min-width: 480px) { @keyframes ec-rise { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translateX(-50%); } } }
+@keyframes ec-pop { 0% { opacity: 0; transform: scale(0.4); } 100% { opacity: 1; transform: scale(1); } }

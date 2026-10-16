@@ -38,6 +38,7 @@ import { appUrl as appBase } from "@/lib/branded-email";
 import { MoneyInput } from "@/components/money-input";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 import { setHumanosAction } from "@/lib/actions/body";
+import { setSoundsOnAction } from "@/lib/actions/scene";
 import { linkedChats } from "@/lib/chat";
 import { setChatProgressShareAction, unlinkChatAction } from "@/lib/actions/chat";
 import { CHANNEL_LABELS } from "@/lib/engine/chat";
@@ -296,6 +297,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ) : null}
               </div>
             </div>
+          </Card>
+        )}
+        {v.team ? null : (
+          <Card id="sounds" className="min-w-0" title="Sounds">
+            {/* The living scenes' sounds (H-400): one switch for the crowd, the applause and the fire, on by default, the member's own. */}
+            {v.switchedInto ? (
+              <p className="text-sm text-ink-3" data-testid="sounds-theirs">{v.membership.soundsOn ? "On." : "Off."} The client sets this.</p>
+            ) : (
+              <form action={setSoundsOnAction} className="flex flex-wrap items-center gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" name="soundsOn" defaultChecked={v.membership.soundsOn} data-testid="sounds-on" /> Play the sounds: the crowd at a rank-up, the arena at the evening close, the fire under the welcome
+                </label>
+                <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="sounds-save">Save</SubmitButton>
+              </form>
+            )}
+            <p className="mt-2 text-xs text-ink-3">Nothing plays until you have tapped or typed on the page, and nothing plays when your device asks for reduced motion.</p>
           </Card>
         )}
         <Card id="you" className="min-w-0" title="You">

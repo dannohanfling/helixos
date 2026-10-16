@@ -6,11 +6,18 @@
  */
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { ctx } from "@/lib/action-helpers";
+import { ctx, refresh, str } from "@/lib/action-helpers";
 
 export async function setSceneLookAction(look: "day" | "night"): Promise<void> {
   const { v } = await ctx({ whileSwitched: "noop" });
   if (v.switchedInto) return;
   if (look !== "day" && look !== "night") return;
   await db.update(schema.memberships).set({ sceneLook: look }).where(eq(schema.memberships.id, v.membership.id));
+}
+
+/** The living scenes' sounds (H-400): one switch, on by default, the member's own; a coach switched in is refused. */
+export async function setSoundsOnAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "The sounds switch is {first}'s own." });
+  await db.update(schema.memberships).set({ soundsOn: str(formData, "soundsOn") === "on" }).where(eq(schema.memberships.id, v.membership.id));
+  refresh();
 }

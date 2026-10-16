@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Evening close</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#100D09}
+a{color:#F0CF86}a:hover{color:#F1E6CF}
+@property --a{syntax:'<angle>';inherits:false;initial-value:0deg}
+.ph{position:relative;width:390px;height:844px;border-radius:40px;overflow:hidden;outline:1px solid #3A3022;background:#1A150F;color:#F1E6CF;font-family:Manrope,"Segoe UI",system-ui,sans-serif}
+.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 45%}
+.unlit{--a:400deg;filter:brightness(.28) saturate(.45);-webkit-mask-image:conic-gradient(from 200deg at 50% 52%,transparent 0deg,transparent var(--a),#000 calc(var(--a) + 16deg),#000 360deg);mask-image:conic-gradient(from 200deg at 50% 52%,transparent 0deg,transparent var(--a),#000 calc(var(--a) + 16deg),#000 360deg);animation:light 3s cubic-bezier(.45,0,.4,1) .4s both}
+.glowl{mix-blend-mode:screen;filter:contrast(2.3) brightness(.8);opacity:0;animation:fadeIn .6s ease 3.2s both,flick 2.4s ease-in-out 3.8s infinite}
+.top{position:absolute;inset:0 0 auto 0;height:140px;background:linear-gradient(rgba(10,8,5,.65),rgba(10,8,5,0))}
+.skip{position:absolute;z-index:5;top:16px;right:16px;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid rgba(241,230,207,.4);background:rgba(16,13,9,.6);color:#F1E6CF;font:700 13px/1 Manrope,sans-serif;letter-spacing:1.5px;cursor:pointer}
+.card{position:absolute;left:16px;right:16px;bottom:16px;border-radius:20px;padding:24px 22px 20px;display:flex;flex-direction:column;gap:16px;background:rgba(16,13,9,.95);border:1px solid #5E4C27;animation:rise .6s ease 3.0s both}
+.eb{font-size:12px;line-height:16px;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:#F0CF86}
+.ttl{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:34px;line-height:1.05;margin:8px 0 6px}
+.ln{margin:0;font-size:15px;line-height:1.5;color:#A7997F}
+.row{display:flex;align-items:center;gap:14px;padding:12px 0;border-top:1px solid #3A3022;border-bottom:1px solid #3A3022}
+.coin{position:relative;flex:none;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:17px;color:#4A2E0C;text-shadow:0 1px 0 rgba(255,236,180,.6);background:radial-gradient(circle at 32% 28%,#FFF3C8 0%,#F3D47E 16%,#D9AC4E 40%,#B07A2C 68%,#7E501C 100%);box-shadow:inset 0 0 0 1.5px #8C5A1E,inset 0 0 0 3px rgba(255,236,180,.45),0 2px 4px rgba(0,0,0,.35);animation:pop .4s cubic-bezier(.3,1.6,.5,1) 3.4s both}
+.row-t{flex:1;font-size:15px;line-height:1.4}
+.row-t b{color:#F0CF86}
+.row-s{font-size:13px;color:#A7997F}
+.cta{position:relative;overflow:hidden;min-height:50px;border:1px solid #7A4E1C;border-radius:999px;background:linear-gradient(180deg,#FBE7A6 0%,#E8C26A 30%,#C9973F 62%,#9A6526 100%);color:#3A230A;font:800 14px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,240,200,.6);box-shadow:inset 0 1px 0 rgba(255,250,225,.9),inset 0 -2px 0 rgba(90,56,16,.35),0 2px 6px rgba(0,0,0,.35);cursor:pointer;animation:rise .4s ease 3.8s both}
+.done *:not(.lv),.done{animation:none !important}
+.done .glowl{opacity:.18}
+@media (prefers-reduced-motion: reduce){.ph *,.ph{animation:none !important}.ph .glowl{opacity:.18}}
+.rp{min-height:44px;padding:0 22px;border-radius:999px;border:1px solid #5E4C27;background:transparent;color:#F0CF86;font:700 13px/1 Manrope,sans-serif;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer}
+@keyframes light{from{--a:0deg}to{--a:400deg}}
+@keyframes fadeIn{from{opacity:0}to{opacity:.18}}
+@keyframes flick{0%,100%{opacity:.18}20%{opacity:.26}45%{opacity:.12}70%{opacity:.22}85%{opacity:.15}}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{opacity:0;transform:scale(.4)}100%{opacity:1;transform:scale(1)}}
+</style>
+</helmet>
+<div style="width: 486px; height: 1080px; box-sizing: border-box; padding: 48px; display: flex; flex-direction: column; gap: 16px; align-items: center; background: #100D09; font-family: Manrope, 'Segoe UI', system-ui, sans-serif">
+<div style="width: 100%; display: flex; flex-direction: column; gap: 6px; min-height: 52px">
+<div style="font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; color: #F0CF86">NIGHT · AFTER CLOSE OUT</div>
+<div style="font-size: 15px; line-height: 1.5; color: #A7997F">The lamps light one by one around the arena, then the day is sealed.</div>
+</div>
+<div style="width: 390px; height: 844px">
+<sc-if value="{{show}}" hint-placeholder-val="{{true}}">
+<div class="ph {{doneCls}}">
+<img src="/_blob/410922bac4f2be271a3277af4676a359" alt="">
+<img class="glowl lv" src="/_blob/410922bac4f2be271a3277af4676a359" alt="">
+<img class="unlit" src="/_blob/410922bac4f2be271a3277af4676a359" alt="">
+<div class="top"></div>
+<button class="skip" onClick="{{skip}}">Skip</button>
+<div class="card">
+<div>
+<div class="eb">Day closed</div>
+<h2 class="ttl">The arena is lit.</h2>
+<p class="ln">Every lamp is yours tonight. Your 12-day fire carries into tomorrow.</p>
+</div>
+<div class="row">
+<span class="coin">20</span>
+<div class="row-t"><b>+20</b> for closing out the day<div class="row-s">Tomorrow is Saturday: +40 for showing up</div></div>
+</div>
+<button class="cta">Good night</button>
+</div>
+</div>
+</sc-if>
+</div>
+<button class="rp" onClick="{{replay}}">Replay</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":486,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    return {
+      show: !st.hidden,
+      doneCls: st.done ? 'done' : '',
+      skip: () => this.setState({ done: true }),
+      replay: () => {
+        this.setState({ hidden: true, done: false });
+        setTimeout(() => this.setState({ hidden: false }), 60);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
