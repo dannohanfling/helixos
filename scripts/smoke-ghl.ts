@@ -132,17 +132,19 @@ async function main() {
     await expectText(page, "Settings → Private Integrations", "the numbered steps");
     if (!(await page.locator('[data-testid="ghl-token"]').isVisible())) throw new Error("the key box sits beside the steps");
     // H-233: one row per permission, each with the picker's name, the search text, its own Copy and a tick; the list is the one list.
-    if (await page.locator('[data-testid="ghl-steps"] button:has-text("Copy the list")').count()) throw new Error("Copy the list is gone: GoHighLevel takes permissions one at a time");
+    // H-294: "Copy the list" is back as the whole list of ids, one a line (GoHighLevel's search matches the id), beside the per-row copies.
+    if ((await page.locator('[data-testid="ghl-scope-copy-list"]').count()) !== 1) throw new Error("Copy the list copies every id, one a line (H-294)");
     await expectText(page, "GoHighLevel adds permissions one at a time", "the one-at-a-time line above the rows");
     const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.getAttribute("data-scope")));
-    if (listedScopes.length !== 21 || !listedScopes.includes("users.readonly") || !listedScopes.includes("locations.readonly") || !listedScopes.includes("contacts.readonly") || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write") || !listedScopes.includes("opportunities.readonly")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
-    if ((await page.locator('[data-testid="ghl-scope-list"] li button:has-text("Copy")').count()) !== 21 || (await page.locator('[data-testid="ghl-scope-tick"]').count()) !== 21) throw new Error("every row has its own Copy and its own tick");
+    if (listedScopes.length !== 19 || !listedScopes.includes("users.readonly") || !listedScopes.includes("locations.readonly") || !listedScopes.includes("contacts.readonly") || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write") || !listedScopes.includes("opportunities.readonly")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
+    if ((await page.locator('[data-testid="ghl-scope-list"] li button:has-text("Copy")').count()) !== 19 || (await page.locator('[data-testid="ghl-scope-tick"]').count()) !== 19) throw new Error("every row has its own Copy and its own tick");
     const postRow = page.locator('[data-testid="ghl-scope-list"] li[data-scope="socialplanner/post.write"]');
-    if (!(await postRow.innerText()).includes("Edit Social Planner Posts") || (await postRow.locator('[data-testid="ghl-scope-search"]').innerText()) !== "Social Planner Post") throw new Error("a row shows the picker's name and the text to search for");
+    // H-350: a row shows the picker's own name (View or Edit plus the noun) and the id beside it; the older "search" word is gone.
+    if (!(await postRow.innerText()).includes("Edit Social Planner Posts") || (await postRow.locator('[data-testid="ghl-scope-id"]').innerText()).trim() !== "socialplanner/post.write") throw new Error("a row shows the picker's name and the id");
     await page.locator('[data-testid="ghl-scope-tick"]').nth(0).check();
     await page.locator('[data-testid="ghl-scope-tick"]').nth(1).check();
     await page.locator('[data-testid="ghl-scope-tick"]').nth(2).check();
-    if ((await page.locator('[data-testid="ghl-scope-count"]').innerText()).trim().startsWith("3 of 21 added") !== true) throw new Error(`the ticks count: ${await page.locator('[data-testid="ghl-scope-count"]').innerText()}`);
+    if ((await page.locator('[data-testid="ghl-scope-count"]').innerText()).trim().startsWith("3 of 19 added") !== true) throw new Error(`the ticks count: ${await page.locator('[data-testid="ghl-scope-count"]').innerText()}`);
     await page.reload();
     if ((await page.locator('[data-testid="ghl-scope-count"]').getAttribute("data-done")) !== "0") throw new Error("the ticks are a checklist in the page alone and reset on leaving");
     // H-240: an email address in the Location ID box (a browser's autofill) gets the line under the box and no call; autofill is off.
