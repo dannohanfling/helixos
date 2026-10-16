@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { GHL_SCOPES, ONE_AT_A_TIME, REQUIRED_SCOPES, pickerName, scopeNamedIn, searchText } from "../ghl-scopes";
+import { GHL_SCOPES, ONE_AT_A_TIME, REQUIRED_SCOPES, pickerName, scopeList, scopeNamedIn, searchText } from "../ghl-scopes";
 import { explainGhl } from "../ghl-errors";
 
 const ROOT = join(__dirname, "..", "..", "..", "..");
@@ -10,9 +10,11 @@ describe("the one GoHighLevel scope list", () => {
   it("covers what the app calls now and within two releases, once each", () => {
     expect(new Set(REQUIRED_SCOPES).size).toBe(REQUIRED_SCOPES.length);
     for (const s of ["socialplanner/account.readonly", "socialplanner/post.readonly", "socialplanner/post.write", "contacts.write", "locations.readonly", "medias.write", "users.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("now");
-    for (const s of ["socialplanner/statistics.readonly", "socialplanner/comments.readonly", "socialplanner/comments.write", "emails/builder.write", "locations/customFields.write", "locations/customFields.readonly", "contacts.readonly", "opportunities.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
+    for (const s of ["socialplanner/stat.readonly", "emails/builder.write", "locations/customFields.write", "locations/customFields.readonly", "contacts.readonly", "opportunities.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
     // Nothing this product will ever touch.
     for (const s of ["category", "tag", "csv", "watermark"]) expect(REQUIRED_SCOPES.some((x) => x.includes(s))).toBe(false);
+    // H-294: every id spelled as GoHighLevel's own scope list spells it (checked against its OpenAPI specs, 16 Oct): no "statistics", no "comments".
+    for (const s of ["statistics", "comments"]) expect(REQUIRED_SCOPES.some((x) => x.includes(s))).toBe(false);
   });
   it("each row carries the picker's own name and a search text that finds it, one at a time (H-233)", () => {
     for (const s of GHL_SCOPES) {
@@ -28,7 +30,11 @@ describe("the one GoHighLevel scope list", () => {
     // The rows read the list and write no scope name of their own.
     const rows = readFileSync(join(ROOT, "src/components/ghl-scope-rows.tsx"), "utf8");
     expect(rows).toContain("pickerName");
-    expect(rows).toContain("searchText");
+    // H-294: a row's Copy is the scope id alone and the id sits beside the name; the list copy is every id, one a line.
+    expect(rows).toContain("text={s.scope}");
+    expect(rows).toContain("scopeList");
+    expect(scopeList(GHL_SCOPES.slice(0, 2))).toBe(`${GHL_SCOPES[0].scope}\n${GHL_SCOPES[1].scope}`);
+    expect(scopeList(GHL_SCOPES).endsWith("\n")).toBe(false);
     expect(rows).not.toMatch(/socialplanner\/[a-z]+\.[a-z]+|opportunities\.readonly/);
   });
   it("every screen and document that names a scope reads this list: the README carries every entry and no other socialplanner scope", () => {

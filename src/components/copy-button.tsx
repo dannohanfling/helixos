@@ -7,7 +7,7 @@ import { useState } from "react";
  * keeps italics and indents and everything else falls back to the plain text. The HTML flavour is the caller's to build from
  * block elements only: a <br> becomes a backslash in a Markdown-storing destination, a <p> boundary becomes a blank line.
  */
-export function CopyButton({ text, html, label = "Copy", className = "btn btn-soft btn-sm", disabled = false, title, doneMs = 1500 }: { text: string; html?: string; label?: string; className?: string; disabled?: boolean; title?: string; doneMs?: number }) {
+export function CopyButton({ text, html, label = "Copy", doneLabel = "Copied ✓", className = "btn btn-soft btn-sm", disabled = false, title, doneMs = 1500, testId }: { text: string; html?: string; label?: string; /** What the button says for `doneMs` after a copy ("Copied contacts.readonly"). */ doneLabel?: string; className?: string; disabled?: boolean; title?: string; doneMs?: number; testId?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button
@@ -15,6 +15,7 @@ export function CopyButton({ text, html, label = "Copy", className = "btn btn-so
       className={className}
       disabled={disabled}
       title={title}
+      data-testid={testId}
       onClick={async () => {
         try {
           if (html && typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
@@ -29,7 +30,7 @@ export function CopyButton({ text, html, label = "Copy", className = "btn btn-so
         }
       }}
     >
-      {done ? "Copied ✓" : label}
+      {done ? doneLabel : label}
     </button>
   );
 }
