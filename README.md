@@ -144,6 +144,10 @@ up). `PROOF_BLOB_STORE_ID` and `PROOF_BLOB_WEBHOOK_PUBLIC_KEY` are set alongside
 `scripts/mock-blob.ts` holds both stores and tells them apart by the token's store id: a store whose id contains PROOF is
 private, refuses a public put, and answers 403 at an object's URL without its token. Walk: `scripts/smoke-proofs.ts`.
 
+## Public pages
+
+Six pages anyone can open without signing in (H-331): `/privacy`, `/terms`, `/support`, `/delete-account`, `/ai-and-the-board` and `/community-guidelines`. Their copy is `docs/legal/*.html`, Scriba's files word for word; `scripts/legal-pages.ts` writes them into `src/content/legal.ts` with the cross-page links turned into routes, and `src/lib/engine/__tests__/legal.test.ts` regenerates that file so the two never drift. To change a page, edit its HTML in `docs/legal`, run `npx tsx --tsconfig tsconfig.json scripts/legal-pages.ts`, and commit both. They are the only pages `robots.txt` allows, each carries its canonical address, and the proxy lists them as public.
+
 ## Client-facing errors
 
 An error a client can see says what happened to them and what to do next. It never names a variable, a host, a vendor's raw
@@ -194,6 +198,7 @@ npx tsx scripts/smoke-ai.ts          # Bring-your-own AI key: 401 / no-billing /
 npx tsx scripts/smoke-socrates.ts    # Socrates Domain: lessons in order, library filters + own question, reframes split spoken/principle with the credit, script wizard to the fill step, the call sheet (both clipboard flavours) and the copy block, Conversations link
 npx tsx scripts/smoke-ladders.ts     # Ladder facts, skeleton + checklist blocks, finished ladder clears, live hour, Airtable copy, composer hand-off, scheduled posts keep their text until "Push the update"
 npx tsx scripts/smoke-headers.ts     # Every page as client and coach under the Content Security Policy: no violations, no page errors
+npx tsx scripts/smoke-legal.ts       # The six public pages signed out in both looks and widths (links, anchors, canonical, axe), the footer and Settings → Account links, Delete my HumanOS data and Delete my account, the folding menu and the rail (H-331, H-333)
 npx tsx scripts/smoke-firstday.ts    # A new client's first five minutes on a phone: join, welcome card, no admin tasks, touch targets, 16px fields, installable (manifest + icons), no developer copy
 npx tsx scripts/smoke-loop.ts        # The daily loop's edges: broken-streak notice + repair, close pre-filled from the day, editing a close scores the difference, member timezone, coach nudge
 npx tsx scripts/smoke-rewards.ts     # Earn Your Way: whole catalogue visible, no link = "Opening soon", claim = points off + booking link, workspace caps with reopen date, server-side refusal, coach claims read-only (needs REWARDS_CONFIG_OVERRIDE; dev-server.sh sets it)

@@ -113,6 +113,8 @@ async function main() {
     must(rowsWhile.join() === "1,2,3,4,5", `each row appears as its advisor speaks, earlier rows staying: ${rowsWhile.join()}`);
     // H-245: each turn is 10 to 15 s by its quote's length; the four turns after the first add up inside those bounds.
     must(took > 4 * MIN_TURN_MS - 1000 && took < 4 * MAX_TURN_MS + 3000, `10 to 15 s a speaker: ${took} ms from the second speaker to the recommendation`);
+    // H-331: "How the Board works" beside "You decide." goes to the public AI and your Board page.
+    must((await page.locator('[data-testid="board-how-it-works"]').getAttribute("href")) === "/ai-and-the-board", "How the Board works links /ai-and-the-board");
     must((await page.locator('[data-testid="board-table-recommends"]').innerText()).startsWith("THE BOARD RECOMMENDS"), "the table ends on the recommendation");
     console.log(`✓ the Boardroom plays it back: ${heard.join(" → ")}, ${took} ms for the last four turns, rows appearing as each speaks, the recommendation last`);
     for (const x of SEATS) must(await page.locator(`[data-testid="board-minute-${x.key}"]`).count(), `the ${x.name} row in the minutes`);

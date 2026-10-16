@@ -17,7 +17,7 @@ import { and, eq, inArray, isNull, like, ne, sql } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
-import { CHILD_TABLES, MEMBER_TABLES, USER_TABLES, WORKSPACE_TABLES, type MemberLabel } from "@/lib/member-data";
+import { BODY_LABELS, CHILD_TABLES, MEMBER_TABLES, USER_TABLES, WORKSPACE_TABLES, type MemberLabel } from "@/lib/member-data";
 import { deleteProofObject, listProofObjects, proofStorageConfigured } from "@/lib/proof-storage";
 import { deletePublicObjectStrict } from "@/lib/storage";
 
@@ -219,6 +219,45 @@ export async function eraseMember(plan: ErasePlan, ranByUserId: string): Promise
 }
 
 /** The audit row for one run: counts and the email, never content. */
+// ---------------------------------------------------------------------------------------------------------------------------
+// H-331: the two deletions a member runs alone, from Settings → Account.
+
+export type BodyErasePlan = { workspaceId: string; userId: string; membershipId: string; email: string; ids: Record<string, string[]>; counts: Record<string, number>; total: number };
+
+/**
+ * What "Delete my HumanOS data" would remove: every HumanOS table (BODY_LABELS) and what hangs off it, for this one member,
+ * nothing else. Reads only. The WHOOP connection (body_devices, its tokens sealed) goes with it.
+ */
+export async function planBodyErase(workspaceId: string, userId: string): Promise<BodyErasePlan | null> {
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)) });
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+  if (!m || !user) return null;
+  const ids: Record<string, string[]> = {};
+  for (const [label, table] of Object.entries(MEMBER_TABLES)) {
+    if (!BODY_LABELS.has(label as MemberLabel)) continue;
+    ids[label] = ((await db.select({ id: col(table, "id") }).from(table).where(and(eq(col(table, "workspaceId"), workspaceId), eq(col(table, "userId"), userId)))) as { id: string }[]).map((r) => r.id);
+  }
+  for (const c of CHILD_TABLES) if (BODY_LABELS.has(c.parent as MemberLabel)) ids[c.label] = await childIds(c.table, c.fk, ids[c.parent] ?? []);
+  const counts = Object.fromEntries(Object.entries(ids).map(([k, v]) => [k, v.length]));
+  return { workspaceId, userId, membershipId: m.id, email: user.email, ids, counts, total: Object.values(counts).reduce((a, b) => a + b, 0) };
+}
+
+/** Runs a body plan made moments before: children first, one transaction per table, then one audit row with counts and no content. */
+export async function eraseBody(plan: BodyErasePlan, ranByUserId: string): Promise<string> {
+  const childrenOf = (parent: string): (typeof CHILD_TABLES)[number][] => CHILD_TABLES.filter((c) => c.parent === parent);
+  const subtree = (parent: string): (typeof CHILD_TABLES)[number][] => childrenOf(parent).flatMap((c) => [...subtree(c.label), c]);
+  for (const [label, table] of Object.entries(MEMBER_TABLES) as [MemberLabel, SQLiteTable][]) {
+    if (!BODY_LABELS.has(label)) continue;
+    await db.transaction(async (tx) => {
+      for (const c of subtree(label)) await drop(tx, c.table, plan.ids[c.label] ?? []);
+      await drop(tx, table, plan.ids[label] ?? []);
+    });
+  }
+  const id = newId();
+  await db.insert(schema.deletionAudits).values({ id, workspaceId: plan.workspaceId, ranByUserId, deletedEmail: plan.email, counts: { ...plan.counts, humanos_only: 1 }, objects: 0, userRemoved: false, workspaceRemoved: false, stoppedAt: null });
+  return id;
+}
+
 async function audit(plan: ErasePlan, ranByUserId: string, counts: Record<string, number>, objects: number, run: { stoppedAt: string | null; userGoes: boolean; workspaceGoes: boolean }): Promise<string> {
   const id = newId();
   await db.insert(schema.deletionAudits).values({ id, workspaceId: plan.workspaceId, ranByUserId, deletedEmail: plan.email, counts, objects, userRemoved: run.userGoes, workspaceRemoved: run.workspaceGoes, stoppedAt: run.stoppedAt });

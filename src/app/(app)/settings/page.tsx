@@ -65,7 +65,7 @@ export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
   const ownMedia = v.switchedInto ? [] : await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), columns: { id: true, caption: true, kind: true }, orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 96 });
@@ -79,7 +79,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -240,6 +240,29 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Card>
         <Card id="login-email" className="min-w-0" title="Login email">
           <ChangeEmailForm current={v.user.email} />
+        </Card>
+        {/* Account (H-331): the pages the app stores point at, the export, and the two deletions a member can run alone. */}
+        <Card id="account" className="min-w-0" title="Account">
+          <ul className="space-y-2 text-sm" data-testid="account-links">
+            <li>
+              <Link href="/privacy" className="underline">Privacy Policy</Link> · <Link href="/terms" className="underline">Terms of Service</Link> · <Link href="/support" className="underline">Support</Link>
+            </li>
+            <li>
+              <a href="/api/export?format=json" className="underline" download>Download my data</a>
+              <span className="text-ink-3"> (everything you own here, as one JSON file)</span>
+            </li>
+            {v.switchedInto || v.team ? null : (
+              <>
+                <li>
+                  <Link href="/settings/delete-humanos" className="underline" data-testid="account-delete-humanos">Delete my HumanOS data</Link>
+                  <span className="text-ink-3"> (only your health data; the rest of your account stays)</span>
+                </li>
+                <li>
+                  <Link href="/settings/delete-account" className="text-danger underline" data-testid="account-delete">Delete my account</Link>
+                </li>
+              </>
+            )}
+          </ul>
         </Card>
         {v.team ? null : (
           <Card id="photo" className="min-w-0" title="Your photo" action={<span className="text-xs text-ink-3" data-testid="photo-source">{v.membership.headshotSource === "upload" ? "your own" : v.membership.headshotSource === "import" ? "from your coach's records" : v.membership.headshotSource === "removed" ? "removed" : "none yet"}</span>}>
@@ -429,6 +452,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         )}
         {/* HumanOS (rev 320/322): the member's own switch, off by default. Off hides the group and keeps the data; on shows it as it was. */}
         <Card id="humanos" title="HumanOS">
+          {humanosNotice === "deleted" ? <p className="mb-2 rounded-lg bg-surface-2 p-2 text-sm" role="status" data-testid="humanos-deleted">Your HumanOS data was deleted. Everything else is as it was.</p> : null}
           <p className="text-sm text-ink-2">Food, training, sleep, practices and weigh-ins, in your HelixOS. Everything in it is private to you by default; sharing with your coach is a separate switch inside HumanOS settings, and so is letting AI use it.</p>
           <form action={setHumanosAction} className="mt-3 flex flex-wrap items-center gap-3" data-testid="humanos-form">
             <input type="hidden" name="on" value={v.membership.bodyEnabled ? "0" : "1"} />

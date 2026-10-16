@@ -113,6 +113,8 @@ export const memberships = sqliteTable(
     profileSavedAt: text("profile_saved_at"),
     /** The streak's week (H-289 §2): every day (the default) or Monday to Friday, the member's own choice under Settings → You. */
     workDays: text("work_days", { enum: ["weekdays", "all"] }).notNull().default("all"),
+    /** The menu as this member left it (H-333): which groups are collapsed, and whether the desktop sidebar is a rail. Shared across their devices. */
+    navState: text("nav_state", { mode: "json" }).$type<{ collapsed?: Record<string, boolean>; rail?: boolean }>().notNull().default({}),
     /** The streak recount (H-289 §4): the points it added for this member, null until the coach applied it; and when the member saw Today's one line about it. */
     streakRecountPoints: integer("streak_recount_points"),
     streakRecountSeenAt: text("streak_recount_seen_at"),

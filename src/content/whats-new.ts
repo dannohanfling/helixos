@@ -12,6 +12,26 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 213,
+    date: "2026-10-16",
+    title: "The menu folds the way you like, on your phone too",
+    lines: [
+      "On a phone, every group heading on the More page is now a button: tap it to fold or unfold that group. One \"Collapse all\" at the top shuts them all (it then reads \"Expand all\"). The group holding the page you are on always stays open.",
+      "On a desktop, the sidebar folds to a slim rail of icons with the button at its top or the [ key (never while you are typing); hover an icon for its name. What you fold stays folded on every device you use.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 212,
+    date: "2026-10-16",
+    title: "Privacy, Terms, Support and the other pages; delete your account or your HumanOS data yourself",
+    lines: [
+      "Six pages anyone can read without signing in: Privacy Policy, Terms of Service, Support, Delete your account, AI and your Board, and the Community Guidelines. A small footer under every page links to them, the sign-in screen says you agree to the Terms and Privacy Policy by continuing, and the Board's \"You decide\" note links to how the Board works.",
+      "Settings → Account gathers Privacy, Terms, Support, Download my data and two deletions you can run yourself: Delete my HumanOS data removes only your health data, and Delete my account removes everything you made here, for good, after you type your email. A coach's own account still goes through Support.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 211,
     date: "2026-10-16",
     title: "Coaches: Inbox posts can be on hold or superseded, with no Approve",

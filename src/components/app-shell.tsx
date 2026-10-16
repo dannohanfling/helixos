@@ -8,6 +8,10 @@ import type { Viewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { BottomNav, SideNav } from "./nav";
+import { NavStateProvider } from "./nav-state";
+import { Sidebar } from "./sidebar";
+import { navStateOf } from "@/lib/engine/nav-state";
+import { LegalFooter } from "./legal-footer";
 import { SubmitButton } from "@/components/submit-button";
 import { APP_VERSION } from "@/lib/version";
 import { SwitchBanner } from "@/components/switch-banner";
@@ -24,20 +28,36 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
   // except a team member, who is shown as themself.
   const who = team ? viewer.actor : viewer.user;
   return (
+    <NavStateProvider initial={navStateOf(viewer.membership.navState)} persist={!viewer.switchedInto && !viewer.team}>
     <div className="min-h-screen md:flex" data-app-shell>
-      {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold. */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-surface py-4 md:flex md:sticky md:top-0 md:h-screen">
-        <Link href="/today" className="mb-5 flex items-center gap-2.5 px-5">
+      {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold.
+          H-333: the whole column folds to a rail of icons (Sidebar); what has no place on the rail carries rail-hide. */}
+      <Sidebar>
+        <Link href="/today" className="rail-hide mb-5 flex items-center gap-2.5 px-5">
           <AppLogo size={40} />
           <div className="leading-tight">
             <div className="text-sm font-bold">HelixOS</div>
             <div className="text-[11px] text-ink-3">{viewer.workspace.name}</div>
           </div>
         </Link>
-        <div className="min-h-0 flex-1 overflow-y-auto px-3">
+        <Link href="/today" className="rail-only mx-auto mb-3" aria-label="HelixOS, Today" title="Today">
+          <AppLogo size={40} />
+        </Link>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 [aside[data-rail=true]_&]:px-1">
           <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} />
         </div>
-        <div className="mt-3 space-y-3 border-t px-5 pt-3">
+        {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
+        <div className="rail-only mt-3 flex flex-col items-center gap-2 border-t pt-3">
+          <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-md text-base hover:bg-surface-2" aria-label="Settings" title="Settings" data-testid="rail-settings">
+            ⚙️
+          </Link>
+          <form action={logoutAction}>
+            <SubmitButton className="flex h-9 w-9 items-center justify-center rounded-md text-base hover:bg-surface-2" aria-label="Log out" title="Log out" data-testid="rail-logout" pendingText="…">
+              🚪
+            </SubmitButton>
+          </form>
+        </div>
+        <div className="rail-hide mt-3 space-y-3 border-t px-5 pt-3">
           {coachFirst && !viewer.switchedInto && !team ? <ReportButton coachFirst={coachFirst} /> : null}
           {team ? (
             // A team member's own block (Danno, 6 Oct): whose HelixOS this is, and the way to another when they have one. No tier
@@ -90,7 +110,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
             {APP_VERSION}
           </Link>
         </div>
-      </aside>
+      </Sidebar>
       <div className="min-w-0 flex-1">
         {viewer.switchedInto ? <SwitchBanner sw={viewer.switchedInto} /> : null}
         {viewer.team ? <TeamBanner team={viewer.team} choices={choices} /> : null}
@@ -137,12 +157,14 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
           ) : (
             children
           )}
+          <LegalFooter />
         </main>
       </div>
       <BottomNav role={viewer.role} badges={badges} />
       {/* The coach's assistant (rev 241): null while switched into a client, or when the workspace hasn't set it up. */}
       {chat ? <ChatWidget {...chat} /> : null}
     </div>
+    </NavStateProvider>
   );
 }
 
