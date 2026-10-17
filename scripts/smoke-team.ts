@@ -17,6 +17,7 @@ import { chromium, type Browser, type Page } from "@playwright/test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { execSync } from "node:child_process";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const PASSWORD = "teampass123";
@@ -385,6 +386,10 @@ async function main() {
     console.log("✓ the cap holds at the seats line; the coach raises it and removes from the client page; the owner removes from Settings; access ends on the next request");
 
     // ── 8. Multiple memberships: Jordan joins Maya's team with his own login. ──
+    // Sections 3 to 7 compile most of the app (26 closed pages and their actions), and the dev server climbs to the container's
+    // 13 GB with this section's pages still to compile (17 Oct: killed twice at "his own post opens"). Locally, a fresh server
+    // here, as smoke.sh gives one before the walk; the sessions live in the database, so every signed-in browser carries on.
+    if (base === "http://localhost:3000") execSync("scripts/dev-server.sh fresh", { stdio: "inherit" });
     await db.update(schema.memberships).set({ bodyEnabled: true }).where(eq(schema.memberships.id, jordanM.id));
     if (!(await db.query.bodySettings.findFirst({ where: and(eq(schema.bodySettings.workspaceId, ws), eq(schema.bodySettings.userId, jordan.id)) }))) await db.insert(schema.bodySettings).values({ id: newId(), workspaceId: ws, userId: jordan.id });
     const jCtx = await browser.newContext();
