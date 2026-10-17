@@ -165,3 +165,8 @@ export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.oohOnly || m.role === "coach" || Boolean(m.oohOn)) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 
+
+/** The groups this member sees, each with only its visible items; a group with none isn't drawn at all (HumanOS without Body). */
+export function visibleGroups(m: NavMember, links: PlatformLinks = {}, ownCommunity: string | null = null, shippedKeys: readonly string[] = []) {
+  return NAV_GROUPS.map((g) => ({ ...g, items: withHorizon(withPlatformLinks(g.items, links, ownCommunity), shippedKeys).filter((n) => navVisible(n, m)) })).filter((g) => g.items.length);
+}

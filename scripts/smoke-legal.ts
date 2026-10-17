@@ -156,7 +156,20 @@ async function main() {
     await p1.goto(`${base}/offers`);
     must((await build.getAttribute("data-open")) === "true", "the group holding the current page (Offers, in Build) always shows open");
     must((await daily.getAttribute("data-open")) === "true", "Daily is still open");
-    const collapseAll = nav.locator('[data-testid="nav-collapse-all"]');
+    // H-499: both controls sit in one row at the bottom left of the sidebar, above Settings; nothing of them at the top.
+    const foot = p1.locator('[data-testid="sidebar-foot"]');
+    const side = (await p1.locator('[data-testid="sidebar"]').boundingBox())!;
+    const fold = foot.locator('[data-testid="nav-rail-toggle"]');
+    const collapseAll = foot.locator('[data-testid="nav-collapse-all"]');
+    must((await p1.locator('[data-testid="nav-rail-toggle"]').count()) === 1 && (await p1.locator('[data-testid="sidebar"] [data-testid="nav-collapse-all"]').count()) === 1, "one fold button and one Collapse all in the sidebar, both in its foot");
+    must((await nav.locator('[data-testid="nav-collapse-all"]').count()) === 0, "nothing of them left at the top of the menu");
+    const foldBox = (await fold.boundingBox())!;
+    const allBox = (await collapseAll.boundingBox())!;
+    const settingsBox = (await p1.locator('[data-testid="nav-settings"]').boundingBox())!;
+    must(foldBox.y > side.y + side.height / 2 && allBox.y > side.y + side.height / 2 && foldBox.y < settingsBox.y, "both sit in the bottom half of the sidebar, above Settings");
+    must(foldBox.x - side.x <= 8 && allBox.x > foldBox.x, "the fold button at the left edge, Collapse all beside it");
+    must(foldBox.height >= 44 && foldBox.width >= 44 && allBox.height >= 44, "both are 44 px tap targets");
+    must((await fold.getAttribute("aria-label")) === "Collapse menu" && (await fold.getAttribute("title"))?.startsWith("Collapse menu") && (await fold.innerText()).trim() === "«", "the fold button reads « with Collapse menu for the pointer and the screen reader");
     must((await collapseAll.innerText()).trim() === "Collapse all", "the control reads Collapse all");
     await collapseAll.click();
     const groups = p1.locator('[data-testid="nav-group"]');
@@ -167,6 +180,9 @@ async function main() {
       must((await g.getAttribute("data-open")) === (label === "Build" ? "true" : "false"), `Collapse all shuts ${label} (the current page's group stays open)`);
     }
     must((await collapseAll.innerText()).trim() === "Expand all", "once everything is shut it reads Expand all");
+    await p1.waitForTimeout(700);
+    await p1.reload();
+    must((await collapseAll.innerText()).trim() === "Expand all", "and still after a reload: everything stays shut");
     await collapseAll.click();
     for (let i = 0; i < n; i++) must((await groups.nth(i).getAttribute("data-open")) === "true", "Expand all opens every group");
     // The rail.
@@ -183,6 +199,9 @@ async function main() {
     const wideBefore = (await sidebar.boundingBox())!.width;
     await p1.locator('[data-testid="nav-rail-toggle"]').click();
     must((await sidebar.getAttribute("data-rail")) === "true" && (await sidebar.boundingBox())!.width < 70 && wideBefore > 200, "the sidebar folds to a slim rail");
+    const railFold = (await fold.boundingBox())!;
+    must(Math.abs(railFold.x - foldBox.x) <= 1 && railFold.y > side.y + side.height / 2, "folded, the expand button is at the bottom left in the same spot");
+    must((await fold.innerText()).trim() === "»" && (await fold.getAttribute("aria-label")) === "Expand menu" && (await foot.locator('[data-testid="nav-collapse-all"]').count()) === 0, "it reads » with Expand menu, and Collapse all steps aside on the rail");
     must((await nav.locator('[data-testid="nav-group-toggle"]').count()) === 0 && (await nav.locator('[role="separator"]').count()) === n, "on the rail the group headings are thin dividers");
     const railLinks = nav.locator("a");
     const rn = await railLinks.count();

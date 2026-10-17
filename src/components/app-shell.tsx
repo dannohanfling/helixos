@@ -9,7 +9,8 @@ import { logoutAction } from "@/lib/actions/auth";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { BottomNav, SideNav } from "./nav";
 import { NavStateProvider } from "./nav-state";
-import { Sidebar } from "./sidebar";
+import { Sidebar, SidebarFoot } from "./sidebar";
+import { visibleGroups } from "./nav-groups";
 import { navStateOf } from "@/lib/engine/nav-state";
 import { LegalFooter } from "./legal-footer";
 import { SubmitButton } from "@/components/submit-button";
@@ -46,18 +47,20 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
         <div className="min-h-0 flex-1 overflow-y-auto px-3 [aside[data-rail=true]_&]:px-1">
           <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
         </div>
+        {/* The sidebar's controls (H-499): fold and Collapse all, at the bottom left, open or folded. */}
+        <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
         {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
-        <div className="rail-only mt-3 flex flex-col items-center gap-2 border-t pt-3">
-          <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-md text-base hover:bg-surface-2" aria-label="Settings" title="Settings" data-testid="rail-settings">
+        <div className="rail-only mt-1 flex flex-col items-center gap-1">
+          <Link href="/settings" className="flex h-11 w-11 items-center justify-center rounded-md text-base hover:bg-surface-2" aria-label="Settings" title="Settings" data-testid="rail-settings">
             ⚙️
           </Link>
           <form action={logoutAction}>
-            <SubmitButton className="flex h-9 w-9 items-center justify-center rounded-md text-base hover:bg-surface-2" aria-label="Log out" title="Log out" data-testid="rail-logout" pendingText="…">
+            <SubmitButton className="flex h-11 w-11 items-center justify-center rounded-md text-base hover:bg-surface-2" aria-label="Log out" title="Log out" data-testid="rail-logout" pendingText="…">
               🚪
             </SubmitButton>
           </form>
         </div>
-        <div className="rail-hide mt-3 space-y-3 border-t px-5 pt-3">
+        <div className="rail-hide mt-2 space-y-3 px-5">
           {coachFirst && !viewer.switchedInto && !team ? <ReportButton coachFirst={coachFirst} /> : null}
           {team ? (
             // A team member's own block (Danno, 6 Oct): whose HelixOS this is, and the way to another when they have one. No tier

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 226,
+    date: "2026-10-17",
+    title: "The menu's fold and Collapse all now sit at the bottom left",
+    lines: [
+      "On a computer, the button that folds the menu to icons («, or » to open it again) and Collapse all / Expand all now share one row at the bottom left of the menu, just above Settings. The top shows only HelixOS and your workspace.",
+      "Folded to icons, the open button stays in the same spot at the bottom left. Your menu remembers how you left it, as before, and the [ key still folds it. Nothing changes on a phone.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 225,
     date: "2026-10-17",
     title: "Loyalty: the Points desk, for moving a member's points safely",
