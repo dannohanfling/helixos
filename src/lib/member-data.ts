@@ -194,6 +194,7 @@ export const CHILD_TABLES = [
   { label: "handoff_deliveries", table: schema.handoffDeliveries, fk: "messageId", parent: "handoff_messages" },
   // A leaderboard's earlier addresses (H-109): slugs only, no member data of their own; they go with the feed row.
   { label: "leaderboard_slug_aliases", table: schema.leaderboardSlugAliases, fk: "feedId", parent: "leaderboard_feeds" },
+  { label: "loyalty_points_moves", table: schema.loyaltyPointsMoves, fk: "feedId", parent: "leaderboard_feeds" },
   { label: "hermes_contact_links", table: schema.hermesContactLinks, fk: "signupId", parent: "webinar_signups" }, // Hermes (H-51): the GHL contact id kept with a sign-up
 ] as const;
 export type ChildLabel = (typeof CHILD_TABLES)[number]["label"];

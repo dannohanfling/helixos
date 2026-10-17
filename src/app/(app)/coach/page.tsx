@@ -32,6 +32,7 @@ import { openClaims } from "@/lib/queries/rewards";
 import { setFeatureOnAction } from "@/lib/actions/bot-features";
 import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
 import { PointsCheck } from "@/components/leaderboard/points-check";
+import { DeskSettings } from "@/components/leaderboard/desk-settings";
 import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -367,6 +368,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                         ) : null}
                         <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/lb/{feedOf.get(r.m.id)!.slug} · /api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
                         {feedOf.get(r.m.id)!.keyEncrypted ? <PointsCheck feed={feedOf.get(r.m.id)!} error={sp.pointsCheckError} /> : null}
+                        {feedOf.get(r.m.id)!.keyEncrypted ? <DeskSettings feed={feedOf.get(r.m.id)!} /> : null}
                         <a href={`/lb/${feedOf.get(r.m.id)!.slug}`} target="_blank" rel="noreferrer" className="text-[11px] underline" data-testid="leaderboard-open-page">Open their leaderboard page →</a>
                       </div>
                     ) : null}
