@@ -5,6 +5,7 @@
  * the coach's own actions and nowhere else). A decision is one answer "from Danno", delivered once in the sender's next
  * handoff_inbox. Every post, file, ack, decision and token change is in the audit.
  */
+import { cutText } from "@/lib/engine/cut";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, ne, sql, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -50,7 +51,7 @@ const mine = (o: Owner) => and(eq(schema.handoffMessages.workspaceId, o.workspac
 const agentsOf = (o: Owner) => db.query.forumAgents.findMany({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId)) });
 
 export async function audit(o: Owner, agentId: string | null, action: string, ref: string | null = null, note: string | null = null): Promise<void> {
-  await db.insert(schema.handoffAudit).values({ id: newId(), ...o, agentId, action, ref, note: note ? note.slice(0, 300) : null, at: nowIso() });
+  await db.insert(schema.handoffAudit).values({ id: newId(), ...o, agentId, action, ref, note: note ? cutText(note, 300) : null, at: nowIso() });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -277,7 +278,7 @@ export async function ackHandoff(o: Owner, agentId: string, ref: unknown, note: 
   const seq = parseHId(ref);
   const row = seq === null ? null : await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.seq, seq)) });
   if (!row) throw new Error(`There's no ${String(ref)} in the inbox.`);
-  const line = scrubText(String(note ?? "").replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.note)).text || null;
+  const line = scrubText(cutText(String(note ?? "").replace(/\s+/g, " ").trim(), HANDOFF_MAX.note)).text || null;
   const done = await db.update(schema.handoffDeliveries).set({ ackedAt: nowIso(), ackNote: line, deliveredAt: sql`coalesce(${schema.handoffDeliveries.deliveredAt}, ${nowIso()})` }).where(and(eq(schema.handoffDeliveries.messageId, row.id), eq(schema.handoffDeliveries.recipient, agentId))).returning({ id: schema.handoffDeliveries.id });
   if (!done.length) throw new Error(`${hId(row.seq)} wasn't sent to this agent, so there's nothing to ack.`);
   await audit(o, agentId, "ack", hId(row.seq), line);
@@ -300,7 +301,7 @@ export async function decideHandoff(o: Owner, actorUserId: string, messageId: st
   if (!claimed.length) return { ok: false, text: `${hId(row.seq)} was already decided.` };
   const word = decision === "approved" ? "Approved" : decision === "changed" ? "Change" : "Declined";
   const to = row.fromAgentId ? [row.fromAgentId] : [];
-  await insertMessage(o, { fromAgentId: null, toIds: to, kind: "answer", title: `${word}: ${hId(row.seq)} ${row.title}`.slice(0, HANDOFF_MAX.title), body: scrubText(note.slice(0, HANDOFF_MAX.change)).text, replyToId: row.id, threadId: row.threadId ?? row.id, decision, decidedAt: now, decidedBy: actorUserId, decisionForId: row.id }, to);
+  await insertMessage(o, { fromAgentId: null, toIds: to, kind: "answer", title: cutText(`${word}: ${hId(row.seq)} ${row.title}`, HANDOFF_MAX.title), body: scrubText(cutText(note, HANDOFF_MAX.change)).text, replyToId: row.id, threadId: row.threadId ?? row.id, decision, decidedAt: now, decidedBy: actorUserId, decisionForId: row.id }, to);
   await audit(o, null, decision === "approved" ? "approve" : decision === "changed" ? "change" : "decline", hId(row.seq), note || null);
   return { ok: true, text: `${word}: ${hId(row.seq)}. ${row.fromAgentId ? "The agent reads its inbox every few minutes; this post says when it has." : ""}` };
 }
@@ -308,9 +309,9 @@ export async function decideHandoff(o: Owner, actorUserId: string, messageId: st
 /** Danno's own answer to a message, without a decision. */
 export async function answerHandoff(o: Owner, messageId: string, body: string): Promise<boolean> {
   const row = await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.id, messageId)) });
-  const text = scrubText(body.trim().slice(0, HANDOFF_MAX.body)).text;
+  const text = scrubText(cutText(body.trim(), HANDOFF_MAX.body)).text;
   if (!row || !text || !row.fromAgentId) return false;
-  const answer = await insertMessage(o, { fromAgentId: null, toIds: [row.fromAgentId], kind: "answer", title: `Re: ${row.title}`.slice(0, HANDOFF_MAX.title), body: text, replyToId: row.id, threadId: row.threadId ?? row.id }, [row.fromAgentId]);
+  const answer = await insertMessage(o, { fromAgentId: null, toIds: [row.fromAgentId], kind: "answer", title: cutText(`Re: ${row.title}`, HANDOFF_MAX.title), body: text, replyToId: row.id, threadId: row.threadId ?? row.id }, [row.fromAgentId]);
   await audit(o, null, "answer", hId(answer.seq));
   return true;
 }
@@ -321,13 +322,13 @@ export async function answerHandoff(o: Owner, messageId: string, body: string): 
  */
 export async function noteDecision(o: Owner, messageId: string, note: string): Promise<{ ok: boolean; text: string }> {
   const row = await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.id, messageId)) });
-  const text = scrubText(note.replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.change)).text;
+  const text = scrubText(cutText(note.replace(/\s+/g, " ").trim(), HANDOFF_MAX.change)).text;
   if (!row || !row.decision) return { ok: false, text: "That message hasn't been decided." };
   if (!text) return { ok: false, text: "Write the note first." };
   if (!row.fromAgentId) return { ok: false, text: "That message is your own." };
   const word = row.decision === "approved" ? "Approved" : row.decision === "changed" ? "Change" : "Declined";
-  const answer = await insertMessage(o, { fromAgentId: null, toIds: [row.fromAgentId], kind: "answer", title: `Note on ${hId(row.seq)} (${word}): ${text}`.slice(0, HANDOFF_MAX.title), body: text, replyToId: row.id, threadId: row.threadId ?? row.id, decisionForId: row.id }, [row.fromAgentId]);
-  await audit(o, null, "note", hId(row.seq), text.slice(0, HANDOFF_MAX.note));
+  const answer = await insertMessage(o, { fromAgentId: null, toIds: [row.fromAgentId], kind: "answer", title: cutText(`Note on ${hId(row.seq)} (${word}): ${text}`, HANDOFF_MAX.title), body: text, replyToId: row.id, threadId: row.threadId ?? row.id, decisionForId: row.id }, [row.fromAgentId]);
+  await audit(o, null, "note", hId(row.seq), cutText(text, HANDOFF_MAX.note));
   return { ok: true, text: `Note sent as ${hId(answer.seq)}.` };
 }
 
@@ -598,9 +599,9 @@ export async function setBusy(o: Owner, agent: schema.ForumAgent, on: boolean, n
 /** Danno writes to an agent himself (13 Oct), marked urgent when it must get past a busy check-in. Only from his own page. */
 export async function writeAsOwner(o: Owner, agentId: string, kind: HandoffKind, title: string, body: string, urgent: boolean): Promise<boolean> {
   const agent = await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId), eq(schema.forumAgents.id, agentId)) });
-  const t = scrubText(title.replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.title)).text;
+  const t = scrubText(cutText(title.replace(/\s+/g, " ").trim(), HANDOFF_MAX.title)).text;
   if (!agent || agent.builtIn || !t) return false;
-  const row = await insertMessage(o, { fromAgentId: null, toIds: [agent.id], kind, title: t, body: scrubText(body.trim().slice(0, HANDOFF_MAX.body)).text, urgent }, [agent.id]);
+  const row = await insertMessage(o, { fromAgentId: null, toIds: [agent.id], kind, title: t, body: scrubText(cutText(body.trim(), HANDOFF_MAX.body)).text, urgent }, [agent.id]);
   await audit(o, null, urgent ? "wrote (urgent)" : "wrote", hId(row.seq), t);
   return true;
 }
@@ -613,7 +614,7 @@ export const READING_PACK_FILE_MAX = 20 * 1024 * 1024;
 export async function sendReadingPack(o: Owner, agentId: string, title: string, body: string, files: { name: string; bytes: Buffer; type?: string }[]): Promise<{ ok: true; seq: number } | { ok: false; text: string }> {
   const agent = await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId), eq(schema.forumAgents.id, agentId)) });
   if (!agent || agent.builtIn) return { ok: false, text: "Pick one of your agents." };
-  const t = scrubText(title.replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.title)).text || "Reading pack";
+  const t = scrubText(cutText(title.replace(/\s+/g, " ").trim(), HANDOFF_MAX.title)).text || "Reading pack";
   if (files.length > HANDOFF_MAX.files) return { ok: false, text: `At most ${HANDOFF_MAX.files} files in one pack.` };
   const ids: string[] = [];
   for (const f of files) {
@@ -631,7 +632,7 @@ export async function sendReadingPack(o: Owner, agentId: string, title: string, 
     await db.insert(schema.handoffFiles).values({ id, ...o, agentId: null, name: n, contentType: type, size: f.bytes.length, key, status: "ready", readyAt: nowIso() });
     ids.push(id);
   }
-  const row = await insertMessage(o, { fromAgentId: null, toIds: [agent.id], kind: "brief", title: t, body: scrubText(body.trim().slice(0, HANDOFF_MAX.body)).text, fileIds: ids }, [agent.id]);
+  const row = await insertMessage(o, { fromAgentId: null, toIds: [agent.id], kind: "brief", title: t, body: scrubText(cutText(body.trim(), HANDOFF_MAX.body)).text, fileIds: ids }, [agent.id]);
   await audit(o, null, "reading pack", hId(row.seq), `${t} (${ids.length} file${ids.length === 1 ? "" : "s"})`);
   return { ok: true, seq: row.seq };
 }
