@@ -211,8 +211,11 @@ describe("Body ships dark: a member without the flag sees none of it (rev 195)",
       expect(navVisible(body[0], { role, passEnabled: true, bodyEnabled: false })).toBe(false);
       expect(navVisible(body[0], { role, passEnabled: false, bodyEnabled: true })).toBe(true);
     }
-    // The side menu and the More page both filter through navVisible, so neither can show Body on a rule of its own.
-    for (const f of ["src/components/nav.tsx", "src/app/(app)/more/page.tsx"]) expect(read(f)).toMatch(/navVisible\(n, \{[^}]*bodyEnabled/);
+    // The side menu and the More page both filter through navVisible, so neither can show Body on a rule of its own. The side
+    // menu (and its foot, H-499) reads its groups from visibleGroups, which filters through navVisible.
+    expect(read("src/app/(app)/more/page.tsx")).toMatch(/navVisible\(n, \{[^}]*bodyEnabled/);
+    expect(read("src/components/nav.tsx")).toMatch(/visibleGroups\(\{[^}]*bodyEnabled/);
+    expect(read("src/components/nav-groups.ts")).toMatch(/export function visibleGroups\([\s\S]*?\.filter\(\(n\) => navVisible\(n, m\)\)/);
   });
   it("every Body page 404s first, the coach's view 404s for a client whose Body is off, and so does the Body export", () => {
     const pages = ["src/app/(app)/body/practices/meds/page.tsx", "src/app/(app)/body/page.tsx", "src/app/(app)/body/foods/page.tsx", "src/app/(app)/body/settings/page.tsx", "src/app/(app)/body/training/page.tsx", "src/app/(app)/body/training/routines/page.tsx", "src/app/(app)/body/training/[exerciseId]/page.tsx", "src/app/(app)/body/weight/page.tsx", "src/app/(app)/body/pantry/page.tsx", "src/app/(app)/body/week/page.tsx", "src/app/(app)/body/import/page.tsx", "src/app/(app)/body/practices/page.tsx", "src/app/(app)/body/sleep/page.tsx", "src/app/(app)/body/training/health/page.tsx", "src/app/(app)/body/insights/page.tsx", "src/app/(app)/body/shopping/page.tsx", "src/app/(app)/body/foods/find/page.tsx", "src/app/(app)/body/goals/page.tsx"];

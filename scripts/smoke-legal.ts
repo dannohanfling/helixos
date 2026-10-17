@@ -156,7 +156,20 @@ async function main() {
     await p1.goto(`${base}/offers`);
     must((await build.getAttribute("data-open")) === "true", "the group holding the current page (Offers, in Build) always shows open");
     must((await daily.getAttribute("data-open")) === "true", "Daily is still open");
-    const collapseAll = nav.locator('[data-testid="nav-collapse-all"]');
+    // H-499: both controls sit in one row at the bottom left of the sidebar, above Settings; nothing of them at the top.
+    const foot = p1.locator('[data-testid="sidebar-foot"]');
+    const side = (await p1.locator('[data-testid="sidebar"]').boundingBox())!;
+    const fold = foot.locator('[data-testid="nav-rail-toggle"]');
+    const collapseAll = foot.locator('[data-testid="nav-collapse-all"]');
+    must((await p1.locator('[data-testid="nav-rail-toggle"]').count()) === 1 && (await p1.locator('[data-testid="sidebar"] [data-testid="nav-collapse-all"]').count()) === 1, "one fold button and one Collapse all in the sidebar, both in its foot");
+    must((await nav.locator('[data-testid="nav-collapse-all"]').count()) === 0, "nothing of them left at the top of the menu");
+    const foldBox = (await fold.boundingBox())!;
+    const allBox = (await collapseAll.boundingBox())!;
+    const settingsBox = (await p1.locator('[data-testid="nav-settings"]').boundingBox())!;
+    must(foldBox.y > side.y + side.height / 2 && allBox.y > side.y + side.height / 2 && foldBox.y < settingsBox.y, "both sit in the bottom half of the sidebar, above Settings");
+    must(foldBox.x - side.x <= 8 && allBox.x > foldBox.x, "the fold button at the left edge, Collapse all beside it");
+    must(foldBox.height >= 44 && foldBox.width >= 44 && allBox.height >= 44, "both are 44 px tap targets");
+    must((await fold.getAttribute("aria-label")) === "Collapse menu" && (await fold.getAttribute("title"))?.startsWith("Collapse menu") && (await fold.innerText()).trim() === "«", "the fold button reads « with Collapse menu for the pointer and the screen reader");
     must((await collapseAll.innerText()).trim() === "Collapse all", "the control reads Collapse all");
     await collapseAll.click();
     const groups = p1.locator('[data-testid="nav-group"]');
@@ -167,6 +180,9 @@ async function main() {
       must((await g.getAttribute("data-open")) === (label === "Build" ? "true" : "false"), `Collapse all shuts ${label} (the current page's group stays open)`);
     }
     must((await collapseAll.innerText()).trim() === "Expand all", "once everything is shut it reads Expand all");
+    await p1.waitForTimeout(700);
+    await p1.reload();
+    must((await collapseAll.innerText()).trim() === "Expand all", "and still after a reload: everything stays shut");
     await collapseAll.click();
     for (let i = 0; i < n; i++) must((await groups.nth(i).getAttribute("data-open")) === "true", "Expand all opens every group");
     // The rail.
@@ -183,6 +199,9 @@ async function main() {
     const wideBefore = (await sidebar.boundingBox())!.width;
     await p1.locator('[data-testid="nav-rail-toggle"]').click();
     must((await sidebar.getAttribute("data-rail")) === "true" && (await sidebar.boundingBox())!.width < 70 && wideBefore > 200, "the sidebar folds to a slim rail");
+    const railFold = (await fold.boundingBox())!;
+    must(Math.abs(railFold.x - foldBox.x) <= 1 && railFold.y > side.y + side.height / 2, "folded, the expand button is at the bottom left in the same spot");
+    must((await fold.innerText()).trim() === "»" && (await fold.getAttribute("aria-label")) === "Expand menu" && (await foot.locator('[data-testid="nav-collapse-all"]').count()) === 0, "it reads » with Expand menu, and Collapse all steps aside on the rail");
     must((await nav.locator('[data-testid="nav-group-toggle"]').count()) === 0 && (await nav.locator('[role="separator"]').count()) === n, "on the rail the group headings are thin dividers");
     const railLinks = nav.locator("a");
     const rn = await railLinks.count();
@@ -197,7 +216,16 @@ async function main() {
     await untilSaved(false);
     await p1.goto(`${base}/settings`);
     must((await sidebar.getAttribute("data-rail")) === "false", "Settings opens with the full sidebar, as saved");
-    await p1.locator('input[name="name"], input[type="text"]').first().focus();
+    // The page hydrates after its first paint, and a field can remount then: focus it once the page is settled, and check the
+    // focus held before typing, so the "[" lands in the field and nowhere else.
+    await p1.waitForLoadState("networkidle");
+    const field = p1.locator('input[name="name"], input[type="text"]').first();
+    for (let i = 0; i < 10; i++) {
+      await field.focus();
+      if (await p1.evaluate(() => document.activeElement instanceof HTMLInputElement)) break;
+      await p1.waitForTimeout(200);
+    }
+    must(await p1.evaluate(() => document.activeElement instanceof HTMLInputElement), "a text field on Settings holds the focus");
     await p1.keyboard.press("[");
     must((await sidebar.getAttribute("data-rail")) === "false", "[ typed into a field changes nothing");
     await p1.locator("body").click({ position: { x: 5, y: 5 } });
@@ -214,9 +242,13 @@ async function main() {
     // ── The phone's More page at 390: every group a 44px button that folds, Collapse all, nothing wider than the screen. ──
     await p1.setViewportSize({ width: 390, height: 844 });
     await p1.goto(`${base}/more`);
+    // Measured once the page has settled: a heading measured mid-hydration has no box yet.
+    await p1.waitForLoadState("networkidle");
     const toggles = p1.locator('[data-testid="more-group-toggle"]');
+    await toggles.first().waitFor({ timeout: 20000 });
     const tn = await toggles.count();
     must(tn >= 5, `the phone menu shows its groups (${tn})`);
+    for (let i = 0; i < tn; i++) await toggles.nth(i).waitFor({ state: "visible", timeout: 10000 });
     for (let i = 0; i < tn; i++) must((await toggles.nth(i).boundingBox())!.height >= 44 && (await toggles.nth(i).getAttribute("aria-expanded")) === "true", "each group heading is a 44px button, open");
     await toggles.nth(1).click();
     must((await p1.locator('[data-testid="more-group"]').nth(1).getAttribute("data-open")) === "false" && (await toggles.nth(1).getAttribute("aria-expanded")) === "false", "a tap folds the group on the phone");
@@ -252,7 +284,6 @@ async function main() {
     // A fixture so there is something to delete: HumanOS on, one weigh-in day and one food.
     await db.update(schema.memberships).set({ bodyEnabled: true }).where(eq(schema.memberships.id, jm.id));
     await db.insert(schema.bodyDays).values({ id: `lg-day-${Date.now()}`, workspaceId: jm.workspaceId, userId: jordan.id, date: "2026-10-01" } as typeof schema.bodyDays.$inferInsert).catch(() => undefined);
-    const pointsBefore = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, jordan.id) })).length;
     const before = await bodyCount();
     // Delete my account lists the member's stored objects through the blob store; the dev server points at scripts/mock-blob.ts
     // on :4050 (dev-server.sh), and without it the store's client retries for a minute. Up here if it is not already.
@@ -265,6 +296,11 @@ async function main() {
     watch(p3);
     await loginAs(p3, jordan.email, "demo1234");
     await p3.waitForURL(/\/today/);
+    // Counted after Today has loaded: the day's first open pays its streak bonus (the daily welcome, H-312), and that row is
+    // the sign-in's, not the deletion's.
+    await p3.locator("h1").first().waitFor({ timeout: 20000 });
+    await p3.waitForLoadState("networkidle");
+    const pointsBefore = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, jordan.id) })).length;
     await p3.goto(`${base}/settings/delete-humanos`);
     must(/\d+ records across \d+ tables/.test(await p3.locator('[data-testid="delete-humanos-count"]').innerText()), "the HumanOS deletion counts what would go");
     await p3.fill('[data-testid="delete-humanos-email"]', "someone.else@example.com");

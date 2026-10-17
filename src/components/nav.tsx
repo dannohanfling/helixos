@@ -1,10 +1,10 @@
 "use client";
 
 import { PinToViewport } from "@/components/pin-to-viewport";
-import { NAV_GROUPS, navVisible, withHorizon, withPlatformLinks, type NavItem } from "./nav-groups";
+import { visibleGroups, type NavItem } from "./nav-groups";
 import type { PlatformLinks } from "@/lib/platforms";
 import { ComingSoonItem } from "./coming-soon-item";
-import { CollapseAllButton, useNavState } from "./nav-state";
+import { useNavState } from "./nav-state";
 import { isOpen } from "@/lib/engine/nav-state";
 
 import Link from "next/link";
@@ -16,7 +16,7 @@ function isActive(pathname: string, href: string) {
 
 /**
  * The desktop menu. Each group folds under its heading (H-333: remembered on the membership through the nav store, shared with
- * the phone's More page); "Collapse all" at the top shuts them all; the group holding the current page always shows open. As a
+ * the phone's More page); "Collapse all" in the sidebar's foot shuts them all (H-499); the group holding the current page always shows open. As a
  * rail (the sidebar folded), every item is its icon alone with its name as the tooltip and the accessible name, and group
  * headings become thin dividers.
  */
@@ -24,24 +24,17 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
   const pathname = usePathname();
   const nav = useNavState();
   const rail = nav.state.rail;
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withHorizon(withPlatformLinks(g.items, platformLinks, ownCommunity), shippedKeys).filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn, loyaltyOn, oohOn })) }))
-    // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
-    .filter((g) => g.items.length);
+  // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
+  const groups = visibleGroups({ role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn, loyaltyOn, oohOn }, platformLinks, ownCommunity, shippedKeys);
   // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
   const activeHref = groups
     .flatMap((g) => g.items)
     .filter((n) => !n.external && !n.comingSoon && isActive(pathname, n.href))
     .reduce<string | null>((best, n) => (!best || n.href.length > best.length ? n.href : best), null);
   const currentGroup = groups.find((g) => g.items.some((n) => n.href === activeHref))?.label ?? null;
-  const labels = groups.map((g) => g.label);
   const itemClass = (active: boolean) => `flex items-center rounded-lg text-sm font-medium transition ${rail ? "justify-center px-0 py-2" : "gap-3 px-3 py-1.5"} ${active ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`;
   return (
     <nav className="space-y-2" data-testid="side-nav" data-rail={rail ? "true" : "false"}>
-      {rail ? null : (
-        <div className="flex justify-end">
-          <CollapseAllButton labels={labels} />
-        </div>
-      )}
       {groups.map((g) => {
         const activeItem = g.items.find((n) => n.href === activeHref);
         const open = rail || isOpen(nav.state, g.label, currentGroup);
