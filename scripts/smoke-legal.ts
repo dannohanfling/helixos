@@ -216,7 +216,16 @@ async function main() {
     await untilSaved(false);
     await p1.goto(`${base}/settings`);
     must((await sidebar.getAttribute("data-rail")) === "false", "Settings opens with the full sidebar, as saved");
-    await p1.locator('input[name="name"], input[type="text"]').first().focus();
+    // The page hydrates after its first paint, and a field can remount then: focus it once the page is settled, and check the
+    // focus held before typing, so the "[" lands in the field and nowhere else.
+    await p1.waitForLoadState("networkidle");
+    const field = p1.locator('input[name="name"], input[type="text"]').first();
+    for (let i = 0; i < 10; i++) {
+      await field.focus();
+      if (await p1.evaluate(() => document.activeElement instanceof HTMLInputElement)) break;
+      await p1.waitForTimeout(200);
+    }
+    must(await p1.evaluate(() => document.activeElement instanceof HTMLInputElement), "a text field on Settings holds the focus");
     await p1.keyboard.press("[");
     must((await sidebar.getAttribute("data-rail")) === "false", "[ typed into a field changes nothing");
     await p1.locator("body").click({ position: { x: 5, y: 5 } });
@@ -233,9 +242,13 @@ async function main() {
     // ── The phone's More page at 390: every group a 44px button that folds, Collapse all, nothing wider than the screen. ──
     await p1.setViewportSize({ width: 390, height: 844 });
     await p1.goto(`${base}/more`);
+    // Measured once the page has settled: a heading measured mid-hydration has no box yet.
+    await p1.waitForLoadState("networkidle");
     const toggles = p1.locator('[data-testid="more-group-toggle"]');
+    await toggles.first().waitFor({ timeout: 20000 });
     const tn = await toggles.count();
     must(tn >= 5, `the phone menu shows its groups (${tn})`);
+    for (let i = 0; i < tn; i++) await toggles.nth(i).waitFor({ state: "visible", timeout: 10000 });
     for (let i = 0; i < tn; i++) must((await toggles.nth(i).boundingBox())!.height >= 44 && (await toggles.nth(i).getAttribute("aria-expanded")) === "true", "each group heading is a 44px button, open");
     await toggles.nth(1).click();
     must((await p1.locator('[data-testid="more-group"]').nth(1).getAttribute("data-open")) === "false" && (await toggles.nth(1).getAttribute("aria-expanded")) === "false", "a tap folds the group on the phone");
@@ -271,7 +284,6 @@ async function main() {
     // A fixture so there is something to delete: HumanOS on, one weigh-in day and one food.
     await db.update(schema.memberships).set({ bodyEnabled: true }).where(eq(schema.memberships.id, jm.id));
     await db.insert(schema.bodyDays).values({ id: `lg-day-${Date.now()}`, workspaceId: jm.workspaceId, userId: jordan.id, date: "2026-10-01" } as typeof schema.bodyDays.$inferInsert).catch(() => undefined);
-    const pointsBefore = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, jordan.id) })).length;
     const before = await bodyCount();
     // Delete my account lists the member's stored objects through the blob store; the dev server points at scripts/mock-blob.ts
     // on :4050 (dev-server.sh), and without it the store's client retries for a minute. Up here if it is not already.
@@ -284,6 +296,11 @@ async function main() {
     watch(p3);
     await loginAs(p3, jordan.email, "demo1234");
     await p3.waitForURL(/\/today/);
+    // Counted after Today has loaded: the day's first open pays its streak bonus (the daily welcome, H-312), and that row is
+    // the sign-in's, not the deletion's.
+    await p3.locator("h1").first().waitFor({ timeout: 20000 });
+    await p3.waitForLoadState("networkidle");
+    const pointsBefore = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, jordan.id) })).length;
     await p3.goto(`${base}/settings/delete-humanos`);
     must(/\d+ records across \d+ tables/.test(await p3.locator('[data-testid="delete-humanos-count"]').innerText()), "the HumanOS deletion counts what would go");
     await p3.fill('[data-testid="delete-humanos-email"]', "someone.else@example.com");
