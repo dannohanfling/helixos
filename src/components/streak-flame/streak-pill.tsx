@@ -15,12 +15,16 @@ import { createPortal } from "react-dom";
 import { Fire } from "./fire";
 import { WELCOME_CLOSED } from "@/components/rank-up";
 import { ARRIVAL_CLOSED } from "@/components/first-arrival";
-import { markStreakSurgeSeenAction } from "@/lib/actions/streak-flame";
 import { flameLabel, nextTierLine, tierName, type FlameState } from "@/lib/engine/streak-flame";
 import { lbSerif } from "@/components/leaderboard/fonts";
 import "./streak-flame.css";
 
 export type PillPlace = "bar" | "side" | "rail";
+
+/** Stores the day's surge as played: a plain request, kept out of the router's action queue (see the route). */
+function markSurgeSeen(day: string): void {
+  void fetch("/api/streak-flame/seen", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ day }), keepalive: true }).catch(() => undefined);
+}
 
 /** How long after the open the surge starts when nothing else is on screen, and when the count ticks within it. */
 const SURGE_DELAY_MS = 600;
@@ -44,14 +48,14 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
     const still = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
     // Only the pill the layout shows plays the surge; the hidden ones just show the count.
     if (!el || el.getClientRects().length === 0 || still) {
-      if (el && el.getClientRects().length > 0) void markStreakSurgeSeenAction(state.day);
+      if (el && el.getClientRects().length > 0) markSurgeSeen(state.day);
       timers.push(setTimeout(() => setTicked(true), 0));
       return () => timers.forEach(clearTimeout);
     }
     const play = () => {
       if (started.current) return;
       started.current = true;
-      void markStreakSurgeSeenAction(state.day);
+      markSurgeSeen(state.day);
       setSurgeAt(performance.now() / 1000);
       timers.push(
         setTimeout(() => {
