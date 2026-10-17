@@ -75,7 +75,8 @@ export const sortRows = <T extends { lifetime: number; name: string }>(rows: T[]
 // ---------------------------------------------------------------------------------------------------------------------------
 // The client's page settings (H-28): copy, the pass link, tiers and rewards, with the 9 Oct design's samples as the defaults.
 
-export type Tier = { name: string; min: number };
+/** A tier: its name, the lifetime points that reach it, and what it brings (H-399: given by hand by the client's staff). */
+export type Tier = { name: string; min: number; reward?: string };
 export type Reward = { name: string; cost: number | null; desc: string };
 export type PageConfig = {
   eyebrow: string;
@@ -99,9 +100,12 @@ export type PageConfig = {
 export const MAX_TIERS = 9;
 export const MAX_REWARDS = 20;
 
-/** The 9 Oct design's own placeholders, marked Sample until the client's team confirms theirs. */
-export const SAMPLE_TIERS: Tier[] = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n, i) => ({ name: `Gate ${n}`, min: [0, 100, 250, 500, 800, 1200, 1700, 2300, 3000][i] }));
-export const SAMPLE_REWARDS: Reward[] = [
+/**
+ * The 9 Oct design's own placeholders, the defaults until 17 Oct. Kept only so a saved copy of them is recognised and read as
+ * the real defaults below (a board saved before the client's rules arrived updates on its own, with nobody saving it again).
+ */
+export const LEGACY_SAMPLE_TIERS: Tier[] = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n, i) => ({ name: `Gate ${n}`, min: [0, 100, 250, 500, 800, 1200, 1700, 2300, 3000][i] }));
+export const LEGACY_SAMPLE_REWARDS: Reward[] = [
   { name: "Identity Shift Audio", cost: 100, desc: "A guided audio to anchor who you're becoming" },
   { name: "Compounding Kindness Journal", cost: 250, desc: "The printed journal, mailed to you" },
   { name: "Movement Spotlight", cost: 400, desc: "Featured in the weekly community digest" },
@@ -112,6 +116,24 @@ export const SAMPLE_REWARDS: Reward[] = [
   { name: "Legacy Designation", cost: 3000, desc: "A numbered certificate, a place in the archive and the annual Legacy Gathering" },
 ];
 
+/** The Compounding Kindness program's five tiers on lifetime KK (their Kindness Koins doc v2, H-399), with what each brings. */
+export const KK_TIERS: Tier[] = [
+  { name: "Kindness Starter", min: 500, reward: "A digital badge" },
+  { name: "Kindness Investor", min: 1500, reward: "A member spotlight" },
+  { name: "Kindness Insider", min: 3000, reward: "Join one staff meeting" },
+  { name: "Kindness Multiplier", min: 7500, reward: "Gift a benefit: New Member Ambassador" },
+  { name: "Kindness Compounder", min: 20000, reward: "Ambassador Trainer" },
+];
+/** Their four redemptions, spent from available KK (H-399). The costs are theirs; the one-line descriptions are ours to change. */
+export const KK_REWARDS: Reward[] = [
+  { name: "Mindpower Success Programming Vault", cost: 500, desc: "The Mindpower Success Programming audio vault" },
+  { name: "1-on-1 with the community manager", cost: 750, desc: "A Facebook audit, content and community session" },
+  { name: "1-on-1 with the systems lead", cost: 750, desc: "GHL, Claude and systems, one to one" },
+  { name: "1-on-1 with the founder", cost: 1500, desc: "A private session with the founder" },
+];
+/** What a member below the first tier reads instead of a tier name. */
+export const BELOW_FIRST_TIER = "On the way";
+
 export const DEFAULT_PAGE: PageConfig = {
   eyebrow: "THE COMPOUNDING KINDNESS PASS",
   headline: "Kindness Koin Leaderboard",
@@ -121,10 +143,10 @@ export const DEFAULT_PAGE: PageConfig = {
   footer: "© 2026 Christian Raphael Hypnotherapy · Albuquerque, New Mexico",
   passUrl: "",
   unit: "KK",
-  tiers: SAMPLE_TIERS,
-  rewards: SAMPLE_REWARDS,
-  tiersSample: true,
-  rewardsSample: true,
+  tiers: KK_TIERS,
+  rewards: KK_REWARDS,
+  tiersSample: false,
+  rewardsSample: false,
   showZero: true,
 };
 
@@ -138,7 +160,10 @@ export function readPassUrl(v: unknown): string {
   return s;
 }
 
-/** Tiers from "name, min" lines (also "name|min" or a tab): named, sorted by threshold, once per threshold, at most nine. */
+/**
+ * Tiers from "name, min" lines (also "name|min" or a tab), with what the tier brings after a third separator if given:
+ * named, sorted by threshold, once per threshold, at most nine.
+ */
 export function readTiers(text: string): Tier[] {
   const out: Tier[] = [];
   for (const raw of text.split(/\r?\n/)) {
@@ -148,7 +173,8 @@ export function readTiers(text: string): Tier[] {
     const min = Math.max(0, Math.floor(num(parts[1])));
     if (!name || !/^\d[\d,]*$/.test(parts[1])) continue;
     if (out.some((t) => t.min === min)) continue;
-    out.push({ name, min });
+    const reward = line(parts.slice(2).filter(Boolean).join(", "), 80);
+    out.push(reward ? { name, min, reward } : { name, min });
   }
   return out.sort((a, b) => a.min - b.min).slice(0, MAX_TIERS);
 }
@@ -166,8 +192,14 @@ export function readRewards(text: string): Reward[] {
   return out.sort((a, b) => (a.cost ?? Number.MAX_SAFE_INTEGER) - (b.cost ?? Number.MAX_SAFE_INTEGER)).slice(0, MAX_REWARDS);
 }
 
-export const tiersText = (tiers: readonly Tier[]): string => tiers.map((t) => `${t.name}, ${t.min}`).join("\n");
+export const tiersText = (tiers: readonly Tier[]): string => tiers.map((t) => `${t.name}, ${t.min}${t.reward ? `, ${t.reward}` : ""}`).join("\n");
 export const rewardsText = (rewards: readonly Reward[]): string => rewards.map((r) => `${r.name} | ${r.cost ?? ""} | ${r.desc}`).join("\n");
+
+/** Two tier or reward lists are the same when every entry's name and number match, in order (descriptions aside). */
+function sameList(a: readonly (Tier | Reward)[], b: readonly (Tier | Reward)[]): boolean {
+  const key = (x: Tier | Reward) => `${x.name}|${"min" in x ? x.min : (x as Reward).cost}`;
+  return a.length === b.length && a.every((x, i) => key(x) === key(b[i]));
+}
 
 /** The saved settings, whole: anything missing or malformed takes the design's default. */
 export function readPageConfig(json: string | null | undefined): PageConfig {
@@ -178,8 +210,13 @@ export function readPageConfig(json: string | null | undefined): PageConfig {
   } catch {
     raw = {};
   }
-  const tiers = Array.isArray(raw.tiers) ? readTiers(raw.tiers.map((t) => (t && typeof t === "object" ? `${(t as Tier).name}|${(t as Tier).min}` : "")).join("\n")) : DEFAULT_PAGE.tiers;
-  const rewards = Array.isArray(raw.rewards) ? readRewards(raw.rewards.map((r) => (r && typeof r === "object" ? `${(r as Reward).name}|${(r as Reward).cost ?? ""}|${(r as Reward).desc ?? ""}` : "")).join("\n")) : DEFAULT_PAGE.rewards;
+  const savedTiers = Array.isArray(raw.tiers) ? readTiers(raw.tiers.map((t) => (t && typeof t === "object" ? `${(t as Tier).name}|${(t as Tier).min}|${(t as Tier).reward ?? ""}` : "")).join("\n")) : null;
+  const savedRewards = Array.isArray(raw.rewards) ? readRewards(raw.rewards.map((r) => (r && typeof r === "object" ? `${(r as Reward).name}|${(r as Reward).cost ?? ""}|${(r as Reward).desc ?? ""}` : "")).join("\n")) : null;
+  // A copy of the old placeholders, saved before the client's rules arrived, reads as the real defaults (H-404).
+  const legacyTiers = savedTiers !== null && sameList(savedTiers, LEGACY_SAMPLE_TIERS);
+  const legacyRewards = savedRewards !== null && sameList(savedRewards, LEGACY_SAMPLE_REWARDS);
+  const tiers = savedTiers && !legacyTiers ? savedTiers : DEFAULT_PAGE.tiers;
+  const rewards = savedRewards && !legacyRewards ? savedRewards : DEFAULT_PAGE.rewards;
   return {
     eyebrow: "eyebrow" in raw ? line(raw.eyebrow, 80) : DEFAULT_PAGE.eyebrow,
     headline: ("headline" in raw && line(raw.headline, 80)) || DEFAULT_PAGE.headline,
@@ -191,8 +228,8 @@ export function readPageConfig(json: string | null | undefined): PageConfig {
     unit: ("unit" in raw && line(raw.unit, 12)) || DEFAULT_PAGE.unit,
     tiers,
     rewards,
-    tiersSample: bool(raw.tiersSample, DEFAULT_PAGE.tiersSample),
-    rewardsSample: bool(raw.rewardsSample, DEFAULT_PAGE.rewardsSample),
+    tiersSample: legacyTiers ? DEFAULT_PAGE.tiersSample : bool(raw.tiersSample, DEFAULT_PAGE.tiersSample),
+    rewardsSample: legacyRewards ? DEFAULT_PAGE.rewardsSample : bool(raw.rewardsSample, DEFAULT_PAGE.rewardsSample),
     showZero: bool(raw.showZero, DEFAULT_PAGE.showZero),
   };
 }

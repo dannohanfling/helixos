@@ -189,7 +189,8 @@ export function suggestion(h: PassHolder, cl: ClRecord | null, last: LastChange 
   return { suggested: h.balance, reason: `${base}; CL's copy ("Get Pass Data") is out of date` };
 }
 
-export function compare(holders: readonly PassHolder[], cl: readonly ClRecord[], hidden: ReadonlySet<string>, history: ReadonlyMap<string, LastChange | null>, meta: { at: string; templates: string[]; columns: ClColumns; clRows: number; note: string }): Snapshot {
+/** Each pass holder with its Community Loyalty record, by customer id, then serial, then email; and the CL records left over. */
+export function pairUp(holders: readonly PassHolder[], cl: readonly ClRecord[]): { pairs: { h: PassHolder; rec: ClRecord | null; matchedBy: MatchedBy | null }[]; leftover: ClRecord[] } {
   const byCustomer = new Map<string, ClRecord>();
   const bySerial = new Map<string, ClRecord>();
   const byEmail = new Map<string, ClRecord>();
@@ -199,7 +200,7 @@ export function compare(holders: readonly PassHolder[], cl: readonly ClRecord[],
     if (r.email && !byEmail.has(r.email)) byEmail.set(r.email, r);
   }
   const used = new Set<ClRecord>();
-  const rows: CheckRow[] = [];
+  const pairs: { h: PassHolder; rec: ClRecord | null; matchedBy: MatchedBy | null }[] = [];
   for (const h of holders) {
     let matchedBy: MatchedBy | null = null;
     let rec: ClRecord | null = null;
@@ -214,6 +215,15 @@ export function compare(holders: readonly PassHolder[], cl: readonly ClRecord[],
       matchedBy = "email";
     }
     if (rec) used.add(rec);
+    pairs.push({ h, rec, matchedBy });
+  }
+  return { pairs, leftover: cl.filter((r) => !used.has(r)) };
+}
+
+export function compare(holders: readonly PassHolder[], cl: readonly ClRecord[], hidden: ReadonlySet<string>, history: ReadonlyMap<string, LastChange | null>, meta: { at: string; templates: string[]; columns: ClColumns; clRows: number; note: string }): Snapshot {
+  const { pairs, leftover } = pairUp(holders, cl);
+  const rows: CheckRow[] = [];
+  for (const { h, rec, matchedBy } of pairs) {
     const last = history.get(h.id) ?? null;
     const s = suggestion(h, rec, last);
     rows.push({
@@ -232,7 +242,7 @@ export function compare(holders: readonly PassHolder[], cl: readonly ClRecord[],
     });
   }
   rows.sort((a, b) => Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0) || a.name.localeCompare(b.name));
-  const clOnly: Unmatched[] = cl.filter((r) => !used.has(r)).map((r) => ({ name: r.name, cl: r.clBalance, kkBank: r.kkBank, hasCustomerId: Boolean(r.customerId), hasSerial: Boolean(r.serial) }));
+  const clOnly: Unmatched[] = leftover.map((r) => ({ name: r.name, cl: r.clBalance, kkBank: r.kkBank, hasCustomerId: Boolean(r.customerId), hasSerial: Boolean(r.serial) }));
   const members = rows.filter((r) => !r.hidden);
   const counts: Counts = {
     passes: members.length,
@@ -259,3 +269,31 @@ export function snapshotIsClean(s: Snapshot): boolean {
 
 /** Field names only (never a value), for the first live call's log line and the coach's note. */
 export const fieldNamesOf = (o: unknown): string[] => (o && typeof o === "object" && !Array.isArray(o) ? Object.keys(o as object).sort() : []);
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The id report (H-402 step 2): the same comparison with the ids kept, for Danno's review before any correction is written.
+
+/** The report's columns. Ids and numbers and fixed words only: no name, email or pass serial is ever a column. */
+export const ID_REPORT_COLUMNS = ["eloyalty_customer_id", "cl_loyalty_customer_id", "matched_by", "team_test", "lifetime", "available", "cl_balance", "kk_bank", "difference", "last_change_at", "last_change_amount", "last_change_by", "suggested", "reason"] as const;
+
+const cell = (v: string | number | null | undefined): string => {
+  const t = v === null || v === undefined ? "" : String(v);
+  return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+
+/**
+ * The comparison as CSV, one row per pass holder (most different first) and then one per Community Loyalty record with no
+ * eLoyalty match. Built from ids and numbers alone, so it can go to the inbox for review; it is never stored.
+ */
+export function idReportCsv(holders: readonly PassHolder[], cl: readonly ClRecord[], hidden: ReadonlySet<string>, history: ReadonlyMap<string, LastChange | null>): string {
+  const { pairs, leftover } = pairUp(holders, cl);
+  const rows = pairs.map(({ h, rec, matchedBy }) => {
+    const last = history.get(h.id) ?? null;
+    const s = suggestion(h, rec, last);
+    const diff = rec && rec.clBalance !== null ? h.balance - rec.clBalance : null;
+    return { diff, cells: [h.id, rec?.customerId ?? "", matchedBy ?? "no CL record", hidden.has(h.id) ? "yes" : "no", h.earned, h.balance, rec?.clBalance ?? null, rec?.kkBank ?? null, diff, last?.at ?? "", last?.amount ?? null, last?.by ?? "unknown", s.suggested, s.reason] };
+  });
+  rows.sort((a, b) => Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0));
+  const extra = leftover.map((r) => ["", r.customerId ?? "", "no eLoyalty match", "no", null, null, r.clBalance, r.kkBank, null, "", null, "", null, r.customerId ? "CL holds a customer id eLoyalty does not have" : "CL record with a pass serial only"]);
+  return [ID_REPORT_COLUMNS.join(","), ...rows.map((r) => r.cells.map(cell).join(",")), ...extra.map((c) => c.map(cell).join(","))].join("\n") + "\n";
+}

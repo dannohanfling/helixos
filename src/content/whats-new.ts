@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 220,
+    date: "2026-10-17",
+    title: "Loyalty leaderboards: the Kindness Koins tiers and rewards, with what each tier brings",
+    lines: [
+      "The leaderboard page now uses the program's own five tiers on lifetime points (Kindness Starter at 500, Investor at 1,500, Insider at 3,000, Multiplier at 7,500 and Compounder at 20,000) and its four rewards, in place of the sample gates and costs. A board that still had the samples saved switches over by itself.",
+      "Each tier is listed beside the rewards with what it brings (on /loyalty, after its points: \"Kindness Starter, 500, A digital badge\"). A member below the first tier reads \"On the way\", with the points still to go; at the top it reads \"Top tier reached\".",
+      "For the coach: the points check on a client's row can download an id report (CSV), the same comparison with customer ids in place of names, for review before any balance is corrected. It is never kept in HelixOS.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 219,
     date: "2026-10-16",
     title: "A ceremony when you rise a rank, and the arena lights up when you close the day",

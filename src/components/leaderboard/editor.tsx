@@ -108,7 +108,7 @@ export function LeaderboardEditor({ feed, base, canHide, exportRows, aliases = [
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="label">Tiers: name, lifetime points to reach it (one per line, up to {MAX_TIERS})</span>
+              <span className="label">Tiers: name, lifetime points to reach it, and what it brings if you like (one per line, up to {MAX_TIERS})</span>
               <textarea className="field min-h-40 font-mono text-xs" name="tiers" defaultValue={tiersText(c.tiers)} data-testid="lb-tiers" />
               <span className="mt-1 flex items-center gap-2 text-xs">
                 <input type="checkbox" name="tiersSample" defaultChecked={c.tiersSample} data-testid="lb-tiers-sample" /> Still sample tiers (shown as such until yours are confirmed)

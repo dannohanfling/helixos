@@ -107,7 +107,7 @@ describe("serving a leaderboard never reaches eLoyalty", () => {
   it("without a key the pasted export is served; with nothing at all the feed is 503 and the page shows the samples", async () => {
     const { servedFeed, pageFor } = await import("@/lib/leaderboard");
     state.feed = fresh({ exportJson: JSON.stringify([{ name: "Aisha P.", lifetime: 1105, available: 405 }]), exportAsOf: "9 Oct 2026" });
-    expect(await servedFeed("christian-abc123")).toEqual({ updated_at: "9 Oct 2026", members: [{ name: "Aisha P.", lifetime: 1105, available: 405, tier: "Gate 5" }] });
+    expect(await servedFeed("christian-abc123")).toEqual({ updated_at: "9 Oct 2026", members: [{ name: "Aisha P.", lifetime: 1105, available: 405, tier: "Kindness Starter" }] });
     expect((await pageFor("christian-abc123"))?.source).toEqual({ kind: "export", at: "9 Oct 2026" });
     state.feed = fresh();
     expect(await servedFeed("christian-abc123")).toBeNull();

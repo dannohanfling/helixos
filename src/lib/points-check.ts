@@ -9,8 +9,22 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open, seal } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
-import { type ClRecord, type LastChange, type Snapshot, compare, fieldNamesOf, latestChange, passHolders, snapshotIsClean } from "@/lib/engine/points-check";
+import { type ClRecord, type LastChange, type Snapshot, compare, fieldNamesOf, idReportCsv, latestChange, parseClExport, passHolders, snapshotIsClean } from "@/lib/engine/points-check";
 import { customers, getJson, statusWords, templatesOf } from "@/lib/leaderboard";
+
+/** The largest Community Loyalty export read. */
+export const MAX_EXPORT_BYTES = 5 * 1024 * 1024;
+
+/** The uploaded export, checked and parsed in memory, or the reason in plain words. The file itself is never kept. */
+export async function readExportUpload(file: FormDataEntryValue | null): Promise<{ ok: true; parsed: ReturnType<typeof parseClExport> } | { ok: false; error: string }> {
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose the export file first." };
+  if (file.size > MAX_EXPORT_BYTES) return { ok: false, error: "That file is over 5MB." };
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".csv") && !name.endsWith(".txt") && !name.endsWith(".tsv")) return { ok: false, error: "Use the CSV export." };
+  const parsed = parseClExport(Buffer.from(await file.arrayBuffer()).toString("utf8"));
+  if (!parsed.columns.customerId && !parsed.columns.serial) return { ok: false, error: "That export has no Loyalty Customer ID or pass serial column; pin them in Community Loyalty and export again." };
+  return { ok: true, parsed };
+}
 
 /** The events path the Mini-App's GetPassActivity uses (architecture doc, read off the config): unverified until the first live call. */
 export const EVENTS_PATH = (customerId: string) => `/api/public/admin/customers/${encodeURIComponent(customerId)}/events?limit=50`;
@@ -65,6 +79,21 @@ export async function runPointsCheck(feed: schema.LeaderboardFeed, cl: readonly 
   if (!snapshotIsClean(snapshot)) return { ok: false, error: "The result carried something that looked like an id, an email or a long number, so it was not kept." };
   await db.update(schema.leaderboardFeeds).set({ pointsCheckSealed: seal(JSON.stringify(snapshot)), pointsCheckAt: snapshot.at, updatedAt: nowIso() }).where(eq(schema.leaderboardFeeds.id, feed.id));
   return { ok: true, snapshot };
+}
+
+/**
+ * The id report (H-402 step 2): the same reads as the check, every one a GET, and the comparison as CSV with the customer ids
+ * kept, handed straight back for download. Nothing is stored, so the ids never sit in HelixOS.
+ */
+export async function pointsCheckReport(feed: schema.LeaderboardFeed, cl: readonly ClRecord[]): Promise<{ ok: true; csv: string; note: string } | { ok: false; error: string }> {
+  const key = open(feed.keyEncrypted);
+  if (!key) return { ok: false, error: "No eLoyalty key is saved on this row." };
+  if (!feed.lastCheckOk) return { ok: false, error: "Connect and check has to pass first." };
+  const got = await customers(feed.host, key, feed);
+  if (!got.ok) return { ok: false, error: `${statusWords(got.status)} reading the passes.` };
+  const holders = passHolders(got.list);
+  const { history, note } = await readHistory(feed.host, key, holders.map((h) => h.id));
+  return { ok: true, csv: idReportCsv(holders, cl, new Set(feed.hidden), history), note };
 }
 
 /** The last snapshot, opened, or null. */
