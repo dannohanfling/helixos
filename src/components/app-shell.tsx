@@ -21,8 +21,10 @@ import { ChatWidget } from "@/components/chat-widget";
 import { ReportButton } from "@/components/report-button";
 import type { ChatWidgetProps } from "@/lib/chat";
 import { MemberAvatar } from "@/components/member-avatar";
+import { StreakPill } from "@/components/streak-flame/streak-pill";
+import type { FlameState } from "@/lib/engine/streak-flame";
 
-export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
+export function AppShell({ viewer, chat = null, points, flame = null, flameAfterWelcome = false, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; /** The streak flame (H-558): null for a team member, whose streak is the owner's. */ flame?: FlameState | null; /** The surge waits for the daily welcome or the first arrival to close. */ flameAfterWelcome?: boolean; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
   const tier = tierProgress(points);
   const team = Boolean(viewer.team);
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
@@ -51,6 +53,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
         <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
         {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
         <div className="rail-only mt-1 flex flex-col items-center gap-1">
+          {flame ? <StreakPill state={flame} place="rail" afterWelcome={flameAfterWelcome} /> : null}
           <Link href="/settings" className="flex h-11 w-11 items-center justify-center rounded-md text-base hover:bg-surface-2" aria-label="Settings" title="Settings" data-testid="rail-settings">
             ⚙️
           </Link>
@@ -94,9 +97,13 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
             </Link>
           ) : null}
           {/* Settings as its own item (friction walk G1, 7 Oct: the only way in was the name under it). */}
-          <Link href="/settings" className="flex items-center gap-2 text-sm text-ink-2 hover:text-ink" data-testid="nav-settings">
-            <span className="text-base">⚙️</span> Settings
-          </Link>
+          <div className="flex items-center justify-between gap-2">
+            <Link href="/settings" className="flex items-center gap-2 text-sm text-ink-2 hover:text-ink" data-testid="nav-settings">
+              <span className="text-base">⚙️</span> Settings
+            </Link>
+            {/* The streak flame (H-558), on the account rows, where it never squeezes the name. */}
+            {flame ? <StreakPill state={flame} place="side" afterWelcome={flameAfterWelcome} /> : null}
+          </div>
           <div className="flex items-center justify-between">
             <Link href="/settings" className="flex items-center gap-2 text-sm text-ink-2 hover:text-ink">
               {team ? <span className="text-lg">{who.avatarEmoji}</span> : <MemberAvatar membershipId={viewer.membership.id} hasPhoto={Boolean(viewer.membership.headshotDisplayUrl)} emoji={who.avatarEmoji} size={28} version={viewer.membership.headshotUpdatedAt} name={who.name} />}
@@ -128,7 +135,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
           <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-xs min-[400px]:gap-2">
             {team ? null : (
               <>
-                <span className="badge badge-accent shrink-0">🔥 {streak}</span>
+                {flame ? <StreakPill state={flame} place="bar" afterWelcome={flameAfterWelcome} /> : null}
                 <span className="badge shrink-0" title={`${points.toLocaleString()} points`}>
                   {compactPoints(points)} pts
                 </span>
