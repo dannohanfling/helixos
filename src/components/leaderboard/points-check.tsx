@@ -1,5 +1,6 @@
 import type { schema } from "@/db";
 import { FilePicker } from "@/components/file-picker";
+import { IdReportButton } from "@/components/leaderboard/id-report-button";
 import { SubmitButton } from "@/components/submit-button";
 import { clearPointsCheckAction, runPointsCheckAction } from "@/lib/actions/leaderboard";
 import { fmt } from "@/lib/engine/leaderboard";
@@ -24,13 +25,14 @@ export function PointsCheck({ feed, error }: { feed: schema.LeaderboardFeed; err
         <SubmitButton className="btn btn-ghost btn-xs" pendingText="Comparing…" data-testid="points-check-run">
           Compare with eLoyalty
         </SubmitButton>
+        <IdReportButton />
         {snap ? (
           <SubmitButton className="btn btn-ghost btn-xs" pendingText="Clearing…" formAction={clearPointsCheckAction} data-testid="points-check-clear">
             Clear
           </SubmitButton>
         ) : null}
       </form>
-      <p className="mt-1 text-[11px] text-ink-3">The Community Loyalty bot-user export (CSV) is read here once and thrown away; only this table stays, sealed. Reads only: nothing is changed in eLoyalty or Community Loyalty.</p>
+      <p className="mt-1 text-[11px] text-ink-3">The Community Loyalty bot-user export (CSV) is read here once and thrown away; only this table stays, sealed. Reads only: nothing is changed in eLoyalty or Community Loyalty. The id report is the same comparison with customer ids in place of names, downloaded to you and never kept here.</p>
       {error ? (
         <p className="mt-1 text-xs text-danger" data-testid="points-check-error">
           {error.slice(0, 300)}

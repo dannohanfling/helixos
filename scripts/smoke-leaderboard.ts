@@ -9,6 +9,7 @@
  * the page shows the design's samples. HelixOS never writes to eLoyalty. Runs against scripts/mock-eloyalty.ts.
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { chromium, type Page } from "@playwright/test";
 import { CL_EXPORT_CSV, CUSTOMERS, ELOYALTY_KEY, TEMPLATES } from "./fixtures/eloyalty";
 
@@ -105,7 +106,7 @@ async function main() {
     must(res.status === 200 && res.headers.get("access-control-allow-origin") === "*", `the feed answers anyone: ${res.status}`);
     let feed = JSON.parse(body) as { updated_at: string; members: { name: string; tier: string; lifetime: number }[] };
     must(JSON.stringify(feed.members) === JSON.stringify(expected([])) && !Number.isNaN(Date.parse(feed.updated_at)), `the members as mapped: ${body}`);
-    must(feed.members.some((x) => x.lifetime === 0) && feed.members.every((x) => /^Gate \d$/.test(x.tier)), "0-point members are on by default and every tier is a configured gate, not eLoyalty's");
+    must(feed.members.some((x) => x.lifetime === 0) && feed.members.every((x) => x.tier === "" || /^Kindness (Starter|Investor|Insider|Multiplier|Compounder)$/.test(x.tier)) && feed.members.some((x) => x.tier === "Kindness Starter"), "0-point members are on by default and every tier is one of the program's five (H-399), none of eLoyalty's");
     must(clean(body), "no email, phone, id, serial, last name or key in the feed");
     must((await fetch(url, { method: "OPTIONS" })).headers.get("access-control-allow-origin") === "*", "the preflight answers too");
     must((await fetch(`${base}/api/public/leaderboard/no-such-feed-1`)).status === 503, "an unknown address is 503");
@@ -117,7 +118,7 @@ async function main() {
     must(res.status === 200 && body.includes('id="ckl-root"') && body.includes('data-source="live"'), `the page renders the live board: ${res.status}`);
     must(!res.headers.get("x-frame-options") && !/frame-ancestors/.test(res.headers.get("content-security-policy") ?? ""), "the page may be framed");
     for (const mem of expected([])) must(body.includes(`>${mem.name}<`), `the page carries ${mem.name}`);
-    must(body.includes("SAMPLE COSTS · TO CONFIRM") && body.includes("Gate 1") && !body.includes("SAMPLE DATA"), "sample rewards and tiers are marked, the members are real");
+    must(body.includes('data-testid="lb-tiers-list"') && body.includes("Kindness Compounder") && body.includes("A digital badge") && body.includes("Mindpower Success Programming Vault") && body.includes("On the way") && !body.includes("SAMPLE COSTS") && !body.includes("SAMPLE TIERS") && !body.includes("Gate 1") && !body.includes("SAMPLE DATA"), "the program's tiers with what each brings and its rewards, unmarked; a member under 500 reads On the way; the members are real");
     must(cleanPage(body), "no email, phone, id, serial, last name or key on the page");
     must((await fetch(`${base}/lb/no-such-feed-1`)).status === 404, "an unknown page is 404");
     await page.goto(pageUrl);
@@ -236,10 +237,21 @@ async function main() {
     must(table.includes("Maria S. (test)"), "a hidden member is shown as a test");
     const checkHtml = await page.content();
     must(!checkHtml.includes("example.com") && !checkHtml.includes("cus_0") && !checkHtml.includes("SER-") && !checkHtml.includes("Santos") && !checkHtml.includes("f159927"), "no email, id, serial, last name or bot user ns on the coach page");
+    // The id report (H-402): the same comparison downloaded with customer ids in place of names, never kept, nothing written.
+    await row().locator('[data-testid="points-check"] summary').evaluate((el) => ((el.parentElement as HTMLDetailsElement).open = true));
+    await row().locator('[data-testid="points-check-file"]').setInputFiles({ name: "wDn-walk-export.csv", mimeType: "text/csv", buffer: Buffer.from(CL_EXPORT_CSV) });
+    const [download] = await Promise.all([page.waitForEvent("download", { timeout: 30000 }), row().locator('[data-testid="points-check-report"]').click()]);
+    must(/^points-check-ids-\d{4}-\d{2}-\d{2}\.csv$/.test(download.suggestedFilename()), `the report downloads as a dated CSV: ${download.suggestedFilename()}`);
+    const report = readFileSync((await download.path())!, "utf8");
+    const reportLines = report.trim().split("\n");
+    must(reportLines[0].startsWith("eloyalty_customer_id,cl_loyalty_customer_id,matched_by,team_test,lifetime,available"), `the report's columns: ${reportLines[0]}`);
+    // Seven active passes (Maria counted as a team test) and the one CL record with no pass.
+    must(reportLines.length === 1 + 7 + 1 && report.includes("cus_001,") && /cus_001,[^\n]*,yes,/.test(report) && report.includes("no eLoyalty match"), `the report: one row per pass, the hide list marked, the CL-only record last (${reportLines.length} lines)`);
+    must(!/example\.com|SER-|Santos|Okafor|Maria|Ben O|f159927|\+1555/.test(report), "the report carries ids and numbers only: no name, email, phone, serial or bot user ns");
     const sealedRow = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feedRow.id) }))!;
     must(sealedRow.pointsCheckSealed?.startsWith("enc:v1:") && !sealedRow.pointsCheckSealed.includes("Ben"), "the snapshot is sealed at rest");
     must((await mockCalls()).writes.length === writesBefore, "the check wrote nothing to eLoyalty");
-    console.log("✓ the points check: the export read once, members as First L. with both balances and the reason, the hide list apart, sealed at rest, nothing written");
+    console.log("✓ the points check: the export read once, members as First L. with both balances and the reason, the hide list apart, sealed at rest; the id report downloaded with ids and numbers only; nothing written");
 
     // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
     await page.goto(`${base}/coach?connections=open`);

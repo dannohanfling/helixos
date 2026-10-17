@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type ClColumns, compare, countsLine, latestChange, parseClExport, passHolders, snapshotIsClean, suggestion } from "../points-check";
+import { type ClColumns, ID_REPORT_COLUMNS, compare, countsLine, idReportCsv, latestChange, parseClExport, passHolders, snapshotIsClean, suggestion } from "../points-check";
 
 /** The points check (H-102, H-112), on invented people: eLoyalty's passes against a Community Loyalty export, in memory, names as First L. only. */
 const customers = [
@@ -89,6 +89,29 @@ describe("the comparison", () => {
     expect(snapshotIsClean(snap)).toBe(true);
     expect(snapshotIsClean({ ...snap, rows: [{ ...snap.rows[0], name: "wp-1757900000001-aaa" }] })).toBe(false);
     expect(snapshotIsClean({ ...snap, clOnly: [{ name: "x@y", cl: null, kkBank: null, hasCustomerId: false, hasSerial: true }] })).toBe(false);
+  });
+
+  it("the id report: customer ids and numbers, most different first, then CL records with no pass; never a name, email or serial", () => {
+    const report = idReportCsv(holders, records, hidden, history);
+    const lines = report.trim().split("\n");
+    expect(lines[0]).toBe(ID_REPORT_COLUMNS.join(","));
+    // Six pass holders, then the two CL pass-linked records with no eLoyalty match (the guest and Peter).
+    expect(lines).toHaveLength(1 + 6 + 2);
+    expect(lines[1].startsWith("11111111-aaaa-4bbb-8ccc-000000000001,11111111-aaaa-4bbb-8ccc-000000000001,customer id,no,900,700,650,500,50,2026-10-05T09:00:00.000Z,50,team (portal),700,")).toBe(true);
+    expect(report).toContain("11111111-aaaa-4bbb-8ccc-000000000005,,no CL record,yes,");
+    expect(lines.slice(-2).every((l) => l.startsWith(",") && l.includes("no eLoyalty match"))).toBe(true);
+    // A reason with a comma or semicolon is quoted, so every line has the same number of cells.
+    const cells = (l: string) => {
+      let n = 1;
+      let quoted = false;
+      for (const ch of l) {
+        if (ch === '"') quoted = !quoted;
+        else if (ch === "," && !quoted) n++;
+      }
+      return n;
+    };
+    expect(lines.map(cells)).toEqual(lines.map(() => ID_REPORT_COLUMNS.length));
+    for (const bad of ["@", "wp-", "Maria", "Santos", "Okafor", "Ben O", "Guest", "Peter", "f159927"]) expect(report).not.toContain(bad);
   });
 
   it("the suggestion is always eLoyalty's balance, with the reason that fits", () => {

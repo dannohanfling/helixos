@@ -1,5 +1,5 @@
 import type { PageMember, PageModel } from "@/lib/engine/leaderboard";
-import { fmt } from "@/lib/engine/leaderboard";
+import { BELOW_FIRST_TIER, fmt } from "@/lib/engine/leaderboard";
 
 /**
  * The Kindness Koin leaderboard (H-28), rendered on the server from the page model: the 9 Oct design's markup, class for
@@ -10,7 +10,7 @@ import { fmt } from "@/lib/engine/leaderboard";
 const SHOW = 25;
 
 function nextLine(m: PageMember, u: string) {
-  if (!m.next) return <div className="l-next">Top gate reached</div>;
+  if (!m.next) return <div className="l-next">Top tier reached</div>;
   return (
     <>
       <div className="l-bar">
@@ -74,6 +74,20 @@ export function Board({ model, unit }: { model: PageModel; unit?: string }) {
                 </li>
               ))}
             </ol>
+            <div className="l-rw-head l-tiers-head">Tiers on lifetime {u}</div>
+            <div id="ckl-tiers-sample">{c.tiersSample ? <span className="l-rw-tag">SAMPLE TIERS · TO CONFIRM</span> : null}</div>
+            <ol className="l-rw-list" id="ckl-tiers-list" data-testid="lb-tiers-list">
+              {c.tiers.map((t, i) => (
+                <li key={i}>
+                  <span className="l-rw-name">{t.name}</span>
+                  <span className="l-rw-cost">
+                    {fmt(t.min)}
+                    <small>{u}</small>
+                  </span>
+                  {t.reward ? <span className="l-rw-desc">{t.reward}</span> : null}
+                </li>
+              ))}
+            </ol>
             {c.passUrl ? (
               <a className="l-rw-join" href={c.passUrl} rel="noreferrer">
                 Start earning: get your free pass
@@ -109,7 +123,7 @@ export function Board({ model, unit }: { model: PageModel; unit?: string }) {
                       <small>{u}</small>
                     </div>
                     <div className="l-pod-meta">
-                      {m.tier}
+                      {m.tier || BELOW_FIRST_TIER}
                       {model.hasAvailable ? ` · ${fmt(m.available)} available` : ""}
                     </div>
                   </div>
@@ -144,7 +158,7 @@ export function Board({ model, unit }: { model: PageModel; unit?: string }) {
                       <div className="c-rank l-rank">{m.rank}</div>
                       <div className="c-name l-name">{m.name}</div>
                       <div className="c-tier">
-                        <span className="l-tier">{m.tier || "—"}</span>
+                        <span className="l-tier">{m.tier || BELOW_FIRST_TIER}</span>
                         {nextLine(m, u)}
                       </div>
                       <div className="c-life r">
@@ -176,7 +190,7 @@ export function Board({ model, unit }: { model: PageModel; unit?: string }) {
           <br />
           <b>Available {u}</b> is what you can exchange for rewards today.
           <br />
-          <b>Next tier</b> shows how much more lifetime {u} opens the next gate.
+          <b>Next tier</b> shows how much more lifetime {u} reaches the next tier.
         </div>
 
         {c.passUrl ? (

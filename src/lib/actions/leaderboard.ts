@@ -8,8 +8,7 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 import { nowIso } from "@/lib/dates";
 import { pageConfigFromForm, parseExport, readHidden } from "@/lib/engine/leaderboard";
 import { checkFeed, feedForMembership, removeFeedKey, saveExport, saveFeedSettings, savePageConfig, setFeedSlug } from "@/lib/leaderboard";
-import { parseClExport } from "@/lib/engine/points-check";
-import { clearPointsCheck, runPointsCheck } from "@/lib/points-check";
+import { clearPointsCheck, readExportUpload, runPointsCheck } from "@/lib/points-check";
 
 /** One of this coach's clients, by membership, or the coach's own membership (their own program, H-29). */
 async function programOf(coach: { workspace: { id: string }; membership: { id: string } }, membershipId: string) {
@@ -103,7 +102,6 @@ export async function saveLeaderboardSlugAction(formData: FormData): Promise<voi
   redirect("/loyalty?slug=changed#address");
 }
 
-const MAX_EXPORT_BYTES = 5 * 1024 * 1024;
 
 /**
  * The points check (H-102, H-112): the coach uploads the client's Community Loyalty bot-user export once; it is read here,
@@ -116,14 +114,9 @@ export async function runPointsCheckAction(formData: FormData): Promise<void> {
   const feed = await db.query.leaderboardFeeds.findFirst({ where: and(eq(schema.leaderboardFeeds.id, str(formData, "id")), eq(schema.leaderboardFeeds.workspaceId, coach.workspace.id)) });
   if (!feed) return;
   const back = (error?: string) => `/coach?connections=open${error ? `&pointsCheckError=${encodeURIComponent(error)}` : ""}#leaderboard-${feed.id}`;
-  const file = formData.get("export");
-  if (!(file instanceof File) || file.size === 0) redirect(back("Choose the export file first."));
-  if (file.size > MAX_EXPORT_BYTES) redirect(back("That file is over 5MB."));
-  const name = file.name.toLowerCase();
-  if (!name.endsWith(".csv") && !name.endsWith(".txt") && !name.endsWith(".tsv")) redirect(back("Use the CSV export."));
-  const text = Buffer.from(await file.arrayBuffer()).toString("utf8");
-  const parsed = parseClExport(text);
-  if (!parsed.columns.customerId && !parsed.columns.serial) redirect(back("That export has no Loyalty Customer ID or pass serial column; pin them in Community Loyalty and export again."));
+  const upload = await readExportUpload(formData.get("export"));
+  if (!upload.ok) redirect(back(upload.error));
+  const parsed = upload.parsed;
   const r = await runPointsCheck(feed, parsed.records, { columns: parsed.columns, clRows: parsed.rows });
   if (!r.ok) redirect(back(r.error));
   refresh();

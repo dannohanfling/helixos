@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PAGE, SAMPLE_REWARDS, SAMPLE_ROWS, SAMPLE_TIERS, buildFeed, displayName, feedIsClean, feedSlug, fieldNames, mergeCustomers, pageConfigFromForm, pageMembersText, pageModel, parseExport, readHidden, readPageConfig, readPassUrl, readRewards, readTiers, textIsClean, tierFor } from "../leaderboard";
+import { DEFAULT_PAGE, KK_REWARDS, KK_TIERS, LEGACY_SAMPLE_REWARDS, LEGACY_SAMPLE_TIERS, SAMPLE_ROWS, tiersText, buildFeed, displayName, feedIsClean, feedSlug, fieldNames, mergeCustomers, pageConfigFromForm, pageMembersText, pageModel, parseExport, readHidden, readPageConfig, readPassUrl, readRewards, readTiers, textIsClean, tierFor } from "../leaderboard";
 
 /** Christian's Kindness Koin leaderboard (rev 639, H-29): first name and initial, points and tier, and nothing that reaches a person. */
 const customers = [
@@ -95,18 +95,48 @@ describe("tiers from config", () => {
 });
 
 describe("the page's settings", () => {
-  it("default to the 9 Oct design's samples, marked Sample, and read back whatever is saved", () => {
+  it("default to the program's five tiers and four rewards (H-399), not marked Sample, and read back whatever is saved", () => {
     const d = readPageConfig(null);
-    expect(d.tiers).toEqual(SAMPLE_TIERS);
-    expect(d.rewards).toEqual(SAMPLE_REWARDS);
-    expect(d.tiersSample && d.rewardsSample && d.showZero).toBe(true);
-    expect(SAMPLE_TIERS).toHaveLength(9);
-    expect(SAMPLE_TIERS[8]).toEqual({ name: "Gate 9", min: 3000 });
+    expect(d.tiers).toEqual(KK_TIERS);
+    expect(d.rewards).toEqual(KK_REWARDS);
+    expect(d.tiersSample || d.rewardsSample).toBe(false);
+    expect(d.showZero).toBe(true);
+    expect(KK_TIERS.map((t) => [t.name, t.min])).toEqual([
+      ["Kindness Starter", 500],
+      ["Kindness Investor", 1500],
+      ["Kindness Insider", 3000],
+      ["Kindness Multiplier", 7500],
+      ["Kindness Compounder", 20000],
+    ]);
+    expect(KK_REWARDS.map((r) => [r.name, r.cost])).toEqual([
+      ["Mindpower Success Programming Vault", 500],
+      ["1-on-1 with the community manager", 750],
+      ["1-on-1 with the systems lead", 750],
+      ["1-on-1 with the founder", 1500],
+    ]);
     expect(readPageConfig("not json").headline).toBe(d.headline);
     const saved = pageConfigFromForm({ headline: "Koin Board", headlineEm: "Board", eyebrow: "", tiers: "Seed, 0\nTree, 1000", rewards: "Hug | 10 | one", passUrl: "https://loyalty.example.com/pass-1785444472615", tiersSample: "", rewardsSample: "on", showZero: "" });
     const back = readPageConfig(JSON.stringify(saved));
     expect(back).toEqual(saved);
     expect(back).toMatchObject({ headline: "Koin Board", eyebrow: "", tiers: [{ name: "Seed", min: 0 }, { name: "Tree", min: 1000 }], rewards: [{ name: "Hug", cost: 10, desc: "one" }], tiersSample: false, rewardsSample: true, showZero: false, passUrl: "https://loyalty.example.com/pass-1785444472615" });
+  });
+  it("a saved copy of the old sample gates and costs reads as the program's own, and anything else saved is kept", () => {
+    const legacy = readPageConfig(JSON.stringify({ headline: "Kept", tiers: LEGACY_SAMPLE_TIERS, rewards: LEGACY_SAMPLE_REWARDS, tiersSample: true, rewardsSample: true }));
+    expect(legacy).toMatchObject({ headline: "Kept", tiers: KK_TIERS, rewards: KK_REWARDS, tiersSample: false, rewardsSample: false });
+    // One gate renamed is the client's own list: kept as saved, with its Sample mark.
+    const own = readPageConfig(JSON.stringify({ tiers: LEGACY_SAMPLE_TIERS.map((t, i) => (i === 0 ? { ...t, name: "Seed" } : t)), tiersSample: true }));
+    expect(own.tiers[0]).toEqual({ name: "Seed", min: 0 });
+    expect(own.tiersSample).toBe(true);
+  });
+  it("a tier line can say what the tier brings, and it round-trips through the editor's text", () => {
+    const tiers = readTiers("Kindness Starter, 500, A digital badge\nKindness Investor | 1500 | A member spotlight, in the digest\nPlain, 3000");
+    expect(tiers).toEqual([
+      { name: "Kindness Starter", min: 500, reward: "A digital badge" },
+      { name: "Kindness Investor", min: 1500, reward: "A member spotlight, in the digest" },
+      { name: "Plain", min: 3000 },
+    ]);
+    expect(readTiers(tiersText(KK_TIERS))).toEqual(KK_TIERS);
+    expect(readPageConfig(JSON.stringify(pageConfigFromForm({ tiers: tiersText(KK_TIERS) }))).tiers).toEqual(KK_TIERS);
   });
   it("keeps only an https pass link", () => {
     expect(readPassUrl("https://loyalty.example.com/join")).toBe("https://loyalty.example.com/join");
