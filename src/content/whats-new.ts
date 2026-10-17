@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 227,
+    date: "2026-10-17",
+    title: "The Forum tells you when an agent stops checking in",
+    lines: [
+      "An agent with its own token that goes quiet now shows Paused in amber on the Forum, with when it stopped and why it usually happens (its usage limit, or its session closed). Its Now and Next stay as they were, so you can see what it was in the middle of.",
+      "One item lands in What needs you, with Open its session, and a line on Today. Both clear by themselves the next time the agent reports or checks in, and the news says when it was back. With scheduled check-ins, 3 missed check-ins (at least 15 minutes) inside its active hours count; otherwise an agent left Working with nothing for an hour does. Idle and waiting agents are never flagged.",
+      "Each agent's card can now edit its session link, and Don't watch this agent mutes one you've stood down. Coach → Inbox can also email you when an agent stops; it starts off.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 226,
     date: "2026-10-17",
     title: "The menu's fold and Collapse all now sit at the bottom left",

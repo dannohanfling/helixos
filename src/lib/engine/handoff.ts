@@ -321,3 +321,13 @@ export function holdReason(raw: unknown): string | null {
   const r = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.note);
   return r || null;
 }
+
+/** An agent's session link (13 Oct, H-495): https only, no credentials in it, at most 300 characters; anything else is none. */
+export function cleanSessionUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "https:" && !u.username && !u.password ? u.toString().slice(0, 300) : null;
+  } catch {
+    return null;
+  }
+}

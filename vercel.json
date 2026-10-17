@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/leaderboards",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/forum-watch",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

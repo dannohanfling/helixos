@@ -6,7 +6,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { ApprovalButtons, DecisionNote, HoldButtons } from "@/components/handoff-bits";
 import { HandoffMarkdown } from "@/components/handoff-markdown";
-import { answerHandoffAction, setApprovalEmailsAction, setCheckinsPausedAction, writeToAgentAction } from "@/lib/actions/handoff";
+import { answerHandoffAction, setApprovalEmailsAction, setCheckinsPausedAction, setStallEmailsAction, writeToAgentAction } from "@/lib/actions/handoff";
 import { markOwnerRead, ownerInbox, supersededInbox, type InboxItem } from "@/lib/handoff";
 import { HOLD_LABEL, SUPERSEDED_LABEL, TITLE_PREFIXES } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
@@ -219,12 +219,20 @@ export default async function CoachInboxPage({ searchParams }: { searchParams: P
               </Link>
             </form>
           </Card>
-          <Card title="Approval emails">
+          <Card title="Emails">
             <form action={setApprovalEmailsAction} className="flex flex-wrap items-center gap-3 text-sm" data-testid="handoff-emails">
               <input type="hidden" name="on" value={settings.approvalEmails ? "0" : "1"} />
               <span>{settings.approvalEmails ? "You get an email when something needs your approval." : "No emails: check here and on The Forum."}</span>
               <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="handoff-emails-toggle">
                 {settings.approvalEmails ? "Turn emails off" : "Turn emails on"}
+              </SubmitButton>
+            </form>
+            {/* H-495: when an agent stops checking in; the Forum and Today show it either way. */}
+            <form action={setStallEmailsAction} className="mt-3 flex flex-wrap items-center gap-3 text-sm" data-testid="stall-emails">
+              <input type="hidden" name="on" value={settings.stallEmails ? "0" : "1"} />
+              <span>{settings.stallEmails ? "You get an email when an agent stops checking in." : "No email when an agent stops: the Forum and Today show it."}</span>
+              <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="stall-emails-toggle">
+                {settings.stallEmails ? "Stop these emails" : "Email me when an agent stops"}
               </SubmitButton>
             </form>
           </Card>

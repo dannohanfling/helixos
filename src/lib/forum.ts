@@ -11,6 +11,7 @@ import { safeEqual } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
+import { heardFrom } from "@/lib/forum-watch";
 import { BUILT_INS, cleanLine, composeForum, FORUM_FLOW_MS, FORUM_FLOWS_SHOWN, FORUM_KEEP_DAYS, FORUM_MAX, FORUM_REPORTS_PER_MINUTE, FORUM_SEED, forumNameKey, isBuiltIn, isForumPlot, parseForumReport, plotFor, type BuiltInEvent, type BuiltInKey, type ForumPlot, type ForumReport, type ForumState } from "@/lib/engine/forum";
 
 export type ForumMember = { workspaceId: string; userId: string };
@@ -95,6 +96,8 @@ async function applyReport(m: ForumMember, agent: schema.ForumAgent, r: ForumRep
   if (r.flow) Object.assign(set, { flowTo: r.flow.to, flowLabel: r.flow.label, flowAt: at });
   if (r.queue) set.queue = r.queue;
   await db.update(schema.forumAgents).set(set).where(eq(schema.forumAgents.id, agent.id));
+  // A report is a sign of life: a stall the watch flagged ends here (H-495).
+  if (agent.stalledAt) await heardFrom(m, agent);
   const events: (typeof schema.forumEvents.$inferInsert)[] = [];
   const ev = (kind: schema.ForumEvent["kind"], payload: Record<string, unknown>) => events.push({ id: newId(), ...m, agentId: agent.id, kind, source, payload, at });
   if (r.status || r.has.now || r.has.last || r.has.next) ev("status", { status: r.status, now: r.now, last: r.last, next: r.next });
@@ -294,10 +297,11 @@ export async function memberForWebhook(secret: string): Promise<ForumMember | nu
 
 /** A call just came through this agent's connection: working now, and the status it reported itself kept to go back to. */
 export async function agentCalled(m: ForumMember, agentId: string): Promise<void> {
-  const a = await db.query.forumAgents.findFirst({ where: and(mineAgents(m), eq(schema.forumAgents.id, agentId)), columns: { id: true, status: true, restStatus: true } });
+  const a = await db.query.forumAgents.findFirst({ where: and(mineAgents(m), eq(schema.forumAgents.id, agentId)), columns: { id: true, status: true, restStatus: true, stalledAt: true, stallNeedId: true } });
   if (!a) return;
   const now = nowIso();
   await db.update(schema.forumAgents).set(a.status === "working" ? { lastCallAt: now } : { lastCallAt: now, restStatus: a.restStatus ?? a.status, status: "working", updatedAt: now }).where(eq(schema.forumAgents.id, a.id));
+  if (a.stalledAt) await heardFrom(m, a);
 }
 
 /**
