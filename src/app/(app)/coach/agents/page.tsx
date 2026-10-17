@@ -397,7 +397,9 @@ export default async function CoachAgentsPage({
             Add it as an environment variable called HELIXOS_AGENT_TOKEN in that
             session&apos;s own environment settings (or
             HELIXOS_TOKEN_&lt;NAME&gt;, which also names the agent). Never in
-            the repo, a chat or a document.
+            the repo, a chat or a document. Also set HELIXOS_AGENT_NAME to the
+            agent&apos;s name, so the Forum hook uses its token even when the
+            environment holds other agents&apos; tokens too.
           </li>
           <li>Add HelixOS as a connector there:</li>
           <li>

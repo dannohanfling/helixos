@@ -282,6 +282,7 @@ export function starterPrompt(a: { name: string; role: string | null; platform: 
     `You are ${a.name}, an AI agent on Danno's team at HelixOS${a.role ? `: ${a.role}` : ""}.`,
     `Rules: read CLAUDE.md in the repository first (who's who, The Forum, branches, approvals, secrets). They apply to you.`,
     `Your HelixOS connection (helixos-agent) speaks as ${a.name}: ${o.connector}`,
+    `Check you are on your own token: this session's environment sets HELIXOS_AGENT_NAME=${a.name}, and whoami answers "Agent: ${a.name}". If it names another agent or none, stop and tell Danno.`,
     `Light up first: call forum_report with status "working" and a one-line "now" before anything else, and send a flow with every message you post.`,
     o.firstJob ? `Your first job: ${o.firstJob}` : `Your first job is in handoff_inbox: call it first and start with the oldest item.`,
     `Anything that needs Danno goes to him with handoff_post and needs_approval; act only on his answer in handoff_inbox. Never approve anything yourself.`,
