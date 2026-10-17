@@ -1015,6 +1015,17 @@ export const leaderboardFeeds = sqliteTable(
     lastCheckAt: text("last_check_at"),
     lastCheckOk: integer("last_check_ok", { mode: "boolean" }),
     lastCheckNote: text("last_check_note"),
+    /**
+     * The Points desk (H-493, 0191): the HelixOS accounts of the client's team members the coach has let move points (the
+     * community manager, H-429). A coach working in the client's HelixOS can always use it; nobody else ever can.
+     */
+    deskUserIds: text("desk_user_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The coach's pause: while on, moves wait in the outbox and nothing is sent to eLoyalty. */
+    movesPaused: integer("moves_paused", { mode: "boolean" }).notNull().default(false),
+    /** The one add-and-deduct check on a team test pass (H-493): when it last ran, whether both moves landed, and what it saw, in words and numbers. The desk stays shut until it passes. */
+    deskCheckAt: text("desk_check_at"),
+    deskCheckOk: integer("desk_check_ok", { mode: "boolean" }),
+    deskCheckNote: text("desk_check_note"),
     /** The last good feed, served when eLoyalty is busy or down; already stripped to what the page shows. */
     cacheJson: text("cache_json"),
     cachedAt: text("cached_at"),
@@ -1040,6 +1051,45 @@ export const leaderboardSlugAliases = sqliteTable(
   (t) => [uniqueIndex("leaderboard_slug_aliases_slug").on(t.slug), index("leaderboard_slug_aliases_feed").on(t.feedId)],
 );
 export type LeaderboardSlugAlias = typeof leaderboardSlugAliases.$inferSelect;
+
+/**
+ * The points outbox (H-404, H-493): every Kindness Koins move HelixOS makes on a client's eLoyalty program, one row each,
+ * always a delta (an add or a deduct by customer id), never a set. `source` is unique, so one desk press, one check step or
+ * one approved claim can make one move only, however often it is retried. A move whose answer was lost is never sent again
+ * blind: the customer's events are read first for its tag. `eventId` and `newBalance` are eLoyalty's own answer.
+ */
+export const loyaltyPointsMoves = sqliteTable(
+  "loyalty_points_moves",
+  {
+    id: id(),
+    feedId: text("feed_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    /** The eLoyalty customer the points move on. */
+    customerId: text("customer_id").notNull(),
+    /** Positive adds, negative deducts. Never zero. */
+    delta: integer("delta").notNull(),
+    /** The reason sent to eLoyalty, with the move's own tag at the end so its events can be found. */
+    reason: text("reason").notNull(),
+    /** What made it: "desk:<id>", "check:<feed>:<time>:deduct", "claim:<id>". Unique. */
+    source: text("source").notNull(),
+    /** Who pressed it: the HelixOS account (the coach or the team member), never a member of the program. */
+    byUserId: text("by_user_id").notNull(),
+    /** pending (waiting or retrying), sent (eLoyalty answered yes), failed (refused, or out of tries). */
+    status: text("status").notNull().default("pending"),
+    /** The last send's outcome was unknown: read the events for the tag before sending again. */
+    checkFirst: integer("check_first", { mode: "boolean" }).notNull().default(false),
+    attempts: integer("attempts").notNull().default(0),
+    nextTryAt: text("next_try_at").notNull().default(sql`(datetime('now'))`),
+    lastStatus: integer("last_status"),
+    lastNote: text("last_note"),
+    eventId: text("event_id"),
+    newBalance: integer("new_balance"),
+    sentAt: text("sent_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("loyalty_points_moves_source").on(t.source), index("loyalty_points_moves_feed").on(t.feedId, t.status, t.nextTryAt)],
+);
+export type LoyaltyPointsMove = typeof loyaltyPointsMoves.$inferSelect;
 
 /** Bot Features (rev 618): how each feature unlocks in this workspace, one rule per feature, changed by the coach without code. */
 export const botFeatureRules = sqliteTable(

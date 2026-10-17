@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -9,6 +9,10 @@ import { nowIso } from "@/lib/dates";
 import { pageConfigFromForm, parseExport, readHidden } from "@/lib/engine/leaderboard";
 import { checkFeed, feedForMembership, removeFeedKey, saveExport, saveFeedSettings, savePageConfig, setFeedSlug } from "@/lib/leaderboard";
 import { clearPointsCheck, readExportUpload, runPointsCheck } from "@/lib/points-check";
+import { open } from "@/lib/crypto";
+import { type BoardRow } from "@/lib/engine/leaderboard";
+import { customerForRef, deskAccess, deskRefusal } from "@/lib/engine/points-outbox";
+import { drainFeed, liveBalance, queueMove, runDeskCheck } from "@/lib/points-outbox";
 
 /** One of this coach's clients, by membership, or the coach's own membership (their own program, H-29). */
 async function programOf(coach: { workspace: { id: string }; membership: { id: string } }, membershipId: string) {
@@ -129,4 +133,88 @@ export async function clearPointsCheckAction(formData: FormData): Promise<void> 
   if (coach.switchedInto) return;
   await clearPointsCheck(str(formData, "id"), coach.workspace.id);
   refresh();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The Points desk (H-493): moving Kindness Koins on a member's pass, for two people only, through the outbox.
+
+const heldRows = (feed: schema.LeaderboardFeed): BoardRow[] => {
+  try {
+    return feed.cacheJson ? (JSON.parse(feed.cacheJson) as BoardRow[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * One move from the desk on /loyalty: add or deduct, by the member's customer id, with a reason. Only the coach working in
+ * the client's HelixOS, or a team member the coach named for it, gets past the first lines; the desk opens only after the
+ * add-and-deduct check passed. A deduct is read against eLoyalty's live balance first and never goes below 0. The form's
+ * one-time id makes a second press of the same form the same move, never a second one.
+ */
+export async function pointsDeskMoveAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ team: "allow", whileSwitched: "log" });
+  const back = (q: string): never => redirect(`/loyalty?${q}#desk`);
+  const fail = (why: string): never => back(`deskError=${encodeURIComponent(why)}`);
+  const feed = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, v.membership.id) });
+  if (!feed) return fail("No loyalty program is set up here.");
+  const access = deskAccess({ switchedMode: v.switchedInto?.mode ?? null, teamUserId: v.team ? v.actor.id : null }, feed.deskUserIds);
+  if (!access.ok) return fail(access.why);
+  if (!feed.deskCheckOk) return fail("The desk opens once the add-and-deduct check has passed on your coach's page.");
+  const customerId = customerForRef(feed.id, str(formData, "member"), heldRows(feed).map((r) => r.id));
+  if (!customerId) return fail("Choose a member from the list.");
+  const nonce = str(formData, "nonce");
+  if (!/^[0-9a-z-]{8,64}$/i.test(nonce)) return fail("The form was out of date. Open the desk again and try once more.");
+  const direction = str(formData, "direction");
+  const amount = Number(str(formData, "amount"));
+  const reason = str(formData, "reason");
+  const key = open(feed.keyEncrypted);
+  if (!key) return fail("No eLoyalty key is saved for this program.");
+  const available = direction === "deduct" ? ((await liveBalance(feed, key, customerId))?.balance ?? null) : null;
+  const refusal = deskRefusal({ direction, amount, reason, available });
+  if (refusal) return fail(refusal);
+  const move = await queueMove(feed, { customerId, delta: direction === "add" ? amount : -amount, reason, source: `desk:${nonce}`, byUserId: v.actor.id });
+  if (move.status === "pending") await drainFeed(feed, new Date(), move.id);
+  refresh();
+  return back(`move=${encodeURIComponent(move.id)}`);
+}
+
+/** The coach's one feed in their own workspace (the caller has already refused a switched session). */
+async function feedOfCoach(coach: { workspace: { id: string } }, formData: FormData) {
+  return db.query.leaderboardFeeds.findFirst({ where: and(eq(schema.leaderboardFeeds.id, str(formData, "id")), eq(schema.leaderboardFeeds.workspaceId, coach.workspace.id)) });
+}
+
+/** Who on the client's team may use the desk (H-429: the community manager). Only live team members of that client count. */
+export async function saveDeskAccessAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  const feed = await feedOfCoach(coach, formData);
+  if (!feed) return;
+  const ticked = new Set(formData.getAll("deskUser").map(String));
+  const team = await db.query.teamMembers.findMany({ where: and(eq(schema.teamMembers.ownerMembershipId, feed.membershipId), isNull(schema.teamMembers.removedAt)) });
+  const deskUserIds = [...new Set(team.map((t) => t.teamUserId).filter((id) => ticked.has(id)))];
+  await db.update(schema.leaderboardFeeds).set({ deskUserIds, updatedAt: nowIso() }).where(eq(schema.leaderboardFeeds.id, feed.id));
+  refresh();
+}
+
+/** The coach's pause: while on, every move waits in the outbox and nothing is sent. */
+export async function setMovesPausedAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  const feed = await feedOfCoach(coach, formData);
+  if (!feed) return;
+  await db.update(schema.leaderboardFeeds).set({ movesPaused: str(formData, "paused") === "on", updatedAt: nowIso() }).where(eq(schema.leaderboardFeeds.id, feed.id));
+  refresh();
+}
+
+/** The one add-and-deduct check on a team test pass (H-493 step 4): 1 deducted, 1 added back, both read back. */
+export async function runDeskCheckAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  const feed = await feedOfCoach(coach, formData);
+  if (!feed) return;
+  const customerId = customerForRef(feed.id, str(formData, "member"), heldRows(feed).map((r) => r.id));
+  await runDeskCheck(feed, customerId ?? "", coach.actor.id);
+  refresh();
+  redirect(`/coach?connections=open#leaderboard-${feed.id}`);
 }

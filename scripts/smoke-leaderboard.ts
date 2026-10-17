@@ -6,7 +6,8 @@
  * page /lb/<slug> renders the same members server-side, with the client's words, tiers and rewards from /loyalty, and can be
  * framed. A visitor never makes HelixOS call eLoyalty: the cron is the one reader, and a busy eLoyalty leaves the last good
  * board in place. Before a key is in, a pasted export (stripped on save) stands in; with nothing, the feed answers 503 and
- * the page shows the design's samples. HelixOS never writes to eLoyalty. Runs against scripts/mock-eloyalty.ts.
+ * the page shows the design's samples. The only writes to eLoyalty are the Points desk's moves (H-493), adds and deducts by
+ * customer id, never a set. Runs against scripts/mock-eloyalty.ts.
  */
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -236,7 +237,8 @@ async function main() {
     must(table.includes("Ben O.") && table.includes("Ina") && table.includes("both agree") && table.includes("team (portal)") && table.includes("API"), `the table: members as First L., the reasons and who made the last change: ${table.slice(0, 200)}`);
     must(table.includes("Maria S. (test)"), "a hidden member is shown as a test");
     const checkHtml = await page.content();
-    must(!checkHtml.includes("example.com") && !checkHtml.includes("cus_0") && !checkHtml.includes("SER-") && !checkHtml.includes("Santos") && !checkHtml.includes("f159927"), "no email, id, serial, last name or bot user ns on the coach page");
+    const leaked = ["example.com", "cus_0", "SER-", "Santos", "f159927"].filter((t) => checkHtml.includes(t));
+    must(!leaked.length, `no email, id, serial, last name or bot user ns on the coach page (found: ${leaked.join(", ")}${leaked.length ? ` near "${checkHtml.slice(Math.max(0, checkHtml.indexOf(leaked[0]) - 120), checkHtml.indexOf(leaked[0]) + 40).replace(/\s+/g, " ")}"` : ""})`);
     // The id report (H-402): the same comparison downloaded with customer ids in place of names, never kept, nothing written.
     await row().locator('[data-testid="points-check"] summary').evaluate((el) => ((el.parentElement as HTMLDetailsElement).open = true));
     await row().locator('[data-testid="points-check-file"]').setInputFiles({ name: "wDn-walk-export.csv", mimeType: "text/csv", buffer: Buffer.from(CL_EXPORT_CSV) });
@@ -252,6 +254,86 @@ async function main() {
     must(sealedRow.pointsCheckSealed?.startsWith("enc:v1:") && !sealedRow.pointsCheckSealed.includes("Ben"), "the snapshot is sealed at rest");
     must((await mockCalls()).writes.length === writesBefore, "the check wrote nothing to eLoyalty");
     console.log("✓ the points check: the export read once, members as First L. with both balances and the reason, the hide list apart, sealed at rest; the id report downloaded with ids and numbers only; nothing written");
+
+    // The Points desk (H-493): closed until the add-and-deduct check passes on a team test pass; then, for the coach working in
+    // Maya's HelixOS, one deduct through the outbox (refused above what is available), a move held while paused and sent by the
+    // cron after; never for Maya herself.
+    const deskBox = () => row().locator('[data-testid="desk-settings"]');
+    const openDesk = async () => deskBox().locator("summary").evaluate((el) => ((el.parentElement as HTMLDetailsElement).open = true));
+    const deskMoves = () => db.query.loyaltyPointsMoves.findMany({ where: eq(schema.loyaltyPointsMoves.feedId, feedRow.id) });
+    await page.goto(`${base}/coach?connections=open`);
+    await openDesk();
+    must((await deskBox().locator("summary").innerText()).includes("closed until the check passes"), "the desk starts closed");
+    const writes0 = (await mockCalls()).writes.length;
+    await deskBox().locator('[data-testid="desk-check-pass"]').selectOption({ label: "Maria S. · 900 available" });
+    await submit(page, `li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="desk-check-run"]`);
+    const checkNote = (await row().locator('[data-testid="desk-check-note"]').textContent()) ?? "";
+    must(checkNote.startsWith("Passed: deduct 1: available 900 → 899, lifetime unchanged; add 1 back: available 900"), `the check on the team test pass: ${checkNote}`);
+    must(JSON.stringify((await mockCalls()).writes.slice(writes0)) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add"]), "the check made exactly one deduct and one add");
+    must((await deskMoves()).length === 2 && (await deskMoves()).every((m) => m.status === "sent" && m.eventId && m.customerId === "cus_001"), "both check moves went through the outbox and were sent");
+    must((await deskBox().locator("summary").innerText()).includes("open"), "the desk opens once the check has passed");
+    const switchIn = async () => {
+      await page.goto(`${base}/coach/${feedRow.membershipId}`);
+      await page.check('[data-testid="switch-work"]');
+      await submit(page, '[data-testid="switch-open"]');
+      await page.waitForURL(/\/today/);
+      await page.goto(`${base}/loyalty`);
+      await page.locator('[data-testid="desk-send"]').waitFor();
+    };
+    const deskMove = async (customer: string, direction: "add" | "deduct", amount: string, reason: string) => {
+      await page.selectOption('[data-testid="desk-member"]', { label: customer });
+      await page.check(`[data-testid="desk-${direction}"]`);
+      await fillExact(page, '[data-testid="desk-amount"]', amount);
+      await fillExact(page, '[data-testid="desk-reason"]', reason);
+      await submit(page, '[data-testid="desk-send"]');
+    };
+    await db.update(schema.memberships).set({ coachCanWork: true }).where(eq(schema.memberships.id, feedRow.membershipId));
+    await switchIn();
+    const writes1 = (await mockCalls()).writes.length;
+    await deskMove("Ben O. · 300 available", "deduct", "301", "Walk: more than they have");
+    must((await page.locator('[data-testid="desk-error"]').innerText()).includes("Only 300 are available, so nothing was deducted"), "a deduct above what is available is refused in words");
+    must((await mockCalls()).writes.length === writes1, "and nothing was sent");
+    await deskMove("Ben O. · 300 available", "deduct", "25", "Redeemed: the vault");
+    const deskResult = await page.locator('[data-testid="desk-result"]').innerText();
+    must(deskResult === "Deducted 25 KK from Ben O.: 275 available now.", `the desk says what happened: ${deskResult}`);
+    must(JSON.stringify((await mockCalls()).writes.slice(writes1)) === JSON.stringify(["POST /api/public/admin/points/deduct"]), "exactly one deduct was sent");
+    const benMove = (await deskMoves()).find((m) => m.customerId === "cus_002")!;
+    must(benMove.status === "sent" && benMove.delta === -25 && benMove.newBalance === 275 && /\[HX-[0-9a-z]+\]$/i.test(benMove.reason), "the move is a delta, tagged, with eLoyalty's new balance kept");
+    const benOnBoard = ((await (await fetch(url)).json()) as { members: { name: string; lifetime: number; available: number }[] }).members.find((x) => x.name === "Ben O.");
+    must(benOnBoard?.available === 275 && benOnBoard.lifetime === 1300, `the board shows it at once, lifetime untouched: ${JSON.stringify(benOnBoard)}`);
+    must((await page.locator('[data-testid="desk-moves"]').innerText()).includes("Ben O."), "the desk lists the move");
+    // The desk's own card (the hide list editor further down the page lists the hidden ids by design, for the owner).
+    const deskHtml = await page.locator("#desk").evaluate((el) => el.outerHTML);
+    const deskLeak = ["cus_0", "example.com", "SER-"].filter((t) => deskHtml.includes(t));
+    must(!deskLeak.length, `no customer id, email or serial in the desk: members are picked by reference (found: ${deskLeak.join(", ")})`);
+    // The pause: a move waits in the outbox, nothing is sent; lifted, the cron sends it.
+    await submit(page, '[data-testid="switch-back"]');
+    await page.goto(`${base}/coach?connections=open`);
+    await openDesk();
+    await deskBox().locator('[data-testid="desk-pause"]').check();
+    await submit(page, `li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="desk-pause-save"]`);
+    await switchIn();
+    must((await page.locator('[data-testid="desk-paused"]').count()) === 1, "the desk says the moves are paused");
+    const writes2 = (await mockCalls()).writes.length;
+    await deskMove("Ben O. · 275 available", "add", "10", "Walk: a kind act");
+    must((await page.locator('[data-testid="desk-result"]').innerText()).startsWith("Ben O.: waiting"), "a move while paused waits");
+    must((await mockCalls()).writes.length === writes2, "nothing is sent while paused");
+    await submit(page, '[data-testid="switch-back"]');
+    await page.goto(`${base}/coach?connections=open`);
+    await openDesk();
+    await deskBox().locator('[data-testid="desk-pause"]').uncheck();
+    await submit(page, `li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="desk-pause-save"]`);
+    const drained = (await (await fetch(`${base}/api/cron/leaderboards`, { headers: CRON })).json()) as { moves: { sent: number }[] };
+    must(drained.moves.reduce((n, m) => n + m.sent, 0) === 1 && JSON.stringify((await mockCalls()).writes.slice(writes2)) === JSON.stringify(["POST /api/public/admin/points/add"]), "the cron sends the held move once the pause is lifted");
+    must((await deskMoves()).filter((m) => m.status === "sent").length === 4, "four moves, all sent: the check's two, the deduct and the held add");
+    // Maya herself, the owner: no desk on her /loyalty (H-429: the community manager and the coach only).
+    await logout(page);
+    await login(page, "As a client");
+    await page.goto(`${base}/loyalty`);
+    must((await page.locator('[data-testid="desk-send"]').count()) === 0 && (await page.locator('[data-testid="desk-settings"]').count()) === 0, "the owner sees no desk");
+    await logout(page);
+    await login(page, "As the coach");
+    console.log("✓ the Points desk: closed until the check passed (1 off, 1 back, lifetime unchanged); a deduct above available refused, one deduct sent and shown at once; a move held while paused and sent by the cron; none for the owner");
 
     // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
     await page.goto(`${base}/coach?connections=open`);
@@ -278,7 +360,8 @@ async function main() {
     console.log("✓ before a key: Remove key falls back to the samples; a pasted export is stripped on save and served, dated");
 
     const writes = (await mockCalls()).writes;
-    must(writes.length === 0, `HelixOS never writes to eLoyalty: ${writes.join(", ")}`);
+    // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add"]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {

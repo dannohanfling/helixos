@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 225,
+    date: "2026-10-17",
+    title: "Loyalty: the Points desk, for moving a member's points safely",
+    lines: [
+      "A client's /loyalty page gains a Points desk: pick a member from the live board, add or deduct, and say why. It goes to eLoyalty once, as an add or a deduct with the reason on their history; a deduct never takes more than is available, and lifetime points never go down. Each move is listed with who made it and what happened.",
+      "It is for two people only: you while working in their HelixOS, and the team members you tick on their row in Coach (their community manager). The client and anyone else on their team never see it.",
+      "On their row in Coach, under Points desk: who can use it, a pause that holds every move until it is lifted, and the one check that opens it, 1 deducted from a team test pass and 1 added back, read back from eLoyalty each time.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 222,
     date: "2026-10-17",
     title: "A welcome at the gate on your first sign-in",
