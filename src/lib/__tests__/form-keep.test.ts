@@ -82,8 +82,32 @@ describe("snapshot", () => {
   it("can explicitly include credentials in an in-memory refusal snapshot", () => {
     expect(snapshot(form([new FakeInput("credential", "password", "fixture")]), { secrets: true })).toEqual([{ name: "credential", type: "password", value: "fixture", checked: false }]);
   });
-  // Current implementation includes credentials unless secrets:false; requested safe default is absent.
-  it.todo("omits credential fields when the secrets option is omitted");
+  it("includes credential fields by default for an in-memory refusal snapshot", () => {
+    const fields = [new FakeInput("ordinary", "password", "fixture"), ...["token", "secret", "password", "apikey", "api_key", "webhook"].map((name) => new FakeInput(name, "text", "fixture"))];
+    expect(snapshot(form(fields))).toEqual(fields.map((field) => ({ name: field.name, type: field.type, value: "fixture", checked: false })));
+  });
+  it("explicitly excludes credentials in every draft-keeper snapshot call", () => {
+    const path = join(__dirname, "../../components/draft-keeper.tsx");
+    const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const calls: ts.CallExpression[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "snapshot") calls.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      const options = call.arguments[1];
+      expect(options && ts.isObjectLiteralExpression(options), call.getText(source)).toBe(true);
+      if (!options || !ts.isObjectLiteralExpression(options)) continue;
+      expect(options.properties.some(ts.isSpreadAssignment), call.getText(source)).toBe(false);
+      const secrets = options.properties.filter((property) => property.name?.getText(source) === "secrets");
+      expect(secrets.length, call.getText(source)).toBeGreaterThan(0);
+      for (const property of secrets) {
+        expect(ts.isPropertyAssignment(property) && property.initializer.kind === ts.SyntaxKind.FalseKeyword, call.getText(source)).toBe(true);
+      }
+    }
+  });
 });
 
 describe("restore", () => {
@@ -171,3 +195,6 @@ describe("refusalIn", () => {
     expect(refusalIn("?error=%ZZ&field=")).toEqual({ message: "%ZZ", field: "" });
   });
 });
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import * as ts from "typescript";
