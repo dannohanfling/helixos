@@ -283,6 +283,9 @@ export type ForumStateAgent = {
   builtIn: BuiltInKey | null;
   isNew: boolean;
   reportedAt: string | null;
+  /** The stall watch (H-495): when it went quiet, while it is flagged; and whether the owner muted the watch for it. */
+  paused: string | null;
+  muted: boolean;
 };
 export type ForumState = {
   updatedAt: string | null;
@@ -292,12 +295,12 @@ export type ForumState = {
   flows: { id: string; from: ForumPlot | "rostra"; to: ForumPlot | "rostra"; label: string; agentId: string; fromName: string; toName: string; at: string; reply: boolean }[];
   /** The road: each agent's milestones, in agent order. */
   queue: (ForumMilestone & { agentId: string; agent: string })[];
-  waiting: { id: string; what: string; detail: string | null; when: string | null; agent: string | null; at: string }[];
+  waiting: { id: string; what: string; detail: string | null; when: string | null; agent: string | null; agentId: string | null; stall: boolean; at: string }[];
   log: { at: string; who: string; text: string }[];
 };
 
 export type ComposeInput = {
-  agents: { id: string; name: string; platform: string | null; role: string | null; link: string | null; plotId: string | null; builtIn: string | null; status: string; now: string | null; last: string | null; next: string | null; flowTo: string | null; flowLabel: string | null; flowAt: string | null; queue: ForumMilestone[]; confirmed: boolean; reportedAt: string | null; createdAt: string; lastCallAt?: string | null; restStatus?: string | null }[];
+  agents: { id: string; name: string; platform: string | null; role: string | null; link: string | null; plotId: string | null; builtIn: string | null; status: string; now: string | null; last: string | null; next: string | null; flowTo: string | null; flowLabel: string | null; flowAt: string | null; queue: ForumMilestone[]; confirmed: boolean; reportedAt: string | null; createdAt: string; lastCallAt?: string | null; restStatus?: string | null; stalledAt?: string | null; stallSince?: string | null; stallMuted?: boolean; stallNeedId?: string | null }[];
   builtIns: Partial<Record<BuiltInKey, BuiltInEvent[]>>;
   needs: { id: string; agentId: string | null; what: string; detail: string | null; when: string | null; createdAt: string }[];
   events: { agentId: string | null; kind: string; payload: Record<string, unknown>; at: string }[];
@@ -338,6 +341,8 @@ export function composeForum(input: ComposeInput): ForumState {
       builtIn,
       isNew: !a.confirmed,
       reportedAt: live?.lastAt ?? (a.reportedAt ? isoOf(a.reportedAt) : null),
+      paused: !builtIn && a.stalledAt ? isoOf(a.stallSince ?? a.stalledAt) : null,
+      muted: Boolean(a.stallMuted),
     };
   });
   // Built-ins with something to show and no row yet take the lowest plots left, then the Outer districts.
@@ -348,7 +353,7 @@ export function composeForum(input: ComposeInput): ForumState {
     if (!live) continue;
     const plot = plotFor(taken);
     if (plot) taken.add(plot);
-    agents.push({ id: `builtin:${key}`, plot, name: BUILT_INS[key].name, platform: "HelixOS", role: BUILT_INS[key].role, link: null, status: live.status, now: live.now, last: live.last, next: null, builtIn: key, isNew: false, reportedAt: live.lastAt });
+    agents.push({ id: `builtin:${key}`, plot, name: BUILT_INS[key].name, platform: "HelixOS", role: BUILT_INS[key].role, link: null, status: live.status, now: live.now, last: live.last, next: null, builtIn: key, isNew: false, reportedAt: live.lastAt, paused: null, muted: false });
   }
   const byId = new Map(agents.map((a) => [a.id, a]));
   const byName = new Map(agents.map((a) => [forumNameKey(a.name), a]));
@@ -387,7 +392,7 @@ export function composeForum(input: ComposeInput): ForumState {
 
   const waiting = [...input.needs]
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((n) => ({ id: n.id, what: n.what, detail: n.detail, when: n.when, agent: n.agentId ? (byId.get(n.agentId)?.name ?? null) : null, at: isoOf(n.createdAt) }));
+    .map((n) => ({ id: n.id, what: n.what, detail: n.detail, when: n.when, agent: n.agentId ? (byId.get(n.agentId)?.name ?? null) : null, agentId: n.agentId, stall: rows.some((r) => r.id === n.agentId && r.stallNeedId === n.id), at: isoOf(n.createdAt) }));
 
   const log: ForumState["log"] = [];
   for (const e of input.events) {

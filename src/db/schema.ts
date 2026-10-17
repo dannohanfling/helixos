@@ -4410,7 +4410,7 @@ export type GlossaryEntry = typeof glossaryEntries.$inferSelect;
 export const FORUM_STATUSES = ["working", "waiting", "idle", "done"] as const;
 /** The twelve plots on the forum photo (forum12-plots.json), in the order new agents take them. */
 export const FORUM_PLOTS = ["p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08", "p09", "p10", "p11", "p12"] as const;
-export const FORUM_SOURCES = ["member", "connector", "webhook", "builtin", "seed", "agent"] as const;
+export const FORUM_SOURCES = ["member", "connector", "webhook", "builtin", "seed", "agent", "watch"] as const;
 export type ForumMilestone = { name: string; state: "done" | "now" | "queued"; rev?: string };
 export const forumAgents = sqliteTable(
   "forum_agents",
@@ -4443,6 +4443,11 @@ export const forumAgents = sqliteTable(
     /** Automatic lights (H-19): the last call through this agent's own connection, and the status it reported itself when a call lit it working. */
     lastCallAt: text("last_call_at"),
     restStatus: text("rest_status", { enum: FORUM_STATUSES }),
+    /** The stall watch (H-495): the owner's "Don't watch this agent"; when it was flagged, the last sign of life before it, and its What needs you item. */
+    stallMuted: integer("stall_muted", { mode: "boolean" }).notNull().default(false),
+    stalledAt: text("stalled_at"),
+    stallSince: text("stall_since"),
+    stallNeedId: text("stall_need_id"),
     createdAt: createdAt(),
     updatedAt: text("updated_at"),
   },
@@ -4507,6 +4512,8 @@ export const forumSettings = sqliteTable(
     approvalEmails: integer("approval_emails", { mode: "boolean" }).notNull().default(true),
     /** Scheduled check-ins (Danno, 13 Oct): Pause all, every agent's check-in answers quiet. */
     checkinsPaused: integer("checkins_paused", { mode: "boolean" }).notNull().default(false),
+    /** The stall watch (H-495): an email to the owner's own address when an agent stops checking in. Off until they turn it on. */
+    stallEmails: integer("stall_emails", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("forum_settings_member").on(t.workspaceId, t.userId), uniqueIndex("forum_settings_webhook").on(t.webhookHash)],

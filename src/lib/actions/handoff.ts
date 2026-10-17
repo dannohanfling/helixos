@@ -11,7 +11,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { refresh, str } from "@/lib/action-helpers";
 import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner, refusalOf, holdHandoff, releaseHandoff, supersedeHandoff } from "@/lib/handoff";
-import { CHECKIN_DEFAULTS, CHECKIN_EVERY, hhmm } from "@/lib/engine/handoff";
+import { CHECKIN_DEFAULTS, CHECKIN_EVERY, cleanSessionUrl, hhmm } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
 
 export type HandoffFormState = { error?: string; ok?: string; token?: string; agent?: string } | null;
@@ -63,6 +63,15 @@ export async function setApprovalEmailsAction(formData: FormData): Promise<void>
   refresh();
 }
 
+/** Coach → Inbox (H-495): an email to the owner's own address when an agent stops checking in. Off until turned on. */
+export async function setStallEmailsAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const m = { workspaceId: coach.workspace.id, userId: coach.user.id };
+  await forumSettingsFor(m);
+  await db.update(schema.forumSettings).set({ stallEmails: str(formData, "on") === "1" }).where(and(eq(schema.forumSettings.workspaceId, m.workspaceId), eq(schema.forumSettings.userId, m.userId)));
+  refresh();
+}
+
 /** Coach → Agents: one agent's scheduled check-ins (13 Oct): on or off, how often, active hours, the session link. */
 export async function saveAgentCheckinsAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
@@ -74,14 +83,7 @@ export async function saveAgentCheckinsAction(formData: FormData): Promise<void>
   const every = Number(str(formData, "every"));
   const days = formData.getAll("days").map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
   const tz = str(formData, "tz");
-  const link = str(formData, "sessionUrl");
-  let sessionUrl: string | null = null;
-  try {
-    const u = new URL(link);
-    if (u.protocol === "https:" && !u.username && !u.password) sessionUrl = u.toString().slice(0, 300);
-  } catch {
-    sessionUrl = null;
-  }
+  const sessionUrl = cleanSessionUrl(str(formData, "sessionUrl"));
   await db
     .update(schema.handoffAgents)
     .set({

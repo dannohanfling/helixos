@@ -8,7 +8,9 @@ import { markGlossary } from "@/lib/engine/glossary";
 import { FORUM_BUILDINGS, FORUM_PLATFORMS, type ForumPlot, type ForumStateAgent } from "@/lib/engine/forum";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { formatDateTime } from "@/lib/dates";
-import { confirmForumAgentAction, editForumAgentAction, removeForumAgentAction, setForumShareAction, tickForumNeedAction } from "@/lib/actions/forum";
+import { confirmForumAgentAction, editForumAgentAction, removeForumAgentAction, setForumAgentMutedAction, setForumShareAction, tickForumNeedAction } from "@/lib/actions/forum";
+import { watchForum } from "@/lib/forum-watch";
+import { stallWords } from "@/lib/engine/forum-watch";
 import { ForumMap } from "@/components/forum-map";
 import { ForumAddAgent, ForumLive } from "@/components/forum-bits";
 import { GlossaryText } from "@/components/glossary-text";
@@ -60,6 +62,8 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
   }
   const m = { workspaceId: v.workspace.id, userId: ownerId };
   if (own && v.role === "coach") await seedCoachForum(m);
+  // The stall watch (H-495) runs when the page opens too, so the Forum is never behind the five-minute cron.
+  await watchForum(m);
   const [state, settings, glossary, owner, sharing] = await Promise.all([
     forumStateFor(m),
     forumSettingsFor(m),
@@ -76,8 +80,8 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
   const canEdit = own && !v.team;
   // The Handoff inbox (rev 769): the coach's waiting decisions sit in What needs you too, with the same three buttons.
   const inbox = own && v.role === "coach" ? await ownerInbox(m, 1) : null;
-  // The Nudge opens an agent's saved session link (13 Oct), when there is one.
-  const sessions = inbox ? new Map((await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, m.workspaceId), eq(schema.handoffAgents.userId, m.userId)), columns: { agentId: true, sessionUrl: true } })).map((r) => [r.agentId, r.sessionUrl])) : new Map<string, string | null>();
+  // The Nudge and a stalled agent's item open its saved session link (13 Oct, H-495), when there is one.
+  const sessions = own ? new Map((await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, m.workspaceId), eq(schema.handoffAgents.userId, m.userId)), columns: { agentId: true, sessionUrl: true } })).map((r) => [r.agentId, r.sessionUrl])) : new Map<string, string | null>();
   const approvals = inbox?.waiting ?? [];
   const at = (iso: string) => formatDateTime(iso, v.tz, { zone: true });
   const firstName = (owner?.name ?? "This member").split(" ")[0];
@@ -155,6 +159,11 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                     <div>
                       <div className="fo-t">{w.what}</div>
                       {w.detail ? <div className="fo-d">{w.detail}</div> : null}
+                      {w.stall && w.agentId && sessions.get(w.agentId) ? (
+                        <a href={sessions.get(w.agentId)!} target="_blank" rel="noopener noreferrer" className="fo-btn fo-small-btn fo-linkbtn" data-testid="forum-stall-session">
+                          Open its session
+                        </a>
+                      ) : null}
                       <div className="fo-meta">
                         {w.when ? <span className={`fo-w${/^now/i.test(w.when) ? " fo-ok" : ""}`}>{w.when}</span> : null}
                         <span>
@@ -239,8 +248,19 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                           {a.role ? ` · ${a.role}` : ""}
                         </div>
                       </div>
-                      <span className={`fo-chip fo-${a.status}`}>{CHIP[a.status]}</span>
+                      {a.paused ? (
+                        <span className="fo-chip fo-paused" data-testid="forum-paused">
+                          Paused
+                        </span>
+                      ) : (
+                        <span className={`fo-chip fo-${a.status}`}>{CHIP[a.status]}</span>
+                      )}
                     </div>
+                    {a.paused ? (
+                      <div className="fo-row fo-stall" data-testid="forum-stall-line">
+                        {stallWords.card(at(a.paused))}
+                      </div>
+                    ) : null}
                     {(
                       [
                         ["Now", a.now],
@@ -311,8 +331,20 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                             <span>Link</span>
                             <input name="link" type="url" defaultValue={a.link ?? ""} maxLength={300} />
                           </label>
+                          <label>
+                            <span>Session link</span>
+                            <input name="sessionUrl" type="url" defaultValue={sessions.get(a.id) ?? ""} maxLength={300} placeholder="https://claude.ai/code/…" data-testid="forum-session-url" />
+                          </label>
                           <SubmitButton className="fo-btn" pendingText="Saving…">
                             Save
+                          </SubmitButton>
+                        </form>
+                        <form action={setForumAgentMutedAction} className="fo-inline">
+                          <input type="hidden" name="id" value={a.id} />
+                          <input type="hidden" name="on" value={a.muted ? "0" : "1"} />
+                          <span className="fo-fine">{a.muted ? "Not watched: it is never flagged as stopped." : "Flagged as Paused if it stops checking in."}</span>
+                          <SubmitButton className="fo-btn fo-small-btn" pendingText="Saving…" data-testid="forum-mute">
+                            {a.muted ? "Watch this agent" : "Don't watch this agent"}
                           </SubmitButton>
                         </form>
                         <form action={removeForumAgentAction}>

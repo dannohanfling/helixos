@@ -12,6 +12,9 @@ import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { forumSettingsFor, makeForumWebhook, moveForumAgent, revokeForumWebhook, type ForumMember } from "@/lib/forum";
 import { FORUM_MAX, cleanLine, cleanLink, forumNameKey, looksLikeSecret, plotFor } from "@/lib/engine/forum";
+import { cleanSessionUrl } from "@/lib/engine/handoff";
+import { agentSettings } from "@/lib/handoff";
+import { watchForum } from "@/lib/forum-watch";
 
 const THEIRS = "{first}'s Forum is their own.";
 const mine = (m: ForumMember, id: string) => and(eq(schema.forumAgents.workspaceId, m.workspaceId), eq(schema.forumAgents.userId, m.userId), eq(schema.forumAgents.id, id));
@@ -49,6 +52,22 @@ export async function editForumAgentAction(fd: FormData): Promise<void> {
   const key = forumNameKey(name);
   const clash = key !== row.nameKey && (await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, m.workspaceId), eq(schema.forumAgents.userId, m.userId), eq(schema.forumAgents.nameKey, key)) }));
   await db.update(schema.forumAgents).set({ ...(clash || row.builtIn ? {} : { name, nameKey: key }), platform: text(fd, "platform", FORUM_MAX.platform), role: text(fd, "role", FORUM_MAX.role), link: cleanLink(str(fd, "link")), confirmed: true, updatedAt: nowIso() }).where(mine(m, id));
+  // H-495: the session link is the one the Agents page and Nudge use, editable from the card too.
+  if (fd.has("sessionUrl") && !row.builtIn) {
+    const s = await agentSettings(m, row.id);
+    await db.update(schema.handoffAgents).set({ sessionUrl: cleanSessionUrl(str(fd, "sessionUrl")) }).where(eq(schema.handoffAgents.id, s.id));
+  }
+  refresh();
+}
+
+/** H-495: "Don't watch this agent" (a stood-down agent, say) and back; muting ends a stall it is in. */
+export async function setForumAgentMutedAction(fd: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: THEIRS });
+  const m: ForumMember = { workspaceId, userId };
+  const row = await db.query.forumAgents.findFirst({ where: mine(m, str(fd, "id")) });
+  if (!row || row.builtIn) return;
+  await db.update(schema.forumAgents).set({ stallMuted: str(fd, "on") === "1", updatedAt: nowIso() }).where(mine(m, row.id));
+  await watchForum(m);
   refresh();
 }
 

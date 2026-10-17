@@ -13,6 +13,7 @@ import { todayData } from "@/lib/queries/today";
 import { cookies } from "next/headers";
 import { closeSceneShell } from "@/lib/scenes";
 import { oohAccessFor } from "@/lib/office-hours-access";
+import { stalledAgentsOf } from "@/lib/forum-watch";
 import { firstArrivalFor } from "@/lib/first-arrival";
 import { FirstArrival } from "@/components/first-arrival";
 import { EveningClose } from "@/components/evening-close";
@@ -28,7 +29,7 @@ import { PendingLink } from "@/components/pending-link";
 import { FIELD_TASKS } from "@/lib/engine/pathway";
 import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
-import { addDays, formatDate, relativeDay } from "@/lib/dates";
+import { addDays, formatDate, formatDateTime, relativeDay } from "@/lib/dates";
 import { oohNoticeWords } from "@/lib/engine/office-hours";
 import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
@@ -120,6 +121,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     setupFor(v),
   ]);
   const tData = tick();
+  // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
+  const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
   const [share, goals, workout] = await Promise.all([
     week ? shareFor(v.workspace.id, v.user.id, week) : Promise.resolve(null),
     // Goals (rev 508 §5): the two that need it most, under the HumanOS line.
@@ -199,6 +202,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               {coachNew[3]} bot feature{coachNew[3] === 1 ? "" : "s"} to switch on →
             </Link>
           ) : null}
+        </div>
+      ) : null}
+      {stalled.length ? (
+        <div className="mb-4 flex flex-wrap gap-2" data-testid="today-stalled">
+          {stalled.map((a) => (
+            <Link key={a.id} href="/forum" className="rounded-lg bg-warn-soft px-3 py-2 text-sm font-medium text-warn hover:underline" data-testid="today-stalled-agent">
+              {a.name} stopped checking in at {formatDateTime(a.since, v.tz, { zone: true })}. Open the Forum →
+            </Link>
+          ))}
         </div>
       ) : null}
       {oohNotice ? (

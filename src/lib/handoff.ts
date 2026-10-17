@@ -17,6 +17,7 @@ import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
 import { headProofObject, deleteProofObject, presignHandoffUpload, putHandoffObject, readProofObject } from "@/lib/proof-storage";
 import { drawFlows, reportToForum } from "@/lib/forum";
+import { heardFrom } from "@/lib/forum-watch";
 import { forumNameKey, looksLikeSecret } from "@/lib/engine/forum";
 import {
   DANNO,
@@ -577,6 +578,8 @@ export async function checkinFor(o: Owner, agent: schema.ForumAgent, now: Date =
   const counted = count >= CHECKINS_PER_DAY ? count : count + 1;
   await db.update(schema.handoffAgents).set({ lastCheckinAt: now.toISOString(), lastAct: decided.act, countDay: day, countToday: counted }).where(eq(schema.handoffAgents.id, s.id));
   await audit(o, agent.id, "check-in", null, decided.act);
+  // A check-in is a sign of life: a stall the watch flagged ends here (H-495).
+  if (agent.stalledAt) await heardFrom(o, agent);
   const items = decided.act === "work" || decided.act === "reply" ? await inboxFor(o, agent.id) : [];
   const fresh = await db.query.forumAgents.findFirst({ where: eq(schema.forumAgents.id, agent.id), columns: { now: true, last: true } });
   return { ...decided, items, waitingOn: decided.act === "wait" && waitingOn.length ? waitingOn.join(", ") : null, lastStatus: fresh?.now ?? fresh?.last ?? null, count: counted };
