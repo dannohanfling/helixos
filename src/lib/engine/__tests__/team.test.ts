@@ -58,7 +58,7 @@ const OPEN_PAGES = [
   "src/app/(app)/whats-new/page.tsx",
 ];
 const OPEN_ROUTES = ["src/app/api/deck-images/[id]/route.ts", "src/app/api/deck-images/upload/route.ts", "src/app/api/drafts/route.ts", "src/app/api/webinars/[id]/deck/route.ts"];
-const OPEN_ACTION_FILES = ["account.ts", "clients.ts", "compose.ts", "contacts.ts", "content.ts", "deck-images.ts", "drip.ts", "kpi.ts", "ladders.ts", "leaderboard.ts", "library.ts", "office-hours.ts", "outcomes.ts", "plan.ts", "social.ts", "tasks.ts", "tiers.ts", "variants.ts", "webinars.ts", "whats-new.ts"];
+const OPEN_ACTION_FILES = ["account.ts", "clients.ts", "compose.ts", "contacts.ts", "content.ts", "deck-images.ts", "drip.ts", "first-arrival.ts", "kpi.ts", "ladders.ts", "leaderboard.ts", "library.ts", "office-hours.ts", "outcomes.ts", "plan.ts", "social.ts", "tasks.ts", "tiers.ts", "variants.ts", "webinars.ts", "whats-new.ts"];
 /** In an open action file, the actions that stay closed: the owner's own settings, and the connections. */
 const CLOSED_IN_OPEN_FILES = ["account.ts:changePasswordAction", "clients.ts:updatePassAction", "leaderboard.ts:saveLeaderboardHiddenAction", "ladders.ts:pushKeywordsAction", "social.ts:connectGhlAction", "social.ts:refreshGhlAccountsAction", "social.ts:setGhlMappingAction", "social.ts:disconnectGhlAction", "social.ts:coachDisconnectGhlAction", "social.ts:replayContactSyncAction"];
 

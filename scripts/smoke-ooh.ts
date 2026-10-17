@@ -80,6 +80,12 @@ async function main() {
     await sam.fill('input[name="password"]', PASSWORD);
     await sam.fill('input[name="confirm"]', PASSWORD);
     await Promise.all([sam.waitForURL(/\/today/, { timeout: 30000 }), sam.click('button:has-text("Join the team")')]);
+    // The first arrival (H-472) plays on a fresh account's first open: Skip, then the button, and the page is theirs.
+    if (await sam.locator('[data-testid="first-arrival"]').waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+      await sam.locator('[data-testid="arrival-skip"]').click();
+      await sam.locator('[data-testid="arrival-cta"]').click();
+      await sam.waitForURL(/\/today/);
+    }
     await sam.locator('[data-testid="team-home"]').waitFor({ timeout: 20000 });
     const samUser = (await db.query.users.findFirst({ where: eq(schema.users.email, samEmail) }))!;
     const samRow = (await db.query.teamMembers.findFirst({ where: and(eq(schema.teamMembers.teamUserId, samUser.id), isNull(schema.teamMembers.removedAt)) }))!;

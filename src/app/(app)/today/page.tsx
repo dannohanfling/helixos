@@ -13,6 +13,8 @@ import { todayData } from "@/lib/queries/today";
 import { cookies } from "next/headers";
 import { closeSceneShell } from "@/lib/scenes";
 import { oohAccessFor } from "@/lib/office-hours-access";
+import { firstArrivalFor } from "@/lib/first-arrival";
+import { FirstArrival } from "@/components/first-arrival";
 import { EveningClose } from "@/components/evening-close";
 import { setupFor } from "@/lib/setup-card";
 import { SetupCard } from "@/components/setup-card";
@@ -74,14 +76,22 @@ function greeting(hour: number, name: string): string {
 
 const ENERGY = ["", ...ENERGY_WORDS];
 
-export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; closeError?: string; field?: string }> }) {
+export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; closeError?: string; field?: string; arrival?: string }> }) {
   const t0 = tick();
   const v = await requireViewer({ team: "allow" });
   const tViewer = tick();
-  // A team member (Danno, 6 Oct) sees the doors open to them, not the owner's day.
-  // Office Hours by program level (H-470): a team member's door follows the owner's access.
-  if (v.team) return <TeamHome v={v} oohOn={(await oohAccessFor(v)).open} />;
   const sp = await searchParams;
+  // A team member (Danno, 6 Oct) sees the doors open to them, not the owner's day.
+  // "Play my welcome again" (H-472): the first arrival once more, for a client or a team member, stamping nothing.
+  const replay = sp.arrival === "replay" ? await firstArrivalFor(v, "/today", { replay: true }) : null;
+  // Office Hours by program level (H-470): a team member's door follows the owner's access.
+  if (v.team)
+    return (
+      <>
+        {replay ? <FirstArrival card={replay} /> : null}
+        <TeamHome v={v} oohOn={(await oohAccessFor(v)).open} />
+      </>
+    );
   // The day's data, the intentions, the closed days, Body's line, the coach's notices and the rest of the page's own reads run
   // together (H-164 §9: one after another they held "Loading…" for seconds; the timing line below says what each part cost).
   const [d, week, month, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup] = await Promise.all([
@@ -165,6 +175,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   logTiming("today", [{ name: "viewer", from: t0, to: tViewer }, { name: "reads", from: tViewer, to: tData }, { name: "rest", from: tData, to: tRest }], { switched: v.switchedInto ? 1 : 0 });
   return (
     <>
+      {replay ? <FirstArrival card={replay} /> : null}
       {closeScene ? <EveningClose scene={closeScene} /> : null}
       {coachNew && (coachNew[0] || coachNew[1] || coachNew[2] || coachNew[3]) ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="coach-new">

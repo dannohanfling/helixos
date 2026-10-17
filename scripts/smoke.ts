@@ -387,6 +387,12 @@ async function main() {
   await page.fill('input[name="email"]', `smoke+${stamp}@example.com`);
   await page.click('button:has-text("Join and start Day 1")');
   await page.waitForURL(/\/today/);
+  // The first arrival (H-472) plays on a fresh account's first open: Skip, then the button, and the page is theirs.
+  if (await page.locator('[data-testid="first-arrival"]').waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+    await page.locator('[data-testid="arrival-skip"]').click();
+    await page.locator('[data-testid="arrival-cta"]').click();
+    await page.waitForURL(/\/today/);
+  }
   const joined = await db.query.users.findFirst({ where: eq(schema.users.email, `smoke+${stamp}@example.com`) });
   if (joined?.name !== "Smoke Tester") throw new Error(`first and last are kept as the one name: ${joined?.name}`);
   const joinedM = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, joined.id) });

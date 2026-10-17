@@ -315,6 +315,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p className="mt-2 text-xs text-ink-3">Nothing plays until you have tapped or typed on the page, and nothing plays when your device asks for reduced motion.</p>
           </Card>
         )}
+        {v.switchedInto ? null : (
+          <Card id="welcome" className="min-w-0" title="Your welcome">
+            {/* The first arrival (H-472): the ceremony from the first sign-in, played again on request; nothing is stamped. */}
+            <p className="flex flex-wrap items-center gap-2 text-sm">
+              <Link href="/today?arrival=replay" className="btn btn-soft btn-xs" data-testid="arrival-replay-form">Play my welcome again</Link>
+              <span className="text-xs text-ink-3">The arch, the doors and the wreath from your first sign-in, on Today.</span>
+            </p>
+          </Card>
+        )}
         <Card id="you" className="min-w-0" title="You">
           <form action={updateProfileAction} className="space-y-3">
             <div className="grid grid-cols-[4rem_1fr] gap-3">

@@ -163,6 +163,12 @@ async function main() {
     await sam.fill('input[name="password"]', PASSWORD);
     await sam.fill('input[name="confirm"]', PASSWORD);
     await Promise.all([sam.waitForURL(/\/today/, { timeout: 30000 }), sam.click('button:has-text("Join the team")')]);
+    // The first arrival (H-472) plays on a fresh account's first open: Skip, then the button, and the page is theirs.
+    if (await sam.locator('[data-testid="first-arrival"]').waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+      await sam.locator('[data-testid="arrival-skip"]').click();
+      await sam.locator('[data-testid="arrival-cta"]').click();
+      await sam.waitForURL(/\/today/);
+    }
     await sam.locator('[data-testid="team-banner"]').waitFor({ timeout: 20000 });
     must((await sam.locator('[data-testid="team-banner"]').innerText()).includes(`${maya.name}'s HelixOS as a team member`), "the banner says whose HelixOS it is");
     must(await sam.locator('[data-testid="team-home"]').count(), "Today is the team home, not Maya's day");
@@ -327,6 +333,12 @@ async function main() {
     await tess.fill('input[name="password"]', PASSWORD);
     await tess.fill('input[name="confirm"]', PASSWORD);
     await Promise.all([tess.waitForURL(/\/today/, { timeout: 30000 }), tess.click('button:has-text("Join the team")')]);
+    // The first arrival (H-472) plays on a fresh account's first open: Skip, then the button, and the page is theirs.
+    if (await tess.locator('[data-testid="first-arrival"]').waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+      await tess.locator('[data-testid="arrival-skip"]').click();
+      await tess.locator('[data-testid="arrival-cta"]').click();
+      await tess.waitForURL(/\/today/);
+    }
     await db.update(schema.memberships).set({ teamCap: 2 }).where(eq(schema.memberships.id, mayaM.id));
     await owner.goto(`${base}/settings`);
     must(await owner.locator('[data-testid="team-full"]').count() && !(await owner.locator('[data-testid="team-invite-form"]').count()), "at the cap (2 members, 1 invite open against 2 seats) there is no invite form");
@@ -385,6 +397,12 @@ async function main() {
     await j.fill('input[name="password"]', "demo1234");
     await j.fill('input[name="confirm"]', "demo1234");
     await Promise.all([j.waitForURL(/\/today/, { timeout: 30000 }), j.click('button:has-text("Join the team")')]);
+    // The first arrival (H-472) plays on a fresh account's first open: Skip, then the button, and the page is theirs.
+    if (await j.locator('[data-testid="first-arrival"]').waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+      await j.locator('[data-testid="arrival-skip"]').click();
+      await j.locator('[data-testid="arrival-cta"]').click();
+      await j.waitForURL(/\/today/);
+    }
     await j.locator('[data-testid="team-banner"]').waitFor({ timeout: 20000 });
     must(await j.locator('[data-testid="team-switch"]').count(), "with two HelixOS the banner offers the switch");
     const jRow = (await db.query.teamMembers.findFirst({ where: and(eq(schema.teamMembers.teamUserId, jordan.id), isNull(schema.teamMembers.removedAt)) }))!;
@@ -430,6 +448,12 @@ async function main() {
     await phone.fill('input[name="password"]', PASSWORD);
     await phone.fill('input[name="confirm"]', PASSWORD);
     await Promise.all([phone.waitForURL(/\/today/, { timeout: 30000 }), phone.click('button:has-text("Join the team")')]);
+    // The first arrival (H-472) plays on a fresh account's first open: Skip, then the button, and the page is theirs.
+    if (await phone.locator('[data-testid="first-arrival"]').waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+      await phone.locator('[data-testid="arrival-skip"]').click();
+      await phone.locator('[data-testid="arrival-cta"]').click();
+      await phone.waitForURL(/\/today/);
+    }
     await phone.locator('[data-testid="team-banner"]').waitFor({ timeout: 20000 });
     if (await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error("the team banner scrolls sideways on a phone");
     await phone.close();
