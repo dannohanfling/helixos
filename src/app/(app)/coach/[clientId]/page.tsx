@@ -4,7 +4,10 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { setTestAccountAction, switchToClientAction } from "@/lib/actions/switch";
-import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction } from "@/lib/actions/coach";
+import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction, setClientTierAction, setOohOverrideAction } from "@/lib/actions/coach";
+import { PROGRAM_ORDER } from "@/lib/engine/recordings";
+import { oohAccessWords, oohSwitchWords } from "@/lib/engine/office-hours";
+import { oohAccessOf } from "@/lib/office-hours-access";
 import { lastEmailChange } from "@/lib/email-change";
 import { EMAIL_CHANGE_CRM_NOTE, EMAIL_CHANGE_SAID } from "@/lib/engine/account";
 import { emailBlock } from "@/lib/engine/email-gate";
@@ -159,6 +162,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
     { label: "Content posted", count: posted.length, last: posted[0]?.postedAt ? `${posted[0].title} · ${formatDate(posted[0].postedAt.slice(0, 10))}` : posted[0]?.title ?? null },
   ];
   const when = (iso: string) => formatDateTime(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z", v.tz);
+  // Office Hours by program level (H-470): what this client has today, and the coach's switch over it.
+  const ooh = await oohAccessOf({ workspaceId: m.workspaceId, userId: m.userId, role: m.role, programTier: m.programTier, officeHoursOverride: m.officeHoursOverride }, v.today);
 
   return (
     <>
@@ -204,6 +209,42 @@ export default async function CoachClientPage({ params, searchParams }: { params
         }
       />
       <EssenceOverNote data={essence} own={false} />
+      {/* Program level and Office Hours (H-470): the level sets the default; the coach's switch wins either way until reset. */}
+      <div className="mt-3 grid gap-3 rounded-lg border border-line p-3 text-sm sm:grid-cols-2" data-testid="client-level" data-ooh={ooh.open ? "on" : "off"} data-ooh-reason={ooh.reason}>
+        <div className="space-y-1">
+          <div className="font-semibold">Program level</div>
+          <form action={setClientTierAction} className="flex flex-wrap items-center gap-2" data-testid="level-form">
+            <input type="hidden" name="membershipId" value={m.id} />
+            {/* Keyed on the level: a form action resets its fields to the first render's default, so the saved level needs a fresh mount to show. */}
+            <select key={m.programTier} className="field w-auto py-1 text-sm" name="programTier" defaultValue={m.programTier} aria-label="Program level" data-testid="level-select">
+              {PROGRAM_ORDER.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+            <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="level-save">Save</SubmitButton>
+          </form>
+          <p className="text-xs text-ink-3">Accelerator, Academy, Elite or Luxe. Academy and up have Office Hours by default.</p>
+        </div>
+        <div className="space-y-1">
+          <div className="font-semibold">Office Hours</div>
+          <form action={setOohOverrideAction} className="flex flex-wrap items-center gap-2" data-testid="ooh-switch-form">
+            <input type="hidden" name="membershipId" value={m.id} />
+            <input type="hidden" name="override" value={ooh.open ? "off" : "on"} />
+            <SubmitButton className={`btn btn-xs ${ooh.open ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="ooh-switch">
+              {ooh.open ? "Turn off" : "Turn on"}
+            </SubmitButton>
+            <span className="text-xs text-ink-3" data-testid="ooh-switch-words">{oohSwitchWords(m.officeHoursOverride, m.programTier)}</span>
+          </form>
+          {m.officeHoursOverride ? (
+            <form action={setOohOverrideAction} className="inline">
+              <input type="hidden" name="membershipId" value={m.id} />
+              <input type="hidden" name="override" value="" />
+              <SubmitButton className="text-xs underline" pendingText="Resetting…" data-testid="ooh-reset">Reset to level</SubmitButton>
+            </form>
+          ) : null}
+          <p className="text-xs text-ink-3" data-testid="ooh-access-words">{oohAccessWords(ooh)}</p>
+        </div>
+      </div>
       {/* Switch to client (rev 216): into this client's HelixOS, to look, or to set it up when they let their coach work in it. */}
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 text-sm" data-testid="client-switch" data-can-work={m.coachCanWork ? "1" : "0"}>
         <span>

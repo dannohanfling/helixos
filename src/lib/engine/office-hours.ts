@@ -140,3 +140,63 @@ export function submittedByWords(r: Pick<OohTeamRow, "submittedByUserId">, nameO
 export function oohNoticeWords(name: string, fridayLabel: string): string {
   return `${name} booked office hours for you, ${fridayLabel}`;
 }
+
+/*
+ * Office Hours by program level (H-470): Academy, Elite and Luxe have it; Accelerator does not; the coach's own switch on a
+ * client wins either way; a fulfilled 30-day access reward opens it for 30 days; the coach always has it. Pure.
+ */
+export const OOH_LEVELS_OPEN = ["Academy", "Elite", "Luxe"] as const;
+/** The rewards that open Office Hours while they run (src/data/seed/rewards.json). */
+export const OOH_ACCESS_REWARDS = ["30 Days Access to Evolve Omega Academy", "30 Days Access to Evolve Omega Elite"] as const;
+export const OOH_EARNED_DAYS = 30;
+/** The one line a client without access reads, on the page, from the action and from the connector. No prices, ever. */
+export const OOH_LOCKED_LINE = "Office Hours is not available on your plan.";
+
+export type OohOverride = "on" | "off" | null;
+export type OohClaim = { rewardName: string; status: string; fulfilledAt: string | null };
+export type OohAccess = { open: boolean; reason: "coach" | "set_on" | "set_off" | "earned" | "level" | "locked"; level: string; until: string | null };
+
+/** The last day a fulfilled access reward still opens Office Hours, or null: 30 days from the coach's stamp (a claim with no stamp never counts). */
+export function oohEarnedUntil(claims: OohClaim[], today: string): string | null {
+  let best: string | null = null;
+  for (const c of claims) {
+    if (c.status !== "fulfilled" || !c.fulfilledAt || !(OOH_ACCESS_REWARDS as readonly string[]).includes(c.rewardName)) continue;
+    const d = storedUtc(c.fulfilledAt);
+    if (!d) continue;
+    const until = addDays(d.toISOString().slice(0, 10), OOH_EARNED_DAYS - 1);
+    if (until >= today && (!best || until > best)) best = until;
+  }
+  return best;
+}
+
+/** Whether this membership has Office Hours today, and why. The coach always; a team member gets the owner's answer by passing the owner's membership. */
+export function oohAccess(m: { role: string; programTier: string; officeHoursOverride: OohOverride }, claims: OohClaim[], today: string): OohAccess {
+  const level = m.programTier;
+  if (m.role === "coach") return { open: true, reason: "coach", level, until: null };
+  if (m.officeHoursOverride === "on") return { open: true, reason: "set_on", level, until: null };
+  if (m.officeHoursOverride === "off") return { open: false, reason: "set_off", level, until: null };
+  const until = oohEarnedUntil(claims, today);
+  if (until) return { open: true, reason: "earned", level, until };
+  if ((OOH_LEVELS_OPEN as readonly string[]).includes(level)) return { open: true, reason: "level", level, until: null };
+  return { open: false, reason: "locked", level, until: null };
+}
+
+/** Beside the coach's switch: "Following level (Academy)" or "Set by you". */
+export const oohSwitchWords = (override: OohOverride, level: string): string => (override ? "Set by you" : `Following level (${level})`);
+/** What the switch's state means for the client, in one line for the coach. */
+export function oohAccessWords(a: OohAccess): string {
+  switch (a.reason) {
+    case "coach":
+      return "On: the coach always has Office Hours.";
+    case "set_on":
+      return "On: set by you.";
+    case "set_off":
+      return "Off: set by you.";
+    case "earned":
+      return `On: earned access until ${a.until}, then it follows the level (${a.level}).`;
+    case "level":
+      return `On: ${a.level} and up have Office Hours.`;
+    default:
+      return `Off: ${a.level} does not have Office Hours. Flip the switch to give it to this client.`;
+  }
+}

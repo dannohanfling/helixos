@@ -21,7 +21,7 @@ import { ReportButton } from "@/components/report-button";
 import type { ChatWidgetProps } from "@/lib/chat";
 import { MemberAvatar } from "@/components/member-avatar";
 
-export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, loyaltyOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
+export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
   const tier = tierProgress(points);
   const team = Boolean(viewer.team);
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
@@ -44,7 +44,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
           <AppLogo size={40} />
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 [aside[data-rail=true]_&]:px-1">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
         </div>
         {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
         <div className="rail-only mt-3 flex flex-col items-center gap-2 border-t pt-3">

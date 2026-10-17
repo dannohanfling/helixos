@@ -189,6 +189,19 @@ async function main() {
     must((await ooh()) === had + 1, "nothing saved by the team member");
     console.log("✓ a team member refused on proofs, recordings, the call sheet and Office Hours; DMs open, as in the app");
 
+    // 10. Office Hours by program level (H-470): a client without access is refused with the one plain line; the list keeps history.
+    const { OOH_LOCKED_LINE } = await import("@/lib/engine/office-hours");
+    const lockedV = { ...v, membership: { ...v.membership, programTier: "Accelerator", officeHoursOverride: null } };
+    const locked = (n: string, input: Record<string, unknown>) => allTools().find((t) => t.name === n)!.handler(lockedV, input);
+    const refused = await locked("office_hours_submit", { ...ask, confirm: true }).then(() => "ok", (e: Error) => e.message);
+    must(refused === OOH_LOCKED_LINE && (await ooh()) === had + 1, `office_hours_submit refused to a client without access, nothing saved: ${refused}`);
+    const lockedList = await locked("office_hours_list", {});
+    must(lockedList.text.includes(`${ask.category}: ${ask.question} (pending)`) && lockedList.text.includes(OOH_LOCKED_LINE) && (lockedList.data as { locked?: boolean }).locked === true, `office_hours_list keeps the history and says new ones are off: ${lockedList.text.slice(-120)}`);
+    const switched = { ...lockedV, membership: { ...lockedV.membership, officeHoursOverride: "on" as const } };
+    const opened = await allTools().find((t) => t.name === "office_hours_submit")!.handler(switched, ask);
+    must((opened.data as { sent?: boolean }).sent === false, "the coach's switch on opens the connector too (the read-back, nothing saved)");
+    console.log("✓ Office Hours by level on the connector: refused without access, the list keeps history, the switch opens it");
+
     console.log("\nvoicepack walk passed");
   } finally {
     for (const p of mocks) {

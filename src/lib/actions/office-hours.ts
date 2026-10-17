@@ -6,7 +6,8 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { OOH_OUTCOMES, readList } from "@/lib/engine/office-hours";
+import { OOH_LOCKED_LINE, OOH_OUTCOMES, readList } from "@/lib/engine/office-hours";
+import { oohAccessFor } from "@/lib/office-hours-access";
 import { saveOohRequest } from "@/lib/office-hours-core";
 import { teamOf } from "@/lib/team";
 
@@ -25,6 +26,8 @@ export async function clearOohNoticeAction(): Promise<void> {
 export async function saveOohRequestAction(formData: FormData): Promise<void> {
   // Team access (H-413): a team member books for the owner; the request is the owner's, with the team member as its submitter.
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write.", team: "allow" });
+  // Office Hours by program level (H-470): enforced here, not only in the menu; the team path answers for its owner.
+  if (!(await oohAccessFor(v)).open) redirect(`/office-hours?error=${encodeURIComponent(OOH_LOCKED_LINE)}#mine`);
   const team = await teamOf(v.membership.id);
   const saved = await saveOohRequest(
     { workspaceId, userId, today: v.today, categories: v.workspace.oohCategories, actorId: v.team ? v.actor.id : null, attendeesAllowed: team.map((t) => t.member.teamUserId) },

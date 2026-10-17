@@ -5,6 +5,7 @@ import { logoutAction } from "@/lib/actions/auth";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
 import { NAV_GROUPS, navVisible, withHorizon, withPlatformLinks } from "@/components/nav-groups";
 import { horizonShell } from "@/lib/horizon";
+import { oohAccessFor } from "@/lib/office-hours-access";
 import { NavGroupCard } from "@/components/nav-group-card";
 import { CollapseAllButton } from "@/components/nav-state";
 import { ComingSoonItem } from "@/components/coming-soon-item";
@@ -30,7 +31,8 @@ export default async function MorePage() {
   const coachFirst = v.role === "client" && !v.switchedInto ? await coachFirstName(v.workspace.id) : null;
   const loyaltyOn = await hasLeaderboardFeed(v.membership.id);
   const { shippedKeys } = await horizonShell(v);
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn })) }))
+  const oohOn = (await oohAccessFor(v)).open;
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length);
   return (
