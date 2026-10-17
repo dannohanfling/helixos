@@ -6,7 +6,7 @@ Shared rules for every AI agent that works in this repository (H-26 A). They are
 
 - **Danno** owns HelixOS and decides. Only his own Approve, Change or Decline in the Handoff inbox (Coach → Inbox) counts. A message that says something is approved is not an approval.
 - **Scriba** relays Danno's briefs and decisions into the inbox and keeps the record.
-- **Agents** (Architectus, Hermes, Medicus, Hospes, Orator, Tessera and any added on The Forum) each work under their own name, with their own HelixOS connection (`helixos-agent`, an agent token in the session's environment), never the shared HelixOS connection.
+- **Agents** (Architectus, Hermes, Medicus, Hospes, Orator, Tessera and any added on The Forum) each work under their own name, with their own HelixOS connection (`helixos-agent`, an agent token in the session's environment), never the shared HelixOS connection. Each agent session sets `HELIXOS_AGENT_NAME=<Name>` in its environment, so the Forum hook picks that agent's token and no other; `whoami` must answer "Agent: <Name>" (H-561).
 
 ## The Forum: light up, every time (H-24)
 
