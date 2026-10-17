@@ -9,6 +9,9 @@ import { lbSerif } from "@/components/leaderboard/fonts";
 import { useHidden, useQuiet } from "./scene-life";
 import "./first-arrival.css";
 
+/** Fired when the first arrival closes, so what waits on it (the streak flame's surge) can play. */
+export const ARRIVAL_CLOSED = "helixos:arrival-closed";
+
 const Sky = ({ full }: { full: boolean }) => (
   <svg className="fa-sky" viewBox="0 0 390 120" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
     <g fill="#1A120B">
@@ -85,6 +88,9 @@ export function FirstArrival({ card }: { card: ArrivalCard }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [closed]);
+  useEffect(() => {
+    if (closed) window.dispatchEvent(new Event(ARRIVAL_CLOSED));
   }, [closed]);
   if (closed) return null;
   const skip = () => setInstant(true);

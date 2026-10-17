@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 228,
+    date: "2026-10-17",
+    title: "Your streak now has a flame. Keep it lit.",
+    lines: [
+      "The fire next to your streak count is drawn live. It starts as an Ember, grows into a Torch at 7 days and burns gold from 30 days.",
+      "The first time you open HelixOS on a day that counts, the flame swells and the count ticks up by one.",
+      "From 4 pm until you close out the day, it dims to a still ember with Waiting on you. Tap the flame to see your streak, your tier and the days to the next one.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 227,
     date: "2026-10-17",
     title: "The Forum tells you when an agent stops checking in",
