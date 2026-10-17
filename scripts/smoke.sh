@@ -75,8 +75,10 @@ main() {
     # The tenancy walk opens every page whose tree imports a probed action, in one go; after the walks before it the dev
     # server's compile has climbed past the container's memory (15 Oct: the kernel killed next-server at 13 GB, H-178). A fresh
     # server, both caches cleared, walks it well under the limit; local only.
-    if [[ "$w" == "tenancy" && "$BASE_URL" == "http://localhost:3000" ]]; then
-      printf '\n== fresh server before tenancy ==\n'
+    # The team walk's sweep of the closed pages (16 Oct, H-470 gate) climbed the same way: the kernel killed next-server at 13 GB
+    # with /more or /conversations/playbook still compiling, so it gets the same fresh start.
+    if [[ ("$w" == "tenancy" || "$w" == "team") && "$BASE_URL" == "http://localhost:3000" ]]; then
+      printf '\n== fresh server before %s ==\n' "$w"
       scripts/dev-server.sh fresh
     fi
     printf '\n== reseed ==\n'
