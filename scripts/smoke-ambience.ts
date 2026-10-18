@@ -6,8 +6,10 @@
  * on a reload, never with Sounds off. PR 2, the Aqueduct: a first visit plays nothing and stamps what it showed; a repaired arch
  * plays once (the card's words from the engine, the green tag, the fountain), never on the reload; in a hidden tab it waits and
  * stamps nothing until the member looks; reduced motion shows the end state with nothing moving; the fountain at 390, 1024 and
- * 1440 in both looks with nothing sideways; a hidden tab holds the water. Runs against the dev server; fixtures go straight to
- * the database.
+ * 1440 in both looks with nothing sideways; a hidden tab holds the water. PR 3, the Forum: at 390, 1024 and 1440 in both looks
+ * the look's own parts (night: three flicker copies, the pool, the flame, ten fireflies; golden hour: the cloud, five doves),
+ * running, nothing sideways, the map still on top of it; a hidden tab holds it; reduced motion draws none of it. Runs against the
+ * dev server; fixtures go straight to the database.
  */
 import { chromium, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -247,6 +249,51 @@ async function main() {
     }
     await page2.close();
     console.log("✓ Aqueduct: the fountain at 390, 1024 and 1440 in both looks, nothing sideways; the card under the picture on a phone");
+
+    // ── The Forum (PR 3). ──
+    const fo = await ctx.newPage();
+    fo.on("response", (res) => {
+      if (res.status() >= 500) failures.push(`${res.status()} ${res.url()}`);
+    });
+    const foLayer = '[data-testid="forum-ambience"]';
+    for (const look of ["night", "day"] as const) {
+      await db.update(schema.memberships).set({ sceneLook: look }).where(eq(schema.memberships.id, mm.id));
+      for (const w of [390, 1024, 1440]) {
+        await fo.setViewportSize({ width: w, height: 900 });
+        await fo.goto(`${base}/forum`, { waitUntil: "networkidle" });
+        await fo.locator(foLayer).waitFor();
+        must((await fo.locator(foLayer).getAttribute("data-look")) === look, `Forum ${w}/${look}: the layer follows the look`);
+        const n = async (id: string) => fo.locator(`${foLayer} [data-testid="${id}"]`).count();
+        if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-pool")) === 1 && (await n("amb-flame")) === 1 && (await n("amb-firefly")) === 10 && (await n("amb-dove")) === 0, `Forum ${w}/night: three flicker copies, the pool, the flame, ten fireflies`);
+        else must((await n("amb-cloud")) === 1 && (await n("amb-dove")) === 5 && (await n("amb-flicker")) === 0, `Forum ${w}/day: the cloud and five doves`);
+        const sideways = await fo.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+        must(sideways <= 0, `Forum ${w}/${look}: nothing scrolls sideways (${sideways}px)`);
+        const anims = (await layerAnims(fo, foLayer))!;
+        must(anims.length > 0 && anims.every((st) => st === "running"), `Forum ${w}/${look}: the ambience is running (${anims.length})`);
+        // The map stays on top: what's under the scene's centre belongs to the map's SVG, never to the ambience.
+        const onTop = await fo.evaluate((sel) => {
+          const box = document.querySelector('[data-testid="forum-map"] .fo-scene')!.getBoundingClientRect();
+          const el = document.elementFromPoint(box.left + box.width / 2, box.top + box.height * 0.3);
+          return !!el && !el.closest(sel) && !!el.closest("svg");
+        }, foLayer);
+        must(onTop, `Forum ${w}/${look}: the map's buildings stay on top of the ambience`);
+        await fo.waitForTimeout(1200);
+        await fo.screenshot({ path: `screenshots/ambience-forum-${look}-${w}.png` });
+      }
+    }
+    await setHidden(fo, true);
+    await fo.waitForFunction((sel) => document.querySelector(sel)?.classList.contains("amb-still"), foLayer);
+    const foHeld = (await layerAnims(fo, foLayer))!;
+    must(foHeld.length > 0 && foHeld.every((st) => st === "paused"), "Forum: a hidden tab holds every animation");
+    await setHidden(fo, false);
+    await fo.close();
+    const still3 = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
+    const sp3 = await still3.newPage();
+    await sp3.goto(`${base}/forum`, { waitUntil: "networkidle" });
+    await sp3.locator('[data-testid="forum-map"]').waitFor();
+    must((await sp3.locator(foLayer).count()) === 0, "Forum: reduced motion draws no ambience");
+    await still3.close();
+    console.log("✓ Forum: its own parts at 390, 1024 and 1440 in both looks, running, nothing sideways, the map on top; a hidden tab holds it; reduced motion draws none of it");
 
     must(failures.length === 0, `no server errors: ${failures.join(", ")}`);
     console.log("Ambience smoke passed");
