@@ -157,3 +157,8 @@
   .fo-bld.fo-working .fo-halo { animation: none; }
   .fo-photo { transition: none; }
 }
+
+/* H-719: the button to the agent inbox, a pill like the Forum's tools, a full 44 px tap target. */
+.fo-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--fo-gold); color: inherit; font-size: 14px; font-weight: 600; text-decoration: none; align-self: center; }
+.fo-pill:hover, .fo-pill:focus-visible { background: color-mix(in srgb, var(--fo-gold) 18%, transparent); }
+.fo-pill-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--fo-gold); color: #1b1408; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }

@@ -113,6 +113,12 @@ export default async function CoachInboxPage({ searchParams }: { searchParams: P
             What your agents pass each other, and what waits for you. <Link href="/coach/agents" className="underline">Agents and their tokens →</Link>
           </span>
         }
+        action={
+          // H-719: one tap to The Forum and back, for whoever can open both (this page is the coach's own already).
+          <Link href="/forum" className="btn btn-soft inline-flex min-h-11 items-center gap-1.5 rounded-full px-4" data-testid="inbox-to-forum">
+            <span aria-hidden>🏛️</span> The Forum
+          </Link>
+        }
       />
       <nav className="mb-4 flex gap-3 text-sm" aria-label="Inbox views">
         <Link href="/coach/inbox" aria-current={history ? undefined : "page"} className={history ? "underline" : "font-semibold"}>

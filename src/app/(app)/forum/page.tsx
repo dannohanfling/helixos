@@ -17,7 +17,7 @@ import { GlossaryText } from "@/components/glossary-text";
 import { SubmitButton } from "@/components/submit-button";
 import { CopyButton } from "@/components/copy-button";
 import { ApprovalButtons } from "@/components/handoff-bits";
-import { ownerInbox } from "@/lib/handoff";
+import { inboxCount, ownerInbox } from "@/lib/handoff";
 import { NUDGE_LINE } from "@/lib/engine/handoff";
 import "./forum.css";
 
@@ -80,6 +80,8 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
   const canEdit = own && !v.team;
   // The Handoff inbox (rev 769): the coach's waiting decisions sit in What needs you too, with the same three buttons.
   const inbox = own && v.role === "coach" ? await ownerInbox(m, 1) : null;
+  // The agent inbox button (H-719): only for the coach in their own Forum, the one person who can open /coach/inbox.
+  const inboxLink = own && v.role === "coach" && !v.switchedInto && !v.team ? await inboxCount(m) : null;
   // The Nudge and a stalled agent's item open its saved session link (13 Oct, H-495), when there is one.
   const sessions = own ? new Map((await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, m.workspaceId), eq(schema.handoffAgents.userId, m.userId)), columns: { agentId: true, sessionUrl: true } })).map((r) => [r.agentId, r.sessionUrl])) : new Map<string, string | null>();
   const approvals = inbox?.waiting ?? [];
@@ -102,6 +104,17 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
             <h1 className="fo-h1">The Forum</h1>
             <p className="fo-lede">{own ? "Every AI agent working for you, where its work is, and what's travelling between them." : `${firstName}'s agents, shared with you. Read only.`}</p>
           </div>
+          {inboxLink !== null ? (
+            // H-719: the coach's own Forum links to the agent inbox, with the menu's new count; nobody else gets a link they can't open.
+            <Link href="/coach/inbox" className="fo-pill" data-testid="forum-to-inbox">
+              <span aria-hidden>📥</span> Agent inbox
+              {inboxLink > 0 ? (
+                <span className="fo-pill-badge" aria-label={`${inboxLink} new`} data-testid="forum-inbox-badge">
+                  {inboxLink}
+                </span>
+              ) : null}
+            </Link>
+          ) : null}
           <div className="fo-stamp" data-testid="forum-stamp">
             <b>{state.updatedAt ? `Updated ${at(state.updatedAt)}` : "Waiting for the first report"}</b>
             <ForumLive updatedAt={state.updatedAt} />
