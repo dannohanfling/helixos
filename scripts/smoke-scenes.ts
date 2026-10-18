@@ -7,7 +7,7 @@
  * database, the way the welcome walk's do.
  */
 import { chromium, type Page } from "@playwright/test";
-import { mkdirSync, rmSync, writeFileSync, existsSync, readdirSync, rmdirSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, existsSync, readdirSync, rmdirSync, renameSync } from "node:fs";
 import path from "node:path";
 
 const base = process.argv[2] ?? "http://localhost:3000";
@@ -41,6 +41,22 @@ async function main() {
   const sounds = (page: Page) => page.evaluate(() => ((window as unknown as { __hxSounds?: string[] }).__hxSounds ?? []).slice());
   const ranksDir = path.join(process.cwd(), "public", "ranks");
   let fakeClip: string | null = null;
+  // The real relic clips (H-605) are set aside while the walk checks the medal and a broken file, and put back for the real-clip
+  // check and at the end, whatever happens. A stash left by a walk that was killed is put back first.
+  const stash = path.join(process.cwd(), ".smoke-ranks-stash");
+  const setAside = () => {
+    if (existsSync(ranksDir)) renameSync(ranksDir, stash);
+  };
+  const putBack = () => {
+    if (!existsSync(stash)) return;
+    if (existsSync(ranksDir)) {
+      if (readdirSync(ranksDir).length) throw new Error(`both ${ranksDir} and ${stash} hold files: sort them out by hand`);
+      rmdirSync(ranksDir);
+    }
+    renameSync(stash, ranksDir);
+  };
+  putBack();
+  setAside();
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
     const page = await ctx.newPage();
@@ -118,6 +134,38 @@ async function main() {
     rmSync(fakeClip);
     fakeClip = null;
     console.log("✓ the clip window when a file exists (a broken file strikes the card all the same), no sound before a gesture, Escape twice");
+
+    // ── The real relic clip for this rank (H-605): the WebM plays to its end with the last frame as its poster, then the card. ──
+    if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
+    putBack();
+    if (existsSync(path.join(ranksDir, `rank-${card.slug}.webm`))) {
+      // A fresh context, signed in the same: this page's cache still holds the broken file just played at the same address.
+      const real = await browser.newContext({ viewport: { width: 1280, height: 900 }, storageState: await ctx.storageState() });
+      const rp = await real.newPage();
+      rp.on("response", (r) => {
+        if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
+      });
+      await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
+      await rp.goto(`${base}/today`);
+      const rrk = rp.locator('[data-testid="rank-up"]');
+      await rrk.waitFor({ timeout: 15000 });
+      const clipEl = rp.locator('[data-testid="rank-clip"]');
+      must((await rrk.getAttribute("data-window")) === "clip" && (await clipEl.count()) === 1, "the real clip: the window plays it");
+      must((await clipEl.getAttribute("poster")) === `/ranks/rank-${card.slug}-end.jpg`, "its last frame is the poster");
+      await rp.waitForFunction(() => (document.querySelector('[data-testid="rank-clip"]') as HTMLVideoElement | null)?.ended === true, null, { timeout: 20000 });
+      const played = await clipEl.evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, error: v.error?.code ?? null, duration: v.duration, w: v.videoWidth }));
+      must(played.error === null && played.src.endsWith(`/ranks/rank-${card.slug}.webm`) && played.w === 1280 && played.duration > 5 && played.duration < 12, `the WebM played to its end: ${JSON.stringify(played)}`);
+      await rp.waitForFunction(() => ["card", "ended"].includes(document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") ?? ""), null, { timeout: 5000 });
+      await rp.keyboard.press("Escape");
+      await rp.keyboard.press("Escape");
+      must((await rrk.count()) === 0, "Escape twice closes it");
+      await rp.waitForTimeout(800);
+      await real.close();
+      console.log(`✓ the real ${card.slug} clip played to its end (${played.duration.toFixed(1)} s, 1280 wide) with its last frame as the poster, then the card`);
+    } else {
+      console.log(`· no real clip for ${card.slug} in public/ranks: skipped the real-clip check`);
+    }
+    setAside();
 
     // ── Reduced motion: the finished card at once. Then 390 and 1440, Skip, a hidden tab. ──
     await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
@@ -236,6 +284,7 @@ async function main() {
   } finally {
     if (fakeClip && existsSync(fakeClip)) rmSync(fakeClip);
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
+    putBack();
     await browser.close();
   }
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);

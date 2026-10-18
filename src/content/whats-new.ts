@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 230,
+    date: "2026-10-18",
+    title: "Every rank now has its own relic",
+    lines: [
+      "When you reach a new rank, from Philosopher to Olympian, the gold window now plays a short film of that rank's relic before your card, in place of the struck medal.",
+      "With reduced motion on, you see the film's last frame instead.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 228,
     date: "2026-10-17",
     title: "Your streak now has a flame. Keep it lit.",
