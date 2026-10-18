@@ -54,18 +54,19 @@ export function callWhen(startsAt: string, tz: string, minutes = CALL_MINUTES): 
 /** The ic-<YYYY-MM-DD> tag for that call's day. */
 export const dayTag = (w: CallWhen) => `ic-${w.isoDay}`;
 
-const stamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+/** An instant as an iCalendar UTC stamp: "20261023T170000Z". Shared with the calls' file (src/lib/engine/calls.ts). */
+export const icsStamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
 /** Add to Google Calendar: Google's own event template link. Nothing about the person goes in it. */
 export function googleCalendarUrl(o: { title: string; details: string; when: CallWhen; location: string | null }): string {
-  const q = new URLSearchParams({ action: "TEMPLATE", text: o.title, dates: `${stamp(o.when.startsAt)}/${stamp(o.when.endsAt)}`, details: o.details });
+  const q = new URLSearchParams({ action: "TEMPLATE", text: o.title, dates: `${icsStamp(o.when.startsAt)}/${icsStamp(o.when.endsAt)}`, details: o.details });
   if (o.location) q.set("location", o.location);
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
 
 /** RFC 5545 text: escape \ ; , and newlines, then fold lines at 75 octets. */
-const icsText = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
-function fold(line: string): string {
+export const icsText = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+export function icsFold(line: string): string {
   const bytes = Buffer.from(line, "utf8");
   if (bytes.length <= 75) return line;
   const out: string[] = [];
@@ -92,9 +93,9 @@ export function icsFile(o: { uid: string; title: string; details: string; when: 
     ...(o.zone ? [`X-WR-TIMEZONE:${o.zone}`] : []),
     "BEGIN:VEVENT",
     `UID:${o.uid}`,
-    `DTSTAMP:${stamp((o.now ?? new Date()).toISOString())}`,
-    `DTSTART:${stamp(o.when.startsAt)}`,
-    `DTEND:${stamp(o.when.endsAt)}`,
+    `DTSTAMP:${icsStamp((o.now ?? new Date()).toISOString())}`,
+    `DTSTART:${icsStamp(o.when.startsAt)}`,
+    `DTEND:${icsStamp(o.when.endsAt)}`,
     `SUMMARY:${icsText(o.title)}`,
     `DESCRIPTION:${icsText(o.details)}`,
     ...(o.location ? [`LOCATION:${icsText(o.location)}`, `URL:${o.location}`] : []),
@@ -106,7 +107,7 @@ export function icsFile(o: { uid: string; title: string; details: string; when: 
     "END:VEVENT",
     "END:VCALENDAR",
   ];
-  return lines.map(fold).join("\r\n") + "\r\n";
+  return lines.map(icsFold).join("\r\n") + "\r\n";
 }
 
 /** The countdown's parts at `now`; all zero once the call has started. */

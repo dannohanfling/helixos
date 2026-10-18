@@ -29,6 +29,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/library", label: "Library", icon: "🗂️", team: true, line: "posts and assets to reuse" },
       { href: "/conversations", label: "DMs", icon: "💬", team: true, line: "every conversation, logged" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
+      // The weekly calls (H-820, plan H-828): every member, in their own time; a team member sees the owner's.
+      { href: "/calls", label: "Calls", icon: "📅", hint: "this week", team: true },
       // Team access (H-413): a team member books office hours for the owner and says who's attending.
       // Office Hours by program level (H-470): Academy and up, or the coach's switch; gone otherwise, no card, no prices.
       { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true, oohOnly: true },

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 262,
+    date: "2026-10-18",
+    title: "Calls: this week's calls, in your time",
+    lines: [
+      "Calls is in your menu, under Daily: the next seven days of the calls your level can join, each in your own time zone, with the passcode and a Copy button.",
+      "Join opens 10 minutes before each call and stays open until it ends; a live call shows Live now at the top, and Today shows the next call when one starts within a day. Add to calendar puts a call in your calendar every week, without the days it is off.",
+      "For the coach: Settings → Calls lists every call with who it is for. Add, edit, switch off or reorder a call, mark a day with no call, and set the shared link and passcode.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 272,
     date: "2026-10-19",
     title: "Your HelixOS points can go to the Evolve Omega pass",

@@ -56,6 +56,9 @@ import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 import { logTiming, tick } from "@/lib/timing";
+import { callsBetween } from "@/lib/calls";
+import { canJoin, joinState, nextCallLine, nextCallWithin, visibleTo } from "@/lib/engine/calls";
+import { CallJoin } from "@/components/call-join";
 
 export const metadata = { title: "Today" };
 
@@ -96,7 +99,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     );
   // The day's data, the intentions, the closed days, Body's line, the coach's notices and the rest of the page's own reads run
   // together (H-164 §9: one after another they held "Loading…" for seconds; the timing line below says what each part cost).
-  const [d, week, month, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup] = await Promise.all([
+  const callsNow = new Date();
+  const [d, week, month, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup, callsSoon] = await Promise.all([
     todayData(v),
     // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
     db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) }).then((w) => w ?? null),
@@ -120,6 +124,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         : Promise.resolve(null),
     // H-270 §1: the Setup card's steps, evaluated from what HelixOS already holds.
     setupFor(v),
+    // The Next call line (H-828): the weekly calls of the next 24 hours, one query; nothing shows without one.
+    callsBetween(v.workspace.id, callsNow, new Date(callsNow.getTime() + 24 * 3_600_000)),
   ]);
   const tData = tick();
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
@@ -170,6 +176,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   }
   // Office hours a team member booked for the owner (H-413): one line, until the owner opens Office Hours.
   const oohNotice = !v.switchedInto && v.membership.oohNotice && (await oohAccessFor(v)).open ? await (async (n) => ({ ...n, name: (await db.query.users.findFirst({ where: eq(schema.users.id, n.teamUserId), columns: { name: true } }))?.name ?? "A team member" }))(v.membership.oohNotice) : null;
+  const nextCall = nextCallWithin(callsSoon.filter((o) => visibleTo(o, { role: v.role, programTier: v.membership.programTier })), callsNow);
+  const nextCallState = nextCall ? joinState(nextCall, callsNow) : null;
   const tools = !v.switchedInto && !v.team ? connectProgress({ ghl: Boolean(toolsConn && toolsConn.accounts.length && !toolsConn.lastError && toolsConn.ghlUserId?.trim()), cl: clTokenSet(v.membership) }) : null;
   // One line per render, times only (H-164 §9): how long the viewer, the reads and the page's shaping took.
   // The evening close (H-327 §2): the scene for the close just written, once per close, from the ledger row's own credit.
@@ -218,6 +226,23 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         <Link href="/office-hours#mine" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-ooh-notice">
           🙋 {oohNoticeWords(oohNotice.name, sessionWhen(oohNotice.friday, oohSchedule(v.workspace), v.tz, { zone: true }))} →
         </Link>
+      ) : null}
+      {/* The Next call line (H-828): a weekly call that is live or starts within 24 hours, with Join from 10 minutes before. */}
+      {nextCall && nextCallState ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm" data-testid="today-next-call" data-state={nextCallState} data-call={nextCall.call.id}>
+          <span className="min-w-0 font-medium" data-testid="today-next-call-line">
+            📅 {nextCallLine(nextCall, v.tz, callsNow)}
+          </span>
+          {canJoin(nextCallState) ? <CallJoin startIso={nextCall.startIso} endIso={nextCall.endIso} link={nextCall.link} tz={v.tz} initial={nextCallState} badge={false} /> : null}
+          {canJoin(nextCallState) && nextCall.passcode ? (
+            <span className="text-ink-2" data-testid="today-next-call-passcode">
+              Passcode: <b className="tabular">{nextCall.passcode}</b>
+            </span>
+          ) : null}
+          <Link href="/calls" className="ml-auto inline-flex min-h-11 items-center text-xs underline" data-testid="today-next-call-week">
+            See this week
+          </Link>
+        </div>
       ) : null}
       {featuresOn.length ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="features-on">
