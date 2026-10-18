@@ -260,6 +260,10 @@ async function main() {
     must((await page.locator('[data-testid="evening-tomorrow"]').textContent())?.trim() === tomorrowLine(today, mm.workDays, s.activity.ladder), `the line about tomorrow from the streak engine: ${tomorrowLine(today, mm.workDays, s.activity.ladder)}`);
     must((await sounds(page)).includes("crowd-murmur"), "the arena's murmur, after the close's tap (a gesture)");
     await page.waitForFunction(() => document.querySelector('[data-testid="evening-close"]')?.getAttribute("data-state") === "ended", null, { timeout: 8000 });
+    // H-651: the five lamp chimes rising as the light sweeps round, then the coin as "+N" pops.
+    const closeLog = await sounds(page);
+    const afterMurmur = closeLog.slice(closeLog.lastIndexOf("crowd-murmur") + 1);
+    must(JSON.stringify(afterMurmur.filter((n) => n.startsWith("chime-") || n === "coin")) === JSON.stringify(["chime-0", "chime-1", "chime-2", "chime-3", "chime-4", "coin"]), `the five chimes in order, then the coin: ${JSON.stringify(afterMurmur)}`);
     await page.screenshot({ path: "screenshots/sc03-close-1280.png" });
     await page.locator('[data-testid="evening-cta"]').click();
     must((await ec.count()) === 0, "Good night closes it");
@@ -274,8 +278,12 @@ async function main() {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload();
     await ec.waitFor({ timeout: 15000 });
+    const beforeSkip = (await sounds(page)).length;
     await page.locator('[data-testid="evening-skip"]').click();
     must((await ec.getAttribute("data-state")) === "done", "Skip jumps to the end");
+    await page.waitForTimeout(3600);
+    const afterSkip = (await sounds(page)).slice(beforeSkip);
+    must(!afterSkip.some((n) => n.startsWith("chime-") || n === "coin"), `Skip stops the chimes and the coin still to come: ${JSON.stringify(afterSkip)}`);
     must(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "390px: nothing wider than the screen");
     const ecCard = await page.locator(".ec-card").boundingBox();
     must(ecCard && ecCard.x >= 0 && ecCard.x + ecCard.width <= 391, "390px: the card on screen");

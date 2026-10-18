@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Fire } from "./fire";
+import { playTick } from "@/lib/synth-sounds";
 import { WELCOME_CLOSED } from "@/components/rank-up";
 import { ARRIVAL_CLOSED } from "@/components/first-arrival";
 import { flameLabel, nextTierLine, tierName, type FlameState } from "@/lib/engine/streak-flame";
@@ -61,6 +62,8 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
         setTimeout(() => {
           setTicked(true);
           setTicking(true);
+          // H-651: one soft tick as the count goes up (after a tap only, like every scene sound).
+          playTick(0.5);
         }, TICK_AT_MS),
       );
       timers.push(setTimeout(() => setTicking(false), TICK_AT_MS + 900));

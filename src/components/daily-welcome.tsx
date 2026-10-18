@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import { FIRE_STAGES, FLAME_GLOW, FLAME_SCALE, SPARKS_FROM_STAGE, arenaProgress, type WelcomeCard } from "@/lib/engine/welcome";
 import { lbSerif } from "@/components/leaderboard/fonts";
 import { armSounds, playSound, startFireLoop, stopFireLoop } from "@/lib/sounds";
+import { playCoinStrike, playTick } from "@/lib/synth-sounds";
 import { WELCOME_CLOSED } from "@/components/rank-up";
 import "./daily-welcome.css";
+
+/** When this week's coins land (their pop's delay), so a coin's sound falls on its own pop: today's last, the earlier days in a row. */
+export const TODAY_COIN_MS = 1350;
+export const coinDelayMs = (i: number): number => 850 + i * 70;
 
 /** The sequence's length (docs/welcome/daily-welcome-v1.dc.html): 3.3 s, 4 s on a milestone day. */
 const SEQUENCE_MS = 3300;
@@ -147,6 +152,15 @@ export function DailyWelcome({ card }: { card: WelcomeCard }) {
       if (t) clearTimeout(t);
     };
   }, [open, quiet, card.milestone]);
+  // Censor's small sounds (H-651): a soft tick as each earlier day's coin lands, the coin strike as today's lands. Skip stops
+  // what's left; the rules are every scene sound's (after a tap, Settings → Sounds, reduced motion, a hidden tab).
+  useEffect(() => {
+    if (!open || quiet || done) return;
+    const timers = card.coins.flatMap((c, i) =>
+      c.state === "today" ? [setTimeout(() => playCoinStrike(0.7), TODAY_COIN_MS)] : c.state === "done" ? [setTimeout(() => playTick(0.4), coinDelayMs(i))] : [],
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [open, quiet, done, card.coins]);
   // Closed: a rank-up due on the same open plays now.
   useEffect(() => {
     if (!open) window.dispatchEvent(new Event(WELCOME_CLOSED));
@@ -221,7 +235,7 @@ export function DailyWelcome({ card }: { card: WelcomeCard }) {
             {card.coins.map((c, i) => (
               <div key={c.date} className={`dw-cn dw-s-${c.state}`} data-testid="welcome-coin" data-state={c.state} data-amount={c.amount ?? ""}>
                 <div className="dw-cd">{c.label}</div>
-                <div className="dw-coin" style={{ "--d": c.state === "today" ? "1.35s" : `${(0.85 + i * 0.07).toFixed(2)}s` } as React.CSSProperties}>
+                <div className="dw-coin" style={{ "--d": `${(c.state === "today" ? TODAY_COIN_MS : coinDelayMs(i)) / 1000}s` } as React.CSSProperties}>
                   <span className="dw-cv">{c.state === "missed" || c.state === "off" || c.amount === null ? "" : c.amount}</span>
                   {c.state === "today" ? (
                     <>
