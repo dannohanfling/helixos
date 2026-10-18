@@ -72,7 +72,7 @@ export async function updateProofAction(formData: FormData): Promise<void> {
     // Harvested from a recording: the words are someone else's. Short and long are trims of the verbatim quote or they are refused.
     for (const k of SHAPES) {
       const value = f[k];
-      if (value && !isTrim(value, existing.quote)) redirect(`/proof/${id}?notVerbatim=${k}`);
+      if (value && !isTrim(value, existing.quote)) redirect(`/proof/${id}?verbatimError=${k}`);
     }
     // The name may be corrected (an email to a name, say) only while it is a draft; once approved the attribution is fixed.
     const who = existing.status === "approved" ? existing.who : (f.who ?? existing.who);
@@ -90,10 +90,10 @@ export async function approveProofAction(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   const p = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId)) });
   if (!p) return;
-  if (formData.get("permission") !== "on") redirect(`/proof/${id}?needsPermission=1`);
+  if (formData.get("permission") !== "on") redirect(`/proof/${id}?permissionError=1`);
   // The same gate, extended: an attachment that shows a person needs their likeness permission recorded before the proof can be approved.
   const held = attachmentsBlockApproval(await attachmentsFor(id));
-  if (held) redirect(`/proof/${id}?needsAttachmentConsent=1`);
+  if (held) redirect(`/proof/${id}?consentError=1`);
   await db.update(schema.proofs).set({ status: "approved", permissionAt: nowIso(), permissionBy: userId }).where(eq(schema.proofs.id, id));
   refresh();
   redirect(`/proof/${id}`);

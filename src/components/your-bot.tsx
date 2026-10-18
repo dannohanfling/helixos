@@ -31,7 +31,7 @@ const sectionEdit = (key: string): string => SECTION_EDIT[key] ?? "/offers";
  * checks, the steps that stay manual in Community Loyalty, and one Push. The member sees it for their own bot; their coach sees
  * the same panel for any member's.
  */
-export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m: schema.Membership; preview: Stage1Preview; own: boolean; whose: string; sp: { pushed?: string; changed?: string; failed?: string; note?: string; saved?: string; exampleMissing?: string; storyMissing?: string }; lastPushedLine: string }) {
+export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m: schema.Membership; preview: Stage1Preview; own: boolean; whose: string; sp: { pushed?: string; changed?: string; pushError?: string; note?: string; saved?: string; exampleError?: string; storyError?: string }; lastPushedLine: string }) {
   const rowOf = new Map(preview.rows.map((r) => [r.field, r]));
   const sending = preview.rows.filter((r) => r.status === "change");
   const c = preview.input.coach ?? {};
@@ -57,7 +57,7 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
     <div className="space-y-4" id="your-bot">
       {sp.pushed ? <p className="rounded-xl border border-good bg-good-soft p-3 text-sm" data-testid="bot-pushed" role="status">Pushed {sp.pushed} {sp.pushed === "1" ? "field" : "fields"} and read each one back. Below is what {whose} holds now.</p> : null}
       {sp.changed ? <p className="rounded-xl border border-warn bg-warn-soft p-3 text-sm" data-testid="bot-push-changed" role="status">The bot or the record changed since the page was read. Here is the new before-and-after; nothing was sent.</p> : null}
-      {sp.failed ? <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm font-medium" data-testid="bot-push-failed" role="alert">{sp.failed}</p> : null}
+      {sp.pushError ? <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm font-medium" data-testid="bot-push-failed" role="alert">{sp.pushError}</p> : null}
       {sp.note ? <p className="rounded-lg bg-surface-2 p-2 text-sm" data-testid="bot-push-note" role="status">{sp.note}</p> : null}
 
       <Card title="What your bot will be sent" action={preview.agentNames.length ? <span className="text-xs text-ink-3" data-testid="bot-agents">Agents on this bot: {preview.agentNames.join(", ")}</span> : null}>
@@ -235,7 +235,7 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
       <Card title="How you say it" action={<span className="text-xs text-ink-3">{examples.length} examples</span>}>
         <div id="examples" data-testid="bot-examples">
           <p className="mb-2 text-xs text-ink-3">Short examples from your own chats. Your bot matches the tone and the order and never copies them word for word. No approval needed. A normal message is two sentences at most; an objection up to four: acknowledge them, a story if one fits, the answer, then one question.</p>
-          {sp.exampleMissing ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="alert">An example needs the moment and what you say.</p> : null}
+          {sp.exampleError ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="alert">An example needs the moment and what you say.</p> : null}
           <ul className="space-y-2">
             {examples.map((e) => (
               <li key={e.id} className="rounded-lg border p-2 text-sm" data-testid="bot-example" data-kind={e.kind}>
@@ -265,7 +265,7 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
       <Card title="Your stories" action={<span className="text-xs text-ink-3">{stories.length} stories</span>}>
         <div id="stories" data-testid="bot-stories">
           <p className="mb-2 text-xs text-ink-3">True stories from your own life. Your bot tells only these, may shorten one and never adds to it: at most one plain story a chat, a belief story whenever its belief comes up, never more than two. Each is approved in Needs your eyes. No results or dollar figures here: those are proof.</p>
-          {sp.storyMissing ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="alert">A story needs its words, and a belief story the belief it answers.</p> : null}
+          {sp.storyError ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="alert">A story needs its words, and a belief story the belief it answers.</p> : null}
           <ul className="space-y-2">
             {stories.map((st) => (
               <li key={st.id} className="rounded-lg border p-2 text-sm" data-testid="bot-story" data-kind={st.kind}>

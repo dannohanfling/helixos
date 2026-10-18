@@ -2,7 +2,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PRIVATE_ATTACHMENT_PREFIX, PUBLIC_MAGNET_PREFIX, UPLOAD_MAX_BYTES, capLabel, keyIsPublic, privateAttachmentKey, publicFolderOf, publicMagnetKey, publicUrlFor, safeName, uploadRefusal } from "../storage-policy";
-import { HIT_SOURCES, QUESTION_WARNING, canvaHandoff, contentToText, endsWithQuestion, hitSource, keywordOf, magnetText, parseContent, parseGenerated, primaryTarget, scaffoldContent, slugify } from "../lead-magnet";
+import { HIT_SOURCES, MAGNET_TYPE_INFO, QUESTION_WARNING, canvaHandoff, contentToText, editorHint, endsWithQuestion, hitSource, itemStyle, keywordOf, magnetText, parseContent, parseGenerated, primaryTarget, scaffoldContent, sectionsSpec, slugify } from "../lead-magnet";
+import { MAGNET_TYPES } from "@/db/schema";
 import { SECTION_TASKS, sectionCountLine } from "../pathway";
 
 const SRC = join(__dirname, "..", "..", "..");
@@ -116,6 +117,41 @@ describe("lead magnet: the record and its outputs", () => {
     expect(s.intro).toBe("Post daily in twelve minutes.");
     expect(s.sections.map((x) => x.heading)).toEqual(["Why this matters", "Step one", "Step two", "Step three", "What to do next"]);
     expect(s.sections.every((x) => x.items.length === 0)).toBe(true);
+  });
+  it("an E-book (H-802) is chapters: a title over a few paragraphs each, scaffolded, asked for, and set as paragraphs everywhere", () => {
+    expect(MAGNET_TYPES).toContain("ebook");
+    expect(MAGNET_TYPE_INFO.ebook).toEqual({ label: "E-book", shape: "Chapters with a title and a few paragraphs each, several pages.", itemsLabel: "Chapters" });
+    // Every type has its info and a scaffold with at least one section.
+    for (const t of MAGNET_TYPES) {
+      expect(MAGNET_TYPE_INFO[t].label, t).toBeTruthy();
+      expect(scaffoldContent(t, "P").sections.length, t).toBeGreaterThan(0);
+    }
+    const s = scaffoldContent("ebook", "Fill your calendar without chasing.");
+    expect(s.intro).toBe("Fill your calendar without chasing.");
+    expect(s.sections.map((x) => x.heading)).toEqual(["Chapter 1", "Chapter 2", "Chapter 3", "Chapter 4", "What to do next"]);
+    expect(s.sections.every((x) => x.items.length === 0 && !x.why && !x.how)).toBe(true);
+    expect(itemStyle("ebook")).toBe("paragraph");
+    expect(itemStyle("checklist")).toBe("tick");
+    expect(itemStyle("audit")).toBe("tick");
+    expect(itemStyle("guide")).toBe("bullet");
+    expect(sectionsSpec("ebook")).toMatch(/chapters/);
+    expect(sectionsSpec("ebook")).toMatch(/paragraph/);
+    expect(sectionsSpec("guide")).toContain('"why", "how"');
+    expect(sectionsSpec("checklist")).not.toContain('"why"');
+    expect(editorHint("ebook")).toContain('"## Title" starts a chapter, "- " a paragraph');
+    expect(editorHint("ebook").endsWith("Chapters.")).toBe(true);
+    expect(editorHint("guide")).toContain('"why:" and "how:" fill a section');
+    const content = { intro: "", sections: [{ heading: "Why the chase fails", items: ["First paragraph, a few sentences.", "Second paragraph."] }], closing: "" };
+    // The editor's plain shape round-trips a chapter's paragraphs.
+    expect(parseContent(contentToText(content))).toEqual(content);
+    const text = magnetText({ title: "T", promise: "P", type: "ebook", content });
+    expect(text).toContain("WHY THE CHASE FAILS\nFirst paragraph, a few sentences.\n\nSecond paragraph.");
+    expect(text).not.toMatch(/[•[]/);
+    const canva = canvaHandoff({ title: "T", promise: "P", type: "ebook", content });
+    expect(canva).toContain("Type: E-book.");
+    expect(canva).toContain("PAGE 2 — WHY THE CHASE FAILS\nFirst paragraph, a few sentences.\nSecond paragraph.");
+    expect(canva).toMatch(/chapter opener/);
+    expect(canva).not.toContain("- First paragraph");
   });
   it("the copy-outs carry the content; a checklist ticks, a guide bullets", () => {
     const content = { intro: "", sections: [{ heading: "The list", items: ["Do it."] }], closing: "" };

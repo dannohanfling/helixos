@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 257,
+    date: "2026-10-18",
+    title: "Your Essence keeps what you typed, and E-book lead magnets",
+    lines: [
+      "Your Essence keeps what you typed when a save would take it over the 20,000-character limit: the red line says so, and your words stay in the box to trim. A proof that isn't a trim of the quote, a bot example or story missing its words, and a contact stage that needs an email or phone keep your typing the same way.",
+      "The GoHighLevel permission for post statistics now reads as GoHighLevel's own list spells it: socialplanner/statistics.readonly, View Social Planner Statistics.",
+      "Lead magnets have a new type, E-book: chapters, each a title and a few paragraphs, on the page, in the PDF and in the Canva hand-off.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 264,
     date: "2026-10-18",
     title: "Loyalty health: every loyalty program on one page",

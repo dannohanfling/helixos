@@ -185,7 +185,7 @@ async function main() {
     await post("/__seed", { business_name_cbf: "Torres Nutrition" });
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await pushButton.waitFor({ timeout: 20000 });
-    await Promise.all([page.waitForURL(/\?failed=/), pushButton.click()]);
+    await Promise.all([page.waitForURL(/\?pushError=/), pushButton.click()]);
     const refused = (await page.locator('[data-testid="bot-push-failed"]').innerText()).trim();
     if (!/read-back differs on business_name_cbf/.test(refused)) throw new Error(`a field the bot did not write is a failed push, named beside the button, got "${refused}"`);
     if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.clBotFieldsPushedAt !== pushedAt) throw new Error("a push that did not read back does not move the record");

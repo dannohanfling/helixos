@@ -127,13 +127,13 @@ async function main() {
     if (!(await page.locator('[data-testid="who"]').count())) throw new Error("the name must be correctable before approval");
     await fillExact(page, '[data-testid="short-version"]', "I got three new clients without chasing anyone.");
     await submit(page, 'button:has-text("Save")');
-    await page.waitForURL(/notVerbatim=shortVersion/);
+    await page.waitForURL(/verbatimError=shortVersion/);
     await expectText(page, "isn't a trim of the quote", "rewrite refused");
     await fillExact(page, '[data-testid="who"]', "Jess Morgan-Lee");
     await fillExact(page, '[data-testid="short-version"]', "three new clients this month… didn't chase a single one.");
     await fillExact(page, '[data-testid="hook"]', "She 3x'd her client list in a month without chasing anyone.");
     await submit(page, 'button:has-text("Save")');
-    if (/notVerbatim/.test(page.url())) throw new Error("a trim with an ellipsis, and a hook in the client's own words, must be accepted");
+    if (/verbatimError/.test(page.url())) throw new Error("a trim with an ellipsis, and a hook in the client's own words, must be accepted");
     await expectText(page, "three new clients this month… didn't chase a single one.” — Jess M.", "copy-out carries the attribution (the corrected name)");
     if ((await page.inputValue('[data-testid="who"]')) !== "Jess Morgan-Lee") throw new Error("the corrected name must be saved while a draft");
     const frame = await page.locator('[data-testid="copy-frame"]').innerText();
@@ -144,7 +144,7 @@ async function main() {
     const tickTwo = (await page.locator('[data-testid="permission-tick"]').innerText()).replace(/\s+/g, " ").trim();
     if (tickTwo !== TICK_TWO) throw new Error(`tick two wording differs:\n${tickTwo}`);
     await submit(page, '[data-testid="approve"]');
-    await page.waitForURL(/needsPermission=1/);
+    await page.waitForURL(/permissionError=1/);
     await expectText(page, "tick the permission line first", "no tick, no approval");
     await page.check('[data-testid="permission-tick"] input');
     await submit(page, '[data-testid="approve"]');
@@ -161,7 +161,7 @@ async function main() {
     await page.waitForURL(/\/proof\/[a-z0-9-]+$/i);
     if (await page.locator('select[name="status"]').count()) throw new Error("status must not be settable from the form");
     await submit(page, '[data-testid="approve"]');
-    await page.waitForURL(/needsPermission=1/);
+    await page.waitForURL(/permissionError=1/);
     await page.check('[data-testid="permission-tick"] input');
     await submit(page, '[data-testid="approve"]');
     await expectText(page, "Dana has given me permission", "typed proof approved through the same tick");

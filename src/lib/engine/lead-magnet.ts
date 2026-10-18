@@ -13,7 +13,24 @@ export const MAGNET_TYPE_INFO: Record<MagnetType, { label: string; shape: string
   swipe_file: { label: "Swipe file", shape: "Templates to copy, minimal framing.", itemsLabel: "Templates" },
   audit: { label: "Audit or scorecard", shape: "Questions with a score and what each result means.", itemsLabel: "Questions" },
   resource_list: { label: "Resource list", shape: "Curated links with a line each on why.", itemsLabel: "Resources" },
+  ebook: { label: "E-book", shape: "Chapters with a title and a few paragraphs each, several pages.", itemsLabel: "Chapters" },
 };
+
+/** How a section's items read: boxes to tick (a checklist, an audit), paragraphs (an E-book's chapters), or bullets (the rest). */
+export type ItemStyle = "tick" | "paragraph" | "bullet";
+export const itemStyle = (type: MagnetType): ItemStyle => (type === "checklist" || type === "audit" ? "tick" : type === "ebook" ? "paragraph" : "bullet");
+
+/** What the model is asked to return as "sections", by type: a guide adds its why and how; an E-book's sections are chapters of paragraphs. */
+export function sectionsSpec(type: MagnetType): string {
+  if (type === "ebook") return `"sections" (the chapters: an array of objects with "heading", the chapter's title, and "items", its paragraphs: an array of three to five strings, each a full paragraph of a few sentences)`;
+  return `"sections" (an array of objects with "heading", "items" (an array of strings)${type === "guide" ? ', "why", "how"' : ""})`;
+}
+
+/** The editor's one-line help under Content: what starts a section and what an item is, in this type's words. */
+export function editorHint(type: MagnetType): string {
+  const start = type === "ebook" ? `"## Title" starts a chapter, "- " a paragraph` : `"## Heading" starts a section, "- " an item${type === "guide" ? ', "why:" and "how:" fill a section' : ""}`;
+  return `${start}; text before the first heading is the intro; "---" starts the closing. ${MAGNET_TYPE_INFO[type].itemsLabel}.`;
+}
 
 /** The word people comment: upper case letters and digits, nothing else. */
 export const keywordOf = (raw: string): string => raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 24);
@@ -89,7 +106,10 @@ export function magnetText(m: { title: string; promise: string; content: MagnetC
     lines.push(s.heading.toUpperCase());
     if (s.why) lines.push(`Why: ${s.why}`);
     if (s.how) lines.push(`How: ${s.how}`);
-    for (const i of s.items) lines.push(m.type === "checklist" || m.type === "audit" ? `[ ] ${i}` : `• ${i}`);
+    const style = itemStyle(m.type);
+    // An E-book's paragraphs stand as paragraphs, a blank line between them.
+    if (style === "paragraph") lines.push(s.items.join("\n\n"));
+    else for (const i of s.items) lines.push(style === "tick" ? `[ ] ${i}` : `• ${i}`);
     lines.push("");
   }
   if (m.content.closing) lines.push(m.content.closing);
@@ -105,8 +125,8 @@ export function canvaHandoff(m: { title: string; promise: string; content: Magne
     out.push(`PAGE ${i + 2} — ${s.heading.toUpperCase()}`);
     if (s.why) out.push(`Why: ${s.why}`);
     if (s.how) out.push(`How: ${s.how}`);
-    for (const it of s.items) out.push(`- ${it}`);
-    out.push(`Art direction: ${m.type === "checklist" || m.type === "audit" ? "tick boxes down the left, one line each, plenty of air." : m.type === "cheat_sheet" ? "two columns, no paragraphs, headings in the gold band." : m.type === "resource_list" ? "one link per row with its one line beneath." : "one idea per page, heading large, body in a single column."}`, "");
+    for (const it of s.items) out.push(itemStyle(m.type) === "paragraph" ? it : `- ${it}`);
+    out.push(`Art direction: ${m.type === "checklist" || m.type === "audit" ? "tick boxes down the left, one line each, plenty of air." : m.type === "cheat_sheet" ? "two columns, no paragraphs, headings in the gold band." : m.type === "resource_list" ? "one link per row with its one line beneath." : m.type === "ebook" ? "a chapter opener: the chapter title large over a brand-gold band, then its paragraphs in a single column with wide margins; a long chapter runs on to the next page." : "one idea per page, heading large, body in a single column."}`, "");
   });
   if (m.content.closing) out.push(`LAST PAGE — CLOSE`, m.content.closing, `Art direction: the closing line alone, then the keyword or link, then the logo.`);
   return out.join("\n").trim();
@@ -169,6 +189,8 @@ export function scaffoldContent(type: MagnetType, promise: string): MagnetConten
     swipe_file: ["Template 1", "Template 2", "Template 3"],
     audit: ["Score yourself", "What your score means"],
     resource_list: ["The list"],
+    // Chapters, each a title over a few paragraphs: the paragraphs are the client's to write (or the AI's, in their voice).
+    ebook: ["Chapter 1", "Chapter 2", "Chapter 3", "Chapter 4", "What to do next"],
   };
   return { intro: promise, sections: headings[type].map((heading) => ({ heading, items: [] })), closing: "" };
 }

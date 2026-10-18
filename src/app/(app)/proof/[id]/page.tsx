@@ -21,7 +21,7 @@ import { ItemGone } from "@/components/item-gone";
 const TYPE_LABEL: Record<string, string> = { result: "Result", testimonial: "Testimonial", screenshot: "Screenshot", case_study: "Case study", stat: "Stat", story: "Story" };
 const SHAPE_LABEL: Record<string, string> = { shortVersion: "short version", longVersion: "long version" };
 
-export default async function ProofDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notVerbatim?: string; needsPermission?: string; needsAttachmentConsent?: string; error?: string; attached?: string }> }) {
+export default async function ProofDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ verbatimError?: string; permissionError?: string; consentError?: string; error?: string; attached?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
@@ -69,21 +69,21 @@ export default async function ProofDetailPage({ params, searchParams }: { params
           </div>
         }
       />
-      {sp.notVerbatim ? (
+      {sp.verbatimError ? (
         <p className="mb-4 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="not-verbatim" role="alert">
-          Not saved: the {SHAPE_LABEL[sp.notVerbatim] ?? sp.notVerbatim} isn&apos;t a trim of the quote. Cut with an ellipsis (…); never rewrite their words.
+          Not saved: the {SHAPE_LABEL[sp.verbatimError] ?? sp.verbatimError} isn&apos;t a trim of the quote. Cut with an ellipsis (…); never rewrite their words.
         </p>
       ) : null}
       {errorLine ? (
         <p className="mb-4 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="proof-error" role="alert">{errorLine}</p>
       ) : null}
       {sp.attached ? <p className="mb-4 rounded-lg bg-good-soft p-3 text-sm" data-testid="attached">Attached.</p> : null}
-      {sp.needsAttachmentConsent && held ? (
+      {sp.consentError && held ? (
         <p className="mb-4 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="needs-attachment-consent" role="alert">
           {held} Record it below, or remove the file, before approving.
         </p>
       ) : null}
-      {sp.needsPermission ? (
+      {sp.permissionError ? (
         <p className="mb-4 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="needs-permission" role="alert">
           Not approved: tick the permission line first.
         </p>

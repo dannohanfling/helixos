@@ -10,7 +10,7 @@ import { acceptMagnetAction, buildMagnetPdfAction, deleteMagnetAction, generateM
 import { gateFor, isUnreviewed } from "@/lib/engine/provenance";
 import { GateBlock, UnreviewedMark } from "@/components/provenance";
 import { formatDateTime } from "@/lib/dates";
-import { HIT_SOURCES, MAGNET_TYPE_INFO, QUESTION_WARNING, canvaHandoff, contentToText, endsWithQuestion, magnetText, primaryTarget } from "@/lib/engine/lead-magnet";
+import { HIT_SOURCES, MAGNET_TYPE_INFO, QUESTION_WARNING, canvaHandoff, contentToText, editorHint, endsWithQuestion, magnetText, primaryTarget } from "@/lib/engine/lead-magnet";
 import { STORAGE_UNCONFIGURED, publicUrls, storageConfigured } from "@/lib/storage";
 import { MagnetUpload } from "@/components/magnet-upload";
 import { AiFormStatus } from "@/components/ai-status";
@@ -116,7 +116,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
                   </select>
                 </Field>
               </div>
-              <Field label="Content" hint={`"## Heading" starts a section, "- " an item${m.type === "guide" ? ', "why:" and "how:" fill a section' : ""}; text before the first heading is the intro; "---" starts the closing. ${info.itemsLabel}.`}>
+              <Field label="Content" hint={editorHint(m.type)}>
                 <textarea className="field font-mono text-sm" name="content" rows={16} defaultValue={contentToText(m.content)} data-testid="magnet-content" />
               </Field>
               <fieldset className="grid gap-2 sm:grid-cols-2">

@@ -17,7 +17,7 @@ export const metadata = { title: "Essence" };
  * The client's brand voice as config: fourteen sections, one per step, save and return any time, nothing gated behind
  * completion. Every word is theirs. The one-line prompts under the hard fields are Danno's and appear only once supplied.
  */
-export default async function EssencePage({ searchParams }: { searchParams: Promise<{ step?: string; saved?: string; over?: string }> }) {
+export default async function EssencePage({ searchParams }: { searchParams: Promise<{ step?: string; saved?: string; error?: string; chars?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const data = await essenceFor(v.workspace.id, v.user.id);
@@ -60,9 +60,9 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
       <Progress value={(done.filled / done.total) * 100} tone={done.filled === done.total ? "good" : "accent"} />
       <EssenceOverNote data={data} own />
       {sp.saved ? <p className="mt-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="essence-saved">Saved.</p> : null}
-      {sp.over ? (
+      {sp.error === "over" ? (
         <p className="mt-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="essence-over" role="alert">
-          Not saved: that would make your Essence {Number(sp.over).toLocaleString()} characters, over the {ESSENCE_CAP.toLocaleString()} limit it has to stay under. Trim this section or another.
+          Not saved: that would make your Essence {Number(sp.chars).toLocaleString()} characters, over the {ESSENCE_CAP.toLocaleString()} limit it has to stay under. Trim this section or another.
         </p>
       ) : null}
       <div className="mt-4 grid gap-4 lg:grid-cols-[260px_1fr]">

@@ -123,6 +123,12 @@ export const essenceChars = (data: EssenceData) => serializeEssence(data)?.lengt
  */
 export const essenceOver = (data: EssenceData): number => Math.max(0, essenceChars(data) - ESSENCE_CAP);
 
+/**
+ * Where a save refused over the cap lands (H-802): the refusal is an error answer (?error=over), so the Save button puts back
+ * what was typed and the draft is kept, and the page says how big it would have been from `chars`.
+ */
+export const essenceOverAddress = (step: string, chars: number): string => `/essence?step=${encodeURIComponent(step)}&error=over&chars=${chars}`;
+
 /** Trim to fit: each filled section's share of the size, largest first. */
 export function sectionSizes(data: EssenceData): { key: string; title: string; chars: number }[] {
   const clean = normalizeEssence(data);

@@ -131,5 +131,5 @@ export async function sendFaqAction(): Promise<void> {
   // or by the platform, nothing changed on the bot; refused at the read-back, the write may have landed, so it says that.
   const why = out.note.replace(/^Not sent: /, "");
   const line = /^Pushed/.test(out.note) ? `Couldn't confirm the update on your bot. ${why}` : `Couldn't update your bot. Nothing changed there. ${why}`;
-  redirect(`${BRAIN}?failed=${encodeURIComponent(line)}`);
+  redirect(`${BRAIN}?sendError=${encodeURIComponent(line)}`);
 }

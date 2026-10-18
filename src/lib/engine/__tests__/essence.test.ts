@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ESSENCE_CAP, ESSENCE_PLACEHOLDERS, ESSENCE_SECTIONS, assembleSystem, completion, essenceChars, essenceOver, normalizeEssence, placeholderFor, sectionSizes, serializeEssence } from "../essence";
+import { isErrorAnswer } from "../done-label";
+import { refusalIn } from "@/lib/form-keep";
+import { ESSENCE_CAP, ESSENCE_PLACEHOLDERS, ESSENCE_SECTIONS, assembleSystem, completion, essenceChars, essenceOver, essenceOverAddress, normalizeEssence, placeholderFor, sectionSizes, serializeEssence } from "../essence";
 
 describe("the Essence schema", () => {
   it("has the thirteen production sections plus representative_stories, in order", () => {
@@ -68,5 +70,22 @@ describe("one way to build a system message", () => {
     expect(blocks).toEqual([{ text: "Write the post.", cached: false }]);
     expect(text).toBe("Write the post.");
     expect(text).not.toMatch(/voice|tone/i);
+  });
+});
+
+describe("a save refused over the cap (H-802)", () => {
+  it("lands on an address that is an error answer, so what was typed is put back and the draft kept", () => {
+    const url = new URL(essenceOverAddress("ethical_standards", 20512), "http://localhost");
+    expect(url.pathname).toBe("/essence");
+    expect(url.searchParams.get("step")).toBe("ethical_standards");
+    expect(url.searchParams.get("error")).toBe("over");
+    expect(url.searchParams.get("chars")).toBe("20512");
+    expect(isErrorAnswer(url.search)).toBe(true);
+    // No field named: the page's own red line says it; nothing is drawn beside a field
+    expect(refusalIn(url.search)).toEqual({ message: "over", field: null });
+  });
+  it("is never the old over= address, which read as a save", () => {
+    expect(isErrorAnswer("?step=identity&over=20512")).toBe(false);
+    expect(essenceOverAddress("identity", 20512)).not.toMatch(/[?&]over=/);
   });
 });
