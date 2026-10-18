@@ -20,6 +20,7 @@ import { headProofObject, deleteProofObject, presignHandoffUpload, putHandoffObj
 import { drawFlows, reportToForum } from "@/lib/forum";
 import { heardFrom } from "@/lib/forum-watch";
 import { forumNameKey, looksLikeSecret } from "@/lib/engine/forum";
+import { minuteOf, PING_TITLE } from "@/lib/engine/agent-connection";
 import {
   DANNO,
   HANDOFF_FILE_MAX_BYTES,
@@ -84,12 +85,70 @@ export async function revokeAgentTokens(o: Owner, agentId: string, why = "revoke
 
 /** A bearer agent token to its live token row and connection, or null. Only a token of the right shape is looked up. */
 export async function agentTokenRow(token: string): Promise<{ tokenId: string; appId: string } | null> {
-  if (!/^hxa_[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
+  if (!/^hxa_[A-Za-z0-9_-]{40,50}$/.test(token)) {
+    await countAuthFailure(null).catch(() => undefined);
+    return null;
+  }
   const hash = hashSecret(token);
   const row = await db.query.agentTokens.findFirst({ where: eq(schema.agentTokens.tokenHash, hash) });
-  if (!row || row.revokedAt || !safeEqual(row.tokenHash, hash)) return null;
+  if (!row || row.revokedAt || !safeEqual(row.tokenHash, hash)) {
+    await countAuthFailure(row && row.revokedAt ? row : null).catch(() => undefined);
+    return null;
+  }
   await db.update(schema.agentTokens).set({ lastUsedAt: nowIso() }).where(eq(schema.agentTokens.id, row.id));
   return { tokenId: row.id, appId: row.appId };
+}
+
+/**
+ * Check connection (H-559): one more refused call this minute, against the agent whose revoked token it was, or on the global
+ * count. Only the agent, the owner and the minute are kept; never the token or anything that could find it.
+ */
+async function countAuthFailure(revoked: { workspaceId: string; userId: string; agentId: string } | null, now: Date = new Date()): Promise<void> {
+  const minute = minuteOf(now);
+  const values = revoked
+    ? { id: newId(), scope: `agent:${revoked.agentId}`, workspaceId: revoked.workspaceId, userId: revoked.userId, agentId: revoked.agentId, minute, count: 1 }
+    : { id: newId(), scope: "global", workspaceId: null, userId: null, agentId: null, minute, count: 1 };
+  await db
+    .insert(schema.agentAuthFailures)
+    .values(values)
+    .onConflictDoUpdate({ target: [schema.agentAuthFailures.scope, schema.agentAuthFailures.minute], set: { count: sql`${schema.agentAuthFailures.count} + 1` } });
+}
+
+export type AgentConnection = {
+  token: { createdAt: string; lastUsedAt: string | null; last4: string } | null;
+  lastTool: string | null;
+  failures: { minute: string; count: number }[];
+  ping: { sentAt: string; ackedAt: string | null } | null;
+};
+
+/** Check connection (H-559): what HelixOS recorded for each agent: its live token, its last tool, recent refusals, its last ping. */
+export async function agentConnections(o: Owner, agentIds: string[], now: Date = new Date()): Promise<Map<string, AgentConnection>> {
+  const out = new Map<string, AgentConnection>();
+  if (!agentIds.length) return out;
+  const weekAgo = minuteOf(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+  const [tokens, fails, pings] = await Promise.all([
+    db.query.agentTokens.findMany({ where: and(eq(schema.agentTokens.workspaceId, o.workspaceId), eq(schema.agentTokens.userId, o.userId), inArray(schema.agentTokens.agentId, agentIds), isNull(schema.agentTokens.revokedAt)), orderBy: desc(schema.agentTokens.createdAt) }),
+    db.query.agentAuthFailures.findMany({ where: and(eq(schema.agentAuthFailures.workspaceId, o.workspaceId), eq(schema.agentAuthFailures.userId, o.userId), inArray(schema.agentAuthFailures.agentId, agentIds), sql`${schema.agentAuthFailures.minute} >= ${weekAgo}`) }),
+    db
+      .select({ createdAt: schema.handoffMessages.createdAt, recipient: schema.handoffDeliveries.recipient, ackedAt: schema.handoffDeliveries.ackedAt })
+      .from(schema.handoffMessages)
+      .innerJoin(schema.handoffDeliveries, eq(schema.handoffDeliveries.messageId, schema.handoffMessages.id))
+      .where(and(mine(o), isNull(schema.handoffMessages.fromAgentId), eq(schema.handoffMessages.title, PING_TITLE), inArray(schema.handoffDeliveries.recipient, agentIds)))
+      .orderBy(desc(schema.handoffMessages.seq)),
+  ]);
+  const appIds = tokens.map((t) => t.appId);
+  const apps = appIds.length ? await db.query.connectedApps.findMany({ where: inArray(schema.connectedApps.id, appIds), columns: { id: true, lastTool: true } }) : [];
+  for (const id of agentIds) {
+    const t = tokens.find((x) => x.agentId === id) ?? null;
+    const p = pings.find((x) => x.recipient === id) ?? null;
+    out.set(id, {
+      token: t ? { createdAt: t.createdAt, lastUsedAt: t.lastUsedAt, last4: t.last4 } : null,
+      lastTool: t ? (apps.find((a) => a.id === t.appId)?.lastTool ?? null) : null,
+      failures: fails.filter((f) => f.agentId === id).map((f) => ({ minute: f.minute, count: f.count })),
+      ping: p ? { sentAt: p.createdAt, ackedAt: p.ackedAt } : null,
+    });
+  }
+  return out;
 }
 
 /** Tie one of the owner's own connections (Cowork's claude.ai connector) to an agent, or untie it. Only the owner, by hand. */

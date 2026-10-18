@@ -4546,6 +4546,26 @@ export const agentTokens = sqliteTable(
 );
 export type AgentToken = typeof agentTokens.$inferSelect;
 
+/**
+ * Check connection (H-559): calls that came in on an agent token HelixOS doesn't accept, counted per minute. A revoked token
+ * of a known agent counts against that agent (scope "agent:<id>"); any other unknown token adds to one global count (scope
+ * "global", no agent, no owner). Never a token, a prefix or an address.
+ */
+export const agentAuthFailures = sqliteTable(
+  "agent_auth_failures",
+  {
+    id: id(),
+    scope: text("scope").notNull(),
+    workspaceId: text("workspace_id"),
+    userId: text("user_id"),
+    agentId: text("agent_id"),
+    /** The minute, as "2026-10-17T19:05:00Z". */
+    minute: text("minute").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [uniqueIndex("agent_auth_failures_scope_minute").on(t.scope, t.minute), index("agent_auth_failures_agent").on(t.agentId)],
+);
+
 export const HANDOFF_DECISIONS = ["approved", "changed", "declined"] as const;
 export const handoffMessages = sqliteTable(
   "handoff_messages",

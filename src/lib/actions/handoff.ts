@@ -13,6 +13,7 @@ import { refresh, str } from "@/lib/action-helpers";
 import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner, refusalOf, holdHandoff, releaseHandoff, supersedeHandoff } from "@/lib/handoff";
 import { CHECKIN_DEFAULTS, CHECKIN_EVERY, cleanSessionUrl, hhmm } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
+import { PING_TITLE } from "@/lib/engine/agent-connection";
 
 export type HandoffFormState = { error?: string; ok?: string; token?: string; agent?: string } | null;
 
@@ -30,6 +31,21 @@ export async function revokeAgentTokenAction(formData: FormData): Promise<void> 
   const coach = await requireCoach();
   await revokeAgentTokens({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "agentId"));
   refresh();
+}
+
+/** Check connection (H-559): re-read the agent's token, last tool, failures and ping, and say when it was checked. */
+export async function checkAgentConnectionAction(formData: FormData): Promise<void> {
+  await requireCoach();
+  const agentId = str(formData, "agentId");
+  redirect(`/coach/agents?checked=${encodeURIComponent(agentId)}&at=${Date.now()}#agent-${encodeURIComponent(agentId)}`);
+}
+
+/** Ping (H-559): an ordinary inbox message from the coach that the agent answers with handoff_ack. */
+export async function pingAgentAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const agentId = str(formData, "agentId");
+  await writeAsOwner({ workspaceId: coach.workspace.id, userId: coach.user.id }, agentId, "question", PING_TITLE, "", false);
+  redirect(`/coach/agents?pinged=${encodeURIComponent(agentId)}#agent-${encodeURIComponent(agentId)}`);
 }
 
 export async function tieConnectionAction(formData: FormData): Promise<void> {

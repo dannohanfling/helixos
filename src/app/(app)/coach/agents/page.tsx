@@ -8,12 +8,15 @@ import { CopyButton } from "@/components/copy-button";
 import { FilePicker } from "@/components/file-picker";
 import { AgentTokenButton } from "@/components/handoff-bits";
 import {
+  checkAgentConnectionAction,
+  pingAgentAction,
   revokeAgentTokenAction,
   saveAgentCheckinsAction,
   sendReadingPackAction,
   tieConnectionAction,
 } from "@/lib/actions/handoff";
-import { AGENT_TOKEN_CLIENT, agentSettings } from "@/lib/handoff";
+import { AGENT_TOKEN_CLIENT, agentConnections, agentSettings } from "@/lib/handoff";
+import { CHECK_LINE, connectionOf, envVarFor, failuresSince, pingLine } from "@/lib/engine/agent-connection";
 import { seedCoachForum } from "@/lib/forum";
 import { appUrl } from "@/lib/branded-email";
 import { formatDateTime } from "@/lib/dates";
@@ -37,7 +40,7 @@ export const metadata = { title: "Agents" };
 export default async function CoachAgentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pack?: string; packFor?: string; error?: string }>;
+  searchParams: Promise<{ pack?: string; packFor?: string; error?: string; checked?: string; pinged?: string }>;
 }) {
   const sp = await searchParams;
   const coach = await requireCoach();
@@ -73,6 +76,12 @@ export default async function CoachAgentsPage({
       agents.map(async (a) => [a.id, await agentSettings(o, a.id)] as const),
     ),
   );
+  const conns = await agentConnections(o, agents.map((a) => a.id));
+  const now = new Date();
+  const clock = (iso: string) =>
+    new Intl.DateTimeFormat("en-US", { timeZone: coach.tz, hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(
+      new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`),
+    );
   const at = (iso: string) =>
     formatDateTime(
       iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`,
@@ -117,6 +126,68 @@ export default async function CoachAgentsPage({
                       : "No token"}
                   </span>
                 </div>
+                {(() => {
+                  // Check connection (H-559): what HelixOS saw of this agent's token, in plain words.
+                  const k = conns.get(a.id)!;
+                  const st = connectionOf({
+                    agentName: a.name,
+                    token: k.token,
+                    lastTool: k.lastTool,
+                    failures: failuresSince(k.failures, k.token?.lastUsedAt ?? null),
+                    now,
+                    clock,
+                  });
+                  const ping = pingLine(k.ping, clock);
+                  const chip = st.chip === "done" ? "badge-good" : st.chip === "waiting" ? "badge-warn" : "";
+                  const chipWord = { none: "No token", never: "Not connected", connected: "Connected", failing: "Failing", quiet: "Quiet" }[st.state];
+                  return (
+                    <div className="space-y-2 rounded-lg border p-2 text-sm" data-testid="agent-conn" data-state={st.state}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`badge ${chip}`} data-testid="agent-conn-chip">{chipWord}</span>
+                        <span className="min-w-0" data-testid="agent-conn-line">{st.line}</span>
+                      </div>
+                      {sp.checked === a.id ? (
+                        <p className="text-xs text-ink-3" data-testid="agent-conn-checked">Checked {clock(now.toISOString())}.</p>
+                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        <form action={checkAgentConnectionAction}>
+                          <input type="hidden" name="agentId" value={a.id} />
+                          <SubmitButton className="btn btn-soft min-h-11" pendingText="Checking…" data-testid="agent-check">
+                            Check connection
+                          </SubmitButton>
+                        </form>
+                        <form action={pingAgentAction}>
+                          <input type="hidden" name="agentId" value={a.id} />
+                          <SubmitButton className="btn btn-soft min-h-11" pendingText="Sending…" data-testid="agent-ping">
+                            Ping {a.name}
+                          </SubmitButton>
+                        </form>
+                      </div>
+                      {ping ? <p data-testid="agent-ping-state">{ping}.</p> : null}
+                      <p className="text-xs text-ink-3">The ping sends {a.name} an inbox message to ack. It works only while the agent&apos;s session is awake.</p>
+                      <details className="text-sm" data-testid="agent-setup-help">
+                        <summary className="flex min-h-11 cursor-pointer items-center font-medium">Setup help</summary>
+                        <ul className="mt-1 list-disc space-y-1 pl-5 text-ink-2">
+                          <li>
+                            The token goes in the environment variable{" "}
+                            <code className="break-all" data-testid="agent-env-var">{envVarFor(a.name)}</code>.
+                          </li>
+                          <li>
+                            Add it in Claude Code → the environment the agent runs in (Default, unless you split them) → Environment variables, then start a <strong>new</strong> session. A running session doesn&apos;t see new variables.
+                          </li>
+                          <li>
+                            If the environment holds other agents&apos; tokens too, also set <code>HELIXOS_AGENT_NAME={a.name}</code>, or its Forum light lands on another agent.
+                          </li>
+                          <li className="flex flex-wrap items-center gap-2">
+                            <span>Then send it:</span>
+                            <span className="italic" data-testid="agent-check-line">{CHECK_LINE}</span>
+                            <CopyButton text={CHECK_LINE} label="Copy" className="btn btn-soft min-h-11" testId="agent-check-copy" />
+                          </li>
+                        </ul>
+                      </details>
+                    </div>
+                  );
+                })()}
                 {(() => {
                   const c = checkins.get(a.id)!;
                   const today =
