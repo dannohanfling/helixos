@@ -11,6 +11,7 @@ import { chromium } from "@playwright/test";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { execSync } from "node:child_process";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 
@@ -385,6 +386,10 @@ async function main() {
     console.log(`✓ routes: ${ownedProbed} owned routes each answer B's id exactly as a missing id, with none of B's words`);
     console.log(`✓ ${coachListed.length} coach route: a client reads it exactly as a missing id, with none of B's coach data: ${coachListed.join(", ")}`);
     console.log(`· public routes not owner-scoped, listed not skipped: ${publicListed.join("; ")}`);
+
+    // The route sweep compiles enough pages to bring the dev server near the container's memory (H-832, as the team walk, H-804):
+    // a fresh server before the action sweep, which compiles its own pages below anyway. The session lives in the database.
+    if (base === "http://localhost:3000") execSync("scripts/dev-server.sh fresh", { stdio: "inherit" });
 
     // ── Action sweep: a mutating action per owned table, called as A with B's id, changes nothing. ──
     // The dev server compiles a page's actions on first visit: open A's own Training pages so the Body actions are registered.
