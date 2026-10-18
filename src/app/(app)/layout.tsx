@@ -15,15 +15,9 @@ import { oohAccessFor } from "@/lib/office-hours-access";
 import { SoundsConfig } from "@/components/sounds-config";
 import { VoiceProvider } from "@/components/voice-context";
 import { voiceState } from "@/lib/queries/essence";
-import { intentionsDueFor } from "@/lib/queries/intentions";
-import { agentsOnFor, inboxCount } from "@/lib/handoff";
-import { WHATS_NEW } from "@/content/whats-new";
-import { unseenCount } from "@/lib/engine/whats-new";
+import { navBadges } from "@/lib/nav-badges";
 import { chatWidgetProps } from "@/lib/chat";
-import { hasVisibleRecordings, newRecordings } from "@/lib/recordings";
-import { coachFirstName, newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
-import { openClaims } from "@/lib/queries/rewards";
-import { waitingFeatures } from "@/lib/bot-features";
+import { coachFirstName } from "@/lib/queries/reports";
 import { choicesFor } from "@/lib/team";
 import { horizonShell } from "@/lib/horizon";
 import { HorizonNotice } from "@/components/horizon-notice";
@@ -37,35 +31,18 @@ export const metadata = { robots: { index: false, follow: false } };
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // The shell draws for a team member too (Danno, 6 Oct); each page decides for itself whether it is open to them.
   const viewer = await requireViewer({ team: "allow" });
-  const [points, streak, voice, due, chat, recordingsEnabled, choices] = await Promise.all([
+  // The menu's counts (H-844): worked out in one place, shared with the phone's More page, so the two show the same numbers.
+  const [points, streak, voice, chat, { badges, recordingsEnabled, agentsOn }, choices, coachFirst] = await Promise.all([
     totalPoints(viewer.workspace.id, viewer.user.id),
     streakFor(viewer.workspace.id, viewer.user.id, { today: viewer.today, hour: viewer.hour, tz: viewer.tz, days: viewer.membership.workDays }),
     voiceState(viewer.workspace.id, viewer.user.id),
-    intentionsDueFor(viewer.workspace.id, viewer.user.id, viewer.today),
     chatWidgetProps(viewer),
-    // The Recordings item shows a client only once something is published for them (Recordings R1).
-    viewer.role === "client" ? hasVisibleRecordings(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }) : Promise.resolve(false),
+    navBadges(viewer),
     // How many HelixOS the signed-in person can be in: more than one shows "Switch HelixOS". Never counted while switched (the coach is in their own session).
     viewer.switchedInto ? Promise.resolve([]) : choicesFor(viewer.actor.id),
-  ]);
-  // The coach's counts (rev 432): issues and ideas not yet opened, and monthly feedback new since they last looked. A client
-  // gets the coach's first name for "Tell Danno" instead.
-  const coachView = viewer.role === "coach" && !viewer.switchedInto;
-  const [reportsNew, feedbackNew, coachFirst, recordingsNew, claimsOpen] = await Promise.all([
-    coachView ? unseenReports(viewer.workspace.id) : Promise.resolve(0),
-    coachView ? newMonthlyFeedback(viewer.workspace.id, viewer.membership.feedbackSeenAt) : Promise.resolve(0),
+    // A client gets the coach's first name for "Tell Danno".
     viewer.role === "client" ? coachFirstName(viewer.workspace.id) : Promise.resolve(null),
-    // Rev 498: the calls this member hasn't opened yet, as a count on the Recordings item.
-    recordingsEnabled ? newRecordings(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }).then((r) => r.length) : Promise.resolve(0),
-    // Reward claims the coach hasn't marked done and Bot Features waiting to be switched on, on the Coach item.
-    coachView ? Promise.all([openClaims(viewer.workspace.id), waitingFeatures(viewer.workspace.id)]).then(([a, b]) => a + b) : Promise.resolve(0),
   ]);
-  // The Handoff inbox (rev 769): what waits for the coach's decision and what's new for them, on the Inbox item.
-  const inboxNew = coachView ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
-  // A member's own Agent inbox (H-727): in the menu once they have an agent, with the same count; never while switched in or on a team.
-  const memberView = viewer.role === "client" && !viewer.switchedInto && !viewer.team;
-  const agentsOn = memberView ? await agentsOnFor({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : false;
-  const memberInboxNew = agentsOn ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
   const rank = rankUpShell(viewer, points);
   // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
@@ -85,7 +62,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     ? null
     : flameStateOf({ running: flameStreak.running, asOf: flameStreak.asOf, today: viewer.today, hour: viewer.hour, active: flameStreak.activity.active, closed: flameStreak.closed, seenOn: viewer.switchedInto ? flameStreak.asOf : viewer.membership.streakSurgeSeenOn });
   return (
-    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew }}>
+    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={badges}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>
