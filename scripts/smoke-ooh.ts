@@ -65,7 +65,9 @@ async function main() {
     // Maya's own request, hers alone: a team member must never read the word.
     const privateWord = `MayaPrivateQuestion${run}`;
     await db.insert(schema.officeHoursRequests).values({ id: newId(), workspaceId: ws, userId: maya.id, friday: fridays[1], description: `${privateWord} about my funnel.`, triedSelf: "Read the lesson.", goal: "A working funnel.", category: "Funnels" });
-    const pointsBefore = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id) })).length;
+    // Maya's own visits can earn her points mid-walk (a lock-in or a streak once her morning window opens), so the check below
+    // looks only at the rows the booking could have made, not at her total.
+    const pointsBefore = new Set((await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id), columns: { id: true } })).map((r) => r.id));
 
     // ── 1. Maya invites; Sam joins. ──
     const owner = await browser.newPage();
@@ -143,7 +145,8 @@ async function main() {
     must(req && req.userId === maya.id && req.workspaceId === ws, "the request belongs to the owner's account");
     must(JSON.stringify([...req.attendeeUserIds].sort()) === JSON.stringify([maya.id, samUser.id].sort()) && req.attendeesOther === "Lee", `the attendees and the other name are stored: ${JSON.stringify(req.attendeeUserIds)} ${req.attendeesOther}`);
     must((await db.query.teamChanges.findMany({ where: and(eq(schema.teamChanges.teamMemberId, samRow.id), eq(schema.teamChanges.kind, "change")) })).length === changesBefore + 1, "one change row on Maya's team log for the booking");
-    must((await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id) })).length === pointsBefore, "no points for a team-submitted request");
+    const newPoints = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id) })).filter((r) => !pointsBefore.has(r.id));
+    must(!newPoints.some((r) => r.refId === req.id || /office hours/i.test(r.reason)), `no points for a team-submitted request: ${JSON.stringify(newPoints.map((r) => [r.type, r.reason]))}`);
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaM.id) }))!.oohNotice?.requestId === req.id, "the owner's notice points at the request");
     const samText = await sam.locator("main").innerText();
     must((await sam.locator('[data-testid="ooh-mine"]').count()) === 1 && samText.includes(`Booked by Sam ${run}`) && !samText.includes(privateWord), "Sam sees his request and not Maya's own");
