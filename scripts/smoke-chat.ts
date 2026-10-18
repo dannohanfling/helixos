@@ -101,8 +101,15 @@ async function main() {
     const res = await page.goto(`${base}/today`);
     const csp = res?.headers()["content-security-policy"] ?? "";
     if (!csp.includes("https://communityloyalty.io") || !csp.includes("report-uri /api/csp-report")) throw new Error(`the CSP names the widget's host and reports blocks: ${csp.slice(0, 120)}`);
+    // The chat has its own page (H-693): none on Today, and the menu's Ask item leads to it.
+    if (await page.locator('[data-testid="chat-widget"]').count()) throw new Error("no chat on Today: it lives on the Ask page only");
+    await page.waitForTimeout(1500);
+    if (await page.locator('script[src*="communityloyalty.io"]').count()) throw new Error("no chat script on Today");
+    const askItem = page.locator('[data-testid="side-nav"] a[href="/ask"]');
+    if (!/^💭?\s*Ask \S/.test((await askItem.innerText()).trim()) || /your coach/.test(await askItem.innerText())) throw new Error(`the menu's Ask item is named for the coach: ${await askItem.innerText()}`);
+    await page.goto(`${base}/ask`);
     const widget = page.locator('[data-testid="chat-widget"]');
-    if (!(await widget.count())) throw new Error("the widget is on a member's page");
+    if (!(await widget.count())) throw new Error("the widget is on the Ask page");
     const expected = createHmac("sha256", SECRET).update(client.id).digest("hex");
     if ((await widget.getAttribute("data-user-id")) !== client.id || (await widget.getAttribute("data-hash")) !== expected) throw new Error("the widget carries the member's id and the server-computed hash");
     if ((await widget.getAttribute("data-flow")) !== "f52594s4788801") throw new Error("the sub flow id rides with the widget");
@@ -119,10 +126,13 @@ async function main() {
       const ctxt = await browser.newContext();
       const p2 = await ctxt.newPage();
       // As a string: a function here would be transpiled with a helper (__name) the page doesn't have.
-      await p2.addInitScript({ content: `window.$chatbot = { hasLoaded: ${loaded}, setUser: function (id, u) { window.__setUser = { id: id, u: u }; } };` });
+      await p2.addInitScript({ content: `window.$chatbot = { hasLoaded: ${loaded}, setUser: function (id, u) { window.__setUser = { id: id, u: u }; }, open: function () { window.__opened = true; } };` });
       await p2.goto(`${base}/login`);
       await p2.click('button:has-text("As a client")');
       await p2.waitForURL(/\/today/);
+      await p2.waitForTimeout(1500);
+      if (await p2.locator('html[data-chat-identified="true"]').count()) throw new Error("nothing is said to the chat on Today");
+      await p2.goto(`${base}/ask`);
       if (loaded) {
         await p2.locator('html[data-chat-identified="true"]').waitFor({ timeout: 10000 });
       } else {
@@ -135,6 +145,7 @@ async function main() {
       const by = await p2.locator("html").getAttribute("data-chat-identified-by");
       if (got.id !== client.id || got.u.identifier_hash !== expected || got.u.email !== "client@demo.helixos.app" || got.u.name !== client.name) throw new Error(`setUser gets the member's id, name, email and the hex hash over that id: ${JSON.stringify(got)}`);
       if (by !== (loaded ? "loaded" : "ready")) throw new Error(`the shell says how it was identified: ${by}`);
+      if (!(await p2.evaluate(() => (window as unknown as { __opened?: boolean }).__opened))) throw new Error("the chat is opened on the Ask page once it knows who this is");
       await ctxt.close();
     }
     // The bubble on a phone (rev 468): the real launcher can't load here, so a stand-in is added the way the script adds its
@@ -146,6 +157,7 @@ async function main() {
       await ph.goto(`${base}/login`);
       await ph.click('button:has-text("As a client")');
       await ph.waitForURL(/\/today/);
+      await ph.goto(`${base}/ask`);
       await ph.locator('[data-testid="chat-widget"]').waitFor({ state: "attached" });
       await ph.evaluate(() => {
         const d = document.createElement("div");
@@ -192,8 +204,24 @@ async function main() {
       // Wider than a phone: back where the script put it, untouched.
       await ph.setViewportSize({ width: 1280, height: 900 });
       await ph.waitForFunction(() => !document.getElementById("walk-launcher")!.hasAttribute("data-helix-lifted") && document.getElementById("walk-launcher")!.style.bottom === "16px", null, { timeout: 5000 });
+      // Leaving the Ask page by the menu (H-693): the launcher the script put on the page is hidden on Today, and shows again
+      // back on the Ask page; a fresh load of Today has no script at all.
+      const shown = () => ph.evaluate(() => getComputedStyle(document.getElementById("walk-launcher")!).display !== "none");
+      if (!(await ph.evaluate(() => document.getElementById("walk-launcher")!.hasAttribute("data-helix-chat")))) throw new Error("what the script adds on the Ask page is marked as the chat's");
+      await ph.locator('[data-testid="side-nav"] a[href="/today"]').click();
+      await ph.waitForURL(/\/today/);
+      await ph.waitForFunction(() => !document.querySelector('[data-testid="chat-widget"]'), null, { timeout: 10000 });
+      if (await shown()) throw new Error("no bubble left behind on Today after the Ask page");
+      await ph.locator('[data-testid="side-nav"] a[href="/ask"]').click();
+      await ph.waitForURL(/\/ask/);
+      await ph.locator('[data-testid="chat-widget"]').waitFor({ state: "attached" });
+      if (!(await shown())) throw new Error("back on the Ask page, the chat shows again");
+      await ph.goto(`${base}/today`);
+      await ph.waitForTimeout(1500);
+      if ((await ph.locator('script[src*="communityloyalty.io"]').count()) || (await ph.locator("#walk-launcher").count())) throw new Error("a fresh load of Today has no chat at all");
       await ctxt.close();
     }
+    console.log("✓ the Ask page is the chat's one home: none on Today, hidden after leaving by the menu, back on returning, none on a fresh load");
     console.log("✓ the bubble on a phone: 12 px above the tab bar and above a sticky row of buttons; back in place once opened, and on a wide screen");
     await logout(page);
     console.log("✓ a member's page: the widget with the identifier hash, the CSP naming its host, no secret in the page; setUser called once the SDK has loaded (at once, or on chatbot:ready), and the shell says so");
@@ -206,6 +234,7 @@ async function main() {
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="switch-banner"]').waitFor({ timeout: 15000 });
     if (await page.locator('[data-testid="chat-widget"]').count()) throw new Error("no widget while a coach is switched into a client");
+    if (await page.locator('a[href="/ask"]').count()) throw new Error("no Ask item while a coach is switched into a client");
     if (await page.locator('script[src*="communityloyalty.io"]').count()) throw new Error("no widget script while switched");
     await submit(page, '[data-testid="switch-back"]');
     await logout(page);

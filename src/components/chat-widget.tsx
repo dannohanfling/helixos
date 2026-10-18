@@ -5,7 +5,8 @@ import { useEffect, useRef } from "react";
 import { PHONE_MAX_WIDTH, isLauncher, liftPx, staysLifted } from "@/lib/engine/chat-lift";
 
 /**
- * The coach's Community Loyalty chat bubble (revs 241, 243), on every signed-in page of a workspace that set it up. Once the
+ * The coach's Community Loyalty chat (revs 241, 243), on the Ask page only (H-693, plan H-700): every other page is the
+ * member's own, with no bubble over it. Once the
  * SDK is ready it is told who is signed in: the member's HelixOS user id, name, email and the identifier hash the server
  * computed (HMAC-SHA256 of that same id under the secret, hex), so the bot links the chat to the same person across channels.
  * The secret behind the hash never comes here.
@@ -15,7 +16,7 @@ import { PHONE_MAX_WIDTH, isLauncher, liftPx, staysLifted } from "@/lib/engine/c
  * it is loaded: a call the SDK isn't ready for is dropped, and would have been the last one. Once called, the shell carries
  * `data-chat-identified="true"`, a signal anyone can read in the browser without a secret.
  */
-type Chatbot = { hasLoaded?: boolean; setUser?: (id: string, user: { name: string; email: string; identifier_hash: string }) => void };
+type Chatbot = { hasLoaded?: boolean; setUser?: (id: string, user: { name: string; email: string; identifier_hash: string }) => void; open?: () => void; close?: () => void };
 
 /**
  * On a phone, the bubble sits on HelixOS's bottom bar (rev 468). Whatever the chat script adds to the page outside HelixOS's own
@@ -83,8 +84,52 @@ function useLiftLauncher() {
   }, []);
 }
 
+/** Set on <html> while the Ask page is open; without it, everything the chat script added to the page is hidden (globals.css). */
+export const CHAT_HERE = "data-chat-here";
+/** Marks what the chat script added to <body>, outside HelixOS's own shell. */
+export const CHAT_MARK = "data-helix-chat";
+
+/** Not HelixOS's own: outside the app shell, no walk or app markers, not a custom element, script or style. */
+const notOurs = (c: Element): boolean => !c.querySelector("[data-app-shell]") && !c.hasAttribute("data-app-shell") && !c.closest("[data-testid]") && !c.querySelector("[data-testid]") && !c.tagName.includes("-") && c.tagName !== "SCRIPT" && c.tagName !== "STYLE" && c.tagName !== "NOSCRIPT";
+/** What a chat launcher or window looks like, for anything the script adds after the member has left the Ask page. */
+const looksLikeChat = (c: Element): boolean => Boolean(c.querySelector("iframe")) || c.tagName === "IFRAME" || /chat|bot|widget|launcher/i.test(`${c.id} ${typeof c.className === "string" ? c.className : ""}`);
+
+let marking: MutationObserver | null = null;
+/**
+ * Leaving the Ask page (H-693): the script puts its launcher and chat window on <body>, outside React, so a client-side move
+ * would leave them behind. From the moment the Ask page first mounts, what is added to <body> is watched for the rest of the
+ * page's life: on the Ask page anything not HelixOS's own is marked; off it, only what looks like the chat (it may add more
+ * after the member has left), so a dialog another page opens is never caught. One CSS rule hides what is marked while <html>
+ * lacks CHAT_HERE. Nothing that was on the page before is touched.
+ */
+function markScriptNodes() {
+  if (marking) return;
+  marking = new MutationObserver((records) => {
+    const here = document.documentElement.hasAttribute(CHAT_HERE);
+    for (const r of records)
+      for (const n of Array.from(r.addedNodes)) {
+        if (!(n instanceof Element) || n.hasAttribute(CHAT_MARK) || !notOurs(n)) continue;
+        if (here || looksLikeChat(n)) n.setAttribute(CHAT_MARK, "");
+      }
+  });
+  marking.observe(document.body, { childList: true });
+}
+
+/** On the Ask page: the chat shows, and opens on the page when the script can; off it, hidden and closed. */
+function useChatHere() {
+  useEffect(() => {
+    markScriptNodes();
+    document.documentElement.setAttribute(CHAT_HERE, "");
+    return () => {
+      document.documentElement.removeAttribute(CHAT_HERE);
+      (window as Window & { $chatbot?: Chatbot }).$chatbot?.close?.();
+    };
+  }, []);
+}
+
 export function ChatWidget({ src, userId, name, email, hash, flowNs }: { src: string; userId: string; name: string; email: string; hash: string; flowNs: string | null }) {
   const called = useRef(false);
+  useChatHere();
   useLiftLauncher();
   useEffect(() => {
     const w = window as Window & { $chatbot?: Chatbot };
@@ -94,6 +139,8 @@ export function ChatWidget({ src, userId, name, email, hash, flowNs }: { src: st
       if (why !== "ready" && !bot.hasLoaded) return false;
       bot.setUser(userId, { name, email, identifier_hash: hash });
       called.current = true;
+      // The page is the chat's (H-693): open it here when the script offers that; otherwise its bubble waits on this page.
+      bot.open?.();
       document.documentElement.setAttribute("data-chat-identified", "true");
       document.documentElement.setAttribute("data-chat-identified-by", why);
       return true;

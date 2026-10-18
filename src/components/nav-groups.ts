@@ -13,7 +13,7 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `menuKey` (H-385): the On the horizon item that drives this entry. It reads as Coming soon until that item has shipped
  * (`withHorizon` below), then becomes a normal link; the coach moves the item, no deploy needed.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -31,6 +31,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // Team access (H-413): a team member books office hours for the owner and says who's attending.
       // Office Hours by program level (H-470): Academy and up, or the coach's switch; gone otherwise, no card, no prices.
       { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true, oohOnly: true },
+      // The coach's chat on its own page (H-693, plan H-700): only where the chat is set up, named for the coach (withCoachName).
+      { href: "/ask", label: "Ask your coach", icon: "💭", line: "chat with your coach", chatOnly: true },
     ],
   },
   {
@@ -170,6 +172,14 @@ export function withColosseum(items: NavItem[], on: boolean): NavItem[] {
   return items.map((n) => (n.href === "/rewards" ? { ...n, href: COLOSSEUM_HREF, label: "The Colosseum", icon: "🏟️", line: "the arena, points and prizes" } : n));
 }
 
+/**
+ * The chat's menu item, named for the coach (H-693): "Ask Danno" for a client, "Ask your coach" without a name; the coach sees
+ * it as what members see.
+ */
+export function withCoachName(items: NavItem[], m: Pick<NavMember, "role" | "coachFirst">): NavItem[] {
+  return items.map((n) => (n.href !== "/ask" ? n : m.role === "coach" ? { ...n, line: "what members see" } : m.coachFirst ? { ...n, label: `Ask ${m.coachFirst}` } : n));
+}
+
 /** Whether a menu item is the current page: by its path alone, so The Colosseum (a tab of /rewards) is lit on both tabs. */
 export function navActive(pathname: string, href: string): boolean {
   const path = href.split("?")[0];
@@ -177,15 +187,16 @@ export function navActive(pathname: string, href: string): boolean {
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean };
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean; /** The coach's chat is set up and on for this person (H-693): never for a team member or while switched in. */ chatOn?: boolean; /** The coach's first name, for a client's "Ask Danno". */ coachFirst?: string | null };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
   (!n.loyaltyOnly || Boolean(m.loyaltyOn)) &&
   (!n.oohOnly || m.role === "coach" || Boolean(m.oohOn)) &&
+  (!n.chatOnly || Boolean(m.chatOn)) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 
 
 /** The groups this member sees, each with only its visible items; a group with none isn't drawn at all (HumanOS without Body). */
 export function visibleGroups(m: NavMember, links: PlatformLinks = {}, ownCommunity: string | null = null, shippedKeys: readonly string[] = []) {
-  return NAV_GROUPS.map((g) => ({ ...g, items: withColosseum(withHorizon(withPlatformLinks(g.items, links, ownCommunity), shippedKeys), Boolean(m.colosseumOn)).filter((n) => navVisible(n, m)) })).filter((g) => g.items.length);
+  return NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, links, ownCommunity), shippedKeys), Boolean(m.colosseumOn)), m).filter((n) => navVisible(n, m)) })).filter((g) => g.items.length);
 }
