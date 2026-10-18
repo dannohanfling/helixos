@@ -99,16 +99,16 @@ async function main() {
       const item = page.locator('[data-testid="side-nav"] a[href="/rewards?tab=colosseum"]');
       must((await item.count()) === 1 && (await item.innerText()).includes("The Colosseum") && (await item.innerText()).includes("🏟️"), "one menu item, 🏟️ The Colosseum");
       must((await page.locator('[data-testid="side-nav"] a[href="/rewards"]').count()) === 0, "never a second Rewards item beside it");
-      await Promise.all([page.waitForURL(/\/rewards\?tab=colosseum$/), item.click()]);
+      await Promise.all([page.waitForURL(/\/rewards\?tab=colosseum$/, { waitUntil: "commit" }), item.click()]);
       await page.locator('[data-testid="arena"]').waitFor({ timeout: 15000 });
       must((await item.getAttribute("aria-current")) === "page", "the item is lit on the arena");
       const tabs = await page.locator('[data-testid="rewards-tabs"] a').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
       must(JSON.stringify(tabs) === JSON.stringify(["rewards-colosseum", "rewards-tab-rewards"]), `The Colosseum first, then Rewards: ${tabs}`);
-      await Promise.all([page.waitForURL(/\/rewards$/), page.locator('[data-testid="rewards-tab-rewards"]').click()]);
+      await Promise.all([page.waitForURL(/\/rewards$/, { waitUntil: "commit" }), page.locator('[data-testid="rewards-tab-rewards"]').click()]);
       await page.waitForLoadState("networkidle");
       must((await page.locator('[data-testid="rewards-tab-rewards"]').getAttribute("aria-current")) === "page" && (await page.locator('[data-testid="arena"]').count()) === 0, "the toggle goes to Rewards");
       must((await item.getAttribute("aria-current")) === "page", "the item stays lit on Rewards");
-      await Promise.all([page.waitForURL(/\/rewards\?tab=colosseum$/), page.locator('[data-testid="rewards-colosseum"]').click()]);
+      await Promise.all([page.waitForURL(/\/rewards\?tab=colosseum$/, { waitUntil: "commit" }), page.locator('[data-testid="rewards-colosseum"]').click()]);
       await page.locator('[data-testid="arena"]').waitFor({ timeout: 15000 });
       must((await item.getAttribute("aria-current")) === "page", "and back to the arena, still lit");
       // Old links: /rewards opens Rewards, /colosseum the arena, /rewards/book stays its own page.
