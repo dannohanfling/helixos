@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AQUEDUCT_FOUNTAIN, COLOSSEUM_BIRDS, COLOSSEUM_CLOUD_S, COLOSSEUM_FLICKER, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES, top3CheerKey } from "../ambience";
+import { FORUM_CLOUD_S, FORUM_DOVE_OVAL, FORUM_DOVES, FORUM_FIREFLIES, FORUM_FLAME, FORUM_FLICKER, AQUEDUCT_FOUNTAIN, COLOSSEUM_BIRDS, COLOSSEUM_CLOUD_S, COLOSSEUM_FLICKER, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES, top3CheerKey } from "../ambience";
 
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
 
@@ -64,5 +64,26 @@ describe("the Aqueduct's full fountain (H-637 PR 2)", () => {
         expect(y).toBeLessThan(944);
       }
     }
+  });
+});
+
+describe("the Forum's ambience (H-637 PR 3)", () => {
+  it("draws what the mockup draws: three flicker regions, ten fireflies, five doves, a 52 s cloud", () => {
+    expect(FORUM_FLICKER.map((f) => f.clip)).toEqual(["inset(0 64% 0 0)", "inset(0 34% 0 34%)", "inset(0 0 0 64%)"]);
+    expect(FORUM_FIREFLIES).toHaveLength(10);
+    expect(FORUM_DOVES).toHaveLength(5);
+    expect(FORUM_CLOUD_S).toBe(52);
+  });
+
+  it("puts the fireflies and the flame inside the picture, the flame on the centre column", () => {
+    for (const f of FORUM_FIREFLIES) expect(inside(f) && f.d > 0).toBe(true);
+    expect(FORUM_FIREFLIES[0]).toMatchObject({ x: 36.9, y: 29.66 });
+    expect(Math.abs(FORUM_FLAME.x + FORUM_FLAME.w / 2 - 50)).toBeLessThan(1);
+  });
+
+  it("flies the doves round an oval over the plaza: y a quarter of the way behind x, each dove spaced along it", () => {
+    expect(FORUM_DOVE_OVAL.x[0]).toBeLessThan(FORUM_DOVE_OVAL.x[1]);
+    for (const d of FORUM_DOVES) expect(d.dy - d.dx).toBeCloseTo(-FORUM_DOVE_OVAL.s / 2, 5);
+    expect(new Set(FORUM_DOVES.map((d) => d.dx)).size).toBe(5);
   });
 });

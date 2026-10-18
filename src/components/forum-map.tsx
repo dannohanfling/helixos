@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { moveForumAgentAction } from "@/lib/actions/forum";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import { FORUM_PLOTS } from "@/db/schema";
+import { ForumAmbience } from "@/components/forum-ambience";
 import { FORUM_BUILDINGS, FORUM_FLOW_MS, FORUM_PLOT_XY, ROSTRA_XY, forumAgo, streetPath, type ForumPlot } from "@/lib/engine/forum";
 
 export type MapAgent = { id: string; plot: ForumPlot | null; name: string; status: "working" | "waiting" | "idle" | "done"; now: string | null };
@@ -180,6 +181,8 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
             <img src={`/forum/forum-${k}.jpg`} alt="" className="fo-photo" style={{ opacity: look === k ? 1 : 0 }} loading={k === look ? "eager" : "lazy"} decoding="async" data-testid={`forum-photo-${k}`} />
           </picture>
         ))}
+        {/* The Forum, alive (H-637 PR 3): over the photos, under the messengers and the plates. */}
+        <ForumAmbience look={look} />
         <svg viewBox="0 0 1680 944" role="group" aria-label="The forum: each building is an agent, with messengers on the streets between them" onPointerUp={up} onPointerCancel={() => (drag.current = null)}>
           <defs>
             <radialGradient id="fo-gwork"><stop offset="0" stopColor="#FFD98A" stopOpacity=".75" /><stop offset=".55" stopColor="#E8B24F" stopOpacity=".28" /><stop offset="1" stopColor="#E8B24F" stopOpacity="0" /></radialGradient>

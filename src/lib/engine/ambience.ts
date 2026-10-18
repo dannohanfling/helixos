@@ -104,3 +104,47 @@ export const AQUEDUCT_FOUNTAIN: Record<"day" | "night", Fountain> = {
     ripple: { cx: 1530, cy: 634, rx: 46, ry: 11 },
   },
 };
+
+/*
+ * The Forum (H-327 §5, docs/scenes/living-scenes-forum.dc.html), under the messengers. Night: the same three-copy flicker,
+ * a light pool breathing over the plaza, the welcome's small flame on the centre column, fireflies in the gardens. Golden
+ * hour: five doves flying an oval over the plaza (x and y each easing back and forth, a quarter turn apart) and a cloud.
+ */
+export const FORUM_FLICKER = [
+  { clip: "inset(0 64% 0 0)", d: 2.3, dl: 0 },
+  { clip: "inset(0 34% 0 34%)", d: 1.9, dl: 0.5 },
+  { clip: "inset(0 0 0 64%)", d: 2.7, dl: 1 },
+] as const;
+
+/** The flame on the centre column, as a box in percent of the picture: its base sits on the column's top. */
+export const FORUM_FLAME = { x: 49.2, y: 39.6, w: 1.6, h: 3.6 } as const;
+
+/** Ten fireflies in the gardens, from the mockup's points in the 1680×944 picture. dx and dy are their drift in px. */
+export const FORUM_FIREFLIES: Mote[] = (
+  [
+    [620, 280],
+    [1050, 300],
+    [470, 430],
+    [1180, 420],
+    [560, 620],
+    [1120, 600],
+    [900, 250],
+    [700, 700],
+    [1000, 700],
+    [380, 330],
+  ] as const
+).map(([px, py], i) => ({
+  x: round(px / 16.8),
+  y: round(py / 9.44),
+  dx: (i % 2 ? 1 : -1) * (10 + i * 2),
+  dy: -8 - (i % 3) * 6,
+  d: round(5 + (i % 4) * 1.3, 1),
+  dl: round(-(i * 0.8), 1),
+}));
+
+/** The doves' oval in percent of the picture, the half-lap in seconds, and each dove's delays (x, y, wing). */
+export const FORUM_DOVE_OVAL = { x: [32.1, 67.9], y: [32.8, 64.6], s: 13 } as const;
+export const FORUM_DOVES = [0, 1, 2, 3, 4].map((i) => ({ dx: round(-(i * 2.6), 1), dy: round(-(i * 2.6) - 6.5, 1), fl: round(-(i * 0.13)) }));
+
+/** The cloud shadow's crossing over the Forum, in seconds. */
+export const FORUM_CLOUD_S = 52;
