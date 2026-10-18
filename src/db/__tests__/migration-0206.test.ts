@@ -38,7 +38,7 @@ describe("migration 0206: the weekly calls", () => {
   it("follows 0202 on main in the journal, with a later timestamp", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0206_calls");
-    expect(journal.entries[at - 1]?.tag).toBe("0202_eo_pass");
+    expect(journal.entries[at - 1]?.tag).toBe("0204_loyalty_health");
     expect(journal.entries[at]!.when).toBeGreaterThan(journal.entries[at - 1]!.when);
   });
 });
