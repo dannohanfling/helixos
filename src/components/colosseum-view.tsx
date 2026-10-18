@@ -41,7 +41,7 @@ export async function ColosseumView({ v, sp }: { v: Viewer; sp: ColosseumParams 
         <h1 className="co-title">The Colosseum</h1>
         <p className="co-sub">Where the work gets seen. The closer to the arena, the higher the rank.</p>
       </header>
-      <ColosseumArena rings={rings} champs={champs} more={a.more} initialLook={look} initialPaused={you.paused} ownLook={!v.switchedInto} />
+      <ColosseumArena rings={rings} champs={champs} more={a.more} initialLook={look} initialPaused={you.paused} ownLook={!v.switchedInto} cheerWeek={v.switchedInto ? null : a.week.monday} />
       <section className="co-seat" aria-label="Your seat in the stands" data-testid="your-seat">
         <p className="co-eyebrow">Your seat in the stands</p>
         <p className="co-rankword">{you.tier}</p>

@@ -11,11 +11,14 @@ import { setArenaPausedAction } from "@/lib/actions/colosseum";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import { CHAMPION_SPOTS, LAP_SECONDS, RING_WORDS, seatAngle, seatPlace } from "@/lib/engine/colosseum";
 import type { ArenaSeat } from "@/lib/colosseum";
+import { ColosseumAmbience } from "@/components/colosseum-ambience";
+import { top3CheerKey } from "@/lib/engine/ambience";
+import { armSounds, playSound } from "@/lib/sounds";
 
 type Look = "day" | "night";
 type RingSeat = ArenaSeat & { ring: number; index: number; of: number };
 
-export function ColosseumArena({ rings, champs, more, initialLook, initialPaused, ownLook }: { rings: RingSeat[][]; champs: ArenaSeat[]; more: number[]; initialLook: Look; initialPaused: boolean; ownLook: boolean }) {
+export function ColosseumArena({ rings, champs, more, initialLook, initialPaused, ownLook, cheerWeek }: { rings: RingSeat[][]; champs: ArenaSeat[]; more: number[]; initialLook: Look; initialPaused: boolean; ownLook: boolean; cheerWeek: string | null }) {
   const [look, setLook] = useState<Look>(initialLook);
   const [paused, setPaused] = useState(initialPaused);
   const [picked, setPicked] = useState<string | null>(null);
@@ -72,6 +75,47 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
     };
   }, [rings, paused]);
 
+  // The top-3 cheer (H-637): once a week, the first time the member sees themselves among this week's champions. The mark is
+  // this browser's, and it is only set once the cheer has actually started: before the first tap on the page, or with sounds off,
+  // it waits, so a cheer nobody heard is never counted.
+  const champMe = champs.find((c) => c.isYou)?.membershipId ?? null;
+  useEffect(() => {
+    if (!cheerWeek || !champMe) return;
+    const key = top3CheerKey(champMe, cheerWeek);
+    const seen = () => {
+      try {
+        return localStorage.getItem(key) !== null;
+      } catch {
+        return true;
+      }
+    };
+    if (seen()) return;
+    armSounds();
+    const tryCheer = () => {
+      if (seen() || !playSound("cheer-top3")) return false;
+      try {
+        localStorage.setItem(key, "1");
+      } catch {}
+      return true;
+    };
+    if (tryCheer()) return;
+    // The sounds module unlocks on the same gesture, in an earlier listener; the cheer follows it on the next tick.
+    let t = 0;
+    const onGesture = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        if (tryCheer()) off();
+      }, 0);
+    };
+    const evs = ["pointerdown", "keydown"] as const;
+    const off = () => evs.forEach((ev) => window.removeEventListener(ev, onGesture, true));
+    evs.forEach((ev) => window.addEventListener(ev, onGesture, true));
+    return () => {
+      window.clearTimeout(t);
+      off();
+    };
+  }, [cheerWeek, champMe]);
+
   const pick = picked ? byId.get(picked) : null;
   const avatar = (s: ArenaSeat, extra: string, attrs: Record<string, string | number | undefined>) => (
     <button
@@ -104,6 +148,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
             <img ref={photo} className="co-bg" src={`/colosseum/colosseum-${look}.jpg`} alt="" width={1680} height={944} decoding="async" onError={() => setBroken((b) => new Set(b).add(look))} data-testid="arena-photo" />
           </picture>
         )}
+        {broken.has(look) ? null : <ColosseumAmbience look={look} paused={paused} />}
         {rings.map((ring, r) =>
           ring.map((s) => {
             const p = seatPlace(r, seatAngle(r, s.index, s.of, 0));
