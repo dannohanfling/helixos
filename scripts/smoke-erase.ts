@@ -103,7 +103,8 @@ async function main() {
     };
     for (const [label, table] of Object.entries(MEMBER_TABLES)) {
       // A link between two of the member's own rows points at the ones just made (avatars, rev 501).
-      const links = label === "avatar_offers" ? { avatarId: ids.avatars[0], offerId: ids.offers[0] } : {};
+      // Claude's webinar drafts and their history (H-181) hang off one of the member's webinars, made just before them.
+      const links = label === "avatar_offers" ? { avatarId: ids.avatars[0], offerId: ids.offers[0] } : label === "webinar_drafts" || label === "webinar_history" ? { webinarId: ids.webinars[0] } : {};
       const row = fill(table, { workspaceId: ws, userId, ...(special[label] ?? {}), ...links }, marker);
       await db.insert(table).values(row as never);
       ids[label] = [row.id as string];
