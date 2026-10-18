@@ -55,6 +55,7 @@ async function main() {
     const msgs = await db.query.handoffMessages.findMany({ where: and(eq(schema.handoffMessages.workspaceId, ws), eq(schema.handoffMessages.userId, coach.id)), columns: { id: true } });
     if (msgs.length) await db.delete(schema.handoffDeliveries).where(inArray(schema.handoffDeliveries.messageId, msgs.map((m) => m.id)));
     for (const t of [schema.handoffMessages, schema.handoffFiles, schema.handoffAudit, schema.agentTokens, schema.forumAgents, schema.forumEvents, schema.forumNeeds, schema.forumSettings]) await db.delete(t).where(and(eq(t.workspaceId, ws), eq(t.userId, coach.id)));
+    await db.delete(schema.agentAuthFailures).where(and(eq(schema.agentAuthFailures.workspaceId, ws), eq(schema.agentAuthFailures.userId, coach.id)));
     await db.delete(schema.connectedApps).where(and(eq(schema.connectedApps.workspaceId, ws), eq(schema.connectedApps.userId, coach.id)));
   };
   await reset();
@@ -88,6 +89,64 @@ async function main() {
     must(stored && stored.tokenHash !== mainToken && !JSON.stringify(stored).includes(mainToken), "stored as a hash only");
     const bodyToken = (await makeAgentToken({ ...O, membershipId: cm.id }, agent("Medicus").id))!;
     console.log("✓ Coach → Agents: a token per agent, shown once, stored as a hash");
+
+    // ── Check connection (H-559): the line and chip per agent, Check connection, the ping, the refused calls. ──
+    {
+      const row = `[data-testid="agent-row"][data-agent="Hospes"]`;
+      const conn = page.locator(`${row} [data-testid="agent-conn"]`);
+      const line = () => page.locator(`${row} [data-testid="agent-conn-line"]`).innerText();
+      await page.reload({ waitUntil: "networkidle" });
+      must((await conn.getAttribute("data-state")) === "none" && (await line()) === "No token yet. Make one to connect.", "no token yet");
+      const hospesToken = (await makeAgentToken({ ...O, membershipId: cm.id }, agent("Hospes").id))!;
+      await page.reload({ waitUntil: "networkidle" });
+      must((await conn.getAttribute("data-state")) === "never" && /^Token made .+\. Hospes hasn't connected yet\.$/.test(await line()), `made, never used: ${await line()}`);
+      must((await page.locator(`${row} [data-testid="agent-conn-chip"]`).innerText()).trim() === "Not connected", "the amber chip");
+      const who = await tool(hospesToken, "whoami");
+      must(!who.isError, `the new token connects: ${who.text}`);
+      await submit(page, `${row} [data-testid="agent-check"]`);
+      await page.waitForURL(/checked=/);
+      must((await conn.getAttribute("data-state")) === "connected" && /^Connected\. Last call (just now|\d+ min ago) \(whoami\)\.$/.test(await line()), `connected, with the tool: ${await line()}`);
+      must(await page.locator(`${row} [data-testid="agent-conn-checked"]`).isVisible(), "Check connection says when it checked");
+      // Revoked: calls on the old token are refused and counted against Hospes, nothing else kept.
+      await revokeAgentTokens(O, agent("Hospes").id);
+      for (let i = 0; i < 2; i++) must((await rpc(hospesToken, "tools/list")).status === 401, "a revoked token gets 401");
+      const fails = await db.query.agentAuthFailures.findMany({ where: eq(schema.agentAuthFailures.agentId, agent("Hospes").id) });
+      must(fails.reduce((n, f) => n + f.count, 0) === 2 && fails.every((f) => f.scope === `agent:${agent("Hospes").id}`) && !JSON.stringify(fails).includes(hospesToken) && !JSON.stringify(fails).includes(hospesToken.slice(0, 12)), `two refused calls, counted against the agent, no token kept: ${JSON.stringify(fails)}`);
+      const globalBefore = (await db.query.agentAuthFailures.findMany({ where: eq(schema.agentAuthFailures.scope, "global") })).reduce((n, f) => n + f.count, 0);
+      must((await rpc(`hxa_${"x".repeat(43)}`, "tools/list")).status === 401, "an unknown token gets 401");
+      const globalAfter = await db.query.agentAuthFailures.findMany({ where: eq(schema.agentAuthFailures.scope, "global") });
+      must(globalAfter.reduce((n, f) => n + f.count, 0) === globalBefore + 1 && globalAfter.every((f) => !f.agentId && !f.workspaceId && !f.userId), "an unknown token adds to the global count only");
+      await page.reload({ waitUntil: "networkidle" });
+      must((await conn.getAttribute("data-state")) === "failing" && /^2 calls at .+ used an old or wrong token\. Make a new token and update the environment variable\.$/.test(await line()), `failing, with the count: ${await line()}`);
+      // A new token and a good call clear it.
+      const fresh = (await makeAgentToken({ ...O, membershipId: cm.id }, agent("Hospes").id))!;
+      must(!(await tool(fresh, "forum_read")).isError, "the new token works");
+      await page.reload({ waitUntil: "networkidle" });
+      must((await conn.getAttribute("data-state")) === "connected" && (await line()).includes("(forum_read)"), `a good call after the failures reads connected: ${await line()}`);
+      // Ping: sent, then answered over the agent's own connection.
+      await submit(page, `${row} [data-testid="agent-ping"]`);
+      await page.waitForURL(/pinged=/);
+      must(/^Ping sent .+\.$/.test(await page.locator(`${row} [data-testid="agent-ping-state"]`).innerText()), "Ping sent");
+      const inbox = await tool(fresh, "handoff_inbox");
+      const ping = ((inbox.data?.messages as { ref: string; title: string }[]) ?? []).find((m) => m.title === "Connection check from Danno. Reply with handoff_ack.");
+      must(ping, `the ping reaches the agent's inbox: ${inbox.text}`);
+      must(!(await tool(fresh, "handoff_ack", { id: ping!.ref })).isError, "the agent acks");
+      await page.reload({ waitUntil: "networkidle" });
+      must(/^Ping answered .+\.$/.test(await page.locator(`${row} [data-testid="agent-ping-state"]`).innerText()), "Ping answered");
+      // Setup help, 44 px buttons, nothing sideways at 390.
+      await page.locator(`${row} [data-testid="agent-setup-help"] summary`).click();
+      must((await page.locator(`${row} [data-testid="agent-env-var"]`).innerText()).trim() === "HELIXOS_TOKEN_HOSPES", "the exact variable name");
+      must((await page.locator(`${row} [data-testid="agent-check-line"]`).innerText()).trim() === "Run forum_report now and tell me any error.", "the line to send the agent");
+      for (const id of ["agent-check", "agent-ping", "agent-check-copy"]) must((await page.locator(`${row} [data-testid="${id}"]`).boundingBox())!.height >= 44, `${id} is 44 px`);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.reload({ waitUntil: "networkidle" });
+      const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+      must(wide <= 390, `nothing sideways at 390 (${wide})`);
+      await page.screenshot({ path: "screenshots/ha-conn-390.png", fullPage: false });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await revokeAgentTokens(O, agent("Hospes").id);
+      console.log("✓ Check connection: no token, never used, connected with the tool, failing with the count, cleared by a good call, the ping sent and answered, setup help, 44 px, 390");
+    }
 
     // ── No tool can approve. ──
     const tools = await listTools(mainToken);

@@ -69,6 +69,9 @@ export const MEMBER_TABLES = {
   handoff_files: schema.handoffFiles,
   handoff_audit: schema.handoffAudit,
   handoff_agents: schema.handoffAgents,
+  // Check connection (H-559): refused calls on one of the owner's revoked agent tokens, counted per minute (agent, minute,
+  // count; never a token). The global count has no owner, so it's never one member's.
+  agent_auth_failures: schema.agentAuthFailures,
   // On the horizon (H-385): what a member said they want; theirs, exported and erased with them.
   horizon_wants: schema.horizonWants,
   webinar_signups: schema.webinarSignups,

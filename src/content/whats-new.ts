@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 231,
+    date: "2026-10-18",
+    title: "Check each agent's connection on Coach → Agents",
+    lines: [
+      "Each agent now shows a plain line about its connection, with a coloured chip: no token yet, made but never used, connected (with its last call and tool), failing, or quiet.",
+      "Failing means calls came in on one of its old tokens. HelixOS counts them, and never keeps the token, any part of it, or where the call came from.",
+      "Check connection reads it all again. Ping sends the agent an inbox message to ack, which proves its whole loop works while its session is awake. Setup help gives the exact variable name and a line to send it.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 230,
     date: "2026-10-18",
     title: "Every rank now has its own relic",
