@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
-import { NAV_GROUPS, navVisible, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
+import { NAV_GROUPS, navVisible, withCoachName, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
+import { chatWidgetProps } from "@/lib/chat";
 import { horizonShell } from "@/lib/horizon";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { NavGroupCard } from "@/components/nav-group-card";
@@ -32,7 +33,8 @@ export default async function MorePage() {
   const loyaltyOn = await hasLeaderboardFeed(v.membership.id);
   const { shippedKeys } = await horizonShell(v);
   const oohOn = (await oohAccessFor(v)).open;
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn })) }))
+  const chatOn = (await chatWidgetProps(v)) !== null;
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length);
   return (

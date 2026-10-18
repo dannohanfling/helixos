@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 258,
+    date: "2026-10-18",
+    title: "The chat with your coach has its own page",
+    lines: [
+      "Ask your coach is in your menu, under Daily, named for them (Ask Danno). The chat opens there, and it still knows it's you.",
+      "No more bubble over your day: it's gone from Today, the welcome, the scenes and the evening close.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 254,
     date: "2026-10-18",
     title: "Your Evolve Omega pass: get it from Rewards, in one tap",

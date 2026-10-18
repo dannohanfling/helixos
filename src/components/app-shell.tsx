@@ -17,14 +17,12 @@ import { SubmitButton } from "@/components/submit-button";
 import { APP_VERSION } from "@/lib/version";
 import { SwitchBanner } from "@/components/switch-banner";
 import { TeamBanner } from "@/components/team-banner";
-import { ChatWidget } from "@/components/chat-widget";
 import { ReportButton } from "@/components/report-button";
-import type { ChatWidgetProps } from "@/lib/chat";
 import { MemberAvatar } from "@/components/member-avatar";
 import { StreakPill } from "@/components/streak-flame/streak-pill";
 import type { FlameState } from "@/lib/engine/streak-flame";
 
-export function AppShell({ viewer, chat = null, points, flame = null, flameAfterWelcome = false, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; /** The streak flame (H-558): null for a team member, whose streak is the owner's. */ flame?: FlameState | null; /** The surge waits for the daily welcome or the first arrival to close. */ flameAfterWelcome?: boolean; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
+export function AppShell({ viewer, chatOn = false, points, flame = null, flameAfterWelcome = false, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; /** The coach's chat is set up for this person (H-693): its menu item shows; the chat itself is on /ask only. */ chatOn?: boolean; points: number; /** The streak flame (H-558): null for a team member, whose streak is the owner's. */ flame?: FlameState | null; /** The surge waits for the daily welcome or the first arrival to close. */ flameAfterWelcome?: boolean; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
   const tier = tierProgress(points);
   const team = Boolean(viewer.team);
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
@@ -47,10 +45,10 @@ export function AppShell({ viewer, chat = null, points, flame = null, flameAfter
           <AppLogo size={40} />
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 [aside[data-rail=true]_&]:px-1">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} chatOn={chatOn} coachFirst={coachFirst} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
         </div>
         {/* The sidebar's controls (H-499): fold and Collapse all, at the bottom left, open or folded. */}
-        <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
+        <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, coachFirst }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
         {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
         <div className="rail-only mt-1 flex flex-col items-center gap-1">
           {flame ? <StreakPill state={flame} place="rail" afterWelcome={flameAfterWelcome} /> : null}
@@ -171,8 +169,6 @@ export function AppShell({ viewer, chat = null, points, flame = null, flameAfter
         </main>
       </div>
       <BottomNav role={viewer.role} badges={badges} />
-      {/* The coach's assistant (rev 241): null while switched into a client, or when the workspace hasn't set it up. */}
-      {chat ? <ChatWidget {...chat} /> : null}
     </div>
     </NavStateProvider>
   );

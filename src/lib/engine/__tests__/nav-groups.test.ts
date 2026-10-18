@@ -51,3 +51,19 @@ describe("the menu: subtitles and the coach's three groups", () => {
     expect(navActive("/body/foods", "/body")).toBe(true);
   });
 });
+
+describe("Ask your coach in the menu (H-693)", () => {
+  const ask = (m: Parameters<typeof visibleGroups>[0]) => visibleGroups(m).flatMap((g) => g.items).find((n) => n.href === "/ask");
+  const client = { role: "client" as const, passEnabled: false, bodyEnabled: false };
+  it("shows only where the chat is on, in Daily right after Office Hours, named for the coach", () => {
+    expect(ask(client)).toBeUndefined();
+    expect(ask({ ...client, chatOn: true, coachFirst: "Danno" })?.label).toBe("Ask Danno");
+    expect(ask({ ...client, chatOn: true })?.label).toBe("Ask your coach");
+    const daily = visibleGroups({ ...client, chatOn: true, oohOn: true }).find((g) => g.label === "Daily")!.items.map((n) => n.href);
+    expect(daily.indexOf("/ask")).toBe(daily.indexOf("/office-hours") + 1);
+  });
+  it("the coach sees what members see; a team member never sees it", () => {
+    expect(ask({ role: "coach", passEnabled: false, bodyEnabled: false, chatOn: true })).toMatchObject({ label: "Ask your coach", line: "what members see" });
+    expect(ask({ ...client, chatOn: true, team: true })).toBeUndefined();
+  });
+});

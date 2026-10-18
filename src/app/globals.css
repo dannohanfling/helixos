@@ -486,3 +486,8 @@ aside[data-rail="true"] .rail-hide {
 aside[data-rail="false"] .rail-only {
   display: none;
 }
+
+/* The coach's chat lives on the Ask page only (H-693): whatever its script added to the page is hidden everywhere else. */
+html:not([data-chat-here]) [data-helix-chat] {
+  display: none !important;
+}
