@@ -77,6 +77,9 @@ export const MEMBER_TABLES = {
   webinar_signups: schema.webinarSignups,
   pathways: schema.pathways,
   webinars: schema.webinars,
+  // Claude's webinar drafts and their history (H-181): the member's own, exported and erased with them.
+  webinar_drafts: schema.webinarDrafts,
+  webinar_history: schema.webinarHistory,
   client_records: schema.clientRecords,
   proofs: schema.proofs,
   groups: schema.groups,

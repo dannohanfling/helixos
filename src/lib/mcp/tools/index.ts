@@ -12,3 +12,4 @@ import "./board";
 import "./forum";
 import "./handoff";
 import "./reports";
+import "./webinars";
