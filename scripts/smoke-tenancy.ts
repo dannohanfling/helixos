@@ -104,6 +104,7 @@ const ROUTES: Record<string, Route> = {
   "/mf/p/[code]": { kind: "public", why: "a coach's preview of a Magic funnel page as the real page (H-142), by a day-long 43-character code: the gold design with the form inert, nothing counted; an unknown or expired code is the quiet closed page; rate limited" },
   "/mf/w/[webinarId]": { kind: "public", why: "Hermes: a webinar's cold page for ads, its default copy and an empty form, only while its HelixOS switch is on" },
   "/m/[slug]": { kind: "public", why: "a lead magnet's public hosted page, read by strangers" },
+  "/pwa-icon/[size]": { kind: "public", why: "the old home-screen icon addresses (H-667): 192 or 512 redirect to the medallion files in /public/app-icon, anything else is a 404; nothing personal" },
 };
 
 async function main() {
