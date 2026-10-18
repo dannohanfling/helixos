@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 232,
+    date: "2026-10-18",
+    title: "The Colosseum is back in your menu",
+    lines: ["🏟️ The Colosseum in the menu opens straight onto the arena. Rewards is one tap away at the top of the page."],
+    audience: "everyone",
+  },
+  {
     n: 231,
     date: "2026-10-18",
     title: "Check each agent's connection on Coach → Agents",

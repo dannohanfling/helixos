@@ -38,8 +38,11 @@ main() {
   # page and handler under it answers 404 until a file changes, and the headers walk failed on /oauth/authorize three gates
   # running. The subtree's handlers answer 405 to a GET when the tree is whole, so that one request tells the two apart
   # before any walk starts; a server missing it is stopped, its caches cleared, and started again, up to three times.
+  # 18 Oct: a start came up with /oauth whole but without /join/team (the team walk's third invite link answered 404 after its
+  # fresh server). A made-up team code answers 200 with "This invite link isn't open" when that subtree is there.
   routes_whole() {
-    [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/oauth/revoke")" == "405" ]]
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/oauth/revoke")" == "405" ]] &&
+      [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/join/team/route-check")" == "200" ]]
   }
   start() {
     for attempt in 1 2 3; do
@@ -47,11 +50,11 @@ main() {
       if routes_whole; then
         return
       fi
-      echo "dev-server: up but /oauth answers 404 (route tree incomplete, attempt $attempt of 3); starting again with caches cleared"
+      echo "dev-server: up but /oauth or /join/team answers 404 (route tree incomplete, attempt $attempt of 3); starting again with caches cleared"
       stop
       rm -rf .next/dev .next/cache/turbopack
     done
-    echo "dev-server: three starts in a row came up without the /oauth routes; see $LOG" >&2
+    echo "dev-server: three starts in a row came up without the /oauth or /join/team routes; see $LOG" >&2
     exit 1
   }
   boot() {

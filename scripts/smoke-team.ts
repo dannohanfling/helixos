@@ -47,6 +47,25 @@ async function submit(page: Page, selector: string) {
 const must = (ok: unknown, msg: string) => {
   if (!ok) throw new Error(msg);
 };
+/**
+ * A write from this process while the dev server holds the file: the server's own write (a first arrival's, say) can keep the
+ * lock past the 5 s busy wait, so wait it out for up to 30 s more and say how long it took. Any other error is thrown as is.
+ */
+async function whenFree<T>(what: string, run: () => Promise<T>): Promise<T> {
+  const started = Date.now();
+  for (let i = 0; ; i++) {
+    try {
+      const out = await run();
+      if (i) console.log(`  (${what}: the database was busy, waited ${Math.round((Date.now() - started) / 100) / 10} s)`);
+      return out;
+    } catch (e) {
+      // The lock is named on the cause, two levels down from Drizzle's wrapper.
+      const chain = [e, (e as { cause?: unknown }).cause, ((e as { cause?: { cause?: unknown } }).cause ?? {})["cause"]].map((x) => (x instanceof Error ? x.message : String(x ?? ""))).join(" ");
+      if (!/SQLITE_BUSY|database is locked/.test(chain) || Date.now() - started > 30_000) throw e;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+}
 /** Not found, as the app says it: the dev server streams the shell first, so a notFound() page answers 200 carrying the 404 fallback in its body. */
 // "Gone" is either Next's 404 fallback or the in-page gone view (14 Oct: a detail page returns <ItemGone> in place of notFound(),
 // so another member's record and a missing id both answer 200 with the same line and no name).
@@ -340,7 +359,7 @@ async function main() {
       await tess.locator('[data-testid="arrival-cta"]').click();
       await tess.waitForURL(/\/today/);
     }
-    await db.update(schema.memberships).set({ teamCap: 2 }).where(eq(schema.memberships.id, mayaM.id));
+    await whenFree("the cap set to 2", () => db.update(schema.memberships).set({ teamCap: 2 }).where(eq(schema.memberships.id, mayaM.id)));
     await owner.goto(`${base}/settings`);
     must(await owner.locator('[data-testid="team-full"]').count() && !(await owner.locator('[data-testid="team-invite-form"]').count()), "at the cap (2 members, 1 invite open against 2 seats) there is no invite form");
     must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("2 of 2 seats used (1 invite open)"), "the seats line says so");

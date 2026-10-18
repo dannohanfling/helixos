@@ -25,8 +25,9 @@ function RewardsTabs({ tab, on }: { tab: "rewards" | "colosseum"; on: boolean })
   const cls = (t: string) => `rounded-full px-3 py-1 text-sm font-medium ${tab === t ? "bg-ink text-surface" : "bg-surface-2 text-ink-2 hover:text-ink"}`;
   return (
     <nav className="mb-4 flex flex-wrap gap-2" aria-label="Rewards sections" data-testid="rewards-tabs">
-      <Link href="/rewards" className={cls("rewards")} aria-current={tab === "rewards" ? "page" : undefined} data-testid="rewards-tab-rewards">🏆 Rewards</Link>
+      {/* The Colosseum first (H-592): the menu opens on the arena, Rewards is the second tab. */}
       <Link href={colosseumHref()} className={cls("colosseum")} aria-current={tab === "colosseum" ? "page" : undefined} data-testid="rewards-colosseum">🏟️ The Colosseum</Link>
+      <Link href="/rewards" className={cls("rewards")} aria-current={tab === "rewards" ? "page" : undefined} data-testid="rewards-tab-rewards">🏆 Rewards</Link>
     </nav>
   );
 }

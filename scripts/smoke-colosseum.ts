@@ -90,7 +90,52 @@ async function main() {
       const box = (await page.locator('[data-testid="arena"]').boundingBox())!;
       must(Math.abs(box.width / box.height - 1680 / 944) < 0.02, `at ${w} the arena keeps its shape: ${box.width}x${box.height}`);
       must((await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")) === true, `at ${w} nothing scrolls sideways`);
-      must((await page.locator('a[href="/rewards"]').count()) >= 1 && (await page.locator('[data-testid="rewards-colosseum"]').count()) === 1, `at ${w} the menu has Rewards and the page its Colosseum tab`);
+      must((await page.locator('a[href="/rewards?tab=colosseum"]').count()) >= 1 && (await page.locator('[data-testid="rewards-tab-rewards"]').count()) === 1, `at ${w} the menu has The Colosseum and the page its Rewards tab`);
+    }
+    // ── The Colosseum back in the menu (H-592): the item opens the arena; the toggle goes to Rewards and back, the item lit on
+    // both; the old addresses still land where they did. ──
+    {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`${base}/today`, { waitUntil: "networkidle" });
+      const item = page.locator('[data-testid="side-nav"] a[href="/rewards?tab=colosseum"]');
+      must((await item.count()) === 1 && (await item.innerText()).includes("The Colosseum") && (await item.innerText()).includes("🏟️"), "one menu item, 🏟️ The Colosseum");
+      must((await page.locator('[data-testid="side-nav"] a[href="/rewards"]').count()) === 0, "never a second Rewards item beside it");
+      // Its group may be folded (kept per member): open it first.
+      const group = page.locator('[data-testid="nav-group"]', { has: page.locator('a[href="/rewards?tab=colosseum"]') });
+      if ((await group.getAttribute("data-open")) !== "true") await group.locator('[data-testid="nav-group-toggle"]').click();
+      await item.scrollIntoViewIfNeeded();
+      await Promise.all([page.waitForURL(/\/rewards\?tab=colosseum$/, { waitUntil: "commit" }), item.click()]);
+      await page.locator('[data-testid="arena"]').waitFor({ timeout: 15000 });
+      must((await item.getAttribute("aria-current")) === "page", "the item is lit on the arena");
+      const tabs = await page.locator('[data-testid="rewards-tabs"] a').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
+      must(JSON.stringify(tabs) === JSON.stringify(["rewards-colosseum", "rewards-tab-rewards"]), `The Colosseum first, then Rewards: ${tabs}`);
+      await Promise.all([page.waitForURL(/\/rewards$/, { waitUntil: "commit" }), page.locator('[data-testid="rewards-tab-rewards"]').click()]);
+      await page.waitForLoadState("networkidle");
+      must((await page.locator('[data-testid="rewards-tab-rewards"]').getAttribute("aria-current")) === "page" && (await page.locator('[data-testid="arena"]').count()) === 0, "the toggle goes to Rewards");
+      must((await item.getAttribute("aria-current")) === "page", "the item stays lit on Rewards");
+      await Promise.all([page.waitForURL(/\/rewards\?tab=colosseum$/, { waitUntil: "commit" }), page.locator('[data-testid="rewards-colosseum"]').click()]);
+      await page.locator('[data-testid="arena"]').waitFor({ timeout: 15000 });
+      must((await item.getAttribute("aria-current")) === "page", "and back to the arena, still lit");
+      // Old links: /rewards opens Rewards, /colosseum the arena, /rewards/book stays its own page.
+      await page.goto(`${base}/rewards`, { waitUntil: "networkidle" });
+      must((await page.locator('[data-testid="rewards-tab-rewards"]').getAttribute("aria-current")) === "page", "an old /rewards link still opens Rewards");
+      await page.goto(`${base}/colosseum`, { waitUntil: "networkidle" });
+      must(/\/rewards\?tab=colosseum$/.test(page.url()) && (await page.locator('[data-testid="arena"]').count()) === 1, `an old /colosseum link lands on the arena: ${page.url()}`);
+      // The folded rail: the icon, with its name as the tooltip.
+      await page.goto(`${base}/today`, { waitUntil: "networkidle" });
+      await page.locator('[data-testid="nav-rail-toggle"]').click();
+      await page.locator('[data-testid="side-nav"][data-rail="true"]').waitFor({ timeout: 5000 });
+      must((await item.getAttribute("title")) === "The Colosseum" && (await item.innerText()).includes("🏟️"), "on the rail: the 🏟️ icon, The Colosseum as its tooltip");
+      await page.locator('[data-testid="nav-rail-toggle"]').click();
+      await page.locator('[data-testid="side-nav"][data-rail="false"]').waitFor({ timeout: 5000 });
+      // The phone's More page, at 390, with nothing sideways.
+      await page.setViewportSize({ width: 390, height: 860 });
+      await page.goto(`${base}/more`, { waitUntil: "networkidle" });
+      const more = page.locator('main a[href="/rewards?tab=colosseum"]');
+      must((await more.count()) === 1 && (await more.innerText()).includes("The Colosseum") && (await page.locator('main a[href="/rewards"]').count()) === 0, "More lists The Colosseum, once");
+      must((await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")) === true, "390: nothing scrolls sideways on More");
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log("✓ the menu: 🏟️ The Colosseum opens the arena, the toggle goes to Rewards and back with the item lit on both, old /rewards and /colosseum links land as before; the rail's tooltip; More at 390");
     }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${base}/colosseum`, { waitUntil: "networkidle" });
