@@ -412,7 +412,9 @@ async function main() {
     // On a fresh server (the gate clears both caches first, 14 Oct) nothing is compiled yet: open every page whose tree imports a
     // probed action, as A, so each is registered before the sweep. A's own ladder page carries the ladder actions.
     const aLadder = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.workspaceId, ws), eq(schema.ladders.userId, A.id)), columns: { id: true } });
-    for (const p of ["/settings", "/body/training", "/body/training/routines", "/content", "/offers", "/goals", "/groups", "/conversations", "/proof", "/clients", "/magnets", "/library", "/content/ladders", ...(aLadder ? [`/content/ladders/${aLadder.id}`] : []), "/body/practices", "/body/training/health"]) await visit(p);
+    // A's own goal page carries the KPI card's actions (the fresh server above dropped what the route sweep compiled).
+    const aGoal = await db.query.planRecords.findFirst({ where: and(eq(schema.planRecords.workspaceId, ws), eq(schema.planRecords.userId, A.id)), columns: { id: true } });
+    for (const p of ["/settings", "/body/training", "/body/training/routines", "/content", "/offers", "/goals", ...(aGoal ? [`/goals/${aGoal.id}`] : []), "/groups", "/conversations", "/proof", "/clients", "/magnets", "/library", "/content/ladders", ...(aLadder ? [`/content/ladders/${aLadder.id}`] : []), "/body/practices", "/body/training/health"]) await visit(p);
     let byName: Record<string, string> = {};
     // The map is read from the dev build; a page opened after it was read (Settings, before the brand kit step) adds its actions,
     // so a name that isn't there yet is looked up again before it counts as unregistered (15 Oct, fresh server before this walk).
