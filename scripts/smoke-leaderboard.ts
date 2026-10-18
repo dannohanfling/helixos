@@ -383,6 +383,51 @@ async function main() {
     await login(page, "As the coach");
     console.log("✓ the Evolve Omega pass: the coach's own program connected (the key never shown back); no Get my pass for a client while off; the coach's own pass made by one create, stored, with Add to wallet and its QR; then the client's once Issue passes is on");
 
+    // Loyalty health (H-622 §2): one card per connected program, the coach's own first; the earlier busy refresh counted; a
+    // typed certificate date, flagged on Coach under 30 days; Check all now stops at the first 429 and reads nothing else.
+    await page.goto(`${base}/coach`);
+    must((await page.locator('[data-testid="loyalty-health-link"]').count()) === 1, "Coach links to Loyalty health once a program is connected");
+    must((await page.locator('[data-testid="loyalty-cert-flag"]').count()) === 0, "no certificate line before any date is typed");
+    await page.goto(`${base}/coach/loyalty-health`);
+    const lhRows = page.locator('[data-testid="lh-row"]');
+    must((await lhRows.count()) === 2, `two programs on Loyalty health, saw ${await lhRows.count()}`);
+    const lhNames = await page.locator('[data-testid="lh-name"]').allTextContents(); // as written: card titles show in capitals
+    must(lhNames[0]?.includes("(your own program)"), `the coach's own program comes first: saw ${lhNames.length} cards, own first ${String(lhNames[0]?.includes("(your own program)"))}, own anywhere ${String(lhNames.some((n) => n.includes("(your own program)")))}`);
+    const lhText = await page.locator("main").innerText();
+    must(/Busy answers \(429\) in 24 hours: 1\b/.test(lhText), "the earlier busy refresh is counted on the client's program");
+    must(!lhText.includes(ELOYALTY_KEY) && !(await page.content()).includes(ELOYALTY_KEY), "no key on Loyalty health");
+    const soon = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
+    const ownCard = page.locator('[data-testid="lh-row"]').first();
+    await ownCard.locator('[data-testid="lh-pass"]').fill("pass.com.evolveomega");
+    await ownCard.locator('[data-testid="lh-expiry"]').fill(soon);
+    await submit(page, '[data-testid="lh-row"] >> nth=0 >> [data-testid="lh-cert-save"]');
+    await page.locator('[data-testid="lh-saved"]').waitFor({ timeout: 20000 });
+    const ownFeed = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, coachM.id) }))!;
+    must(ownFeed.passTypeId === "pass.com.evolveomega" && ownFeed.certExpiresAt === soon, "the Pass Type ID and date are saved on the coach's own program");
+    must(/20 days left|19 days left/.test(await page.locator('[data-testid="lh-cert"]').first().innerText()), "the certificate shows its days left");
+    await page.locator('[data-testid="lh-row"]').first().locator('[data-testid="lh-pass"]').fill("not a pass id");
+    await submit(page, '[data-testid="lh-row"] >> nth=0 >> [data-testid="lh-cert-save"]');
+    await page.locator('[data-testid="lh-error"]').waitFor({ timeout: 20000 });
+    must((await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, ownFeed.id) }))!.passTypeId === "pass.com.evolveomega", "a bad Pass Type ID is refused and nothing changes");
+    await page.goto(`${base}/coach`);
+    must(/Your own program: certificate (20|19) days left/.test(await page.locator('[data-testid="loyalty-cert-flag"]').innerText()), "Coach names the program with under 30 days left");
+    await page.goto(`${base}/coach/loyalty-health`);
+    const lhBefore = await mockCalls();
+    await fetch(`${HOST}/__mode?status=429`);
+    await submit(page, '[data-testid="lh-check-all"]');
+    await page.locator('[data-testid="lh-checked"]').waitFor({ timeout: 30000 });
+    await fetch(`${HOST}/__mode?status=200`);
+    must((await page.locator('[data-testid="lh-checked"]').innerText()).includes("stopped there"), "Check all now stops at a 429 and says so");
+    const lhAfter = await mockCalls();
+    must(lhAfter.calls === lhBefore.calls + 1 && lhAfter.writes.length === lhBefore.writes.length, `one read and no write before stopping: ${lhAfter.calls - lhBefore.calls} calls`);
+    await page.goto(`${base}/coach/loyalty-health`);
+    await submit(page, '[data-testid="lh-check-all"]');
+    await page.locator('[data-testid="lh-checked"]').waitFor({ timeout: 30000 });
+    must((await page.locator('[data-testid="lh-checked"]').innerText()).startsWith("Checked 2 of 2: 2 passed"), `Check all now passes both once eLoyalty answers: ${await page.locator('[data-testid="lh-checked"]').innerText()}`);
+    must((await mockCalls()).writes.length === lhBefore.writes.length, "Check all now wrote nothing to eLoyalty");
+    await db.update(schema.leaderboardFeeds).set({ passTypeId: null, certExpiresAt: null }).where(eq(schema.leaderboardFeeds.id, ownFeed.id));
+    console.log("✓ Loyalty health: both programs listed, the coach's own first, the earlier 429 counted, no key shown; a typed certificate saved, a bad one refused, Coach names it under 30 days; Check all now stops at a 429 after one read, then passes both, writing nothing");
+
     // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
     await page.goto(`${base}/coach?connections=open`);
     must((await page.locator('li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-row"]').getAttribute("open")) !== null, "a client with a feed shows the block open");
