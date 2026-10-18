@@ -1,0 +1,42 @@
+/*
+ * Roma Vivit (H-327 PR B, plan H-637): the ambience layer that sits over a scene's photo and under its avatars or messengers.
+ * Never takes a tap. `.amb-still` (tab hidden, or the scene's Pause) holds every animation; reduced motion renders no layer at all,
+ * and the media query below is the belt to that brace. Keyframes from docs/scenes/living-scenes-colosseum.dc.html. Movement uses
+ * transform and opacity only, so nothing lays the page out again while it runs.
+ */
+.amb { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+/* No z-index here: it would isolate the layer, and the screen blend below would mix with nothing instead of the photo. */
+.amb * { pointer-events: none; }
+.amb-still, .amb-still * { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  .amb, .amb * { animation: none !important; }
+}
+
+/* The night flicker: high-contrast copies of the photo, screen-blended, each clipped to a third of the picture. */
+.amb-fl { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; mix-blend-mode: screen; filter: contrast(2.3) brightness(0.8); opacity: 0.16; animation: amb-flick 2s ease-in-out infinite; }
+
+/* City lights twinkling around the rim. */
+.amb-tw { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #ffd9a0; box-shadow: 0 0 6px 2px rgba(255, 200, 120, 0.6); opacity: 0.25; animation: amb-twinkle 3s ease-in-out infinite; }
+
+/* A warm haze drifting over the sand. */
+.amb-haze { position: absolute; left: 30%; top: 30%; width: 42%; height: 44%; border-radius: 50%; background: radial-gradient(ellipse, rgba(255, 200, 140, 0.14), rgba(255, 200, 140, 0) 65%); animation: amb-haze 16s ease-in-out infinite alternate; }
+
+/* The cloud shadow: 70% of the picture wide, crossing from off the left edge to off the right. */
+.amb-cloud { position: absolute; left: 0; top: -10%; width: 70%; height: 90%; border-radius: 50%; background: radial-gradient(ellipse, rgba(25, 16, 6, 0.32), rgba(25, 16, 6, 0) 62%); transform: translateX(-108%); animation: amb-cloud 48s linear infinite; }
+
+/* Dust motes drifting over the floor. */
+.amb-mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 242, 215, 0.75); filter: blur(0.4px); opacity: 0; animation: amb-mote 9s ease-in-out infinite; }
+
+/* Birds: a full-width lane slides across; the bird rides at its left edge. */
+.amb-lane { position: absolute; left: 0; width: 100%; height: 0; transform: translateX(-4%); animation: amb-fly 24s linear infinite; }
+.amb-bird { position: absolute; left: 0; top: 0; width: clamp(14px, 1.6vw, 26px); height: clamp(7px, 0.75vw, 12px); transform: translate(-100%, -50%); }
+.amb-bird svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.amb-wing { transform-box: fill-box; transform-origin: 50% 100%; animation: amb-flap 0.45s ease-in-out infinite alternate; }
+
+@keyframes amb-flick { 0%, 100% { opacity: 0.16; } 18% { opacity: 0.26; } 40% { opacity: 0.1; } 63% { opacity: 0.22; } 82% { opacity: 0.13; } }
+@keyframes amb-twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+@keyframes amb-haze { from { transform: translate(-4%, 2%) scale(1); } to { transform: translate(4%, -2%) scale(1.08); } }
+@keyframes amb-cloud { from { transform: translateX(-108%); } to { transform: translateX(158%); } }
+@keyframes amb-mote { 0% { opacity: 0; transform: translate(0, 0); } 25% { opacity: 0.9; } 75% { opacity: 0.6; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)); } }
+@keyframes amb-fly { from { transform: translateX(-4%); } to { transform: translateX(104%); } }
+@keyframes amb-flap { from { transform: scaleY(1); } to { transform: scaleY(-0.5); } }
