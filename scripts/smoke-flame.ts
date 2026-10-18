@@ -65,6 +65,8 @@ async function main() {
     await login(page);
     const dw = page.locator('[data-testid="daily-welcome"]');
     await dw.waitFor({ timeout: 15000 });
+    // A key press is the gesture sounds wait for (H-400); the welcome's coins then sound as they land (H-651).
+    await page.keyboard.press("Shift");
     const after = await read();
     const days = Math.max(1, after.running);
     must(after.activity.active.has(after.asOf), "the welcome counted today as showing up");
@@ -86,6 +88,11 @@ async function main() {
     });
     must(fit.right <= fit.edge + 0.5 && fit.left >= fit.start - 0.5, `the sidebar pill stays inside the sidebar (${JSON.stringify(fit)})`);
     if ((await pill.getAttribute("data-waiting")) === "true") must((await pill.locator('[data-testid="streak-waiting"] .sf-dot').count()) === 1 && (await pill.locator(".sf-chip").count()) === 0, "waiting in the sidebar: the amber dot, no words to overflow");
+    const played = () => page.evaluate(() => ((window as unknown as { __hxSounds?: string[] }).__hxSounds ?? []).slice());
+    await page.waitForFunction(() => ((window as unknown as { __hxSounds?: string[] }).__hxSounds ?? []).includes("coin"), null, { timeout: 5000 });
+    const welcomeLog = await played();
+    must(welcomeLog.includes("coin") && welcomeLog.indexOf("coin") === welcomeLog.lastIndexOf("coin"), `today's coin sounds once as it lands: ${JSON.stringify(welcomeLog)}`);
+    const ticksBefore = welcomeLog.filter((n) => n === "tick").length;
     // Close the welcome: Skip, then its button.
     await page.locator('[data-testid="welcome-skip"]').click();
     await page.locator('[data-testid="welcome-cta"]').click();
@@ -94,6 +101,7 @@ async function main() {
     await page.waitForFunction((d) => document.querySelector('[data-testid="streak-pill-side"] [data-testid="streak-count"]')?.textContent?.trim() === String(d), days, { timeout: 4000 });
     for (let i = 0; i < 20 && (await seenOn()) !== after.asOf; i++) await sleep(250);
     must((await seenOn()) === after.asOf, `the surge is stored for the streak day (${await seenOn()})`);
+    must((await played()).filter((n) => n === "tick").length === ticksBefore + 1, `one tick as the count goes up: ${JSON.stringify(await played())}`);
     const mode = await pill.locator('[data-flame="fire"]').getAttribute("data-flame-mode");
     must(mode === "webgl", `the pill draws the live fire (${mode})`);
     must((await webgl(page)) <= 1, "one WebGL context with the sheet closed");

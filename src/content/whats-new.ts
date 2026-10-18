@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 235,
+    date: "2026-10-18",
+    title: "Small sounds now mark the moments",
+    lines: [
+      "When you close your day, a soft chime rises as the lamps light around the arena, and a coin rings as your points land. Your morning coins land with a light tick, and your streak ticks up as it grows.",
+      "They play only after you've tapped the page, never with reduced motion, and Settings → Sounds turns them all off.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 233,
     date: "2026-10-18",
     title: "The Colosseum comes alive",

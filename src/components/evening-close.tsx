@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { CloseScene } from "@/lib/engine/scenes";
 import { armSounds, playSound } from "@/lib/sounds";
+import { playCoinStrike, playLampChime } from "@/lib/synth-sounds";
 import { lbSerif } from "@/components/leaderboard/fonts";
 import { useHidden, useQuiet } from "./scene-life";
 import "./evening-close.css";
 
 /** The sequence's length (docs/scenes/living-scenes-closeout.dc.html): the lamps over 3 s, then the card. */
 const SEQUENCE_MS = 4300;
+/** When the five lamp chimes and the coin sound: across the 3 s sweep that starts at 0.4 s, and as the coin pops at 3.4 s. */
+export const LAMP_CHIMES_MS = [400, 1000, 1600, 2200, 2800] as const;
+export const COIN_MS = 3400;
 const seenKey = (id: string) => `hx-close-${id}`;
 /** Each close row decided once per page load (an effect may run twice in development): plays, or was already seen. */
 const decided = new Map<string, boolean>();
@@ -54,6 +58,14 @@ export function EveningClose({ scene }: { scene: CloseScene }) {
     const t = setTimeout(() => setEnded(true), SEQUENCE_MS);
     return () => clearTimeout(t);
   }, [open, quiet]);
+  // Censor's small sounds (H-651): a rising chime as the light sweeps round the ring, then the coin as "+N" pops on the card.
+  // The same rules as every scene sound (after a tap, Settings → Sounds, reduced motion, a hidden tab); Skip stops what's left.
+  useEffect(() => {
+    if (!open || quiet || done) return;
+    const timers = LAMP_CHIMES_MS.map((ms, step) => setTimeout(() => playLampChime(step, 0.6), ms));
+    timers.push(setTimeout(() => playCoinStrike(0.8), COIN_MS));
+    return () => timers.forEach(clearTimeout);
+  }, [open, quiet, done]);
   useEffect(() => {
     if (open && finished) ctaRef.current?.focus();
   }, [open, finished]);
