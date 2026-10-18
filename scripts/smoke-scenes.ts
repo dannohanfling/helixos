@@ -284,10 +284,10 @@ async function main() {
     // card with its whole label, after the card's own rise ends and after Skip.
     const fits = async (label: string) => {
       const m = await page.evaluate(() => {
-        const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
-        const card = r(".ec-card");
-        const cta = r('[data-testid="evening-cta"]');
+        // No helper functions in here: the walk's runner names them with a helper the page doesn't have.
+        const card = document.querySelector(".ec-card")!.getBoundingClientRect();
         const el = document.querySelector('[data-testid="evening-cta"]') as HTMLElement;
+        const cta = el.getBoundingClientRect();
         return { card: { l: card.left, r: card.right, t: card.top, b: card.bottom }, cta: { l: cta.left, r: cta.right, t: cta.top, b: cta.bottom }, h: window.innerHeight, w: window.innerWidth, cut: el.scrollWidth > el.clientWidth + 1, label: el.textContent?.trim() };
       });
       must(m.card.t >= 0 && m.card.b <= m.h - 12 && m.card.l >= 0 && m.card.r <= m.w, `${label}: the card inside the window with a gap below (${JSON.stringify(m.card)}, ${m.w}x${m.h})`);
