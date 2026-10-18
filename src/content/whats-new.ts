@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 239,
+    date: "2026-10-18",
+    title: "Claude can draft your webinar, and you approve each step",
+    lines: [
+      "Through the HelixOS connector, Claude can now start a webinar and draft its Foundation, Beliefs and Offer steps, from your phone by voice or chat.",
+      "A draft never changes your webinar. Each step shows Claude's draft beside what's there, with Approve, Edit and Discard, and History lists every change with Undo for seven days.",
+      "A proof or story that needs permission is never used, and no income claim or figure you didn't give goes in. Reconnect HelixOS in Claude once and tick Webinars: draft to turn it on.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 247,
     date: "2026-10-18",
     title: "The Forum comes alive",
@@ -19,17 +30,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "At night the lamplit windows flicker, a warm light breathes over the plaza, a small flame burns on the centre column and fireflies drift in the gardens.",
       "At golden hour doves circle the plaza and cloud shadows pass. Your agents' messengers still walk the streets on top.",
       "Switch tabs and it all holds still. With Reduce motion on, the Forum stays still.",
-    ],
-    audience: "everyone",
-  },
-  {
-    n: 238,
-    date: "2026-10-18",
-    title: "Claude can draft your webinar, and you approve each step",
-    lines: [
-      "Through the HelixOS connector, Claude can now start a webinar and draft its Foundation, Beliefs and Offer steps, from your phone by voice or chat.",
-      "A draft never changes your webinar. Each step shows Claude's draft beside what's there, with Approve, Edit and Discard, and History lists every change with Undo for seven days.",
-      "A proof or story that needs permission is never used, and no income claim or figure you didn't give goes in. Reconnect HelixOS in Claude once and tick Webinars: draft to turn it on.",
     ],
     audience: "everyone",
   },
