@@ -59,7 +59,7 @@ import {
 import { needsSlides } from "@/lib/engine/section-draft";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, ownerBrandName, presenterOf } from "@/lib/queries/webinar";
-import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry, figureLines, overlaps, layoutsFor, type SlideChoice, type SlideLayout } from "@/lib/engine/deck";
+import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, LOGO_BOX, coverDescriptor, coverLogoBoxFor, descriptorFrame, footerBrandLine, renderPlan, slideGeometry, figureLines, overlaps, layoutsFor, type SlideChoice, type SlideLayout } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { droppedSlides, filledSlides, resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
 import { slideChoicesFor } from "@/lib/queries/deck-choices";
@@ -243,19 +243,22 @@ export default async function WebinarWizardPage({
   const coverThumb = thumbs.find((t) => t.plan.boxes.some((b) => b.role === "cover-title"));
   const logos = await deckLogos({ workspaceId: w.workspaceId, userId: w.userId }, brandKit ?? null, { background: coverThumb?.plan.background ?? deck.kit.ground, ground: deck.kit.ground });
   const hasLogo = Boolean(logos.logo || logos.dark);
+  const coverDescriptorText = coverDescriptor(brandKit);
   const thumbChrome: ThumbChrome = {
     faces: { display: deck.kit.displayFont, body: deck.kit.bodyFont, quote: deck.kit.quoteFont ?? null, fallback: deck.kit.fontFallback },
     footerBar: deck.footerBar,
     ctaBar: deck.ctaBar,
     ctaFooter: deck.ctaFooter,
-    company: w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : await ownerBrandName(w, v.workspace.name)),
+    company: footerBrandLine({ webinar: w.footerBrand, legalName: brandKit?.legalName, kitName: deck.kitApplied ? deck.kit.name : null }) ?? (await ownerBrandName(w, v.workspace.name)),
     muted: deck.kit.muted.replace(/^#/, "").toUpperCase(),
     surface: deck.kit.surface.replace(/^#/, "").toUpperCase(),
     logoUrl: logos.logo ? `/api/deck-images/${logos.logo.id}` : null,
     coverLogoUrl: logos.cover ? `/api/deck-images/${logos.cover.id}` : null,
     coverBadge: logos.badge,
     logoBox: LOGO_BOX,
-    coverLogoBox: COVER_LOGO_BOX,
+    coverLogoBox: coverLogoBoxFor(coverDescriptorText),
+    // The descriptor under the cover logo (H-811), where the export puts it; the thumbnail knows only the logo's box.
+    coverDescriptor: coverDescriptorText ? { text: coverDescriptorText, box: descriptorFrame(null, Boolean(logos.cover && logos.badge)), color: coverThumb?.plan.boxes.find((b) => b.role === "cover-presenter")?.color ?? deck.kit.muted.replace(/^#/, "").toUpperCase() } : null,
   };
   // The export's provenance gate, from the same sections the route reads; a confirm counts only for the drafts as they stand now.
   const exportGate = sectionGate(sections);

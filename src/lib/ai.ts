@@ -4,8 +4,8 @@
  * rule-based draft exactly as before. There is no coach or house key.
  *
  * draft() is the only way a model is called in this codebase (ESLint keeps the SDKs out of every other file). It builds the
- * system message itself: the client's Essence first, the feature's task instruction second. No feature composes its own,
- * so a voice can never be pasted inline and drift.
+ * system message itself: the client's Essence first, the feature's task instruction second, and the member's spelling line
+ * when it isn't American (H-811). No feature composes its own, so a voice can never be pasted inline and drift.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
@@ -19,6 +19,7 @@ import { FEATURES, MODELS, estimateCost, explainAiError, modelFor, type AiProvid
 import { assembleSystem, type SystemBlock } from "@/lib/engine/essence";
 import { anthropicUserContent, imageRefusal, openaiInput, type DraftImage } from "@/lib/engine/ai-request";
 import { essenceBlockFor } from "@/lib/queries/essence";
+import { spellingFor } from "@/lib/queries/brand-kit";
 import { mfKeySource, mfWhy, type MfKeySource } from "@/lib/engine/magic-funnel";
 
 export type AiStatus = { hasKey: boolean; provider: AiProvider | null; last4: string; lastError: string | null; callsToday: number; cap: number; exempt: boolean; blocked: boolean };
@@ -127,7 +128,9 @@ export async function draftFull(task: string, user: string, maxTokens = 4000, op
   if (!key) return null;
   const feature = opts.feature ?? "composer_polish";
   const model = modelFor(cred.provider, feature);
-  const system = assembleSystem(opts.essence === false ? null : await essenceBlockFor(v.workspace.id, v.user.id), task).blocks;
+  // The member's spelling (H-811) rides on every call, `essence: false` ones too (HumanOS, the avatar interview).
+  const [essence, spelling] = await Promise.all([opts.essence === false ? null : essenceBlockFor(v.workspace.id, v.user.id), spellingFor(v.workspace.id, v.user.id)]);
+  const system = assembleSystem(essence, task, { spelling }).blocks;
   let r: Result | null = null;
   try {
     r = cred.provider === "anthropic" ? await callAnthropic(key, model, system, user, maxTokens, opts.images) : await callOpenAI(key, model, system, user, maxTokens, opts.images);

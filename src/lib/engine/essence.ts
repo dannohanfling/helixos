@@ -5,6 +5,7 @@
  */
 import helpJson from "@/data/essence-help.json";
 import placeholdersJson from "@/data/essence-placeholders.json";
+import { spellingLine, type Spelling } from "@/lib/engine/spelling";
 
 export type FieldKind = "text" | "list" | "stories";
 export type EssenceField = { key: string; label: string; kind: FieldKind };
@@ -45,8 +46,14 @@ export const sectionByKey = (key: string) => ESSENCE_SECTIONS.find((s) => s.key 
 const STORIES_SECTION = "representative_stories";
 const STORIES_FIELD = "stories";
 
-/** The platform limit the production Essence lives under; matching it keeps the app's Essence portable to the bot. */
+/**
+ * The platform limit the production Essence lives under; matching it keeps the app's Essence portable to the bot. It counts
+ * the core: every section but Brand (H-811, 18 Oct), which has a budget of its own, so a long Brand never pushes the core out.
+ */
 export const ESSENCE_CAP = 20000;
+/** Brand's own budget (H-811): over it, only Brand is left out of the AI's calls; the core still leads every one. */
+export const BRAND_CAP = 20000;
+export const BRAND_SECTION = "brand";
 
 /** One-line prompts under the fields, keyed "section.field". Danno's words for the hard ones, plain restatements for the rest. */
 export const ESSENCE_HELP: Record<string, string> = helpJson as Record<string, string>;
@@ -103,37 +110,79 @@ export function completion(data: EssenceData): { filled: number; total: number; 
   return { filled, total: counted.length, empty: filled === 0 };
 }
 
-/**
- * The block that leads every system message: the client's Essence as compact JSON in the production shape
- * (representative_stories as a bare array), or null when nothing is filled in.
- */
-export function serializeEssence(data: EssenceData): string | null {
+/** The Essence as one compact JSON block in the production shape, Brand and all: what the sizes measure. */
+function serializeWhole(data: EssenceData): string | null {
   const clean = normalizeEssence(data);
   if (!Object.keys(clean).length) return null;
   const shaped: Record<string, unknown> = { ...clean };
   if (clean[STORIES_SECTION]) shaped[STORIES_SECTION] = clean[STORIES_SECTION][STORIES_FIELD] ?? [];
   return JSON.stringify(shaped);
 }
-export const essenceChars = (data: EssenceData) => serializeEssence(data)?.length ?? 0;
+/** Everything but Brand: the part the 20,000 cap counts. */
+export const essenceCore = (data: EssenceData): EssenceData => Object.fromEntries(Object.entries(data).filter(([k]) => k !== BRAND_SECTION));
+/** Brand alone, or nothing. */
+export const essenceBrand = (data: EssenceData): EssenceData => (data[BRAND_SECTION] ? { [BRAND_SECTION]: data[BRAND_SECTION] } : {});
+
+/** The whole Essence's size, Brand included, as one block. */
+export const essenceChars = (data: EssenceData) => serializeWhole(data)?.length ?? 0;
+/** The core's size, measured against ESSENCE_CAP. */
+export const coreChars = (data: EssenceData) => essenceChars(essenceCore(data));
+/** Brand's size on its own, measured against BRAND_CAP. */
+export const brandChars = (data: EssenceData) => essenceChars(essenceBrand(data));
 
 /**
  * Over the cap: an Essence can arrive over it whole (an Airtable import, 28 Sep: nothing of the client's is cut silently). It
  * is kept as it is, marked, and left out of every AI call until it is trimmed under; a save that doesn't grow it is always
- * allowed, so trimming works one section at a time.
+ * allowed, so trimming works one section at a time. The core only: Brand is measured on its own (brandOver).
  */
-export const essenceOver = (data: EssenceData): number => Math.max(0, essenceChars(data) - ESSENCE_CAP);
+export const essenceOver = (data: EssenceData): number => Math.max(0, coreChars(data) - ESSENCE_CAP);
+/** Brand over its own budget: kept whole and marked like the core, but only Brand is left out of the AI's calls. */
+export const brandOver = (data: EssenceData): number => Math.max(0, brandChars(data) - BRAND_CAP);
 
 /**
- * Where a save refused over the cap lands (H-802): the refusal is an error answer (?error=over), so the Save button puts back
+ * Where a save refused over a cap lands (H-802, H-811): an error answer (?error=over, or brandover for Brand), so the Save button puts back
  * what was typed and the draft is kept, and the page says how big it would have been from `chars`.
  */
-export const essenceOverAddress = (step: string, chars: number): string => `/essence?step=${encodeURIComponent(step)}&error=over&chars=${chars}`;
+export const essenceOverAddress = (step: string, chars: number, error: "over" | "brandover" = "over"): string => `/essence?step=${encodeURIComponent(step)}&error=${error}&chars=${chars}`;
 
-/** Trim to fit: each filled section's share of the size, largest first. */
+/**
+ * The block that leads every system message: the client's Essence as compact JSON in the production shape
+ * (representative_stories as a bare array), or null when nothing is filled in. With Brand over its own budget, the core
+ * alone (H-811). The core over its cap is the caller's to leave out (essenceBlockFor), with the warning shown.
+ */
+export function serializeEssence(data: EssenceData): string | null {
+  return serializeWhole(brandOver(data) ? essenceCore(normalizeEssence(data)) : data);
+}
+/** What every AI call carries: nothing with the core over its cap, else the block serializeEssence makes. */
+export const essenceForAi = (data: EssenceData): string | null => (essenceOver(data) ? null : serializeEssence(data));
+
+/**
+ * Whether a save is refused, and on which budget (H-811): the core grown past ESSENCE_CAP ("over"), else Brand grown past
+ * BRAND_CAP ("brandover"), with the size it would have been. A save that grows neither part past its cap is never refused.
+ */
+export function essenceSaveRefusal(current: EssenceData, next: EssenceData): { error: "over" | "brandover"; chars: number } | null {
+  const core = coreChars(next);
+  if (core > ESSENCE_CAP && core > coreChars(current)) return { error: "over", chars: core };
+  const brand = brandChars(next);
+  if (brand > BRAND_CAP && brand > brandChars(current)) return { error: "brandover", chars: brand };
+  return null;
+}
+
+/** Trim to fit: each filled core section's share of the size, largest first. Brand has its own list (brandFieldSizes). */
 export function sectionSizes(data: EssenceData): { key: string; title: string; chars: number }[] {
   const clean = normalizeEssence(data);
-  return ESSENCE_SECTIONS.filter((s) => clean[s.key])
+  return ESSENCE_SECTIONS.filter((s) => clean[s.key] && s.key !== BRAND_SECTION)
     .map((s) => ({ key: s.key, title: s.title, chars: essenceChars({ [s.key]: clean[s.key] } as EssenceData) }))
+    .sort((a, b) => b.chars - a.chars);
+}
+
+/** Brand's trim to fit (H-811): each filled Brand field's share of Brand's size, largest first. */
+export function brandFieldSizes(data: EssenceData): { key: string; label: string; chars: number }[] {
+  const brand = normalizeEssence(data)[BRAND_SECTION] ?? {};
+  const fields = sectionByKey(BRAND_SECTION)?.fields ?? [];
+  return fields
+    .filter((f) => brand[f.key] !== undefined)
+    .map((f) => ({ key: f.key, label: f.label, chars: JSON.stringify({ [f.key]: brand[f.key] }).length }))
     .sort((a, b) => b.chars - a.chars);
 }
 
@@ -143,15 +192,18 @@ export const roughTokens = (chars: number) => Math.ceil(chars / 4);
 export type SystemBlock = { text: string; cached: boolean };
 /**
  * Voice first, task second: the one way a system message is built. The Essence block is marked for prompt caching (it is
- * the same prefix on every call); the task instruction follows uncached. With no Essence the task stands alone.
+ * the same prefix on every call); the task instruction follows uncached. With no Essence the task stands alone. The member's
+ * spelling (H-811) closes the task block as one line when it isn't American, with or without an Essence, so the cached
+ * prefix stays the same.
  */
-export function assembleSystem(essence: string | null, task: string): { blocks: SystemBlock[]; text: string } {
+export function assembleSystem(essence: string | null, task: string, opts: { spelling?: Spelling | null } = {}): { blocks: SystemBlock[]; text: string } {
   const blocks: SystemBlock[] = [];
   if (essence) {
     // `inspirations` is attribution material: it says who to credit when an idea is theirs, never who to sound like.
     const credit = /"inspirations"/.test(essence) ? " The inspirations listed name who to credit where an idea is theirs; they are never a voice to imitate." : "";
     blocks.push({ text: `This is the voice you write in. It is the client's own brand voice, as JSON; follow it in every line you produce.${credit}\n${essence}`, cached: true });
   }
-  blocks.push({ text: task, cached: false });
+  const spelling = spellingLine(opts.spelling);
+  blocks.push({ text: spelling ? `${task}\n\n${spelling}` : task, cached: false });
   return { blocks, text: blocks.map((b) => b.text).join("\n\n") };
 }

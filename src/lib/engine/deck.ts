@@ -748,6 +748,46 @@ export function logoBadgeFrame(placed: Frame, pad = 0.1): Frame {
   return { x, y, w: placed.w + (placed.x - x) + pad, h: placed.h + (placed.y - y) + pad };
 }
 
+/** The descriptor under the cover logo (H-811): one line, at most this long, at this size, so it fits its column. */
+export const DESCRIPTOR_MAX = 60;
+export const DESCRIPTOR_SIZE = 10;
+/**
+ * With a descriptor the cover logo's box is shorter (H-811): the logo, its badge's margin and the line together end above the
+ * cover title's box (from 1.35 in), at any logo shape. Without one the logo keeps the full COVER_LOGO_BOX.
+ */
+export const COVER_LOGO_BOX_WITH_DESCRIPTOR: Frame = { x: COVER_LOGO_BOX.x, y: COVER_LOGO_BOX.y, w: COVER_LOGO_BOX.w, h: 0.65 };
+/** The line's box: the left text column's width (TEXT_LEFT_ZONE), clear of the cover picture's frame at 5.2 in. */
+const DESCRIPTOR_BOX = { w: 4.5, h: 0.28 };
+/** The descriptor a cover draws (H-811): the kit's line, trimmed to one line of DESCRIPTOR_MAX, only when set and not held blank. */
+export function coverDescriptor(kit: { descriptor?: string | null; descriptorHidden?: boolean | null } | null | undefined): string | null {
+  if (!kit || kit.descriptorHidden) return null;
+  const line = cleanDescriptor(kit.descriptor);
+  return line || null;
+}
+/** One line, spaces collapsed, at most DESCRIPTOR_MAX characters: what the form saves and what the cover draws. */
+export const cleanDescriptor = (v: string | null | undefined): string => (v ?? "").replace(/\s+/g, " ").trim().slice(0, DESCRIPTOR_MAX).trim();
+/** The box the cover logo is fitted in: shorter when a descriptor sits under it. */
+export const coverLogoBoxFor = (descriptor: string | null): Frame => (descriptor ? COVER_LOGO_BOX_WITH_DESCRIPTOR : COVER_LOGO_BOX);
+/**
+ * Where the descriptor sits (H-811): left-aligned with the logo, just under the drawn logo (or under its box when there is no
+ * logo, under the "Your logo here" placeholder), below the badge's margin when the logo stands on one.
+ */
+export function descriptorFrame(logo: Frame | null, badge: boolean): Frame {
+  const box = COVER_LOGO_BOX_WITH_DESCRIPTOR;
+  const bottom = Math.min(box.y + box.h, logo ? logo.y + logo.h : box.y + box.h);
+  return { x: box.x, y: bottom + (badge ? 0.15 : 0.05), w: DESCRIPTOR_BOX.w, h: DESCRIPTOR_BOX.h };
+}
+
+/**
+ * The footer bar's brand line (§4; H-811): the webinar's own line, else the kit's legal name, else the kit's name when the kit
+ * is applied; null leaves it to the owner's business name, as before.
+ */
+export function footerBrandLine(o: { webinar?: string | null; legalName?: string | null; kitName?: string | null }): string | null {
+  return o.webinar?.trim() || o.legalName?.trim() || o.kitName?.trim() || null;
+}
+/** The file's company (H-811): the kit's legal name when set, else the workspace's name. */
+export const deckCompany = (legalName: string | null | undefined, workspaceName: string): string => legalName?.trim() || workspaceName;
+
 /** The file's layouts (§6.6): one master, a layout per slide family, each with real placeholders where slideGeometry puts them. */
 export const SLIDE_MASTERS = ["COVER", "COVER_PICTURE", "CONTENT", "CONTENT_PICTURE", "STATEMENT", "STATEMENT_PICTURE", "PICTURE_ONLY", "LAID_OUT"] as const;
 export type SlideMaster = (typeof SLIDE_MASTERS)[number];

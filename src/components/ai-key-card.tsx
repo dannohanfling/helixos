@@ -6,7 +6,7 @@ import type { Viewer } from "@/lib/auth";
 import { aiStatus } from "@/lib/ai";
 import { recheckAiKeyAction, removeAiKeyAction, saveAiKeyAction } from "@/lib/actions/ai";
 import { MODELS, essenceCallDelta, money, rollup } from "@/lib/engine/ai-usage";
-import { essenceChars, roughTokens } from "@/lib/engine/essence";
+import { essenceForAi, roughTokens } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Card, Field } from "./ui";
@@ -19,7 +19,7 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
   const rows = await db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.workspaceId, v.workspace.id), eq(schema.aiUsage.userId, v.user.id), gte(schema.aiUsage.createdAt, monthStart)) });
   const use = rollup(rows);
   // The voice prefix is paid on every call; say what it adds, on this member's own key.
-  const voiceTokens = roughTokens(essenceChars(await essenceFor(v.workspace.id, v.user.id)));
+  const voiceTokens = roughTokens(essenceForAi(await essenceFor(v.workspace.id, v.user.id))?.length ?? 0);
   const delta = status.provider ? essenceCallDelta(MODELS[status.provider].light, voiceTokens) : null;
   const cred = status.provider ? await db.query.aiCredentials.findFirst({ where: and(eq(schema.aiCredentials.workspaceId, v.workspace.id), eq(schema.aiCredentials.userId, v.user.id)) }) : null;
   const providerName = status.provider === "anthropic" ? "Anthropic" : status.provider === "openai" ? "OpenAI" : null;

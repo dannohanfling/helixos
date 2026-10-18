@@ -13,6 +13,8 @@ import { inviteCode } from "@/lib/ids";
 import { redirect } from "next/navigation";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { brandKitProblems, normaliseHex } from "@/lib/engine/subject";
+import { parseSpelling } from "@/lib/engine/spelling";
+import { cleanDescriptor } from "@/lib/engine/deck";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import { syncPrimaryKpi } from "@/lib/queries/kpi";
 import { isOneEmoji } from "@/lib/engine/emoji";
@@ -202,6 +204,11 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     graphicGoldFrom: normaliseHex(str(formData, "graphicGoldFrom")) || null,
     graphicGoldTo: normaliseHex(str(formData, "graphicGoldTo")) || null,
     aiBackgrounds: str(formData, "aiBackgrounds") === "1",
+    // How the member's AI drafts spell, their registered name and the line under the cover logo (H-811).
+    spelling: parseSpelling(str(formData, "spelling")),
+    legalName: opt(formData, "legalName")?.slice(0, 120).trim() || null,
+    descriptor: cleanDescriptor(str(formData, "descriptor")) || null,
+    descriptorHidden: str(formData, "descriptorHidden") === "1",
   };
   // The badge's yes to the profile photo is the member's own (client headshots, rule 6): never set by a coach switched in.
   const keepConsent = v.switchedInto ? (await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)), columns: { graphicUseHeadshot: true } }))?.graphicUseHeadshot ?? false : null;

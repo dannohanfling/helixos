@@ -8,7 +8,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { AirtableError, airtableProblem, readSource, type BaseAccess } from "@/lib/airtable";
 import { buildPlan, planSummary, type ImportPlan, type NotImported, type PlanLine, TEMPLATE_TABLES, type TableMatch } from "@/lib/engine/airtable-import";
-import { ESSENCE_CAP } from "@/lib/engine/essence";
+import { BRAND_CAP, ESSENCE_CAP } from "@/lib/engine/essence";
 import { newId } from "@/lib/ids";
 import { hashPassword } from "@/lib/password";
 import { applyImport, existingRefs, mergedEssence } from "@/lib/queries/import";
@@ -29,8 +29,11 @@ export type ImportPreview = {
   herTables: { id: string; name: string }[];
   notInPhase1: NotImported[];
   otherTables: string[];
+  /** The core's size (every section but Brand) and whether it is over its cap; Brand's on its own budget (H-811). */
   essenceChars: number;
   overCap: boolean;
+  brandChars: number;
+  brandOverCap: boolean;
 };
 export type ImportState = { error?: string; changed?: boolean; preview?: ImportPreview } | undefined;
 
@@ -86,7 +89,7 @@ async function prepare(workspaceId: string, coachId: string, f: FormData): Promi
   if (!TEMPLATE_TABLES.some((t) => read.matched[t.key])) return { error: "Source base: none of its tables look like the HelixOS template's (no Vision, Offers, Methodologies, Buyer Readiness, Tasks, Groups or Lead Magnet table, by name or by fields). Check the base id." };
   const existing = t.kind === "existing" ? await existingRefs(workspaceId, t.userId) : new Set<string>();
   const plan = buildPlan(read.source, { createdSince: since || null }, existing);
-  const { chars } = await mergedEssence(plan, workspaceId, t.kind === "existing" ? t.userId : "");
+  const { chars, brandChars } = await mergedEssence(plan, workspaceId, t.kind === "existing" ? t.userId : "");
   const key = createHash("sha256")
     .update(JSON.stringify([t.kind === "existing" ? t.membershipId : t.email, plan]))
     .digest("hex")
@@ -107,6 +110,8 @@ async function prepare(workspaceId: string, coachId: string, f: FormData): Promi
       otherTables: plan.otherTables,
       essenceChars: chars,
       overCap: chars > ESSENCE_CAP,
+      brandChars,
+      brandOverCap: brandChars > BRAND_CAP,
     },
   };
 }

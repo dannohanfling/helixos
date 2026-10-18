@@ -111,6 +111,26 @@ async function main() {
     const warnings = await page.locator('[data-testid="brand-warnings"]').innerText();
     if (!/accent on inverseGround is 1\.24:1/.test(warnings)) throw new Error(`the accent pair warns with the ratio, got "${warnings}"`);
     if ((await page.locator('[data-testid="brand-aliases"]').inputValue()) !== "Turas") throw new Error("the permitted name is read back");
+    // H-811: the legal name, the descriptor under the logo and its hold, and the spelling select save and read back; then cleared,
+    // so later walks see the kit as they always have.
+    const spellingOptions = await page.locator('[data-testid="brand-spelling"] option').allInnerTexts();
+    if (JSON.stringify(spellingOptions) !== JSON.stringify(["American", "British and New Zealand"]) || (await page.locator('[data-testid="brand-spelling"]').inputValue()) !== "us") throw new Error(`Spelling offers American (the default) and British and New Zealand, got ${spellingOptions.join(" | ")}`);
+    await page.fill('[data-testid="brand-legal-name"]', "Turas True North Ltd");
+    await page.fill('[data-testid="brand-descriptor"]', "Leadership coaching for founders");
+    await page.check('[data-testid="brand-descriptor-hidden"]');
+    await page.selectOption('[data-testid="brand-spelling"]', "uk_nz");
+    await submit(page, '[data-testid="brand-form"] button[type="submit"]');
+    await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
+    if ((await page.locator('[data-testid="brand-legal-name"]').inputValue()) !== "Turas True North Ltd" || (await page.locator('[data-testid="brand-descriptor"]').inputValue()) !== "Leadership coaching for founders" || !(await page.locator('[data-testid="brand-descriptor-hidden"]').isChecked()) || (await page.locator('[data-testid="brand-spelling"]').inputValue()) !== "uk_nz") throw new Error("the legal name, the descriptor, its hold and the spelling are read back");
+    if ((await page.locator('[data-testid="brand-descriptor"]').getAttribute("maxlength")) !== "60") throw new Error("the descriptor is one short line, 60 characters at most");
+    await page.fill('[data-testid="brand-legal-name"]', "");
+    await page.fill('[data-testid="brand-descriptor"]', "");
+    await page.uncheck('[data-testid="brand-descriptor-hidden"]');
+    await page.selectOption('[data-testid="brand-spelling"]', "us");
+    await submit(page, '[data-testid="brand-form"] button[type="submit"]');
+    await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
+    if ((await page.locator('[data-testid="brand-legal-name"]').inputValue()) !== "" || (await page.locator('[data-testid="brand-spelling"]').inputValue()) !== "us") throw new Error("the legal name clears and the spelling goes back to American");
+    console.log("✓ brand kit (H-811): Legal name, Descriptor under the logo, Hold the descriptor blank and Spelling (American / British and New Zealand) save, read back and clear");
     console.log("✓ brand kit (§6.1): faces from the list or typed under Other with the who-will-not-see line; the preview draws the kit as typed and marks the slide that cannot read; the check proposes an ink with Apply; ash grey on cream still refused on the server with the ratio; the Turas kit saved and read back; the accent pair warns with its ratio");
     await page.goto(`${base}/coach?connections=open`);
     // The tier (rev 442): its own form, saved the moment it changes with the green, never touching the pass; read in full.

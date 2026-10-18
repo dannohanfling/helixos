@@ -1779,6 +1779,14 @@ export const brandKits = sqliteTable(
     graphicUseHeadshot: integer("graphic_use_headshot", { mode: "boolean" }).notNull().default(false),
     /** Allow AI backgrounds (rev 524): on by default; off, a graphic uses only the member's own photos or a plain ground. Faces are never generated. */
     aiBackgrounds: integer("ai_backgrounds", { mode: "boolean" }).notNull().default(true),
+    /** How every AI draft spells (H-811, migration 0205): American by default; "uk_nz" adds one line to every system message. */
+    spelling: text("spelling", { enum: ["us", "uk_nz"] }).notNull().default("us"),
+    /** The registered name (H-811): on the decks' footer bar and as the file's company when set; the kit's name otherwise. */
+    legalName: text("legal_name"),
+    /** One line under the cover logo (H-811), when set and not held blank. */
+    descriptor: text("descriptor"),
+    /** The descriptor kept but not drawn ("Hold the descriptor blank for now"). */
+    descriptorHidden: integer("descriptor_hidden", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("brand_kits_member").on(t.workspaceId, t.userId)],
