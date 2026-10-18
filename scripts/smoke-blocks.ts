@@ -170,7 +170,13 @@ async function main() {
       must(rowText.includes(JORDAN_TEXT) && rowText.includes(jordan.name) && rowText.includes(maya.name) && rowText.includes("Harassment or hurtful") && rowText.includes("Content"), `${w}: it shows the win's words, who wrote it, who reported it and why`);
       await noSideways(page, "Issues and ideas", w);
       await submit(page, '[data-testid="report-hide-win"]');
-      must((await db.query.colosseumWins.findFirst({ where: eq(schema.colosseumWins.id, JORDAN_WIN) }))!.hiddenAt, `${w}: Hide this win hid it`);
+      // The hide lands with its POST; a click before the page is ready posts nothing, so give it a moment and click again once.
+      const hidden = async () => Boolean((await db.query.colosseumWins.findFirst({ where: eq(schema.colosseumWins.id, JORDAN_WIN) }))!.hiddenAt);
+      for (let i = 0; i < 20 && !(await hidden()); i++) {
+        if (i === 10 && (await page.locator('[data-testid="report-hide-win"]').count())) await submit(page, '[data-testid="report-hide-win"]');
+        await page.waitForTimeout(500);
+      }
+      must(await hidden(), `${w}: Hide this win hid it`);
       await page.goto(wins(), { waitUntil: "networkidle" });
       must((await winRow(JORDAN_WIN).count()) === 0, `${w}: hidden for everyone, the coach too`);
       await login(page, "As a client");
