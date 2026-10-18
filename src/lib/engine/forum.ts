@@ -3,6 +3,7 @@
  * (capped, scrubbed, statuses checked), and the state the page draws, in the mockup's shape (updatedAt, headline, agents,
  * flows, queue, waiting, log). No database, no request. Times stay UTC here; the page shows them in the member's zone.
  */
+import { cutText, wellFormed } from "@/lib/engine/cut";
 import { FORUM_PLOTS, FORUM_STATUSES, type ForumMilestone } from "@/db/schema";
 
 export type ForumPlot = (typeof FORUM_PLOTS)[number];
@@ -99,7 +100,7 @@ export function cleanLine(value: unknown, max: number): string | null {
     .replace(/\s+/g, " ")
     .trim();
   if (!s) return null;
-  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+  return s.length > max ? `${cutText(s, max - 1).trimEnd()}…` : wellFormed(s);
 }
 
 /** An agent's saved link: http(s) only, no credentials in it, or nothing. */

@@ -10,6 +10,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { nowIso } from "@/lib/dates";
+import { cutText } from "@/lib/engine/cut";
 import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
 import { APP_VERSION } from "@/lib/version";
@@ -51,7 +52,7 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
     }
   } catch (e) {
     ok = false;
-    error = e instanceof Error ? e.message.slice(0, 200) : "error";
+    error = e instanceof Error ? cutText(e.message, 200) : "error";
     text = e instanceof Error ? e.message : "Something went wrong.";
   }
   const ms = Date.now() - t0;

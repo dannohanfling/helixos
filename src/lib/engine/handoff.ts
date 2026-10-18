@@ -4,6 +4,7 @@
  * names inside a zip, and markdown read into plain blocks the page renders as text (no HTML, no remote images, links with
  * their full address). No database, no request.
  */
+import { cutText } from "@/lib/engine/cut";
 import { looksLikeSecret } from "@/lib/engine/forum";
 
 export const HANDOFF_KINDS = ["brief", "plan", "status", "answer", "question", "report"] as const;
@@ -39,7 +40,7 @@ export function scrubText(text: string): { text: string; removed: number } {
   return { text: out, removed };
 }
 
-const clean = (v: unknown, max: number): string => String(v ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F‪-‮⁦-⁩]/g, "").replace(/\r\n?/g, "\n").trim().slice(0, max);
+const clean = (v: unknown, max: number): string => cutText(String(v ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F‪-‮⁦-⁩]/g, "").replace(/\r\n?/g, "\n").trim(), max);
 
 export type HandoffPost = { to: string[]; kind: HandoffKind; title: string; body: string; replyTo: number | null; files: string[]; needsApproval: boolean; removed: number; /** H-351: the H-number of the post this one replaces, marked superseded in the same call. */ supersedes: number | null };
 
@@ -319,7 +320,7 @@ export function labelledTitle(title: string, s: HoldState): string {
 
 /** A hold's reason: one line, 200 characters, never empty. */
 export function holdReason(raw: unknown): string | null {
-  const r = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.note);
+  const r = cutText(String(raw ?? "").replace(/\s+/g, " ").trim(), HANDOFF_MAX.note);
   return r || null;
 }
 
