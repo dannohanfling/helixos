@@ -389,14 +389,30 @@ async function main() {
 
     // The route sweep compiles enough pages to bring the dev server near the container's memory (H-832, as the team walk, H-804):
     // a fresh server before the action sweep, which compiles its own pages below anyway. The session lives in the database.
-    if (base === "http://localhost:3000") execSync("scripts/dev-server.sh fresh", { stdio: "inherit" });
+    if (base === "http://localhost:3000") {
+      execSync("scripts/dev-server.sh fresh", { stdio: "inherit" });
+      // The open page notices the new server and goes to Today on its own; let that land before the next visit.
+      await page.goto(`${base}/today`, { waitUntil: "networkidle" }).catch(() => undefined);
+      await page.waitForLoadState("networkidle").catch(() => undefined);
+    }
+    /** A visit that a late redirect interrupted is simply made again. */
+    const visit = async (p: string) => {
+      for (let i = 0; ; i++) {
+        try {
+          return await page.goto(`${base}${p}`);
+        } catch (e) {
+          if (i >= 2 || !String(e).includes("interrupted by another navigation")) throw e;
+          await page.waitForLoadState("networkidle").catch(() => undefined);
+        }
+      }
+    };
 
     // ── Action sweep: a mutating action per owned table, called as A with B's id, changes nothing. ──
     // The dev server compiles a page's actions on first visit: open A's own Training pages so the Body actions are registered.
     // On a fresh server (the gate clears both caches first, 14 Oct) nothing is compiled yet: open every page whose tree imports a
     // probed action, as A, so each is registered before the sweep. A's own ladder page carries the ladder actions.
     const aLadder = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.workspaceId, ws), eq(schema.ladders.userId, A.id)), columns: { id: true } });
-    for (const p of ["/settings", "/body/training", "/body/training/routines", "/content", "/offers", "/goals", "/groups", "/conversations", "/proof", "/clients", "/magnets", "/library", "/content/ladders", ...(aLadder ? [`/content/ladders/${aLadder.id}`] : []), "/body/practices", "/body/training/health"]) await page.goto(`${base}${p}`);
+    for (const p of ["/settings", "/body/training", "/body/training/routines", "/content", "/offers", "/goals", "/groups", "/conversations", "/proof", "/clients", "/magnets", "/library", "/content/ladders", ...(aLadder ? [`/content/ladders/${aLadder.id}`] : []), "/body/practices", "/body/training/health"]) await visit(p);
     let byName: Record<string, string> = {};
     // The map is read from the dev build; a page opened after it was read (Settings, before the brand kit step) adds its actions,
     // so a name that isn't there yet is looked up again before it counts as unregistered (15 Oct, fresh server before this walk).
