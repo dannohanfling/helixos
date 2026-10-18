@@ -122,3 +122,24 @@ function partsInTz(at: Date, tz: string): { y: number; mo: number; d: number; h:
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(at).map((x) => [x.type, x.value]));
   return { y: Number(p.year), mo: Number(p.month), d: Number(p.day), h: Number(p.hour) % 24, mi: Number(p.minute), s: Number(p.second) };
 }
+
+/**
+ * A zone's short name at a moment, as people write it (H-457): "PT" and "ET" for the US zones, else the abbreviation the
+ * zone's own English locale uses ("AEDT", "BST", "IST", "NZDT"), else the offset ("GMT+9"). en-US alone writes Sydney as GMT+11.
+ */
+export function zoneName(tz: string, at: Date = new Date()): string {
+  const name = (locale: string, style: "short" | "shortGeneric") => {
+    try {
+      return new Intl.DateTimeFormat(locale, { timeZone: tz, timeZoneName: style }).formatToParts(at).find((p) => p.type === "timeZoneName")?.value ?? "";
+    } catch {
+      return "";
+    }
+  };
+  const generic = name("en-US", "shortGeneric");
+  if (/^[A-Z]{1,4}$/.test(generic)) return generic;
+  for (const locale of ["en-US", "en-AU", "en-GB", "en-IN", "en-NZ", "en-CA", "en-ZA", "en-SG"]) {
+    const n = name(locale, "short");
+    if (n && !/^(GMT|UTC)[+-]/.test(n)) return n;
+  }
+  return name("en-US", "short") || tz;
+}

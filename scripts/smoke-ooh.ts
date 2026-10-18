@@ -8,6 +8,9 @@
  *  4. Maya: a line on Today and at the top of Office Hours says Sam booked for her; both requests show, Sam's with "Submitted by"
  *     and who's attending; opening Office Hours clears the line, so Today no longer carries it.
  *  5. The coach's queue shows the request under Maya with "Submitted by Sam Vale" and the attendees.
+ *  5c. Each member's own zone (H-457): the coach sets the call to Thursday 5 PM in the workspace's zone; Maya, set to Sydney,
+ *     reads every session as Friday morning in her time (the next call, the picker, her requests), the coach sees her time
+ *     beside the host's, Add to calendar gives the session as UTC instants, and 390 px still has no sideways scroll.
  *  6. Maya removes Sam: the request stays, and Sam now reads as a former team member for Maya and the coach.
  */
 import { chromium, type Browser, type Page } from "@playwright/test";
@@ -37,6 +40,8 @@ async function main() {
   const { and, eq, isNull } = await import("drizzle-orm");
   const { newId } = await import("@/lib/ids");
   const { upcomingFridays } = await import("@/lib/engine/office-hours");
+  const { hostToday, oohSchedule, sessionBoth, sessionStart, sessionWhen } = await import("@/lib/engine/ooh-session");
+  const { zoneName } = await import("@/lib/dates");
 
   const browser: Browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -52,8 +57,11 @@ async function main() {
     const ws = mayaM.workspaceId;
     const run = randomUUID().slice(0, 8);
     const samEmail = `sam.ooh.${run}@demo.helixos.app`;
-    const today = new Date().toISOString().slice(0, 10);
-    const fridays = upcomingFridays(today);
+    // The session dates are the host's (H-457), counted from the workspace's today, as the page counts them.
+    const wsRow = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, ws) }))!;
+    const before = { oohWeekday: wsRow.oohWeekday, oohStart: wsRow.oohStart, oohMinutes: wsRow.oohMinutes, mayaTz: mayaM.timezone };
+    const startSession = oohSchedule(wsRow);
+    const fridays = upcomingFridays(hostToday(startSession), 4, startSession.weekday);
     // Maya's own request, hers alone: a team member must never read the word.
     const privateWord = `MayaPrivateQuestion${run}`;
     await db.insert(schema.officeHoursRequests).values({ id: newId(), workspaceId: ws, userId: maya.id, friday: fridays[1], description: `${privateWord} about my funnel.`, triedSelf: "Read the lesson.", goal: "A working funnel.", category: "Funnels" });
@@ -177,6 +185,57 @@ async function main() {
     const cardText = await card.innerText();
     must(cardText.includes(maya.name) && cardText.includes("Submitted by Sam Vale") && cardText.includes(`Attending: ${maya.name}, Sam Vale; others: Lee`), `the coach's card names the member, the submitter and the attendees: ${cardText.slice(0, 200)}`);
     console.log("✓ the coach's queue shows the request under the owner with Submitted by and the attendees");
+
+    // ── 5c. Each member's own zone (H-457). ──
+    await coachPage.goto(`${base}/coach/office-hours#lists`);
+    await coachPage.locator('[data-testid="ooh-weekday"]').selectOption("4");
+    await coachPage.locator('[data-testid="ooh-start"]').fill("17:00");
+    await coachPage.locator('[data-testid="ooh-minutes"]').selectOption("60");
+    await submit(coachPage, '[data-testid="ooh-lists-save"]');
+    await coachPage.locator('[data-testid="ooh-lists-saved"]').waitFor({ timeout: 20000 });
+    const wsNow = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, ws) }))!;
+    must(wsNow.oohWeekday === 4 && wsNow.oohStart === "17:00" && wsNow.oohMinutes === 60, `the coach's day, start and length are saved: ${wsNow.oohWeekday} ${wsNow.oohStart} ${wsNow.oohMinutes}`);
+    await db.update(schema.memberships).set({ timezone: "Australia/Sydney" }).where(eq(schema.memberships.id, mayaM.id));
+    const session = oohSchedule(wsNow);
+    const days = upcomingFridays(hostToday(session), 4, session.weekday);
+    const SYD = "Australia/Sydney";
+    await owner.goto(`${base}/office-hours`);
+    await owner.locator('[data-testid="ooh-next"]').waitFor({ timeout: 20000 });
+    const nextLine = await owner.locator('[data-testid="ooh-next"]').innerText();
+    const nextWant = `Next call: ${sessionWhen(days[0], session, SYD)} ${zoneName(SYD, sessionStart(days[0], session)!)}, your time`;
+    must(nextLine.includes(nextWant) && /\bAE[DS]T\b/.test(nextLine), `the next call is in Maya's own time, named once: "${nextLine}" wants "${nextWant}"`);
+    const options = await owner.locator('[data-testid="ooh-form"]').first().locator('[data-testid="ooh-friday"] option').evaluateAll((els) => els.map((e) => [e.getAttribute("value"), e.textContent]));
+    must(JSON.stringify(options) === JSON.stringify(days.map((d) => [d, sessionWhen(d, session, SYD)])), `the picker offers the host's Thursdays in Maya's own day and time: ${JSON.stringify(options)}`);
+    must(options.every(([, t]) => /^(Fri|Sat) /.test(String(t))), "a Thursday 5 PM Pacific call reads as Friday (or Saturday) in Sydney");
+    must((await owner.locator('[data-testid="ooh-form"]').first().innerText()).includes("Which Thursday"), "the picker names the host's day");
+    const mineWhen = await owner.locator('[data-testid="ooh-mine-when"]').allInnerTexts();
+    const mineRows = await db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.userId, maya.id) });
+    must(mineWhen.length === mineRows.length && mineWhen.every((t) => mineRows.some((r) => t === sessionWhen(r.friday, session, SYD))), `each request reads in Maya's time: ${mineWhen.join(" | ")}`);
+    // Add to calendar: the session as UTC instants with the host's zone as a hint; a day that isn't a session is refused.
+    const ics = await owner.request.get(`${base}/office-hours/calendar?day=${days[0]}`);
+    const icsText = await ics.text();
+    const stampOf = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const at = sessionStart(days[0], session)!;
+    must(ics.status() === 200 && (ics.headers()["content-type"] ?? "").startsWith("text/calendar"), `Add to calendar answers a calendar file: ${ics.status()}`);
+    must(icsText.includes(`DTSTART:${stampOf(at)}`) && icsText.includes(`DTEND:${stampOf(new Date(at.getTime() + 60 * 60_000))}`) && icsText.includes("X-WR-TIMEZONE:America/Los_Angeles"), `the file carries the UTC start and end and the host's zone: ${icsText.slice(0, 400)}`);
+    must(!icsText.includes(maya.email) && !icsText.includes(maya.name), "nothing about the member is in the file");
+    must((await owner.request.get(`${base}/office-hours/calendar?day=2020-01-02`)).status() === 404, "a day that isn't a coming session is refused");
+    // The coach: the member's time beside the host's.
+    await coachPage.goto(`${base}/coach/office-hours`);
+    const theirs = coachPage.locator('[data-testid="ooh-request"]', { hasText: `Booked by Sam ${run}` }).locator('[data-testid="ooh-both-times"]');
+    await theirs.waitFor({ timeout: 20000 });
+    const bothWant = `Their time: ${sessionBoth(req.friday, session, SYD)}`;
+    must((await theirs.innerText()) === bothWant && bothWant.includes(" · ") && bothWant.endsWith(" PT"), `the coach sees Maya's time and the host's: "${await theirs.innerText()}" wants "${bothWant}"`);
+    await owner.setViewportSize({ width: 390, height: 844 });
+    await owner.goto(`${base}/office-hours`);
+    await owner.locator('[data-testid="ooh-next"]').waitFor({ timeout: 20000 });
+    const w390 = await owner.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth }));
+    must(w390.scroll <= w390.inner, `the longer date strings fit at 390 px: ${w390.scroll} vs ${w390.inner}`);
+    await owner.setViewportSize({ width: 1280, height: 900 });
+    // Put the workspace and Maya back as they were for the walks after this one.
+    await db.update(schema.workspaces).set({ oohWeekday: before.oohWeekday, oohStart: before.oohStart, oohMinutes: before.oohMinutes }).where(eq(schema.workspaces.id, ws));
+    await db.update(schema.memberships).set({ timezone: before.mayaTz }).where(eq(schema.memberships.id, mayaM.id));
+    console.log("✓ each member's own zone: Thursday 5 PM Pacific reads as Friday in Sydney on the next-call line, the picker and her requests; the coach sees both times; Add to calendar is UTC with the host's zone; 390 px fits");
 
     // ── 5b. Office Hours by program level (H-470): the level's default, the coach's switch both ways, earned access, the team follows the owner. ──
     const { OOH_LOCKED_LINE } = await import("@/lib/engine/office-hours");

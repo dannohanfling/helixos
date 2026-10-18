@@ -81,13 +81,15 @@ function fold(line: string): string {
 }
 
 /** The Apple / Outlook file: one event, a 15-minute alarm, UTC times. `uid` is stable per call and person, never their details. */
-export function icsFile(o: { uid: string; title: string; details: string; when: CallWhen; location: string | null; now?: Date }): string {
+export function icsFile(o: { uid: string; title: string; details: string; when: CallWhen; location: string | null; now?: Date; zone?: string }): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//Evolve Omega//HelixOS pages//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
+    // The host's zone as a hint (H-457); the times stay UTC instants, which every calendar shows in its owner's own time.
+    ...(o.zone ? [`X-WR-TIMEZONE:${o.zone}`] : []),
     "BEGIN:VEVENT",
     `UID:${o.uid}`,
     `DTSTAMP:${stamp((o.now ?? new Date()).toISOString())}`,

@@ -159,7 +159,7 @@ async function main() {
     r = await tool(token, "office_hours_submit", ask);
     must(!r.isError && r.data!.sent === false && /you'll be there on Friday the \d+(st|nd|rd|th)\. Shall I send it\?/.test(r.text) && (await ooh()) === had, `the read-back, nothing saved: ${r.text}`);
     r = await tool(token, "office_hours_submit", { ...ask, friday: "2099-01-02", confirm: true });
-    must(r.isError && r.text.startsWith("Pick one of the next four Fridays") && (await ooh()) === had, `a far Friday refused: ${r.text}`);
+    must(r.isError && r.text.startsWith("Pick one of the next four sessions") && (await ooh()) === had, `a far Friday refused: ${r.text}`);
     r = await tool(token, "office_hours_submit", { ...ask, confirm: true });
     must(!r.isError && r.data!.sent === true && (await ooh()) === had + 1, `sent after the yes: ${r.text}`);
     const sent = (await db.query.officeHoursRequests.findFirst({ where: eq(schema.officeHoursRequests.id, String(r.data!.id)) }))!;

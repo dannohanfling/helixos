@@ -13,13 +13,14 @@ import { oohCanEdit, readAttendees, readOohRequest, readOthers, type OohInput } 
  * Whose request it is and who is writing it (H-413): `userId` is always the owner's (the account the request belongs to);
  * `actorId` is the team member submitting for them, or null when the owner writes; `attendeesAllowed` is the owner's live team.
  */
-export type OohMember = { workspaceId: string; userId: string; today: string; categories: string[]; actorId?: string | null; attendeesAllowed?: string[] };
+/** `today` is the host's (the workspace's zone) and `sessionWeekday` the workspace's session day (H-457), so dates key on the host's session. */
+export type OohMember = { workspaceId: string; userId: string; today: string; categories: string[]; actorId?: string | null; attendeesAllowed?: string[]; sessionWeekday?: number };
 export type OohRaw = Parameters<typeof readOohRequest>[0] & { attendees?: string[]; attendeesOther?: string };
 export type OohSaved = { ok: true; id: string; value: OohInput; edited: boolean } | { ok: false; goBack: string } | { ok: false; error: string; field?: string };
 
 /** New, or an edit of the member's own request up to and including its Friday (marked edited). Nothing is saved on a refusal. */
 export async function saveOohRequest(m: OohMember, raw: OohRaw, requestId?: string | null): Promise<OohSaved> {
-  const read = readOohRequest(raw, m.today, m.categories);
+  const read = readOohRequest(raw, m.today, m.categories, m.sessionWeekday ?? 5);
   if ("goBack" in read) return { ok: false, goBack: read.goBack };
   if ("error" in read) return { ok: false, error: read.error, field: read.field };
   const { value } = read;

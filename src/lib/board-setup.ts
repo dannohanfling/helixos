@@ -21,7 +21,8 @@ import { saveWeekIntention } from "@/lib/intentions-core";
 import { saveOohRequest } from "@/lib/office-hours-core";
 import { readIntention, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/targets";
-import { upcomingFridays } from "@/lib/engine/office-hours";
+import { OOH_FRIDAYS, upcomingFridays } from "@/lib/engine/office-hours";
+import { hostToday, oohSchedule, sessionSpoken } from "@/lib/engine/ooh-session";
 import type { SetupLook } from "@/lib/engine/board-setup";
 
 const mine = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id });
@@ -31,6 +32,8 @@ export const decisionLink = (id: string) => `${appUrl()}/my-board/${id}`;
 export async function setupLook(v: Viewer, decisionId: string, question: string, known: string): Promise<SetupLook> {
   const { workspaceId, userId } = mine(v);
   const month = monthOf(v.today);
+  const session = oohSchedule(v.workspace);
+  const sessions = upcomingFridays(hostToday(session), OOH_FRIDAYS, session.weekday);
   const [intention, targets, contacts, offers] = await Promise.all([
     db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) }),
     db.query.targets.findMany({ where: and(eq(schema.targets.workspaceId, workspaceId), eq(schema.targets.userId, userId), eq(schema.targets.month, month)) }),
@@ -48,7 +51,9 @@ export async function setupLook(v: Viewer, decisionId: string, question: string,
     contacts,
     offers,
     oohCategories: v.workspace.oohCategories,
-    fridays: upcomingFridays(v.today),
+    // The next sessions as the host's dates (H-457), with each one's words in the member's own day and time.
+    fridays: sessions,
+    oohWords: Object.fromEntries(sessions.map((f) => [f, sessionSpoken(f, session, v.tz)])),
   };
 }
 
@@ -141,7 +146,8 @@ async function applyOne(v: Viewer, p: BoardProposal, look: SetupLook, link: stri
       return { ref: id, href: `/offers/${id}` };
     }
     case "office_hours": {
-      const saved = await saveOohRequest({ ...m, today: v.today, categories: v.workspace.oohCategories }, { friday: str(q.friday), description: str(q.question), triedSelf: str(q.tried), tools: "", goal: str(q.outcome), category: str(q.category), triedGate: "yes", promise: true });
+      const session = oohSchedule(v.workspace);
+      const saved = await saveOohRequest({ ...m, today: hostToday(session), sessionWeekday: session.weekday, categories: v.workspace.oohCategories }, { friday: str(q.friday), description: str(q.question), triedSelf: str(q.tried), tools: "", goal: str(q.outcome), category: str(q.category), triedGate: "yes", promise: true });
       if (!saved.ok) return { skip: "goBack" in saved ? saved.goBack : saved.error };
       return { ref: saved.id, href: "/office-hours#mine" };
     }
