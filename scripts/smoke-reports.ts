@@ -197,6 +197,83 @@ async function main() {
     await logout(page);
     console.log("✓ a switched coach has no button; the screenshot opens for the coach and the sender, and reads as missing to anyone else");
 
+    // ── 7. The connector (H-591): the coach's own connection lists the issue, reads it with its screenshot, marks it Seen.
+    // An agent token and a client's connection never see the tools, and a call by name answers as a tool that isn't there. ──
+    {
+      const { viewerFor } = await import("@/lib/auth");
+      const { registerClient, issueCode, exchangeCode } = await import("@/lib/mcp/oauth");
+      const { makeAgentToken, revokeAgentTokens } = await import("@/lib/handoff");
+      const { seedCoachForum } = await import("@/lib/forum");
+      const { createHash, randomBytes } = await import("node:crypto");
+      const coachM = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachU.id), eq(schema.memberships.workspaceId, ws)) }))!;
+      const O = { workspaceId: ws, userId: coachU.id };
+      const CALLBACK = "http://localhost:4090/cb";
+      let rpcId = 0;
+      const rpc = async (token: string, method: string, params: unknown = {}) => {
+        const res = await fetch(`${base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}`, "mcp-protocol-version": "2025-06-18" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }) });
+        return (await res.json()) as { result?: { tools?: { name: string }[]; content?: { type: string; text?: string; data?: string; mimeType?: string }[]; isError?: boolean }; error?: { message: string } };
+      };
+      const listed = async (token: string) => ((await rpc(token, "tools/list")).result?.tools ?? []).map((t) => t.name).filter((n) => ["reports_list", "report_read", "report_mark"].includes(n));
+      const call = async (token: string, name: string, args: Record<string, unknown> = {}) => {
+        const j = await rpc(token, "tools/call", { name, arguments: args });
+        const content = j.result?.content ?? [];
+        const full = content.find((c) => c.type === "text")?.text ?? j.error?.message ?? "";
+        const cut = full.indexOf("\n\n{");
+        return { text: cut < 0 ? full : full.slice(0, cut), data: cut < 0 ? null : (JSON.parse(full.slice(cut + 2)) as Record<string, unknown>), images: content.filter((c) => c.type === "image"), isError: Boolean(j.result?.isError || j.error) };
+      };
+      const connect = async (userId: string) => {
+        const client = await registerClient("Smoke reports", [CALLBACK]);
+        const v = (await viewerFor(userId, ws))!;
+        const verifier = randomBytes(32).toString("base64url");
+        const code = await issueCode({ v, clientId: client.id, redirectUri: CALLBACK, codeChallenge: createHash("sha256").update(verifier).digest("base64url"), resource: null, scopes: ["forum", "inbox"] as never });
+        const token = ((await exchangeCode({ code, verifier, clientId: client.id, redirectUri: CALLBACK, resource: null, expectedResource: `${base}/api/mcp` })) as { access_token: string }).access_token;
+        return { token, clientId: client.id };
+      };
+      await db.update(schema.memberReports).set({ seenAt: null, doneAt: null }).where(eq(schema.memberReports.id, issue.id));
+      const own = await connect(coachU.id);
+      await seedCoachForum(O);
+      const agentRow = (await db.query.forumAgents.findMany({ where: and(eq(schema.forumAgents.workspaceId, ws), eq(schema.forumAgents.userId, coachU.id)) })).find((a) => !a.builtIn)!;
+      const agentToken = (await makeAgentToken({ ...O, membershipId: coachM.id }, agentRow.id))!;
+      const member = await connect(maya.id);
+      try {
+        must((await listed(own.token)).length === 3, "the coach's own connection lists the three report tools");
+        let r = await call(own.token, "reports_list");
+        const rows = (r.data?.reports ?? []) as { id: string; hasScreenshot: boolean; sender: Record<string, unknown>; createdAt: string; excerpt: string }[];
+        const row = rows.find((x) => x.id === issue.id);
+        must(!r.isError && row && row.hasScreenshot && row.sender.firstName === maya.name.split(" ")[0] && row.sender.memberId === mayaM.id && Object.keys(row.sender).length === 2, `the issue is listed under new, with its screenshot and the sender's first name and member id only: ${r.text}`);
+        must(/ [A-Z]{2,5}$|GMT/.test(row!.createdAt), `its time is in the sender's zone, with the zone written (${row!.createdAt})`);
+        must(!JSON.stringify(r.data).includes(maya.email) && !JSON.stringify(r.data).includes("reports/") && !JSON.stringify(r.data).includes(blob), "no email, store key or store address in the list");
+        r = await call(own.token, "report_read", { id: issue.id });
+        // What was stored, as the coach's own screenshot link streams it from the private store.
+        await login(page, "As the coach");
+        const stored = Buffer.from(await (await page.request.get(`${base}/api/reports/${issue.id}/screenshot`)).body());
+        await logout(page);
+        must(!r.isError && r.images.length === 1 && r.images[0].mimeType === "image/jpeg" && Buffer.from(r.images[0].data!, "base64").equals(stored), `report_read returns the screenshot itself, byte for byte (${r.images.length} picture(s), ${r.text})`);
+        must(r.data?.description === issue.description && !JSON.stringify(r.data).includes("reports/") && !JSON.stringify(r.data).includes(blob), "the whole description, and no store key or address");
+        must((await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }))!.seenAt === null, "reading doesn't mark it Seen");
+        r = await call(own.token, "report_mark", { id: issue.id, seen: true });
+        must(!r.isError && r.text === "Marked Seen.", `report_mark sets Seen: ${r.text}`);
+        const after = (await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }))!;
+        must(after.seenAt && !after.doneAt, "Seen, and Done stays the coach's");
+        must(!((await call(own.token, "reports_list")).data?.reports as { id: string }[]).some((x) => x.id === issue.id), "gone from new");
+        must(((await call(own.token, "reports_list", { state: "open" })).data?.reports as { id: string }[]).some((x) => x.id === issue.id), "still in open");
+        must((await call(own.token, "report_read", { id: newId() })).text === "No report with that id in your workspace.", "a missing id reads as not found");
+        // A connection tied to an agent (Scriba's Cowork) is still the coach's own: it keeps the tools.
+        await db.update(schema.connectedApps).set({ agentId: agentRow.id }).where(eq(schema.connectedApps.clientId, own.clientId));
+        must((await listed(own.token)).length === 3, "tied to an agent, the coach's own connection keeps the tools");
+        must((await listed(agentToken)).length === 0, "an agent token never lists them");
+        r = await call(agentToken, "reports_list");
+        must(r.isError && /not found/i.test(r.text), `an agent token calling one by name: not found (${r.text})`);
+        must((await listed(member.token)).length === 0, "a client's connection never lists them");
+        r = await call(member.token, "report_read", { id: issue.id });
+        must(r.isError && /not found/i.test(r.text) && !r.images.length, `a client's connection calling one by name: not found (${r.text})`);
+        console.log("✓ the connector: listed under new with the sender's first name and member id, read with the screenshot byte for byte, marked Seen (gone from new, still open); hidden from an agent token and a client, not found by name");
+      } finally {
+        await revokeAgentTokens(O, agentRow.id).catch(() => undefined);
+        for (const c of [own, member]) await db.delete(schema.connectedApps).where(eq(schema.connectedApps.clientId, c.clientId));
+      }
+    }
+
     console.log("\nsmoke-reports: all checks passed");
   } finally {
     await browser.close();
