@@ -95,10 +95,15 @@ async function main() {
     // ── The Colosseum back in the menu (H-592): the item opens the arena; the toggle goes to Rewards and back, the item lit on
     // both; the old addresses still land where they did. ──
     {
+      await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`${base}/today`, { waitUntil: "networkidle" });
       const item = page.locator('[data-testid="side-nav"] a[href="/rewards?tab=colosseum"]');
       must((await item.count()) === 1 && (await item.innerText()).includes("The Colosseum") && (await item.innerText()).includes("🏟️"), "one menu item, 🏟️ The Colosseum");
       must((await page.locator('[data-testid="side-nav"] a[href="/rewards"]').count()) === 0, "never a second Rewards item beside it");
+      // Its group may be folded (kept per member): open it first.
+      const group = page.locator('[data-testid="nav-group"]', { has: page.locator('a[href="/rewards?tab=colosseum"]') });
+      if ((await group.getAttribute("data-open")) !== "true") await group.locator('[data-testid="nav-group-toggle"]').click();
+      await item.scrollIntoViewIfNeeded();
       await Promise.all([page.waitForURL(/\/rewards\?tab=colosseum$/, { waitUntil: "commit" }), item.click()]);
       await page.locator('[data-testid="arena"]').waitFor({ timeout: 15000 });
       must((await item.getAttribute("aria-current")) === "page", "the item is lit on the arena");
