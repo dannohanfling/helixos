@@ -21,6 +21,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { hasVisibleRecordings } from "@/lib/recordings";
 import { ReportButton } from "@/components/report-button";
 import { coachFirstName } from "@/lib/queries/reports";
+import { agentsOnFor } from "@/lib/handoff";
 
 export const metadata = { title: "More" };
 
@@ -33,8 +34,10 @@ export default async function MorePage() {
   const loyaltyOn = await hasLeaderboardFeed(v.membership.id);
   const { shippedKeys } = await horizonShell(v);
   const oohOn = (await oohAccessFor(v)).open;
+  // The Agent inbox (H-727): the same rule as the side menu's, worked out in the layout.
+  const agentsOn = v.role === "client" && !v.switchedInto && !v.team ? await agentsOnFor({ workspaceId: v.workspace.id, userId: v.user.id }) : false;
   const chatOn = (await chatWidgetProps(v)) !== null;
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn })) }))
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length);
   return (

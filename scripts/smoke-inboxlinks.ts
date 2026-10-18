@@ -1,6 +1,6 @@
 /**
  * The agent inbox and The Forum, one tap apart (H-719, plan H-726): the coach's inbox links to The Forum and The Forum back to
- * the inbox, with the menu's new count as a badge; a member's Forum has no inbox button (they can't open /coach/inbox); both
+ * the inbox, with the menu's new count as a badge; a member's Forum opens their own agent inbox (H-727); both
  * buttons are full 44 px targets and nothing scrolls sideways at 390 px.
  */
 import { chromium, type Page } from "@playwright/test";
@@ -58,12 +58,19 @@ async function main() {
       await page.waitForURL(/\/coach\/inbox$/);
       await logout(page);
 
+      // Every member has their own agent inbox since H-727: their Forum's button opens it, and it links back to their Forum.
       await login(page, "As a client");
-      await open(page, `${base}/forum`, "forum-page");
-      must(!(await page.locator('[data-testid="forum-to-inbox"]').count()), `a member's Forum has no inbox button at ${width}`);
+      await open(page, `${base}/forum`, "forum-to-inbox");
+      must((await page.locator('[data-testid="forum-to-inbox"]').first().getAttribute("href")) === "/forum/inbox", `a member's Forum button opens their own agent inbox at ${width}`);
+      must((await height(page, '[data-testid="forum-to-inbox"]')) >= 44, `the member's inbox button is a 44 px target at ${width}`);
+      await page.locator('[data-testid="forum-to-inbox"]').click();
+      await page.waitForURL(/\/forum\/inbox$/);
+      await page.locator('[data-testid="inbox-to-forum"]').waitFor({ timeout: 20000 });
+      must((await page.locator('[data-testid="inbox-to-forum"]').first().getAttribute("href")) === "/forum", `the member's agent inbox links back to their Forum at ${width}`);
+      must(await noSideways(page), `the member's agent inbox doesn't scroll sideways at ${width}`);
       await logout(page);
       await ctx.close();
-      console.log(`✓ ${width}: the inbox and The Forum link both ways for the coach, 44 px, the badge counts, no sideways scroll; a member gets no inbox button`);
+      console.log(`✓ ${width}: the inbox and The Forum link both ways for the coach, 44 px, the badge counts, no sideways scroll; a member's Forum and agent inbox link both ways too`);
     }
   } finally {
     await browser.close();

@@ -32,7 +32,7 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
   // The Forum (rev 765): an agent reports what it's doing to the member's own Forum and reads it back. Nothing else.
   forum: { label: "The Forum", line: "Report what your AI agents are doing to your Forum, and read your Forum back." },
-  // The Handoff inbox (rev 769): coach only, never pre-ticked. Agents post and read; only you approve, by hand in HelixOS.
+  // The Handoff inbox (rev 769; every member's own since H-727): never pre-ticked. Agents post and read; only you approve, by hand in HelixOS.
   inbox: { label: "Handoff inbox", line: "Your agents pass briefs, plans, status and files to each other through your inbox. Only you approve anything, by hand in HelixOS." },
   body: { label: "HumanOS", line: "Your HumanOS numbers and meal log. Only with HumanOS's own AI switch on, and never pre-ticked." },
 };

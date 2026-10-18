@@ -82,10 +82,22 @@ export function approvalNeeds(kind: HandoffKind, asked: boolean, text: string): 
   return why;
 }
 
-/** An agent's words claiming Danno's approval. Shown as plain text with a "not an approval" tag; never counted. */
-export function claimsApproval(text: string): boolean {
-  return /\b(danno|you|he)\s+(has\s+|have\s+|already\s+)?(approved|okayed|ok'?d|signed off|said (go|yes)|says (go|yes)|gave (the )?(go|green light))\b|\bapproved by danno\b|\bdanno'?s (approval|go|ok)\b/i.test(text);
+/**
+ * An agent's words claiming the owner's approval: "Danno approved", "the owner has approved", or the owner's own first name
+ * when it is given. Shown as plain text with a "not an approval" tag; never counted.
+ */
+export function claimsApproval(text: string, ownerFirst?: string | null): boolean {
+  const name = ownerFirst?.trim() ? `|${ownerFirst.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}` : "";
+  const who = `danno|the owner${name}`;
+  const re = new RegExp(`\\b(${who}|you|he)\\s+(has\\s+|have\\s+|already\\s+)?(approved|okayed|ok'?d|signed off|said (go|yes)|says (go|yes)|gave (the )?(go|green light))\\b|\\bapproved by (${who})\\b|\\b(${who})'?s (approval|go|ok)\\b`, "i");
+  return re.test(text);
 }
+
+/** The inbox owner's name as the inbox shows it: their first name ("Danno" for Danno), never an email. */
+export const ownerFirst = (name: string | null | undefined): string => (name ?? "").trim().split(/\s+/)[0] || "The owner";
+
+/** Where the owner's inbox lives: Coach → Inbox for the coach, the Agent inbox beside The Forum for a member. */
+export const inboxHref = (coach: boolean): string => (coach ? "/coach/inbox" : "/forum/inbox");
 
 /** What may travel (rev 769 §2): images, video, zip, md, csv, json and pdf. */
 export const HANDOFF_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", heic: "image/heic", mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", zip: "application/zip", md: "text/markdown", csv: "text/csv", json: "application/json", pdf: "application/pdf" };
@@ -261,14 +273,14 @@ export function inActiveHours(now: Date, h: { from: string; to: string; days: nu
  * arrived; reply when anything else needs an answer or an ack; otherwise wait, naming what it waits on. An agent's words never
  * make work: only an item from Danno does, and only Danno's signed-in action makes one.
  */
-export function decideCheckin(c: { enabled: boolean; paused: boolean; active: boolean; countToday: number; busy: string | null; items: CheckinItem[]; waitingOn: string[] }): { act: CheckinAct; line: string } {
+export function decideCheckin(c: { enabled: boolean; paused: boolean; active: boolean; countToday: number; busy: string | null; items: CheckinItem[]; waitingOn: string[]; /** The inbox owner's first name, for the work line. */ owner?: string }): { act: CheckinAct; line: string } {
   if (!c.enabled) return { act: "quiet", line: "Check-ins are off for you." };
   if (c.paused) return { act: "quiet", line: "Check-ins are paused." };
   if (!c.active) return { act: "quiet", line: "Outside your active hours." };
   if (c.countToday >= CHECKINS_PER_DAY) return { act: "quiet", line: `${CHECKINS_PER_DAY} check-ins today: that's the cap.` };
   const urgent = c.items.some((i) => i.fromDanno && i.urgent);
   if (c.busy && !urgent) return { act: "wait", line: `busy: ${c.busy}`.slice(0, 160) };
-  if (c.items.some((i) => i.fromDanno && i.decision !== "declined")) return { act: "work", line: "Danno's answer is in. Do only what he approved." };
+  if (c.items.some((i) => i.fromDanno && i.decision !== "declined")) return { act: "work", line: `${c.owner ?? "Danno"}'s answer is in. Do only what was approved.` };
   if (c.items.length) return { act: "reply", line: "Answer or ack each item, then stop." };
   return { act: "wait", line: c.waitingOn.length ? `Waiting on ${c.waitingOn.join(", ")}.`.slice(0, 160) : "Nothing new." };
 }

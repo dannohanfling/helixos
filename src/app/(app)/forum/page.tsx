@@ -18,7 +18,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { CopyButton } from "@/components/copy-button";
 import { ApprovalButtons } from "@/components/handoff-bits";
 import { inboxCount, ownerInbox } from "@/lib/handoff";
-import { NUDGE_LINE } from "@/lib/engine/handoff";
+import { NUDGE_LINE, inboxHref } from "@/lib/engine/handoff";
 import "./forum.css";
 
 export const metadata = { title: "The Forum" };
@@ -78,10 +78,12 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
       : Promise.resolve([]),
   ]);
   const canEdit = own && !v.team;
-  // The Handoff inbox (rev 769): the coach's waiting decisions sit in What needs you too, with the same three buttons.
-  const inbox = own && v.role === "coach" ? await ownerInbox(m, 1) : null;
-  // The agent inbox button (H-719): only for the coach in their own Forum, the one person who can open /coach/inbox.
-  const inboxLink = own && v.role === "coach" && !v.switchedInto && !v.team ? await inboxCount(m) : null;
+  // The Handoff inbox (rev 769): the owner's waiting decisions sit in What needs you too, with the same three buttons; every
+  // member's own since H-727.
+  const inbox = own ? await ownerInbox(m, 1) : null;
+  // The agent inbox button (H-719, H-727): on the owner's own Forum, to their own inbox (Coach → Inbox for the coach), with the menu's new count.
+  const inboxLink = own && !v.switchedInto && !v.team ? await inboxCount(m) : null;
+  const myInbox = inboxHref(v.role === "coach");
   // The Nudge and a stalled agent's item open its saved session link (13 Oct, H-495), when there is one.
   const sessions = own ? new Map((await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, m.workspaceId), eq(schema.handoffAgents.userId, m.userId)), columns: { agentId: true, sessionUrl: true } })).map((r) => [r.agentId, r.sessionUrl])) : new Map<string, string | null>();
   const approvals = inbox?.waiting ?? [];
@@ -105,8 +107,8 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
             <p className="fo-lede">{own ? "Every AI agent working for you, where its work is, and what's travelling between them." : `${firstName}'s agents, shared with you. Read only.`}</p>
           </div>
           {inboxLink !== null ? (
-            // H-719: the coach's own Forum links to the agent inbox, with the menu's new count; nobody else gets a link they can't open.
-            <Link href="/coach/inbox" className="fo-pill" data-testid="forum-to-inbox">
+            // H-719: the owner's own Forum links to their agent inbox, with the menu's new count; nobody else gets a link they can't open.
+            <Link href={myInbox} className="fo-pill" data-testid="forum-to-inbox">
               <span aria-hidden>📥</span> Agent inbox
               {inboxLink > 0 ? (
                 <span className="fo-pill-badge" aria-label={`${inboxLink} new`} data-testid="forum-inbox-badge">
@@ -159,7 +161,7 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                     <div className="fo-approve">
                       <ApprovalButtons id={w.id} refLabel={w.ref} />
                     </div>
-                    <Link href="/coach/inbox" className="fo-fine">
+                    <Link href={myInbox} className="fo-fine">
                       Read it in your inbox
                     </Link>
                   </div>
@@ -297,7 +299,7 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                       ) : null}
                     </div>
                     {a.builtIn ? <p className="fo-fine">Reads what HelixOS already records.</p> : null}
-                    {inbox && !a.builtIn && a.status === "idle" ? (
+                    {inbox && v.role === "coach" && !a.builtIn && a.status === "idle" ? (
                       <div className="fo-inline">
                         <span className="fo-fine">Idle. HelixOS can&apos;t wake a session:</span>
                         {sessions.get(a.id) ? (
@@ -447,6 +449,10 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                 .map((s) => (
                   <li key={s.userId}>
                     <Link href={`/forum?member=${encodeURIComponent(s.userId)}`}>{s.name}&apos;s Forum</Link>
+                    {" · "}
+                    <Link href={`/forum/inbox?member=${encodeURIComponent(s.userId)}`} data-testid="forum-shared-inbox">
+                      Agent inbox
+                    </Link>
                   </li>
                 ))}
             </ul>

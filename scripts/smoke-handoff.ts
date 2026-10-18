@@ -4,7 +4,8 @@
  * and a .env, a key inside a text file and a .env inside a zip are refused; no tool can approve, and a message saying "Danno
  * approved" stays unapproved with its tag; Danno's Approve (Coach → Inbox) and Change (The Forum) each arrive once in the
  * sender's next inbox read; a status message moves the sender's building; a revoked token is refused at once; the 61st post in
- * a minute is refused; Cowork's own connection, once tied, speaks as Cowork; and a client can't reach any of it.
+ * a minute is refused; Cowork's own connection, once tied, speaks as Cowork; and a client can't reach any of it (their own
+ * inbox is theirs, H-727: scripts/smoke-memberinbox.ts walks it).
  */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
@@ -445,9 +446,10 @@ async function main() {
     const mv2 = randomBytes(32).toString("base64url");
     const mcode = await issueCode({ v: mv, clientId: client.id, redirectUri: CALLBACK, codeChallenge: createHash("sha256").update(mv2).digest("base64url"), resource: null, scopes: ["forum", "inbox"] as never });
     const mtoken = ((await exchangeCode({ code: mcode, verifier: mv2, clientId: client.id, redirectUri: CALLBACK, resource: null, expectedResource: `${base}/api/mcp` })) as { access_token: string }).access_token;
+    // H-727: a member's inbox is their own now; this connection isn't tied to an agent of theirs, and nothing of the coach's shows.
     r = await tool(mtoken, "handoff_inbox");
-    must(r.isError && /coach's own/.test(r.text), `a client's connection, even with the tick, can't use the inbox: ${r.text}`);
-    console.log("✓ a client can't open Coach → Inbox or Agents, and the inbox tools do nothing for them");
+    must(r.isError && /isn't tied to an agent yet/.test(r.text) && !/Danno|Coach → Agents/.test(r.text), `a client's untied connection can't use an inbox, and never the coach's: ${r.text}`);
+    console.log("✓ a client can't open Coach → Inbox or Agents, and their connection never reaches the coach's inbox");
   } finally {
     await browser.close();
     await reset();

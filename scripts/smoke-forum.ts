@@ -260,7 +260,7 @@ async function main() {
       await submit(page, '[data-testid="forum-share-go"]');
       await signIn("coach@demo.helixos.app");
       await page.goto(`${base}/forum`, { waitUntil: "networkidle" });
-      await Promise.all([page.waitForURL(/member=/), page.locator(`[data-testid="forum-shared"] a[href*="${maya.id}"]`).click()]);
+      await Promise.all([page.waitForURL(/member=/), page.locator(`[data-testid="forum-shared"] a[href^="/forum?member=${maya.id}"]`).click()]);
       await page.locator('[data-testid="forum-page"]').waitFor({ timeout: 20000 });
       must((await page.content()).includes("Researcher") && (await page.locator('[data-testid="forum-move"]').count()) === 0 && (await page.locator('[data-testid="forum-add"]').count()) === 0, "shared: the coach reads Maya's Forum, and can't move or add anything");
       console.log("✓ privacy: another client and the coach can't read a Forum that isn't shared; shared, the coach reads it only; the coach's own starts with the build team");

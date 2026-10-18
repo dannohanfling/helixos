@@ -20,7 +20,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   let allowed = !!f && f.status === "ready" && fileSigOk(id, url.searchParams.get("exp"), url.searchParams.get("sig"));
   if (!allowed && f && f.status === "ready" && !url.searchParams.has("sig")) {
     const v = await apiViewer();
-    allowed = !!v && v.role === "coach" && !v.switchedInto && v.workspace.id === f.workspaceId && v.user.id === f.userId;
+    // The inbox's owner, any role (H-727), in their own HelixOS: never switched into it, never a team member (apiViewer).
+    allowed = !!v && !v.switchedInto && v.workspace.id === f.workspaceId && v.user.id === f.userId;
   }
   if (!f || !allowed) return plain(404, "That file isn't here, or the link has run out. Ask for a new one with handoff_file.");
   const stored = await headProofObject(f.key).catch(() => null);

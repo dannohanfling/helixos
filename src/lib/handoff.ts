@@ -1,9 +1,10 @@
 /**
- * The Handoff inbox (rev 769), the database side. The owner is the coach (Danno); members get theirs later, behind a switch.
- * An agent is one of the owner's Forum agents, and its identity is its token or its tied connection, never a name typed in a
- * message. Agents post, read, ack and move files; only the owner decides, by hand, signed in (`decideHandoff` is called from
- * the coach's own actions and nowhere else). A decision is one answer "from Danno", delivered once in the sender's next
- * handoff_inbox. Every post, file, ack, decision and token change is in the audit.
+ * The Handoff inbox (rev 769), the database side. Every inbox is one member's own (H-727): the coach's (Danno's) on Coach →
+ * Inbox, a member's on the Agent inbox beside The Forum, every row keyed by the owner. An agent is one of the owner's Forum
+ * agents, and its identity is its token or its tied connection, never a name typed in a message. Agents post, read, ack and
+ * move files; only the owner decides, by hand, signed in (`decideHandoff` is called from the owner's own actions and nowhere
+ * else). A decision is one answer from the owner (the "danno" recipient, whoever owns the inbox), delivered once in the
+ * sender's next handoff_inbox. The owner is shown by first name. Every post, file, ack, decision and token change is in the audit.
  */
 import { cutText } from "@/lib/engine/cut";
 import { createHash, createHmac, randomBytes } from "node:crypto";
@@ -45,11 +46,31 @@ import {
   type HandoffKind,
   decidable,
   holdReason,
+  inboxHref,
+  ownerFirst,
 } from "@/lib/engine/handoff";
 
 export type Owner = { workspaceId: string; userId: string };
 const mine = (o: Owner) => and(eq(schema.handoffMessages.workspaceId, o.workspaceId), eq(schema.handoffMessages.userId, o.userId));
 const agentsOf = (o: Owner) => db.query.forumAgents.findMany({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId)) });
+
+/** The owner as the inbox names them: first name, and whether it is the coach's inbox (Coach → Inbox) or a member's. */
+export async function ownerOf(o: Owner): Promise<{ first: string; coach: boolean }> {
+  const [u, m] = await Promise.all([
+    db.query.users.findFirst({ where: eq(schema.users.id, o.userId), columns: { name: true } }),
+    db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, o.workspaceId), eq(schema.memberships.userId, o.userId)), columns: { role: true } }),
+  ]);
+  return { first: ownerFirst(u?.name), coach: m?.role === "coach" };
+}
+
+/** Whether a member has the Agent inbox in their menu (H-727): an agent of their own on the Forum, or anything in the inbox. */
+export async function agentsOnFor(o: Owner): Promise<boolean> {
+  const [agent, message] = await Promise.all([
+    db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId), isNull(schema.forumAgents.builtIn)), columns: { id: true } }),
+    db.query.handoffMessages.findFirst({ where: mine(o), columns: { id: true } }),
+  ]);
+  return Boolean(agent || message);
+}
 
 export async function audit(o: Owner, agentId: string | null, action: string, ref: string | null = null, note: string | null = null): Promise<void> {
   await db.insert(schema.handoffAudit).values({ id: newId(), ...o, agentId, action, ref, note: note ? cutText(note, 300) : null, at: nowIso() });
@@ -166,9 +187,16 @@ export async function tieConnection(o: Owner, appId: string, agentId: string | n
 
 /** The agent a call speaks as: the connection's tied agent, still on the owner's Forum. */
 export async function callingAgent(o: Owner, agentId: string | null | undefined): Promise<schema.ForumAgent> {
-  if (!agentId) throw new Error("This connection isn't tied to an agent, so it can't use the inbox. Danno ties it on Coach → Agents.");
+  // Only the coach ties connections today (Coach → Agents); a member's agent connections come later (H-727 PR 2).
+  if (!agentId) {
+    const who = await ownerOf(o);
+    throw new Error(who.coach ? `This connection isn't tied to an agent, so it can't use the inbox. ${who.first} ties it on Coach → Agents.` : "This connection isn't tied to an agent yet, so it can't use the inbox.");
+  }
   const agent = await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId), eq(schema.forumAgents.id, agentId)) });
-  if (!agent) throw new Error("This connection's agent is no longer on the Forum. Danno can tie it to another on Coach → Agents.");
+  if (!agent) {
+    const who = await ownerOf(o);
+    throw new Error(`This connection's agent is no longer on the Forum.${who.coach ? ` ${who.first} can tie it to another on Coach → Agents.` : ""}`);
+  }
   return agent;
 }
 
@@ -209,7 +237,7 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
     const key = forumNameKey(name);
     if (key === DANNO || key === "you" || key === "owner") to.push(DANNO);
     else if (byName.get(key)) to.push(byName.get(key)!.id);
-    else throw new Error(`There's no agent called "${name}" on the Forum. Send to one of: ${["danno", ...agents.filter((a) => !a.builtIn).map((a) => a.name)].join(", ")}.`);
+    else throw new Error(`There's no agent called "${name}" on the Forum. Send to one of: ${["you", ...agents.filter((a) => !a.builtIn).map((a) => a.name)].join(", ")} ("you" is the inbox's owner; "danno" works too).`);
   }
   let replyToId: string | null = null;
   let threadId: string | null = null;
@@ -222,7 +250,8 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   for (const f of p.files) await readyFile(o, f, from.id);
   const text = `${p.title}\n${p.body}`;
   const reasons = approvalNeeds(p.kind, p.needsApproval, text);
-  const row = await insertMessage(o, { fromAgentId: from.id, toIds: [...new Set(to)], kind: p.kind, title: p.title, body: p.body, replyToId, threadId, fileIds: p.files, needsApproval: reasons.length > 0, approvalReasons: reasons, claimsApproval: claimsApproval(text) }, [...new Set(to)]);
+  const who = await ownerOf(o);
+  const row = await insertMessage(o, { fromAgentId: from.id, toIds: [...new Set(to)], kind: p.kind, title: p.title, body: p.body, replyToId, threadId, fileIds: p.files, needsApproval: reasons.length > 0, approvalReasons: reasons, claimsApproval: claimsApproval(text, who.first) }, [...new Set(to)]);
   await audit(o, from.id, "post", hId(row.seq), p.title);
   // H-351: a replacement marks the post it replaces in the same call (the agent's own post only).
   if (p.supersedes !== null) await supersedeHandoff(o, from.id, hId(p.supersedes), hId(row.seq));
@@ -235,22 +264,27 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   return { id: row.id, seq: row.seq, needsApproval: reasons.length > 0, reasons, removed: p.removed };
 }
 
-/** The owner's email when something needs their approval (rev 816: email now, push later), behind their switch and canEmail. */
+/**
+ * The owner's email when something needs their approval (rev 816: email now, push later), behind their switch and canEmail.
+ * The coach's only for now (H-727): a new email to members waits for Danno's own decision, and their inbox shows it either way.
+ */
 export async function alertOwner(o: Owner, row: schema.HandoffMessage, fromName: string): Promise<void> {
+  if (!(await ownerOf(o)).coach) return;
   const settings = await db.query.forumSettings.findFirst({ where: and(eq(schema.forumSettings.workspaceId, o.workspaceId), eq(schema.forumSettings.userId, o.userId)), columns: { approvalEmails: true } });
   if (settings && !settings.approvalEmails) return;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, o.workspaceId), eq(schema.memberships.userId, o.userId)) });
   const u = await db.query.users.findFirst({ where: eq(schema.users.id, o.userId) });
   if (!m || !u || !(await canEmail(m.id))) return;
   // The title only: an agent's body never goes out by email.
-  await sendEmail(u.email, `${hId(row.seq)} needs your approval`, `${fromName} posted ${hId(row.seq)}, "${row.title}", and it needs your approval (${row.approvalReasons.join(", ")}).\n\nOpen your inbox: ${appUrl()}/coach/inbox\n\nTurn these emails off on Coach → Inbox.`);
+  await sendEmail(u.email, `${hId(row.seq)} needs your approval`, `${fromName} posted ${hId(row.seq)}, "${row.title}", and it needs your approval (${row.approvalReasons.join(", ")}).\n\nOpen your inbox: ${appUrl()}${inboxHref(true)}\n\nTurn these emails off on Coach → Inbox.`);
 }
 
 export type InboxItem = { id: string; ref: string; kind: string; from: string; to: string[]; title: string; body: string; replyTo: string | null; files: { id: string; name: string; size: number }[]; needsApproval: boolean; reasons: string[]; claimsApproval: boolean; decision: string | null; decisionFor: string | null; decidedAt: string | null; fromDanno: boolean; at: string; /** H-351 */ hold: { reason: string; at: string } | null; supersededBy: string | null; /** H-356: when the agent's inbox read took Danno's decision on this post; null until then. */ decisionReadAt: string | null; /** H-356: more than three minutes since the decision with no read. */ decisionLate: boolean; /** H-356: the deciding agent's last inbox read and its session link, for "not read yet" and Nudge. */ agentSeenAt: string | null; agentSessionUrl: string | null };
 
-async function describe(o: Owner, rows: schema.HandoffMessage[]): Promise<InboxItem[]> {
-  const agents = await agentsOf(o);
-  const name = (id: string | null) => (id === null || id === DANNO ? "Danno" : (agents.find((a) => a.id === id)?.name ?? "A removed agent"));
+async function describe(o: Owner, rows: schema.HandoffMessage[], owner?: string): Promise<InboxItem[]> {
+  if (!rows.length) return [];
+  const [agents, who] = await Promise.all([agentsOf(o), owner ? Promise.resolve(owner) : ownerOf(o).then((w) => w.first)]);
+  const name = (id: string | null) => (id === null || id === DANNO ? who : (agents.find((a) => a.id === id)?.name ?? "A removed agent"));
   const fileIds = [...new Set(rows.flatMap((r) => r.fileIds))];
   const files = fileIds.length ? await db.query.handoffFiles.findMany({ where: and(eq(schema.handoffFiles.workspaceId, o.workspaceId), eq(schema.handoffFiles.userId, o.userId), inArray(schema.handoffFiles.id, fileIds)) }) : [];
   const parents = new Map<string, number>();
@@ -305,8 +339,8 @@ async function describe(o: Owner, rows: schema.HandoffMessage[]): Promise<InboxI
 }
 
 /**
- * handoff_inbox: what's new for this agent, oldest first, each delivered once. Approvals come as Danno's answers among them,
- * marked with the decision (only Danno's signed-in action makes one).
+ * handoff_inbox: what's new for this agent, oldest first, each delivered once. Approvals come as the owner's answers among
+ * them, marked with the decision (only the owner's signed-in action makes one).
  */
 export async function inboxFor(o: Owner, recipient: string): Promise<InboxItem[]> {
   const rows = await db
@@ -345,7 +379,7 @@ export async function ackHandoff(o: Owner, agentId: string, ref: unknown, note: 
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// Decisions: only the owner, only by hand. Called from the coach's signed-in actions; no connector tool reaches this.
+// Decisions: only the owner, only by hand. Called from the owner's own signed-in actions; no connector tool reaches this.
 
 export async function decideHandoff(o: Owner, actorUserId: string, messageId: string, decision: "approved" | "changed" | "declined", note: string): Promise<{ ok: boolean; text: string }> {
   const row = await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.id, messageId)) });
@@ -365,7 +399,7 @@ export async function decideHandoff(o: Owner, actorUserId: string, messageId: st
   return { ok: true, text: `${word}: ${hId(row.seq)}. ${row.fromAgentId ? "The agent reads its inbox every few minutes; this post says when it has." : ""}` };
 }
 
-/** Danno's own answer to a message, without a decision. */
+/** The owner's own answer to a message, without a decision. */
 export async function answerHandoff(o: Owner, messageId: string, body: string): Promise<boolean> {
   const row = await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.id, messageId)) });
   const text = scrubText(cutText(body.trim(), HANDOFF_MAX.body)).text;
@@ -376,7 +410,7 @@ export async function answerHandoff(o: Owner, messageId: string, body: string): 
 }
 
 /**
- * A note after a decision (H-47): an answer from Danno to the sender, tied to the decided message, shown under it. The decision
+ * A note after a decision (H-47): an answer from the owner to the sender, tied to the decided message, shown under it. The decision
  * itself never changes; only a decided message takes a note.
  */
 export async function noteDecision(o: Owner, messageId: string, note: string): Promise<{ ok: boolean; text: string }> {
@@ -391,15 +425,15 @@ export async function noteDecision(o: Owner, messageId: string, note: string): P
   return { ok: true, text: `Note sent as ${hId(answer.seq)}.` };
 }
 
-/** The owner's view: messages newest first, the waiting decisions, and the menu count (waiting decisions and unread for Danno). */
+/** The owner's view: messages newest first, the waiting decisions, and the menu count (waiting decisions and unread for the owner). */
 export async function ownerInbox(o: Owner, limit = 60): Promise<{ items: InboxItem[]; waiting: InboxItem[]; acks: Map<string, { recipient: string; note: string | null; at: string }[]> }> {
   const rows = await db.query.handoffMessages.findMany({ where: mine(o), orderBy: desc(schema.handoffMessages.seq), limit });
   const waitingRows = await db.query.handoffMessages.findMany({ where: and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)), orderBy: asc(schema.handoffMessages.seq) });
   const deliveries = rows.length ? await db.query.handoffDeliveries.findMany({ where: inArray(schema.handoffDeliveries.messageId, rows.map((r) => r.id)) }) : [];
-  const agents = await agentsOf(o);
+  const [agents, { first }] = await Promise.all([agentsOf(o), ownerOf(o)]);
   const acks = new Map<string, { recipient: string; note: string | null; at: string }[]>();
-  for (const d of deliveries) if (d.ackedAt) acks.set(d.messageId, [...(acks.get(d.messageId) ?? []), { recipient: d.recipient === DANNO ? "Danno" : (agents.find((a) => a.id === d.recipient)?.name ?? "An agent"), note: d.ackNote, at: d.ackedAt }]);
-  return { items: await describe(o, rows), waiting: await describe(o, waitingRows), acks };
+  for (const d of deliveries) if (d.ackedAt) acks.set(d.messageId, [...(acks.get(d.messageId) ?? []), { recipient: d.recipient === DANNO ? first : (agents.find((a) => a.id === d.recipient)?.name ?? "An agent"), note: d.ackNote, at: d.ackedAt }]);
+  return { items: await describe(o, rows, first), waiting: await describe(o, waitingRows, first), acks };
 }
 
 /** The Superseded tab (H-351): every replaced post, newest first, never deleted; `q` narrows by H-number, title or body. */
@@ -413,7 +447,7 @@ export async function supersededInbox(o: Owner, q = "", limit = 200): Promise<In
 // ---------------------------------------------------------------------------------------------------------------------------
 // H-351: HOLD and SUPERSEDED. The writing agent (through the tools) or the owner (signed in) sets them; nobody else.
 
-/** A refusal the inbox says in its own words (H-351): the one kind of error a coach's screen may show; anything else is ours to log. */
+/** A refusal the inbox says in its own words (H-351): the one kind of error the owner's screen may show; anything else is ours to log. */
 export class HandoffRefusal extends Error {}
 export const refusalOf = (e: unknown): string | null => (e instanceof HandoffRefusal ? e.message : null);
 
@@ -431,7 +465,7 @@ async function ownPost(o: Owner, agentId: string | null, ref: unknown): Promise<
   const seq = parseHId(ref);
   const row = seq === null ? null : await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.seq, seq)) });
   if (!row) throw new HandoffRefusal(`There's no ${seq === null ? String(ref) : hId(seq)} in the inbox.`);
-  if (agentId !== null && row.fromAgentId !== agentId) throw new HandoffRefusal(`${hId(row.seq)} isn't yours to change: only the agent that wrote it, or Danno, can.`);
+  if (agentId !== null && row.fromAgentId !== agentId) throw new HandoffRefusal(`${hId(row.seq)} isn't yours to change: only the agent that wrote it, or ${(await ownerOf(o)).first}, can.`);
   return row;
 }
 
@@ -444,10 +478,10 @@ export async function holdHandoff(o: Owner, agentId: string | null, ref: unknown
   if (row.supersededById) throw new HandoffRefusal(`${hId(row.seq)} was replaced; hold the newer post instead.`);
   await db.update(schema.handoffMessages).set({ holdReason: why, heldAt: nowIso() }).where(eq(schema.handoffMessages.id, row.id));
   await audit(o, agentId, "hold", hId(row.seq), why);
-  return `${hId(row.seq)} is on hold: ${why}. Danno can't approve it until it is released.`;
+  return `${hId(row.seq)} is on hold: ${why}. ${(await ownerOf(o)).first} can't approve it until it is released.`;
 }
 
-/** Release: Approve comes back, and Danno is told it is ready. */
+/** Release: Approve comes back, and the owner is told it is ready. */
 export async function releaseHandoff(o: Owner, agentId: string | null, ref: unknown): Promise<string> {
   const row = await ownPost(o, agentId, ref);
   if (!row.holdReason) throw new HandoffRefusal(`${hId(row.seq)} isn't on hold.`);
@@ -457,7 +491,7 @@ export async function releaseHandoff(o: Owner, agentId: string | null, ref: unkn
     const agents = await agentsOf(o);
     await alertOwner(o, row, agents.find((a) => a.id === row.fromAgentId)?.name ?? "An agent");
   }
-  return `${hId(row.seq)} is released${row.needsApproval && !row.decision ? " and back in Danno's Waiting list" : ""}.`;
+  return `${hId(row.seq)} is released${row.needsApproval && !row.decision ? ` and back in ${(await ownerOf(o)).first}'s Waiting list` : ""}.`;
 }
 
 /** Supersede: the old post moves to the Superseded tab, pointing at the newer one; it is never deleted. */
@@ -502,7 +536,10 @@ export async function startUpload(o: Owner, agentId: string, name: unknown, size
   const bytes = Number(size);
   if (!Number.isFinite(bytes) || bytes <= 0) throw new Error("Say the file's size in bytes.");
   if (bytes > HANDOFF_FILE_MAX_BYTES) throw new Error(`A file is at most ${HANDOFF_FILE_MAX_BYTES / 1024 / 1024} MB.`);
-  if ((await usedBytes(o)) + bytes > HANDOFF_TOTAL_BYTES) throw new Error("The inbox's 1 GB of files is full. Danno can delete old files on Coach → Inbox.");
+  if ((await usedBytes(o)) + bytes > HANDOFF_TOTAL_BYTES) {
+    const who = await ownerOf(o);
+    throw new Error(`The inbox's 1 GB of files is full. ${who.first} can delete old files on ${who.coach ? "Coach → Inbox" : "the Agent inbox"}.`);
+  }
   const id = newId();
   const key = `handoff/${o.workspaceId}/${id}/${safeFileName(n)}`;
   const validUntil = Date.now() + HANDOFF_LINK_MINUTES * 60 * 1000;
@@ -625,7 +662,8 @@ export async function checkinFor(o: Owner, agent: schema.ForumAgent, now: Date =
     .where(and(mine(o), eq(schema.handoffDeliveries.recipient, agent.id), isNull(schema.handoffDeliveries.deliveredAt)))
     .orderBy(asc(schema.handoffMessages.seq));
   const asked = await db.query.handoffMessages.findMany({ where: and(mine(o), eq(schema.handoffMessages.fromAgentId, agent.id), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision)), orderBy: asc(schema.handoffMessages.seq), limit: 3 });
-  const waitingOn = asked.map((m) => `Danno's approval of ${hId(m.seq)}`);
+  const { first } = await ownerOf(o);
+  const waitingOn = asked.map((m) => `${first}'s approval of ${hId(m.seq)}`);
   const decided = decideCheckin({
     enabled: s.checkins,
     paused: !!owner?.checkinsPaused,
@@ -634,6 +672,7 @@ export async function checkinFor(o: Owner, agent: schema.ForumAgent, now: Date =
     busy: s.busyNote,
     items: pending.map((p) => ({ fromDanno: p.m.fromAgentId === null, decision: p.m.decision, urgent: p.m.urgent })),
     waitingOn,
+    owner: first,
   });
   const counted = count >= CHECKINS_PER_DAY ? count : count + 1;
   await db.update(schema.handoffAgents).set({ lastCheckinAt: now.toISOString(), lastAct: decided.act, countDay: day, countToday: counted }).where(eq(schema.handoffAgents.id, s.id));
@@ -655,7 +694,7 @@ export async function setBusy(o: Owner, agent: schema.ForumAgent, on: boolean, n
   return on ? `Busy: ${line}. Check-ins wait until you call handoff_busy off.` : "Not busy. Check-ins will hand you work again.";
 }
 
-/** Danno writes to an agent himself (13 Oct), marked urgent when it must get past a busy check-in. Only from his own page. */
+/** The owner writes to an agent themselves (13 Oct), marked urgent when it must get past a busy check-in. Only from their own page. */
 export async function writeAsOwner(o: Owner, agentId: string, kind: HandoffKind, title: string, body: string, urgent: boolean): Promise<boolean> {
   const agent = await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId), eq(schema.forumAgents.id, agentId)) });
   const t = scrubText(cutText(title.replace(/\s+/g, " ").trim(), HANDOFF_MAX.title)).text;

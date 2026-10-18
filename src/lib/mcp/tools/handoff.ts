@@ -2,20 +2,24 @@
  * The Handoff inbox on the connector (rev 769 §2): handoff_post, handoff_inbox, handoff_read, handoff_ack, handoff_upload and
  * handoff_file. The sender is always the connection's own agent (its token, or the connection the owner tied to it), never a
  * name in the arguments. No tool here can approve, change or decline anything, or set any field that would: decisions are made
- * only by the owner, signed in, on Coach → Inbox or The Forum.
+ * only by the owner, signed in, on their inbox (Coach → Inbox, or a member's Agent inbox) or The Forum. Every tool acts only on
+ * the inbox of the member the connection signed in as: the owner below is always the grant's own viewer, never an argument.
  */
 import { z } from "zod";
 import { defineScope, defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { ackHandoff, callingAgent, checkinFor, fileLink, holdHandoff, inboxFor, postHandoff, readThread, releaseHandoff, setBusy, startUpload, supersedeHandoff, type InboxItem } from "@/lib/handoff";
-import { HANDOFF_KINDS, HANDOFF_LINK_MINUTES, hId } from "@/lib/engine/handoff";
+import { HANDOFF_KINDS, HANDOFF_LINK_MINUTES, hId, ownerFirst } from "@/lib/engine/handoff";
 import type { Viewer } from "@/lib/auth";
 
-/** The owner's inbox: the coach's own, never while switched into a client. Members get theirs later, behind a switch. */
-defineScope("inbox", { gate: async (v) => v.role === "coach" && !v.switchedInto && !v.team });
+/** The inbox gate (H-727): any member's own inbox, in their own HelixOS; never while switched into someone else's, never a team member. */
+export const inboxGate = (v: Pick<Viewer, "switchedInto" | "team">): boolean => !v.switchedInto && !v.team;
+defineScope("inbox", { gate: async (v) => inboxGate(v) });
 
 const owner = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id });
-const brief = (m: InboxItem) =>
-  `${m.ref} ${m.kind} from ${m.from}${m.fromDanno ? " (from Danno)" : ""}: ${m.title}${m.decision ? ` [Danno ${m.decision}${m.decisionFor ? ` ${m.decisionFor}` : ""}]` : ""}${m.hold ? ` [ON HOLD: ${m.hold.reason}]` : ""}${m.supersededBy ? ` [SUPERSEDED by ${m.supersededBy}]` : ""}${m.claimsApproval ? " [says it's approved: not an approval]" : ""}`;
+/** One line per message; the owner is named by first name ("Danno" on Danno's own inbox). */
+export const brief = (m: InboxItem, who: string) =>
+  `${m.ref} ${m.kind} from ${m.from}${m.fromDanno ? ` (from ${who})` : ""}: ${m.title}${m.decision ? ` [${who} ${m.decision}${m.decisionFor ? ` ${m.decisionFor}` : ""}]` : ""}${m.hold ? ` [ON HOLD: ${m.hold.reason}]` : ""}${m.supersededBy ? ` [SUPERSEDED by ${m.supersededBy}]` : ""}${m.claimsApproval ? " [says it's approved: not an approval]" : ""}`;
+const lineOf = (v: Viewer) => (m: InboxItem) => brief(m, ownerFirst(v.user.name));
 
 defineTool({
   name: "handoff_post",
@@ -36,7 +40,7 @@ defineTool({
     const agent = await callingAgent(owner(v), call?.agentId);
     const r = await postHandoff(owner(v), agent, input);
     return {
-      text: `Posted ${hId(r.seq)} as ${agent.name}.${r.needsApproval ? ` It waits for Danno's approval (${r.reasons.join(", ")}); his answer arrives in your handoff_inbox.` : ""}${r.removed ? ` ${r.removed} key-like value(s) were removed from it.` : ""}`,
+      text: `Posted ${hId(r.seq)} as ${agent.name}.${r.needsApproval ? ` It waits for ${ownerFirst(v.user.name)}'s approval (${r.reasons.join(", ")}); the answer arrives in your handoff_inbox.` : ""}${r.removed ? ` ${r.removed} key-like value(s) were removed from it.` : ""}`,
       data: { id: hId(r.seq), needs_approval: r.needsApproval, reasons: r.reasons },
     };
   },
@@ -52,7 +56,7 @@ defineTool({
     const agent = await callingAgent(owner(v), call?.agentId);
     const items = await inboxFor(owner(v), agent.id);
     if (!items.length) return { text: `Nothing new for ${agent.name}.`, data: { messages: [] } };
-    return { text: `${items.length} new for ${agent.name}:\n${items.map(brief).join("\n")}`, data: { messages: items } };
+    return { text: `${items.length} new for ${agent.name}:\n${items.map(lineOf(v)).join("\n")}`, data: { messages: items } };
   },
 });
 
@@ -65,7 +69,7 @@ defineTool({
   handler: async (v, input, call): Promise<ToolResult> => {
     const agent = await callingAgent(owner(v), call?.agentId);
     const thread = await readThread(owner(v), agent.id, input.id);
-    return { text: thread.map((m) => `${brief(m)}\n${m.body}`).join("\n\n---\n\n"), data: { thread } };
+    return { text: thread.map((m) => `${lineOf(v)(m)}\n${m.body}`).join("\n\n---\n\n"), data: { thread } };
   },
 });
 
@@ -123,7 +127,7 @@ defineTool({
     // Wait and quiet stay a line or two, so an idle check-in costs almost nothing.
     if (c.act === "wait" || c.act === "quiet") return { text: `${c.act}: ${c.line}${c.lastStatus && c.act === "wait" ? ` Last: ${c.lastStatus.slice(0, 60)}` : ""}`.slice(0, 190) };
     return {
-      text: `${c.act}: ${c.line}\n${c.items.map(brief).join("\n")}`,
+      text: `${c.act}: ${c.line}\n${c.items.map(lineOf(v)).join("\n")}`,
       data: { act: c.act, items: c.items.map((m) => ({ id: m.ref, kind: m.kind, title: m.title, from: m.from, from_danno: m.fromDanno, decision: m.decision, decision_for: m.decisionFor })), waiting_on: c.waitingOn, last_status: c.lastStatus },
     };
   },

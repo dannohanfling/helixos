@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 259,
+    date: "2026-10-18",
+    title: "Your own agent inbox",
+    lines: [
+      "When an AI agent you've connected wants your OK on a plan, it now lands in your Agent inbox, next to The Forum. Nothing happens until you tap Approve, and you can ask for a change or decline instead.",
+      "It's private to you. If you share your Forum with your coach, they can read it too, but only you can decide.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 258,
     date: "2026-10-18",
     title: "The chat with your coach has its own page",
