@@ -1,0 +1,27 @@
+/* The streak flame (H-552). The pill and the sheet stay dark in both looks so the fire reads, with the rim border. */
+.sf-pill {
+  background: #0c0a07;
+  border-color: #5e4c27;
+  color: #f1e6cf;
+}
+.sf-pill:hover { border-color: #8a7038; }
+.sf-pill:focus-visible { outline: 2px solid #f0cf86; outline-offset: 2px; }
+.sf-muted { color: #a7997f; }
+.sf-chip { color: #e58b4b; border-color: #e58b4b; }
+.sf-stage {
+  background: radial-gradient(ellipse 70% 45% at 50% 30%, #4e2a0e 0%, #1a1009 55%, #0a0705 100%);
+  border-color: #3a3022;
+  color: #f1e6cf;
+}
+.sf-count { color: #f0cf86; }
+.sf-eyebrow { color: #a7997f; }
+.sf-close { border-color: #5e4c27; color: #f1e6cf; }
+.sf-close:hover { background: #15110c; }
+.sf-tick { display: inline-block; animation: sf-tick 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes sf-tick {
+  0% { transform: translateY(40%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-tick { animation: none; }
+}

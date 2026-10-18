@@ -125,6 +125,8 @@ export const memberships = sqliteTable(
     welcomeShownOn: text("welcome_shown_on"),
     /** The first arrival (H-472): when this member saw the welcome ceremony on their first sign-in; the migration stamps everyone before it. */
     firstArrivalSeenAt: text("first_arrival_seen_at"),
+    /** The streak flame (H-558): the streak day whose daily surge has played, so it plays once per day. */
+    streakSurgeSeenOn: text("streak_surge_seen_on"),
     /** The living scenes' sounds (H-400): the crowd, the applause and the fire loop; one switch, on by default, the member's own. */
     soundsOn: integer("sounds_on", { mode: "boolean" }).notNull().default(true),
     /** Team access (H-413): the newest Office Hours request a team member booked for this owner, until the owner opens Office Hours. */

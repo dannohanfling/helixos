@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `streak_surge_seen_on` text;

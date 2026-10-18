@@ -27,6 +27,7 @@ import { waitingFeatures } from "@/lib/bot-features";
 import { choicesFor } from "@/lib/team";
 import { horizonShell } from "@/lib/horizon";
 import { HorizonNotice } from "@/components/horizon-notice";
+import { flameStateOf } from "@/lib/engine/streak-flame";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
@@ -73,8 +74,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const welcome = arrival ? null : await welcomeFor(viewer, pathNow);
   // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
   const horizon = await horizonShell(viewer);
+  // The streak flame (H-558): read after the welcome, which counts the first open of the day as showing up. A team member has
+  // none (the streak is the owner's); a coach switched in sees the client's flame but never plays their surge.
+  const flameStreak = welcome ? await streakFor(viewer.workspace.id, viewer.user.id, { today: viewer.today, hour: viewer.hour, tz: viewer.tz, days: viewer.membership.workDays }) : streak;
+  const flame = viewer.team
+    ? null
+    : flameStateOf({ running: flameStreak.running, asOf: flameStreak.asOf, today: viewer.today, hour: viewer.hour, active: flameStreak.activity.active, closed: flameStreak.closed, seenOn: viewer.switchedInto ? flameStreak.asOf : viewer.membership.streakSurgeSeenOn });
   return (
-    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
+    <AppShell viewer={viewer} chat={chat} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>
