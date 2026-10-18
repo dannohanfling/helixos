@@ -107,6 +107,12 @@ describe("the map (Danno's 12 plots, 13 Oct)", () => {
     expect(plotFor([...FORUM_PLOTS])).toBeNull();
   });
 
+  it("no place on the map shares a name with an agent: p12 is The Golden Milestone (H-628)", () => {
+    expect(FORUM_BUILDINGS.p12.place).toBe("The Golden Milestone");
+    const agentNames = new Set(FORUM_SEED.map((a) => a.name.toLowerCase()));
+    for (const { place } of Object.values(FORUM_BUILDINGS)) expect(agentNames.has(place.replace(/^The /, "").toLowerCase())).toBe(false);
+  });
+
   it("the coach's team stands on the plots the photo suggests, Hermes on p08, p09, p10 and p12 free", () => {
     expect(Object.fromEntries(FORUM_SEED.map((a) => [a.name, a.plot]))).toEqual({ Acta: "p01", Scriba: "p02", Porta: "p03", Medicus: "p04", Orator: "p05", Architectus: "p06", Hospes: "p07", Hermes: "p08", Tabularium: "p11" });
   });

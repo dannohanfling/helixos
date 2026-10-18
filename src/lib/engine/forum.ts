@@ -26,7 +26,9 @@ export const FORUM_BUILDINGS: Record<ForumPlot, { place: string; building: strin
   p09: { place: "The Library", building: "Round library" },
   p10: { place: "The Granary", building: "Granary and stables" },
   p11: { place: "The Archive", building: "Long hall" },
-  p12: { place: "The Tabularium", building: "Small temple-house" },
+  // H-628: not "The Tabularium", which read as the Tabularium agent at p11. The Golden Milestone (Miliarium Aureum), where every
+  // Roman road was measured from.
+  p12: { place: "The Golden Milestone", building: "Small temple-house" },
 };
 export const FORUM_PLOT_XY: Record<ForumPlot, { x: number; y: number; dx: number; dy: number; rx: number; ry: number; px: number; py: number }> = {
   p01: { x: 540, y: 165, dx: 642, dy: 336, rx: 170, ry: 95, px: 474, py: 56 },
