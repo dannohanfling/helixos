@@ -223,6 +223,8 @@ async function main() {
     await box.uncheck();
     await page.locator('[data-testid="sounds-save"]').click();
     await page.waitForFunction(() => !(document.querySelector('[data-testid="sounds-on"]') as HTMLInputElement | null)?.checked, null, { timeout: 10000 });
+    // The box unticks at once; the save lands a moment later.
+    for (let i = 0; i < 20 && (await member()).soundsOn !== false; i++) await page.waitForTimeout(250);
     must((await member()).soundsOn === false, "the switch is remembered on the membership");
     await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
     await page.goto(`${base}/today`);
