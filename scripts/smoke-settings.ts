@@ -191,9 +191,15 @@ async function main() {
     await page.goto(`${base}/coach/${mm.id}`, { waitUntil: "networkidle" });
     await page.check('[data-testid="switch-work"]');
     await submit(page, '[data-testid="switch-open"]');
-    // The switch is in once its banner offers the way back; a click that lands before hydration posts nothing, so try again.
-    if (!(await page.locator('[data-testid="switch-back"]').count())) await submit(page, '[data-testid="switch-open"]');
-    await page.locator('[data-testid="switch-back"]').first().waitFor({ timeout: 15000 });
+    // The switch is in once its banner offers the way back. On a cold server the redirect to Today can take a while, so wait
+    // for it; only a click that landed before the page was ready (the button free again, nothing pending) is tried again.
+    const switched = page.locator('[data-testid="switch-back"]').first();
+    try {
+      await switched.waitFor({ timeout: 30000 });
+    } catch {
+      if (await page.locator('[data-testid="switch-open"]:not([disabled])').count()) await submit(page, '[data-testid="switch-open"]');
+      await switched.waitFor({ timeout: 30000 });
+    }
     await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
     must((await page.locator('[data-testid="headshot-upload"]').count()) === 0 && (await page.locator('[data-testid="headshot-media"]').count()) === 0, "switched in, the coach sees no upload and no media picker");
     await submit(page, '[data-testid="switch-back"]');
