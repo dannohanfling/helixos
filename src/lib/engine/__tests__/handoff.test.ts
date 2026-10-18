@@ -154,6 +154,8 @@ describe("Start this agent (H-26 C)", () => {
     expect(p).toContain("loyalty passes");
     expect(p).toContain("CLAUDE.md");
     expect(p).toContain("handoff_inbox");
+    expect(p).toContain("HELIXOS_AGENT_NAME=Tessera");
+    expect(p).toContain("whoami answers \"Agent: Tessera\"");
     expect(p.length).toBeLessThanOrEqual(STARTER_PROMPT_MAX);
     expect(starterPrompt({ name: "Orator", role: null, platform: null }, { connector: "x", firstJob: "Draft the Friday post" })).toContain("Your first job: Draft the Friday post");
   });
