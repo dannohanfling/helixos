@@ -13,7 +13,7 @@
  *  8. Multiple memberships: Jordan joins Maya's team with his own login, gets the picker at sign-in, and switching leaves no
  *     access behind in either direction.
  */
-import { chromium, type Browser, type Page } from "@playwright/test";
+import { chromium, type Browser, type Locator, type Page } from "@playwright/test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -38,11 +38,30 @@ async function logout(page: Page) {
   await page.locator('button:has-text("Log out")').first().click();
   await page.waitForURL(/\/login/);
 }
+/**
+ * Click and wait for the form's POST. On a freshly started dev server a click can land before React has hydrated the button,
+ * and it does nothing; so wait for the page to settle, and click again (up to three times) when no POST follows.
+ */
 async function submit(page: Page, selector: string) {
   await page.locator(selector).first().waitFor({ timeout: 20000 });
-  await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(selector).first().click()]);
+  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
+  for (let attempt = 1; ; attempt++) {
+    const posted = page.waitForResponse((r) => r.request().method() === "POST", { timeout: attempt < 3 ? 10000 : 30000 }).then(() => true, () => false);
+    await page.locator(selector).first().click();
+    if (await posted) break;
+    if (attempt >= 3) throw new Error(`no POST after clicking ${selector} three times`);
+  }
   await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
   await page.waitForTimeout(300);
+}
+/** Open a confirm dialog: a click before hydration opens nothing, so click again until its Yes shows. */
+async function openConfirm(page: Page, opener: Locator) {
+  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await opener.click();
+    if (await page.locator('[data-testid="confirm-delete-yes"]:visible').first().waitFor({ timeout: 8000 }).then(() => true, () => false)) return;
+  }
+  throw new Error("the confirm dialog never opened");
 }
 const must = (ok: unknown, msg: string) => {
   if (!ok) throw new Error(msg);
@@ -377,7 +396,7 @@ async function main() {
     await coachPage.goto(`${base}/coach/${mayaM.id}`);
     must((await coachPage.locator('[data-testid="client-team-seats"]').innerText()).includes("2 of 6 seats used"), "the client page shows the new cap");
     const tessRow = coachPage.locator('[data-testid="client-team-member"]', { hasText: "Tess Lane" });
-    await tessRow.locator('[data-testid="client-team-remove"]').click();
+    await openConfirm(coachPage, tessRow.locator('[data-testid="client-team-remove"]'));
     await submit(coachPage, '[data-testid="confirm-delete-yes"]:visible');
     const tessUser = (await db.query.users.findFirst({ where: eq(schema.users.email, tessEmail) }))!;
     const tessDb = (await db.query.teamMembers.findFirst({ where: eq(schema.teamMembers.teamUserId, tessUser.id) }))!;
@@ -392,7 +411,7 @@ async function main() {
     // The owner removes Sam from Settings; Sam's next request ends the same way.
     await owner.goto(`${base}/settings`);
     must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("1 of 6 seats used"), "Tess's seat is free again");
-    await owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" }).locator('[data-testid="team-remove"]').click();
+    await openConfirm(owner, owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" }).locator('[data-testid="team-remove"]'));
     await submit(owner, '[data-testid="confirm-delete-yes"]:visible');
     must((await db.query.teamMembers.findFirst({ where: eq(schema.teamMembers.id, samRow.id) }))!.removedAt, "Sam is removed");
     must((await db.query.teamChanges.findMany({ where: and(eq(schema.teamChanges.teamMemberId, samRow.id), eq(schema.teamChanges.kind, "removed")) })).length === 1, "the removal is on the log");
