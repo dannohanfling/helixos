@@ -11,6 +11,7 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 import { sharedDecisionsFor } from "@/lib/board-steps";
 import { oohAccess } from "@/lib/engine/office-hours";
 import { oohClaimsFor } from "@/lib/office-hours-access";
+import { OOH_DAY_NAMES, OOH_MINUTES_CHOICES, dayName, hostToday, oohSchedule, sessionBoth, sessionHeading } from "@/lib/engine/ooh-session";
 
 export const metadata = { title: "Office Hours requests" };
 
@@ -31,13 +32,17 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
   // Office Hours by program level (H-470): a request from a client who has no access today is marked, never removed.
   const ownerIds = [...new Set(requests.map((r) => r.userId))];
-  const owners = ownerIds.length ? await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), inArray(schema.memberships.userId, ownerIds)), columns: { userId: true, role: true, programTier: true, officeHoursOverride: true } }) : [];
+  const owners = ownerIds.length ? await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), inArray(schema.memberships.userId, ownerIds)), columns: { userId: true, role: true, programTier: true, officeHoursOverride: true, timezone: true } }) : [];
   const offFor = new Set<string>();
   for (const o of owners) if (!oohAccess(o, await oohClaimsFor(v.workspace.id, o.userId), v.today).open) offFor.add(o.userId);
   const teamOfOwner = (ownerId: string) => new Set(teams.filter((t) => t.userId === ownerId).map((t) => t.teamUserId));
+  // Each member's own zone (H-457): the coach sees their time beside the host's on every request.
+  const zoneOfOwner = new Map(owners.map((o) => [o.userId, o.timezone || v.workspace.timezone]));
+  const session = oohSchedule(v.workspace);
+  const hToday = hostToday(session);
   const fridays = [...new Set(requests.map((r) => r.friday))];
-  const upcoming = fridays.filter((f) => f >= v.today).sort();
-  const past = fridays.filter((f) => f < v.today).sort().reverse();
+  const upcoming = fridays.filter((f) => f >= hToday).sort();
+  const past = fridays.filter((f) => f < hToday).sort().reverse();
   // Inside each Friday, newest first unless the coach asks for the order they came in (rev 625).
   const order = sp.order === "oldest" ? "oldest" : "newest";
   const group = (f: string) => requests.filter((r) => r.friday === f).sort(byStamp(order));
@@ -46,11 +51,11 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
 
   return (
     <>
-      <PageHeader title="Office Hours requests" subtitle={`${requests.filter((r) => r.friday >= v.today).length} upcoming · ${requests.length} in all`} action={<Link href="/coach" className="btn btn-ghost btn-sm">Back</Link>} />
+      <PageHeader title="Office Hours requests" subtitle={`${requests.filter((r) => r.friday >= hToday).length} upcoming · ${requests.length} in all`} action={<Link href="/coach" className="btn btn-ghost btn-sm">Back</Link>} />
       {sp.updated ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="ooh-updated">Saved.</p> : null}
       {requests.length ? (
         <p className="mb-3 text-sm text-ink-2" data-testid="ooh-order">
-          In each Friday: {order === "newest" ? <b>newest first</b> : <Link href="/coach/office-hours" className="underline" data-testid="ooh-order-newest">newest first</Link>} ·{" "}
+          In each {dayName(session)}: {order === "newest" ? <b>newest first</b> : <Link href="/coach/office-hours" className="underline" data-testid="ooh-order-newest">newest first</Link>} ·{" "}
           {order === "oldest" ? <b>oldest first</b> : <Link href="/coach/office-hours?order=oldest" className="underline" data-testid="ooh-order-oldest">oldest first</Link>}
         </p>
       ) : (
@@ -93,7 +98,7 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
       ) : null}
       <div className="space-y-4">
         {[...upcoming, ...past].map((f) => (
-          <Card key={f} title={formatDate(f, { weekday: "long", month: "long", day: "numeric" })} action={<Badge tone={f >= v.today ? "accent" : "neutral"}>{group(f).length} {f >= v.today ? "upcoming" : "past"}</Badge>}>
+          <Card key={f} title={sessionHeading(f, session, v.tz)} action={<Badge tone={f >= hToday ? "accent" : "neutral"}>{group(f).length} {f >= hToday ? "upcoming" : "past"}</Badge>}>
             <ul className="divide-y" data-testid="ooh-friday-group" data-friday={f}>
               {group(f).map((r) => (
                 <li key={r.id} id={`r-${r.id}`} className="grid gap-3 py-3 text-sm md:grid-cols-[1.4fr_1fr]" data-testid="ooh-request">
@@ -103,6 +108,11 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
                       <Badge tone="neutral">{r.category}</Badge>
                     </div>
                     <Stamps createdAt={r.createdAt} editedAt={r.editedAt} tz={v.tz} today={v.today} />
+                    {sessionBoth(r.friday, session, zoneOfOwner.get(r.userId) ?? v.workspace.timezone) ? (
+                      <p className="text-xs text-ink-3" data-testid="ooh-both-times">
+                        Their time: {sessionBoth(r.friday, session, zoneOfOwner.get(r.userId) ?? v.workspace.timezone)}
+                      </p>
+                    ) : null}
                     {submittedByWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId)) ? <p className="text-xs text-ink-3" data-testid="ooh-submitted-by">{submittedByWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId))}</p> : null}
                     <p className="text-xs text-ink-3" data-testid="ooh-attending">{attendeeWords(r, (id) => nameOf.get(id), teamOfOwner(r.userId))}</p>
                     {offFor.has(r.userId) ? <p className="text-xs text-accent-ink" data-testid="ooh-off-mark">Office Hours off for this client now; the request stays.</p> : null}
@@ -176,9 +186,37 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
               Who can be responsible, one per line
               <textarea className="field mt-1" name="hosts" rows={6} defaultValue={v.workspace.oohHosts.join("\n")} data-testid="ooh-hosts" />
             </label>
+            {/* The session as a time in the workspace's zone (H-457): each member reads it on their own day and time. */}
+            <fieldset className="grid grid-cols-3 gap-2 text-sm sm:col-span-2" data-testid="ooh-session">
+              <legend className="mb-1">The call, in {v.workspace.timezone}; each member sees it in their own time</legend>
+              <label className="block">
+                Day
+                <select className="field mt-1" name="weekday" defaultValue={String(session.weekday)} data-testid="ooh-weekday">
+                  {OOH_DAY_NAMES.map((d, i) => (
+                    <option key={d} value={i}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                Starts
+                <input className="field mt-1" name="start" type="time" step={300} defaultValue={session.start ?? ""} data-testid="ooh-start" />
+              </label>
+              <label className="block">
+                Length
+                <select className="field mt-1" name="minutes" defaultValue={String(session.minutes)} data-testid="ooh-minutes">
+                  {OOH_MINUTES_CHOICES.map((m) => (
+                    <option key={m} value={m}>
+                      {m} min
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </fieldset>
             <label className="block text-sm">
-              When the call is, in {v.workspace.timezone}
-              <input className="field mt-1" name="time" defaultValue={v.workspace.oohTime ?? ""} placeholder="Fridays at 12:00 pm" data-testid="ooh-time" />
+              A note for members (optional)
+              <input className="field mt-1" name="time" defaultValue={v.workspace.oohTime ?? ""} placeholder="Bring your screen ready to share" maxLength={120} data-testid="ooh-time" />
             </label>
             <label className="block text-sm">
               The link to join

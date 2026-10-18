@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 238,
+    date: "2026-10-18",
+    title: "Office Hours in your own time zone",
+    lines: [
+      "Office Hours now shows every session on your own day, date and time, from the time zone in your Settings. A Thursday 5 PM Pacific call reads as Friday morning in Sydney, with Friday's date.",
+      "Coaches set the call as a day, a start time and a length on Office Hours requests. Each request shows the member's time beside yours.",
+      "Add to calendar on a booked request saves the session to your own calendar at the right local time.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 237,
     date: "2026-10-18",
     title: "The Aqueduct shows you when an arch is repaired",

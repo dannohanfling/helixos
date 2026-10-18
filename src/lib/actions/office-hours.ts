@@ -9,6 +9,7 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 import { OOH_LOCKED_LINE, OOH_OUTCOMES, readList } from "@/lib/engine/office-hours";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { saveOohRequest } from "@/lib/office-hours-core";
+import { hostToday, oohSchedule, readOohSession } from "@/lib/engine/ooh-session";
 import { teamOf } from "@/lib/team";
 
 /** Opening Office Hours clears the owner's "booked for you" line (H-413). A team member or a switched coach never clears it. */
@@ -29,8 +30,10 @@ export async function saveOohRequestAction(formData: FormData): Promise<void> {
   // Office Hours by program level (H-470): enforced here, not only in the menu; the team path answers for its owner.
   if (!(await oohAccessFor(v)).open) redirect(`/office-hours?error=${encodeURIComponent(OOH_LOCKED_LINE)}#mine`);
   const team = await teamOf(v.membership.id);
+  // The session's dates are the host's (H-457): counted from the host's today, on the workspace's session day.
+  const session = oohSchedule(v.workspace);
   const saved = await saveOohRequest(
-    { workspaceId, userId, today: v.today, categories: v.workspace.oohCategories, actorId: v.team ? v.actor.id : null, attendeesAllowed: team.map((t) => t.member.teamUserId) },
+    { workspaceId, userId, today: hostToday(session), sessionWeekday: session.weekday, categories: v.workspace.oohCategories, actorId: v.team ? v.actor.id : null, attendeesAllowed: team.map((t) => t.member.teamUserId) },
     {
       attendees: formData.getAll("attendees").map(String),
       attendeesOther: str(formData, "attendeesOther"),
@@ -78,7 +81,10 @@ export async function setOohListsAction(formData: FormData): Promise<void> {
   const oohTime = str(formData, "time").trim().slice(0, 120) || null;
   const oohLink = str(formData, "link").trim() || null;
   if (oohLink && !/^https:\/\/\S+$/.test(oohLink)) redirect(`/coach/office-hours?error=${encodeURIComponent("The join link starts with https://.")}#lists`);
-  await db.update(schema.workspaces).set({ oohCategories: categories, oohHosts: hosts, oohTime, oohLink }).where(eq(schema.workspaces.id, coach.workspace.id));
+  // The session as a time in the workspace's zone (H-457): each member reads it in their own.
+  const session = readOohSession({ weekday: str(formData, "weekday"), start: str(formData, "start"), minutes: str(formData, "minutes") });
+  if ("error" in session) redirect(`/coach/office-hours?error=${encodeURIComponent(session.error)}#lists`);
+  await db.update(schema.workspaces).set({ oohCategories: categories, oohHosts: hosts, oohTime, oohLink, ...session.value }).where(eq(schema.workspaces.id, coach.workspace.id));
   refresh();
   redirect(`/coach/office-hours?lists=1#lists`);
 }

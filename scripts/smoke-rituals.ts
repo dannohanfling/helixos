@@ -417,9 +417,10 @@ async function main() {
     await signIn("client");
     await page.goto(`${base}/office-hours`);
     await page.locator('[data-testid="ooh-mine"]').first().waitFor({ timeout: 20000 });
-    // The member reads when and where (friction walk OH1): the time in the workspace's zone and the join link, new tab.
+    // The member reads when and where (friction walk OH1; H-457): the next call in their own time, read from the coach's note
+    // while no start is set (the note itself stays off the line, since it is where the time came from), and the join link, new tab.
     const when = await page.locator('[data-testid="ooh-when"]').innerText();
-    if (!when.includes("Fridays at 12:00 pm") || !when.includes("America/Los_Angeles")) throw new Error(`the member sees the call's time and zone: ${when}`);
+    if (!/Next call: Fri \d+ \w+, 12:00 PM P[DS]?T, your time/.test(when) || when.includes("Fridays at 12:00 pm")) throw new Error(`the member sees the next call in their own time: ${when}`);
     if ((await page.locator('[data-testid="ooh-join"]').getAttribute("href")) !== "https://example.com/office-hours" || (await page.locator('[data-testid="ooh-join"]').getAttribute("target")) !== "_blank") throw new Error("the join link opens the call in a new tab");
     const mineText = await page.locator('[data-testid="ooh-mine"]').first().innerText();
     if (!mineText.includes("With Shonna Roadruck") || !mineText.includes("Covered") || (await page.content()).includes(NOTES)) throw new Error("the member sees who takes it and how it went, never the coach's notes");

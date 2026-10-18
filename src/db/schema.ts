@@ -41,6 +41,14 @@ export const workspaces = sqliteTable("workspaces", {
   /** Office Hours as a member reads it (friction walk OH1, 7 Oct): when, in the workspace's zone, and the link to join. Coach-edited. */
   oohTime: text("ooh_time"),
   oohLink: text("ooh_link"),
+  /**
+   * The session as a time, anchored to the host's zone (the workspace's) (H-457, plan H-469): the weekday (0 Sunday to 6
+   * Saturday), the start as the host's wall time ("17:00", null until the coach sets it) and its length. Each member reads
+   * every session in their own zone; `ooh_time` stays as the coach's free note.
+   */
+  oohWeekday: integer("ooh_weekday").notNull().default(5),
+  oohStart: text("ooh_start"),
+  oohMinutes: integer("ooh_minutes").notNull().default(60),
   /** The Start Here orientation (H-270 §1, S1a): the coach's welcome video, a link HelixOS plays itself (mp4, webm) or opens (a Recordings share link). Null shows "Coming soon". */
   startHereVideo: text("start_here_video"),
   /** Recordings' publishing rules (rev 491): series names and time slots, coach-edited. Null keeps the defaults in recording-rules.ts. */

@@ -42,6 +42,8 @@ export type SetupLook = {
   offers: { id: string; name: string }[];
   oohCategories: string[];
   fridays: string[];
+  /** Each session date's words in the member's own day and time (H-457); missing ones fall back to "Friday the 23rd". */
+  oohWords?: Record<string, string>;
 };
 
 const s = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
@@ -177,7 +179,8 @@ export function buildProposals(a: BoardAnswer, setup: unknown, look: SetupLook):
       // The category it named when it's one of the workspace's; else "Other" when there is one, never a guess at another.
       const category = look.oohCategories.find((c) => c.toLowerCase() === s(o.category, 80).toLowerCase()) ?? look.oohCategories.find((c) => c.toLowerCase() === "other") ?? look.oohCategories[0];
       const friday = look.fridays[0];
-      add({ kind, title: `Ask at Office Hours, ${fridayWords(friday)}`, detail: oohReadBack({ question, tried, outcome, category, friday, tools: null }).split("\n").slice(0, -1).join("\n"), payload: { question, tried, outcome, category, friday } });
+      const when = look.oohWords?.[friday] ?? fridayWords(friday);
+      add({ kind, title: `Ask at Office Hours, ${when}`, detail: oohReadBack({ question, tried, outcome, category, friday, tools: null, when }).split("\n").slice(0, -1).join("\n"), payload: { question, tried, outcome, category, friday } });
     }
   }
   return { proposals: out, notes };

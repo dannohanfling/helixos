@@ -31,6 +31,7 @@ import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
 import { addDays, formatDate, formatDateTime, relativeDay } from "@/lib/dates";
 import { oohNoticeWords } from "@/lib/engine/office-hours";
+import { oohSchedule, sessionWhen } from "@/lib/engine/ooh-session";
 import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
 import { COACH_ITEMS_DAYS, coachItems, newRecordings, openItemsFor } from "@/lib/recordings";
@@ -215,7 +216,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       ) : null}
       {oohNotice ? (
         <Link href="/office-hours#mine" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-ooh-notice">
-          🙋 {oohNoticeWords(oohNotice.name, formatDate(oohNotice.friday, { weekday: "long", month: "long", day: "numeric" }))} →
+          🙋 {oohNoticeWords(oohNotice.name, sessionWhen(oohNotice.friday, oohSchedule(v.workspace), v.tz, { zone: true }))} →
         </Link>
       ) : null}
       {featuresOn.length ? (

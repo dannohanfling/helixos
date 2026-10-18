@@ -75,22 +75,28 @@ export function dayWords(d: string, today: string): string {
   return d > today && d <= addDays(today, 6) ? `${name.charAt(0).toUpperCase()}${name.slice(1)}` : formatDate(d);
 }
 
-/** "Friday the 17th". */
-export function fridayWords(d: string): string {
+/** "Friday the 17th"; the day is the session's (H-457: Friday unless the coach moves it). */
+export function fridayWords(d: string, day = "Friday"): string {
   const n = Number(d.slice(8, 10));
   const th = n % 100 >= 11 && n % 100 <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
-  return `Friday the ${n}${th}`;
+  return `${day} the ${n}${th}`;
 }
 
-/** One of the next Fridays by what was said: a date, "the 17th", "this Friday", "next Friday"; blank is the first. */
-export function fridayFrom(said: string | null | undefined, fridays: readonly string[]): string | null {
+/**
+ * One of the next sessions by what was said: a date, "the 17th", "this Friday", "next Friday"; blank is the first. `names`
+ * are the day names that count ("thursday" for the host, "friday" for a member in Sydney); `localDate` gives a session's
+ * date in the member's own calendar, so "the 30th" finds the session they see on the 30th.
+ */
+export function fridayFrom(said: string | null | undefined, fridays: readonly string[], names: readonly string[] = ["friday"], localDate: (f: string) => string = (f) => f): string | null {
   const raw = (said ?? "").trim();
   const s = norm(raw);
-  if (!s || s === "friday" || s === "this friday" || s === "next" || s === "the next one") return fridays[0] ?? null;
+  const named = (x: string) => names.some((n) => x === n || x === `this ${n}` || x === `next ${n}`);
+  if (!s || s === "next" || s === "the next one" || named(s)) return fridays[0] ?? null;
   if (fridays.includes(raw)) return raw;
-  if (s === "next friday") return fridays[0] ?? null;
+  const local = fridays.find((f) => localDate(f) === raw);
+  if (local) return local;
   const day = s.match(/(\d{1,2})(st|nd|rd|th)?\b/);
-  if (day) return fridays.find((f) => Number(f.slice(8, 10)) === Number(day[1])) ?? null;
+  if (day) return fridays.find((f) => Number(localDate(f).slice(8, 10)) === Number(day[1])) ?? fridays.find((f) => Number(f.slice(8, 10)) === Number(day[1])) ?? null;
   return null;
 }
 
@@ -151,10 +157,12 @@ export function sheetForVoice(sheet: CallSheet): string {
   return out.join("\n\n");
 }
 
-export type OohSaid = { question: string; tried: string; outcome: string; category: string; friday: string; tools?: string | null };
+/** `when` is the session as the member reads it ("Fri 30 Oct, 11:00 AM AEDT", H-457); without it, the host's date in words. */
+export type OohSaid = { question: string; tried: string; outcome: string; category: string; friday: string; tools?: string | null; when?: string };
 /** The read-back before an Office Hours request goes to the coach; the yes to it is the promise to attend. */
 export function oohReadBack(r: OohSaid): string {
-  return [`Your Office Hours request for ${fridayWords(r.friday)}, under ${r.category}:`, `The question: ${r.question}`, `What you've tried: ${r.tried}`, `The outcome you want: ${r.outcome}`, r.tools ? `Tools: ${r.tools}` : "", `It goes to your coach, and you'll be there on ${fridayWords(r.friday)}. Shall I send it?`].filter(Boolean).join("\n");
+  const when = r.when ?? fridayWords(r.friday);
+  return [`Your Office Hours request for ${when}, under ${r.category}:`, `The question: ${r.question}`, `What you've tried: ${r.tried}`, `The outcome you want: ${r.outcome}`, r.tools ? `Tools: ${r.tools}` : "", `It goes to your coach, and you'll be there on ${when}. Shall I send it?`].filter(Boolean).join("\n");
 }
 
 /** A recording by what was said: latest (or nothing), a date, or words from its title; the newest match. */

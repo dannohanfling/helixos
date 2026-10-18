@@ -21,14 +21,15 @@ import { createContentItem } from "@/lib/content-core";
 import { followUpTask as sharedFollowUp } from "@/lib/tasks-core";
 import { addStepTask, stepGroupsFor, visibleRecordings } from "@/lib/recordings";
 import { saveOohRequest } from "@/lib/office-hours-core";
-import { OOH_LOCKED_LINE, OOH_OUTCOME_LABEL, upcomingFridays } from "@/lib/engine/office-hours";
+import { OOH_FRIDAYS, OOH_LOCKED_LINE, OOH_OUTCOME_LABEL, upcomingFridays } from "@/lib/engine/office-hours";
+import { dayName, hostToday, oohSchedule, sessionLocalDate, sessionLocalDay, sessionSpoken } from "@/lib/engine/ooh-session";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { assemble, callSheet } from "@/lib/engine/socrates";
 import { fillsFor, visibleQuestions } from "@/lib/queries/socrates";
 import { itemMoment } from "@/lib/engine/recording-members";
 import { shownTitle } from "@/lib/engine/recordings";
 import { numbered } from "@/lib/engine/voice-ship";
-import { STAGE_WORDS, contentTypeFrom, dayFrom, dayWords, findByName, fridayFrom, fridayWords, oohReadBack, pickCall, proofFrom, quickSheet, sheetForVoice, stageFrom } from "@/lib/engine/voice-pack";
+import { STAGE_WORDS, contentTypeFrom, dayFrom, dayWords, findByName, fridayFrom, oohReadBack, pickCall, proofFrom, quickSheet, sheetForVoice, stageFrom } from "@/lib/engine/voice-pack";
 import { formatDate, todayInTz } from "@/lib/dates";
 
 const appUrl = siteUrl;
@@ -337,13 +338,13 @@ defineTool({
   scope: "office_hours",
   kind: "write",
   description:
-    "Asks for help at a Friday Open Office Hours call. It goes to the coach, so: call it first without confirm to get the read-back, read it to the member (it ends with them being there on that Friday), and only after their yes call again with confirm: true; their yes is their promise to attend. Ask for what they've tried and the outcome they want if they didn't say. The category must be one of the workspace's; the Friday one of the next four.",
+    "Asks for help at an Open Office Hours call (weekly, Friday unless the coach moved it; every time is said in the member's own zone). It goes to the coach, so: call it first without confirm to get the read-back, read it to the member (it ends with them being there for that session), and only after their yes call again with confirm: true; their yes is their promise to attend. Ask for what they've tried and the outcome they want if they didn't say. The category must be one of the workspace's; the session one of the next four.",
   input: {
     question: z.string().min(3).max(4000).describe("The issue, in the member's words"),
     tried: z.string().min(3).max(4000).describe("How they've tried to solve it themselves"),
     outcome: z.string().min(3).max(2000).describe("The solution they want to reach on the call"),
     category: z.string().max(80).optional().describe("One of the workspace's Office Hours categories"),
-    friday: z.string().max(40).optional().describe("Which Friday: YYYY-MM-DD, \"the 17th\", or left out for the next one"),
+    friday: z.string().max(40).optional().describe("Which session: its date as the member sees it (YYYY-MM-DD), \"the 17th\", or left out for the next one"),
     tools: z.string().max(500).optional().describe("Optional: the tools involved"),
     confirm: z.boolean().optional().describe("true only after the member said yes to the read-back"),
   },
@@ -351,17 +352,21 @@ defineTool({
     ownerOnly(v, "ask for Office Hours");
     // Office Hours by program level (H-470): the connector refuses the same way the page does, no prices.
     if (!(await oohAccessFor(v)).open) throw new Error(OOH_LOCKED_LINE);
-    const fridays = upcomingFridays(v.today);
-    const friday = fridayFrom(input.friday as string | undefined, fridays);
-    if (!friday) throw new Error(`Pick one of the next four Fridays: ${fridays.map(fridayWords).join(", ")}.`);
+    // The session is the host's (H-457): dates count from the host's today; the member hears each in their own day and time.
+    const session = oohSchedule(v.workspace);
+    const fridays = upcomingFridays(hostToday(session), OOH_FRIDAYS, session.weekday);
+    const names = [...new Set([dayName(session), ...fridays.map((f) => sessionLocalDay(f, session, v.tz))].map((n) => n.toLowerCase()))];
+    const friday = fridayFrom(input.friday as string | undefined, fridays, names, (f) => sessionLocalDate(f, session, v.tz));
+    const spoken = (f: string) => sessionSpoken(f, session, v.tz);
+    if (!friday) throw new Error(`Pick one of the next four sessions: ${fridays.map(spoken).join(", ")}.`);
     const cats = v.workspace.oohCategories;
     const category = cats.find((c) => c.toLowerCase() === String(input.category ?? "").trim().toLowerCase());
     if (!category) throw new Error(`Which category? ${cats.join(", ")}.`);
-    const said = { question: String(input.question ?? "").trim(), tried: String(input.tried ?? "").trim(), outcome: String(input.outcome ?? "").trim(), category, friday, tools: input.tools ? String(input.tools).trim() : null };
+    const said = { question: String(input.question ?? "").trim(), tried: String(input.tried ?? "").trim(), outcome: String(input.outcome ?? "").trim(), category, friday, tools: input.tools ? String(input.tools).trim() : null, when: spoken(friday) };
     if (input.confirm !== true) return { text: `${oohReadBack(said)}\n\nNot sent yet: read this back and send it only after their yes.`, data: { sent: false, friday, category } };
-    const saved = await saveOohRequest({ ...member(v), categories: cats }, { friday, description: said.question, triedSelf: said.tried, tools: said.tools ?? "", goal: said.outcome, category, triedGate: "yes", promise: true });
+    const saved = await saveOohRequest({ ...member(v), today: hostToday(session), sessionWeekday: session.weekday, categories: cats }, { friday, description: said.question, triedSelf: said.tried, tools: said.tools ?? "", goal: said.outcome, category, triedGate: "yes", promise: true });
     if (!saved.ok) throw new Error("goBack" in saved ? saved.goBack : saved.error);
-    return { text: `Sent to your coach for ${fridayWords(friday)}. See you there.`, data: { sent: true, id: saved.id, friday, category, link: `${appUrl()}/office-hours#mine` } };
+    return { text: `Sent to your coach for ${spoken(friday)}. See you there.`, data: { sent: true, id: saved.id, friday, category, link: `${appUrl()}/office-hours#mine` } };
   },
 });
 
@@ -369,7 +374,7 @@ defineTool({
   name: "office_hours_list",
   scope: "office_hours",
   kind: "read",
-  description: "The member's own Office Hours requests, newest Friday first and numbered: the Friday, the category, the question, and how it went (pending, covered, no-show).",
+  description: "The member's own Office Hours requests, newest session first and numbered: the session in the member's own day and time, the category, the question, and how it went (pending, covered, no-show).",
   input: {},
   handler: async (v): Promise<ToolResult> => {
     ownerOnly(v, "read Office Hours requests");
@@ -377,7 +382,8 @@ defineTool({
     const rows = await db.query.officeHoursRequests.findMany({ where: and(eq(schema.officeHoursRequests.workspaceId, v.workspace.id), eq(schema.officeHoursRequests.userId, v.user.id)), orderBy: [desc(schema.officeHoursRequests.friday), desc(schema.officeHoursRequests.createdAt)], limit: 10 });
     if (!rows.length) return { text: `You haven't asked for Office Hours yet.${locked}`, data: { requests: [], locked: Boolean(locked) } };
     const how = (r: schema.OfficeHoursRequest) => (r.outcome ? OOH_OUTCOME_LABEL[r.outcome] : "pending");
-    const lines = rows.map((r) => `${fridayWords(r.friday)}, ${r.category}: ${r.description.replace(/\s+/g, " ").slice(0, 120)} (${how(r)})`);
+    const session = oohSchedule(v.workspace);
+    const lines = rows.map((r) => `${sessionSpoken(r.friday, session, v.tz)}, ${r.category}: ${r.description.replace(/\s+/g, " ").slice(0, 120)} (${how(r)})`);
     return { text: `${rows.length} request${rows.length === 1 ? "" : "s"}:\n${numbered(lines)}${locked}`, data: { locked: Boolean(locked), requests: rows.map((r, i) => ({ n: i + 1, id: r.id, friday: r.friday, category: r.category, outcome: r.outcome ?? "pending", submitted: r.createdAt, edited: r.editedAt })) } };
   },
 });
