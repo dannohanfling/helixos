@@ -280,7 +280,39 @@ async function main() {
     await page.screenshot({ path: "screenshots/sc04-close-390.png" });
     await page.keyboard.press("Escape");
     must((await ec.count()) === 0, "Escape closes the finished card");
-    console.log(`✓ evening close: once per close, keyed on the ledger row, +${closeRow!.points} from the row itself, tomorrow's line from the engine, the murmur after the tap, Skip and 390`);
+    // H-618: short computer windows. The card sits fully inside the window with a gap below, and Good night sits fully inside the
+    // card with its whole label, after the card's own rise ends and after Skip.
+    const fits = async (label: string) => {
+      const m = await page.evaluate(() => {
+        const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
+        const card = r(".ec-card");
+        const cta = r('[data-testid="evening-cta"]');
+        const el = document.querySelector('[data-testid="evening-cta"]') as HTMLElement;
+        return { card: { l: card.left, r: card.right, t: card.top, b: card.bottom }, cta: { l: cta.left, r: cta.right, t: cta.top, b: cta.bottom }, h: window.innerHeight, w: window.innerWidth, cut: el.scrollWidth > el.clientWidth + 1, label: el.textContent?.trim() };
+      });
+      must(m.card.t >= 0 && m.card.b <= m.h - 12 && m.card.l >= 0 && m.card.r <= m.w, `${label}: the card inside the window with a gap below (${JSON.stringify(m.card)}, ${m.w}x${m.h})`);
+      must(m.cta.l >= m.card.l && m.cta.r <= m.card.r && m.cta.t >= m.card.t && m.cta.b <= m.card.b, `${label}: Good night inside the card (${JSON.stringify(m.cta)} in ${JSON.stringify(m.card)})`);
+      must(!m.cut && m.label === "Good night", `${label}: the button's whole label`);
+    };
+    for (const [w, h] of [[1280, 650], [1440, 700]] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.evaluate((id) => localStorage.removeItem(`hx-close-${id}`), closeRow!.id);
+      await page.reload();
+      await ec.waitFor({ timeout: 15000 });
+      await page.waitForFunction(() => document.querySelector('[data-testid="evening-close"]')?.getAttribute("data-state") === "ended", null, { timeout: 8000 });
+      await page.waitForTimeout(700);
+      await fits(`${w}x${h} after the rise`);
+      if (w === 1280) await page.screenshot({ path: "screenshots/sc05-close-1280x650.png" });
+      await page.keyboard.press("Escape");
+      await page.evaluate((id) => localStorage.removeItem(`hx-close-${id}`), closeRow!.id);
+      await page.reload();
+      await ec.waitFor({ timeout: 15000 });
+      await page.locator('[data-testid="evening-skip"]').click();
+      await fits(`${w}x${h} after Skip`);
+      await page.keyboard.press("Escape");
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    console.log(`✓ evening close: once per close, keyed on the ledger row, +${closeRow!.points} from the row itself, tomorrow's line from the engine, the murmur after the tap, Skip and 390; at 1280x650 and 1440x700 the card fits the window and Good night fits the card`);
   } finally {
     if (fakeClip && existsSync(fakeClip)) rmSync(fakeClip);
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);

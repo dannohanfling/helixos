@@ -7,8 +7,12 @@
 .ec-top { position: absolute; inset: 0 0 auto 0; height: 140px; background: linear-gradient(rgba(10, 8, 5, 0.65), rgba(10, 8, 5, 0)); }
 .ec-skip { position: absolute; z-index: 5; top: max(16px, env(safe-area-inset-top)); right: 16px; min-height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(241, 230, 207, 0.4); background: rgba(16, 13, 9, 0.6); color: #f1e6cf; font: 700 13px/1 Manrope, "Segoe UI", system-ui, sans-serif; letter-spacing: 1.5px; cursor: pointer; }
 .ec-skip:focus-visible, .ec-cta:focus-visible { outline: 2px solid #f0cf86; outline-offset: 3px; }
-.ec-card { position: absolute; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); border-radius: 20px; padding: 24px 22px 20px; display: flex; flex-direction: column; gap: 16px; background: rgba(16, 13, 9, 0.95); border: 1px solid #5e4c27; animation: ec-rise 0.6s ease 3s both; box-sizing: border-box; max-height: calc(100% - 32px); overflow: auto; }
-@media (min-width: 480px) { .ec-card { left: 50%; right: auto; width: 390px; transform: translateX(-50%); } }
+/* H-618: the card is centred by its margins, never a transform, so the rise (a transform) can't push it, or the button that shares
+   the rise, sideways; and it never reaches past the window's bottom: a safe gap below, never taller than the window allows. */
+.ec-card { --ec-gap: max(16px, env(safe-area-inset-bottom)); position: absolute; left: 16px; right: 16px; bottom: var(--ec-gap); border-radius: 20px; padding: 24px 22px 20px; display: flex; flex-direction: column; gap: 16px; background: rgba(16, 13, 9, 0.95); border: 1px solid #5e4c27; animation: ec-rise 0.6s ease 3s both; box-sizing: border-box; max-height: calc(100% - var(--ec-gap) - 16px); overflow: auto; }
+@media (min-width: 480px) { .ec-card { --ec-gap: max(24px, env(safe-area-inset-bottom)); left: 0; right: 0; width: min(390px, calc(100% - 32px)); margin: 0 auto; } }
+/* A short window (a laptop browser not full height): a tighter card, so it sits over the arena instead of running off it. */
+@media (max-height: 720px) { .ec-card { padding: 18px 20px 16px; gap: 12px; } .ec-ttl { font-size: 28px; margin: 6px 0 4px; } .ec-ln { font-size: 14px; } .ec-row { padding: 8px 0; } .ec-cta { min-height: 44px; } }
 .ec-eb { font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 5px; text-transform: uppercase; color: #f0cf86; }
 .ec-ttl { font-family: var(--lb-serif), "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 34px; line-height: 1.05; margin: 8px 0 6px; }
 .ec-ln { margin: 0; font-size: 15px; line-height: 1.5; color: #a7997f; }
@@ -17,7 +21,7 @@
 .ec-row-t { flex: 1; font-size: 15px; line-height: 1.4; }
 .ec-row-t b { color: #f0cf86; }
 .ec-row-s { font-size: 13px; color: #a7997f; }
-.ec-cta { position: relative; overflow: hidden; min-height: 50px; border: 1px solid #7a4e1c; border-radius: 999px; background: linear-gradient(180deg, #fbe7a6 0%, #e8c26a 30%, #c9973f 62%, #9a6526 100%); color: #3a230a; font: 800 14px/1 Manrope, "Segoe UI", system-ui, sans-serif; letter-spacing: 1.5px; text-transform: uppercase; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6); box-shadow: inset 0 1px 0 rgba(255, 250, 225, 0.9), inset 0 -2px 0 rgba(90, 56, 16, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35); cursor: pointer; animation: ec-rise 0.4s ease 3.8s both; }
+.ec-cta { position: relative; overflow: hidden; flex: none; width: 100%; min-height: 50px; border: 1px solid #7a4e1c; border-radius: 999px; background: linear-gradient(180deg, #fbe7a6 0%, #e8c26a 30%, #c9973f 62%, #9a6526 100%); color: #3a230a; font: 800 14px/1 Manrope, "Segoe UI", system-ui, sans-serif; letter-spacing: 1.5px; text-transform: uppercase; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6); box-shadow: inset 0 1px 0 rgba(255, 250, 225, 0.9), inset 0 -2px 0 rgba(90, 56, 16, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35); cursor: pointer; animation: ec-rise 0.4s ease 3.8s both; }
 .ec-cta:hover { filter: brightness(1.05); }
 /* The finished state: Skip, Escape, and reduced motion: the arena lit, the torches at their soft glow. */
 .ec-done *:not(.sc-live), .ec-done { animation: none !important; }
@@ -31,5 +35,4 @@
 @keyframes ec-fadeIn { from { opacity: 0; } to { opacity: 0.18; } }
 @keyframes ec-flick { 0%, 100% { opacity: 0.18; } 20% { opacity: 0.26; } 45% { opacity: 0.12; } 70% { opacity: 0.22; } 85% { opacity: 0.15; } }
 @keyframes ec-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-@media (min-width: 480px) { @keyframes ec-rise { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translateX(-50%); } } }
 @keyframes ec-pop { 0% { opacity: 0; transform: scale(0.4); } 100% { opacity: 1; transform: scale(1); } }
