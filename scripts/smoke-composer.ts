@@ -62,8 +62,11 @@ async function main() {
   await page.waitForURL(/\/today/);
 
   // Collapsible nav
+  // The menu saves its state 300 ms after a tap (NavStateProvider), so wait for that save before the reload (H-757).
+  const saved = page.waitForResponse((r) => r.request().method() === "POST", { timeout: 15000 }).catch(() => null);
   await page.click('nav button:has-text("Build")');
   if (await page.locator('nav a:has-text("Webinars")').isVisible()) throw new Error("Build group did not collapse");
+  if (!(await saved)) throw new Error("The collapsed menu was never saved");
   await page.reload();
   await page.locator('nav button:has-text("Build")[aria-expanded="false"]').waitFor({ timeout: 10000 }).catch(() => {
     throw new Error("Collapse did not persist across reload");
