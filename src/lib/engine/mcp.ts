@@ -26,7 +26,9 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   // My Board (rev 664): write-level, because approving "Set it up for me" makes changes, only after reading them back and a yes.
   board: { label: "My Board", line: "Ask your Board about a decision and read past decisions; set up what it proposes only after reading it back and hearing your yes." },
   library: { label: "Library", line: "Search your library and assets." },
-  webinars: { label: "Webinars", line: "Read your webinars and proofs." },
+  webinars: { label: "Webinars", line: "Read your webinars, proofs and story bank." },
+  // Webinar drafts (H-181): drafts sit beside the webinar until you approve each step in the wizard.
+  "webinars:write": { label: "Webinars: draft", line: "Start a webinar and write Claude's draft of a step beside it. Nothing changes until you approve it in the wizard." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
   // The Forum (rev 765): an agent reports what it's doing to the member's own Forum and reads it back. Nothing else.
   forum: { label: "The Forum", line: "Report what your AI agents are doing to your Forum, and read your Forum back." },

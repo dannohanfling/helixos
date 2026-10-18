@@ -1595,6 +1595,73 @@ export const deckImages = sqliteTable(
 );
 export type DeckImage = typeof deckImages.$inferSelect;
 
+/**
+ * Claude's drafts for a webinar (H-181, plan H-684): one pending draft per webinar, step and section, written by a connector
+ * call and never into the webinar itself. The wizard shows it beside what is there, with Approve, Edit and Discard. `fields`
+ * holds only the step's own field names (WEBINAR_DRAFT_FIELDS); `notes` says what the tool took out on the way in.
+ */
+export const WEBINAR_DRAFT_STEPS = ["foundation", "beliefs", "offer", "script", "deck"] as const;
+export type WebinarDraftStep = (typeof WEBINAR_DRAFT_STEPS)[number];
+export const WEBINAR_DRAFT_STATUSES = ["pending", "approved", "edited", "discarded", "replaced"] as const;
+export const webinarDrafts = sqliteTable(
+  "webinar_drafts",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    webinarId: text("webinar_id")
+      .notNull()
+      .references(() => webinars.id, { onDelete: "cascade" }),
+    step: text("step", { enum: WEBINAR_DRAFT_STEPS }).notNull(),
+    /** The script section's key; empty for the other steps. */
+    sectionKey: text("section_key").notNull().default(""),
+    fields: text("fields", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+    notes: text("notes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Who wrote it, as the history shows it: "Claude (connector)". The connection and the Forum agent, when there is one. */
+    byLabel: text("by_label").notNull(),
+    appId: text("app_id"),
+    agentId: text("agent_id"),
+    status: text("status", { enum: WEBINAR_DRAFT_STATUSES }).notNull().default("pending"),
+    decidedAt: text("decided_at"),
+    decidedBy: text("decided_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("webinar_drafts_webinar").on(t.webinarId, t.status), index("webinar_drafts_member").on(t.workspaceId, t.userId)],
+);
+export type WebinarDraft = typeof webinarDrafts.$inferSelect;
+
+/**
+ * A webinar's history of Claude's drafts (H-181): each connector write, and each Approve, Edit, Discard and Undo, with who and
+ * when. `before` holds the values an Approve replaced, so Undo (for seven days) can put them back.
+ */
+export const WEBINAR_HISTORY_ACTIONS = ["created", "drafted", "approved", "edited", "discarded", "undone"] as const;
+export const webinarHistory = sqliteTable(
+  "webinar_history",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    webinarId: text("webinar_id")
+      .notNull()
+      .references(() => webinars.id, { onDelete: "cascade" }),
+    draftId: text("draft_id"),
+    step: text("step", { enum: WEBINAR_DRAFT_STEPS }),
+    sectionKey: text("section_key").notNull().default(""),
+    action: text("action", { enum: WEBINAR_HISTORY_ACTIONS }).notNull(),
+    byLabel: text("by_label").notNull(),
+    /** True when the connector wrote it: "by Claude (connector)". */
+    byConnector: integer("by_connector", { mode: "boolean" }).notNull().default(false),
+    /** The step's fields this changed, by name. */
+    changed: text("changed", { mode: "json" }).$type<string[]>().notNull().default([]),
+    before: text("before", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    undoneAt: text("undone_at"),
+    undoneBy: text("undone_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("webinar_history_webinar").on(t.webinarId, t.createdAt)],
+);
+export type WebinarHistoryRow = typeof webinarHistory.$inferSelect;
+
 /** The coach's choice of which image fills a suggested slot on a webinar's slide, keyed by the slot's stable key. */
 export const deckSlots = sqliteTable(
   "deck_slots",
@@ -3379,7 +3446,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "forum", "inbox", "body"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {

@@ -86,6 +86,9 @@ import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { MoneyInput } from "@/components/money-input";
 import { ItemGone } from "@/components/item-gone";
+import { WebinarDraftPanel, WebinarHistory } from "@/components/webinar-draft-panel";
+import { foundationDefaults, historyFor, pendingDrafts } from "@/lib/webinar-drafts";
+import { BELIEF_COLUMN, beliefRows, foundationRows, type BeliefDraft, type BeliefField, type FoundationDraft, type OfferDraft } from "@/lib/engine/webinar-drafts";
 
 const ACT_ICON: Record<string, string> = {
   opening: "🎬",
@@ -131,7 +134,9 @@ export default async function WebinarWizardPage({
     field?: string;
     savedSection?: string;
     draftError?: string;
-    slides?: string; made?: string; failed?: string; left?: string }>;
+    slides?: string; made?: string; failed?: string; left?: string;
+    /** Claude's draft being edited in the step's form (H-181), and what its last button did. */
+    draft?: string; draftNote?: string }>;
 }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
@@ -310,6 +315,36 @@ export default async function WebinarWizardPage({
     redirect(`/webinars/${w.id}?${qs.toString()}`);
   }
 
+  // Claude's drafts (H-181): the one waiting for this step, the one being edited in its form, and the webinar's history.
+  const [drafts, history] = await Promise.all([pendingDrafts(w.id), historyFor(w.id)]);
+  const stepDraft = drafts.find((d) => d.step === step) ?? null;
+  const editing = stepDraft && sp.draft === stepDraft.id ? stepDraft : null;
+  const wf = editing?.step === "foundation" ? foundationDefaults(w, editing.fields as FoundationDraft) : w;
+  const offerEdit = editing?.step === "offer" ? (editing.fields as OfferDraft) : null;
+  const wo = offerEdit ? { ...w, offerId: offerEdit.offerId ?? w.offerId, ctaType: offerEdit.ctaType ?? w.ctaType } : w;
+  const beliefEdit = editing?.step === "beliefs" ? (editing.fields as BeliefDraft) : null;
+  const withBeliefDraft = (row: (typeof beliefs)[number] | undefined, type: "vehicle" | "internal" | "external") => {
+    const d = beliefEdit?.[type];
+    if (!row || !d) return row;
+    const set = Object.fromEntries(Object.entries(d).map(([f, val]) => [BELIEF_COLUMN[f as BeliefField], val]));
+    return { ...row, ...set };
+  };
+  const citedName = (field: BeliefField, ref: string): string =>
+    (field === "proofId" ? proofs.find((p) => p.id === ref)?.name : field === "evidenceId" ? evidence.find((e) => (e.source === "shared" ? `shared:${e.id}` : e.id) === ref)?.name : ref.startsWith("essence:") ? (() => { const st = essenceStories[Number(ref.slice(8))]; return st ? `${st.name || st.summary.slice(0, 40)} (your Essence)` : undefined; })() : stories.find((a) => a.id === ref)?.name) ?? ref;
+  const draftRows = !stepDraft || editing
+    ? []
+    : stepDraft.step === "foundation"
+      ? foundationRows(w as unknown as Record<string, unknown>, stepDraft.fields as FoundationDraft)
+      : stepDraft.step === "beliefs"
+        ? beliefRows(Object.fromEntries(beliefs.map((b) => [b.type, { from: b.fromBelief, to: b.toBelief, proofId: b.proofId, storyId: b.storyAssetId, evidenceId: b.evidenceId }])), stepDraft.fields as BeliefDraft, citedName)
+        : stepDraft.step === "offer"
+          ? [
+              ...((stepDraft.fields as OfferDraft).offerId ? [{ key: "offerId", label: "The offer it sells", now: offers.find((o) => o.id === w.offerId)?.name ?? "", draft: offers.find((o) => o.id === (stepDraft.fields as OfferDraft).offerId)?.name ?? "(an offer no longer there)" }] : []),
+              ...((stepDraft.fields as OfferDraft).ctaType ? [{ key: "ctaType", label: "Call to action", now: w.ctaType, draft: (stepDraft.fields as OfferDraft).ctaType! }] : []),
+            ]
+          : [];
+  const DRAFT_NOTES: Record<string, string> = { approved: "Claude's draft is in. Undo is under History for seven days.", discarded: "Claude's draft was discarded. Undo is under History for seven days.", undone: "Undone." };
+
   return (
     <>
       <PageHeader
@@ -384,6 +419,23 @@ export default async function WebinarWizardPage({
         })}
       </div>
 
+      {sp.draftNote ? (
+        <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" data-testid="draft-note" role="status">
+          {DRAFT_NOTES[sp.draftNote] ?? sp.draftNote}
+        </p>
+      ) : null}
+      {editing ? (
+        <p className="mb-4 rounded-lg bg-accent/5 p-3 text-sm" data-testid="draft-editing">
+          The form below is filled with Claude&apos;s draft. Change what you like, then save; the draft is settled as edited.{" "}
+          <Link href={`/webinars/${w.id}?step=${step}`} className="underline">
+            Back to the draft
+          </Link>
+        </p>
+      ) : stepDraft && draftRows.length ? (
+        <div className="mb-4">
+          <WebinarDraftPanel webinarId={w.id} step={step} draftId={stepDraft.id} rows={draftRows} notes={stepDraft.notes} written={stepDraft.createdAt} tz={v.tz} editHref={`/webinars/${w.id}?step=${step}&draft=${stepDraft.id}`} />
+        </div>
+      ) : null}
       {step === "foundation" ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <Card title="1 · Foundation">
@@ -395,13 +447,14 @@ export default async function WebinarWizardPage({
               className="grid gap-3 sm:grid-cols-2"
             >
               <input type="hidden" name="id" value={w.id} />
-              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.foundation`} />
+              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.foundation${editing ? `.draft.${editing.id}` : ""}`} />
+              {editing ? <input type="hidden" name="fromDraft" value={editing.id} /> : null}
               <div className="sm:col-span-2">
                 <Field label="Title">
                   <input
                     className="field"
                     name="title"
-                    defaultValue={w.title}
+                    defaultValue={wf.title}
                     required
                   />
                 </Field>
@@ -414,7 +467,7 @@ export default async function WebinarWizardPage({
                   <input
                     className="field"
                     name="presenter"
-                    defaultValue={w.presenter ?? ""}
+                    defaultValue={wf.presenter ?? ""}
                     placeholder={v.user.name}
                     data-testid="presenter"
                   />
@@ -424,7 +477,7 @@ export default async function WebinarWizardPage({
                 <select
                   className="field"
                   name="category"
-                  defaultValue={w.category}
+                  defaultValue={wf.category}
                 >
                   {["Live", "Evergreen", "JV / partner", "Challenge"].map(
                     (c) => (
@@ -437,7 +490,7 @@ export default async function WebinarWizardPage({
                 <select
                   className="field"
                   name="ctaType"
-                  defaultValue={w.ctaType}
+                  defaultValue={wf.ctaType}
                 >
                   {[
                     "Book a call",
@@ -455,7 +508,7 @@ export default async function WebinarWizardPage({
                   <textarea
                     className="field"
                     name="audience"
-                    defaultValue={w.audience ?? ""}
+                    defaultValue={wf.audience ?? ""}
                     placeholder="Busy moms of school-age kids who've tried every diet and quit by week three."
                   />
                 </Field>
@@ -464,7 +517,7 @@ export default async function WebinarWizardPage({
                 <textarea
                   className="field"
                   name="coreProblem"
-                  defaultValue={w.coreProblem ?? ""}
+                  defaultValue={wf.coreProblem ?? ""}
                   placeholder="I lose 10 lbs and gain it back every time."
                 />
               </Field>
@@ -472,7 +525,7 @@ export default async function WebinarWizardPage({
                 <textarea
                   className="field"
                   name="desiredResult"
-                  defaultValue={w.desiredResult ?? ""}
+                  defaultValue={wf.desiredResult ?? ""}
                   placeholder="To stop starting over. To trust themselves around food."
                 />
               </Field>
@@ -484,7 +537,7 @@ export default async function WebinarWizardPage({
                   <textarea
                     className="field"
                     name="promise"
-                    defaultValue={w.promise ?? ""}
+                    defaultValue={wf.promise ?? ""}
                     placeholder="Leave with a 12-minute Tuesday plan and the 3 swaps that drop the first 5 lbs in 14 days."
                   />
                 </Field>
@@ -497,7 +550,7 @@ export default async function WebinarWizardPage({
                   <input
                     className="field"
                     name="mechanismName"
-                    defaultValue={w.mechanismName ?? ""}
+                    defaultValue={wf.mechanismName ?? ""}
                     placeholder="The 12-Minute Tuesday System"
                   />
                 </Field>
@@ -510,7 +563,7 @@ export default async function WebinarWizardPage({
                   <input
                     className="field"
                     name="mechanismWaivedReason"
-                    defaultValue={w.mechanismWaivedReason ?? ""}
+                    defaultValue={wf.mechanismWaivedReason ?? ""}
                     data-testid="mechanism-waived"
                   />
                 </Field>
@@ -519,28 +572,28 @@ export default async function WebinarWizardPage({
                 <p className="label">The opening contract</p>
                 <p className="mb-2 text-xs text-ink-3">Each line is its own slide at the top of the deck, in your own words. A line you leave empty is not a slide, and the Deck step lists it. Nothing here is written for you.</p>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="The promise, in one line"><input className="field" name="promiseLine" defaultValue={w.promiseLine ?? ""} data-testid="promise-line" /></Field>
-                  <Field label="Say hi in the chat"><input className="field" name="chatPrompt" defaultValue={w.chatPrompt ?? ""} data-testid="chat-prompt" /></Field>
-                  <Field label="Ground rule / earnings disclaimer"><input className="field" name="groundRule" defaultValue={w.groundRule ?? ""} data-testid="ground-rule" /></Field>
-                  <Field label="My goal for today"><input className="field" name="sessionGoal" defaultValue={w.sessionGoal ?? ""} data-testid="session-goal" /></Field>
-                  <Field label="Outcome 1"><input className="field" name="outcome1" defaultValue={w.outcomes?.[0] ?? ""} data-testid="outcome-1" /></Field>
-                  <Field label="Outcome 2"><input className="field" name="outcome2" defaultValue={w.outcomes?.[1] ?? ""} data-testid="outcome-2" /></Field>
-                  <Field label="Outcome 3"><input className="field" name="outcome3" defaultValue={w.outcomes?.[2] ?? ""} data-testid="outcome-3" /></Field>
-                  <Field label="Permission to be direct"><input className="field" name="permissionLine" defaultValue={w.permissionLine ?? ""} data-testid="permission-line" /></Field>
-                  <Field label="Reflection question, before the offer"><input className="field" name="reflectionPrompt" defaultValue={w.reflectionPrompt ?? ""} data-testid="reflection-prompt" /></Field>
+                  <Field label="The promise, in one line"><input className="field" name="promiseLine" defaultValue={wf.promiseLine ?? ""} data-testid="promise-line" /></Field>
+                  <Field label="Say hi in the chat"><input className="field" name="chatPrompt" defaultValue={wf.chatPrompt ?? ""} data-testid="chat-prompt" /></Field>
+                  <Field label="Ground rule / earnings disclaimer"><input className="field" name="groundRule" defaultValue={wf.groundRule ?? ""} data-testid="ground-rule" /></Field>
+                  <Field label="My goal for today"><input className="field" name="sessionGoal" defaultValue={wf.sessionGoal ?? ""} data-testid="session-goal" /></Field>
+                  <Field label="Outcome 1"><input className="field" name="outcome1" defaultValue={wf.outcomes?.[0] ?? ""} data-testid="outcome-1" /></Field>
+                  <Field label="Outcome 2"><input className="field" name="outcome2" defaultValue={wf.outcomes?.[1] ?? ""} data-testid="outcome-2" /></Field>
+                  <Field label="Outcome 3"><input className="field" name="outcome3" defaultValue={wf.outcomes?.[2] ?? ""} data-testid="outcome-3" /></Field>
+                  <Field label="Permission to be direct"><input className="field" name="permissionLine" defaultValue={wf.permissionLine ?? ""} data-testid="permission-line" /></Field>
+                  <Field label="Reflection question, before the offer"><input className="field" name="reflectionPrompt" defaultValue={wf.reflectionPrompt ?? ""} data-testid="reflection-prompt" /></Field>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                  <label className="flex items-center gap-2"><input type="checkbox" name="footerBar" defaultChecked={w.footerBar} data-testid="footer-bar" /> Logo footer bar on content slides</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" name="footerBar" defaultChecked={wf.footerBar} data-testid="footer-bar" /> Logo footer bar on content slides</label>
                   <label className="flex items-center gap-2">
                     Footer brand line
-                    <input className="field py-1" name="footerBrand" defaultValue={w.footerBrand ?? ""} placeholder="empty: the kit's name" data-testid="footer-brand" />
+                    <input className="field py-1" name="footerBrand" defaultValue={wf.footerBrand ?? ""} placeholder="empty: the kit's name" data-testid="footer-brand" />
                   </label>
-                  <label className="flex items-center gap-2"><input type="checkbox" name="ctaBar" defaultChecked={w.ctaBar} data-testid="cta-bar" /> CTA bar on offer and Q&amp;A slides</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" name="ctaBar" defaultChecked={wf.ctaBar} data-testid="cta-bar" /> CTA bar on offer and Q&amp;A slides</label>
                 </div>
               </div>
               <div className="sm:col-span-2">
                 <Field label="Stay to the end" hint="one line, its own slide after the hook: what they get by staying. Empty means no slide.">
-                  <input className="field" name="stayLine" defaultValue={w.stayLine ?? ""} data-testid="stay-line" />
+                  <input className="field" name="stayLine" defaultValue={wf.stayLine ?? ""} data-testid="stay-line" />
                 </Field>
               </div>
               <div className="sm:col-span-2">
@@ -549,7 +602,7 @@ export default async function WebinarWizardPage({
                 <div className="grid gap-3 sm:grid-cols-2">
                   {ORIGIN_BEATS.map((b) => (
                     <Field key={b.key} label={b.label} hint={b.help}>
-                      <input className="field" name={`beat_${b.key}`} defaultValue={w.originStory?.[b.key] ?? ""} data-testid={`beat-${b.key}`} />
+                      <input className="field" name={`beat_${b.key}`} defaultValue={wf.originStory?.[b.key] ?? ""} data-testid={`beat-${b.key}`} />
                     </Field>
                   ))}
                 </div>
@@ -601,7 +654,8 @@ export default async function WebinarWizardPage({
       {step === "beliefs" ? (
         <form action={updateWebinarBeliefsAction} className="space-y-4">
           <input type="hidden" name="id" value={w.id} />
-          <DraftKeeper id={`webinar.${v.user.id}.${w.id}.beliefs`} />
+          <DraftKeeper id={`webinar.${v.user.id}.${w.id}.beliefs${editing ? `.draft.${editing.id}` : ""}`} />
+          {editing ? <input type="hidden" name="fromDraft" value={editing.id} /> : null}
           <p className="text-sm text-ink-2">
             {WIZARD_STAGES[1]?.description} Fill the three shifts. Each one
             becomes an act.
@@ -609,7 +663,7 @@ export default async function WebinarWizardPage({
           <div className="grid gap-4 lg:grid-cols-3">
             {(["vehicle", "internal", "external"] as const).map((type) => {
               const a = ACTS.find((x) => x.key === type)!;
-              const b = beliefs.find((x) => x.type === type);
+              const b = withBeliefDraft(beliefs.find((x) => x.type === type), type);
               return (
                 <Card
                   key={type}
@@ -1342,11 +1396,12 @@ export default async function WebinarWizardPage({
             </p>
             <form action={linkOfferAction} className="space-y-3">
               <input type="hidden" name="id" value={w.id} />
+              {editing ? <input type="hidden" name="fromDraft" value={editing.id} /> : null}
               <Field label="Which offer does this webinar sell?">
                 <select
                   className="field"
                   name="offerId"
-                  defaultValue={w.offerId ?? ""}
+                  defaultValue={wo.offerId ?? ""}
                 >
                   <option value="">Choose an offer…</option>
                   {offers.map((o) => (
@@ -1360,7 +1415,7 @@ export default async function WebinarWizardPage({
                 <select
                   className="field"
                   name="ctaType"
-                  defaultValue={w.ctaType}
+                  defaultValue={wo.ctaType}
                 >
                   {[
                     "Book a call",
@@ -1807,6 +1862,9 @@ export default async function WebinarWizardPage({
           </div>
         </div>
       ) : null}
+      <div className="mt-6">
+        <WebinarHistory webinarId={w.id} step={step} rows={history} tz={v.tz} />
+      </div>
     </>
   );
 }

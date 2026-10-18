@@ -36,6 +36,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     n: 237,
     date: "2026-10-18",
+    title: "Claude can draft your webinar, and you approve each step",
+    lines: [
+      "Through the HelixOS connector, Claude can now start a webinar and draft its Foundation, Beliefs and Offer steps, from your phone by voice or chat.",
+      "A draft never changes your webinar. Each step shows Claude's draft beside what's there, with Approve, Edit and Discard, and History lists every change with Undo for seven days.",
+      "A proof or story that needs permission is never used, and no income claim or figure you didn't give goes in. Reconnect HelixOS in Claude once and tick Webinars: draft to turn it on.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 237,
+    date: "2026-10-18",
     title: "The Aqueduct shows you when an arch is repaired",
     lines: [
       "When the step that was leaking has recovered, the Aqueduct plays the repair once: a gold burst at the arch, the leak stops, the channel fills and the tag turns green.",

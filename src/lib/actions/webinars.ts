@@ -24,6 +24,13 @@ import { essenceFor } from "@/lib/queries/essence";
 import { citableEvidence } from "@/lib/queries/evidence";
 import { draftAvatarBrief } from "@/lib/avatars";
 import { createWebinar } from "@/lib/webinars-core";
+import { markDraftEdited } from "@/lib/webinar-drafts";
+
+/** The step was saved from its form opened with Claude's draft (H-181): the draft is settled as edited, in the history. */
+async function settleDraft(formData: FormData, o: { workspaceId: string; userId: string }, webinarId: string, by: string) {
+  const draftId = str(formData, "fromDraft");
+  if (draftId) await markDraftEdited(o, draftId, webinarId, { name: by, connector: false });
+}
 
 async function own(webinarId: string, userId: string) {
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, webinarId), eq(schema.webinars.userId, userId)) });
@@ -39,7 +46,7 @@ export async function createWebinarAction(formData: FormData): Promise<void> {
 }
 
 export async function updateWebinarFoundationAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx({ team: "allow" });
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   await db
@@ -71,12 +78,13 @@ export async function updateWebinarFoundationAction(formData: FormData): Promise
       updatedAt: nowIso(),
     })
     .where(eq(schema.webinars.id, id));
+  await settleDraft(formData, { workspaceId, userId }, id, v.actor.name);
   refresh();
   redirect(`/webinars/${id}?step=beliefs`);
 }
 
 export async function updateWebinarBeliefsAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx({ team: "allow" });
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   const existing = await db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) });
@@ -111,6 +119,7 @@ export async function updateWebinarBeliefsAction(formData: FormData): Promise<vo
     }
   }
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
+  await settleDraft(formData, { workspaceId, userId }, id, v.actor.name);
   refresh();
   redirect(`/webinars/${id}?step=script${saved ? `&toBank=${saved}` : ""}`);
 }
@@ -349,7 +358,7 @@ export async function confirmDeckExportAction(formData: FormData): Promise<void>
 }
 
 export async function linkOfferAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx({ team: "allow" });
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   const offerId = opt(formData, "offerId");
@@ -358,6 +367,7 @@ export async function linkOfferAction(formData: FormData): Promise<void> {
     if (!offer) return;
   }
   await db.update(schema.webinars).set({ offerId, ctaType: str(formData, "ctaType") || "Book a call", updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
+  await settleDraft(formData, { workspaceId, userId }, id, v.actor.name);
   refresh();
   redirect(`/webinars/${id}?step=deck`);
 }
