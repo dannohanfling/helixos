@@ -3,6 +3,7 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
 /** `line`: a one-line description shown under the label everywhere, for the two sections a client would otherwise confuse. `hint` shows on the More page only. */
 /** `bodyOnly`: shown only to a member whose HumanOS is switched on (rev 195, per member); `bodyOffOnly`: the one entry shown while it's off (rev 320), leading to the switch. */
 /** `recordingsOnly`: shown to a client only once a recording is published for them (Recordings R1). `clientOnly`: hidden from the coach, whose own copy sits in a coach group. */
+/** `agentsOnly`: shown to a member once they have an agent of their own on the Forum or anything in their agent inbox (H-727). */
 /** `team`: shown to a team member working in the owner's HelixOS (Danno, 6 Oct); everything without it is hidden from them, and closed on the server. */
 /** `external`: an outbound link (the Platforms section, Danno 7 Oct): opens in a new tab with the ↗ mark, and is never the active page. */
 /**
@@ -13,7 +14,7 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `menuKey` (H-385): the On the horizon item that drives this entry. It reads as Coming soon until that item has shipped
  * (`withHorizon` below), then becomes a normal link; the coach moves the item, no deploy needed.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; agentsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -56,6 +57,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/my-board", label: "My Board", icon: "🧭", line: "five advisors on a decision" },
       // The coach finds The Forum under Agents (H-164 §7); a client keeps it here.
       { href: "/forum", label: "The Forum", icon: "🏛️", line: "watch your AI agents work", clientOnly: true },
+      // A member's own Handoff inbox (H-727), once they have an agent; the coach's is Coach → Inbox, under Agents.
+      { href: "/forum/inbox", label: "Agent inbox", icon: "📥", line: "your agents' plans for your OK", clientOnly: true, agentsOnly: true },
       { href: "/webinars", label: "Webinars", icon: "🎤", team: true, line: "the wizard, start to Run it" },
       { href: "/images", label: "Images", icon: "🖼️", team: true, line: "photos, logos, graphics" },
       { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent" },
@@ -187,12 +190,13 @@ export function navActive(pathname: string, href: string): boolean {
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean; /** The coach's chat is set up and on for this person (H-693): never for a team member or while switched in. */ chatOn?: boolean; /** The coach's first name, for a client's "Ask Danno". */ coachFirst?: string | null };
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean; /** The coach's chat is set up and on for this person (H-693): never for a team member or while switched in. */ chatOn?: boolean; /** H-727: an agent of their own on the Forum, or anything in their agent inbox (agentsOnFor). */ agentsOn?: boolean; /** The coach's first name, for a client's "Ask Danno". */ coachFirst?: string | null };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
   (!n.loyaltyOnly || Boolean(m.loyaltyOn)) &&
   (!n.oohOnly || m.role === "coach" || Boolean(m.oohOn)) &&
   (!n.chatOnly || Boolean(m.chatOn)) &&
+  (!n.agentsOnly || Boolean(m.agentsOn)) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 
 

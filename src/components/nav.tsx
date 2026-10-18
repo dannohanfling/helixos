@@ -18,12 +18,12 @@ const isActive = navActive;
  * rail (the sidebar folded), every item is its icon alone with its name as the tooltip and the accessible name, and group
  * headings become thin dividers.
  */
-export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, colosseumOn = false, loyaltyOn = false, oohOn = false, chatOn = false, coachFirst = null, badges = {}, platformLinks = {}, ownCommunity = null, shippedKeys = [] }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; oohOn?: boolean; /** The coach's chat is on for this person (H-693): the Ask item shows. */ chatOn?: boolean; coachFirst?: string | null; badges?: Record<string, number>; platformLinks?: PlatformLinks; ownCommunity?: string | null; /** The horizon's shipped menu keys (H-385): an entry with a menuKey is Coming soon until its key is here. */ shippedKeys?: string[] }) {
+export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, colosseumOn = false, loyaltyOn = false, oohOn = false, chatOn = false, agentsOn = false, coachFirst = null, badges = {}, platformLinks = {}, ownCommunity = null, shippedKeys = [] }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; oohOn?: boolean; /** The coach's chat is on for this person (H-693): the Ask item shows. */ chatOn?: boolean; agentsOn?: boolean; coachFirst?: string | null; badges?: Record<string, number>; platformLinks?: PlatformLinks; ownCommunity?: string | null; /** The horizon's shipped menu keys (H-385): an entry with a menuKey is Coming soon until its key is here. */ shippedKeys?: string[] }) {
   const pathname = usePathname();
   const nav = useNavState();
   const rail = nav.state.rail;
   // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
-  const groups = visibleGroups({ role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn, loyaltyOn, oohOn, chatOn, coachFirst }, platformLinks, ownCommunity, shippedKeys);
+  const groups = visibleGroups({ role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst }, platformLinks, ownCommunity, shippedKeys);
   // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
   const activeHref = groups
     .flatMap((g) => g.items)

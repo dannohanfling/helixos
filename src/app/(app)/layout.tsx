@@ -16,7 +16,7 @@ import { SoundsConfig } from "@/components/sounds-config";
 import { VoiceProvider } from "@/components/voice-context";
 import { voiceState } from "@/lib/queries/essence";
 import { intentionsDueFor } from "@/lib/queries/intentions";
-import { inboxCount } from "@/lib/handoff";
+import { agentsOnFor, inboxCount } from "@/lib/handoff";
 import { WHATS_NEW } from "@/content/whats-new";
 import { unseenCount } from "@/lib/engine/whats-new";
 import { chatWidgetProps } from "@/lib/chat";
@@ -62,6 +62,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   ]);
   // The Handoff inbox (rev 769): what waits for the coach's decision and what's new for them, on the Inbox item.
   const inboxNew = coachView ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
+  // A member's own Agent inbox (H-727): in the menu once they have an agent, with the same count; never while switched in or on a team.
+  const memberView = viewer.role === "client" && !viewer.switchedInto && !viewer.team;
+  const agentsOn = memberView ? await agentsOnFor({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : false;
+  const memberInboxNew = agentsOn ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
   const rank = rankUpShell(viewer, points);
   // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
@@ -81,7 +85,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     ? null
     : flameStateOf({ running: flameStreak.running, asOf: flameStreak.asOf, today: viewer.today, hour: viewer.hour, active: flameStreak.activity.active, closed: flameStreak.closed, seenOn: viewer.switchedInto ? flameStreak.asOf : viewer.membership.streakSurgeSeenOn });
   return (
-    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
+    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

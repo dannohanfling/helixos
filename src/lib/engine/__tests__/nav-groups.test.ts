@@ -50,6 +50,22 @@ describe("the menu: subtitles and the coach's three groups", () => {
     expect(navActive("/today", COLOSSEUM_HREF)).toBe(false);
     expect(navActive("/body/foods", "/body")).toBe(true);
   });
+
+  it("the Agent inbox (H-727): right after The Forum in Build, a member's own once they have an agent, never the coach's or a team member's", () => {
+    const build = NAV_GROUPS.find((g) => g.label === "Build")!.items.map((i) => i.href);
+    expect(build.indexOf("/forum/inbox")).toBe(build.indexOf("/forum") + 1);
+    const item = NAV.find((n) => n.href === "/forum/inbox")!;
+    expect(item).toMatchObject({ label: "Agent inbox", icon: "📥", line: "your agents' plans for your OK", clientOnly: true, agentsOnly: true });
+    expect(navVisible(item, client)).toBe(false);
+    expect(navVisible(item, { ...client, agentsOn: true })).toBe(true);
+    expect(navVisible(item, { ...coach, agentsOn: true })).toBe(false);
+    expect(navVisible(item, { ...client, agentsOn: true, team: true })).toBe(false);
+    // The side menu and the More page draw from the same rule.
+    expect(visibleGroups({ ...client, agentsOn: true }).flatMap((g) => g.items).some((n) => n.href === "/forum/inbox")).toBe(true);
+    expect(visibleGroups(client).flatMap((g) => g.items).some((n) => n.href === "/forum/inbox")).toBe(false);
+    // Lit on its own page, and The Forum stays a separate item (the most specific match wins in the menu).
+    expect(navActive("/forum/inbox", "/forum/inbox")).toBe(true);
+  });
 });
 
 describe("Ask your coach in the menu (H-693)", () => {

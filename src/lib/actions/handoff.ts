@@ -2,20 +2,29 @@
 
 /**
  * The Handoff inbox (rev 769): the owner's own actions, signed in. Agent tokens (made, shown once, revoked), tying a connection
- * to an agent, the approval-email switch, Danno's answers, and the only door to a decision: Approve, Change or Decline, here
- * and on The Forum. A coach switched into a client is that client here, and requireCoach turns them away.
+ * to an agent, the approval-email switch and check-ins stay the coach's (requireCoach). The owner's answers, notes, writing to
+ * an agent, Hold, Release and Superseded, and the only door to a decision (Approve, Change or Decline, on the inbox and on The
+ * Forum) are any member's on their own inbox (H-727), through ctx(). Each acts only on the signed-in member's own inbox. A
+ * coach switched into a client, and a team member, are turned away from both.
  */
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { refresh, str } from "@/lib/action-helpers";
+import { ctx, refresh, str } from "@/lib/action-helpers";
 import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner, refusalOf, holdHandoff, releaseHandoff, supersedeHandoff } from "@/lib/handoff";
 import { CHECKIN_DEFAULTS, CHECKIN_EVERY, cleanSessionUrl, hhmm } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
 import { PING_TITLE } from "@/lib/engine/agent-connection";
 
 export type HandoffFormState = { error?: string; ok?: string; token?: string; agent?: string } | null;
+
+/**
+ * The inbox's owner (H-727), any role, through the gate: ctx() refuses a coach switched into a client (an inbox is its owner's
+ * own) and a team member. The owner is always the signed-in member themselves, never an id from the form, so a decision can
+ * only ever land on one's own inbox.
+ */
+const OWN_INBOX = { whileSwitched: "refuse", reason: "{first}'s agent inbox is theirs alone: only {first} decides there." } as const;
 
 export async function makeAgentTokenAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
   const coach = await requireCoach();
@@ -54,20 +63,22 @@ export async function tieConnectionAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-/** Approve, Change (with what to change) or Decline: one tap, Danno's own, signed in. */
+/** Approve, Change (with what to change) or Decline: one tap, the owner's own, signed in. */
 export async function decideHandoffAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
-  const coach = await requireCoach();
+  const { v, workspaceId, userId } = await ctx(OWN_INBOX);
+  const o = { workspaceId, userId };
   const choice = str(formData, "decision");
   const decision = choice === "approved" || choice === "changed" || choice === "declined" ? choice : null;
   if (!decision) return { error: "Choose Approve, Change or Decline." };
-  const r = await decideHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, coach.actor.id, str(formData, "id"), decision, String(formData.get("note") ?? "").trim());
+  const r = await decideHandoff(o, v.actor.id, str(formData, "id"), decision, String(formData.get("note") ?? "").trim());
   refresh();
   return r.ok ? { ok: r.text } : { error: r.text };
 }
 
 export async function answerHandoffAction(formData: FormData): Promise<void> {
-  const coach = await requireCoach();
-  await answerHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "id"), String(formData.get("body") ?? ""));
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  const o = { workspaceId, userId };
+  await answerHandoff(o, str(formData, "id"), String(formData.get("body") ?? ""));
   refresh();
 }
 
@@ -133,11 +144,12 @@ export async function setCheckinsPausedAction(formData: FormData): Promise<void>
   refresh();
 }
 
-/** Danno writes to one agent; urgent gets past a busy check-in. */
+/** The owner writes to one of their own agents; urgent gets past a busy check-in. */
 export async function writeToAgentAction(formData: FormData): Promise<void> {
-  const coach = await requireCoach();
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  const o = { workspaceId, userId };
   const kind = str(formData, "kind") === "answer" ? "answer" : "brief";
-  await writeAsOwner({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "agentId"), kind, str(formData, "title"), String(formData.get("body") ?? ""), formData.get("urgent") === "on");
+  await writeAsOwner(o, str(formData, "agentId"), kind, str(formData, "title"), String(formData.get("body") ?? ""), formData.get("urgent") === "on");
   refresh();
 }
 
@@ -155,19 +167,21 @@ export async function sendReadingPackAction(formData: FormData): Promise<void> {
   redirect(`/coach/agents?pack=${r.seq}&packFor=${str(formData, "agentId")}#agent-${str(formData, "agentId")}`);
 }
 
-/** A note after a decision (H-47), from Danno's own page only. */
+/** A note after a decision (H-47), from the owner's own inbox only. */
 export async function noteDecisionAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
-  const coach = await requireCoach();
-  const r = await noteDecision({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "id"), String(formData.get("note") ?? ""));
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  const o = { workspaceId, userId };
+  const r = await noteDecision(o, str(formData, "id"), String(formData.get("note") ?? ""));
   refresh();
   return r.ok ? { ok: r.text } : { error: r.text };
 }
 
-// H-351: Danno's own Hold, Release and Supersede on any post, from the inbox.
+// H-351: the owner's own Hold, Release and Supersede on any post in their inbox.
 export async function holdHandoffAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
-  const coach = await requireCoach();
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  const o = { workspaceId, userId };
   try {
-    const text = await holdHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, null, str(formData, "ref"), str(formData, "reason"));
+    const text = await holdHandoff(o, null, str(formData, "ref"), str(formData, "reason"));
     refresh();
     return { ok: text };
   } catch (e) {
@@ -178,9 +192,10 @@ export async function holdHandoffAction(_prev: HandoffFormState, formData: FormD
 }
 
 export async function releaseHandoffAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
-  const coach = await requireCoach();
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  const o = { workspaceId, userId };
   try {
-    const text = await releaseHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, null, str(formData, "ref"));
+    const text = await releaseHandoff(o, null, str(formData, "ref"));
     refresh();
     return { ok: text };
   } catch (e) {
@@ -191,9 +206,10 @@ export async function releaseHandoffAction(_prev: HandoffFormState, formData: Fo
 }
 
 export async function supersedeHandoffAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
-  const coach = await requireCoach();
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  const o = { workspaceId, userId };
   try {
-    const text = await supersedeHandoff({ workspaceId: coach.workspace.id, userId: coach.user.id }, null, str(formData, "ref"), str(formData, "by"));
+    const text = await supersedeHandoff(o, null, str(formData, "ref"), str(formData, "by"));
     refresh();
     return { ok: text };
   } catch (e) {
