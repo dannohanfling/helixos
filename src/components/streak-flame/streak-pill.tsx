@@ -89,7 +89,7 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
         data-testid={`streak-pill-${place}`}
         data-waiting={state.waiting ? "true" : "false"}
         data-surge={surgeAt !== null ? "playing" : state.surge ? "due" : "none"}
-        className={`sf-pill shrink-0 overflow-hidden rounded-full border ${rail ? "flex w-11 flex-col items-center px-0 py-1" : "flex min-h-11 items-center gap-1 py-0.5 pl-1.5 pr-3"}`}
+        className={`sf-pill shrink-0 overflow-hidden max-w-full rounded-full border ${rail ? "flex w-11 flex-col items-center px-0 py-1" : "flex min-h-11 items-center gap-1 py-0.5 pl-1.5 pr-3"}`}
       >
         <Fire look={look} place="bar" width={rail ? 24 : 30} height={rail ? 30 : 38} surgeAt={surgeAt} />
         <span className={`inline-flex items-center overflow-hidden ${rail ? "h-4" : "h-5"}`}>
@@ -97,9 +97,16 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
             {shown}
           </span>
         </span>
-        {state.waiting && !rail ? (
-          <span className={`sf-chip ml-1 whitespace-nowrap rounded-full border px-1.5 text-[11px] font-semibold leading-4 ${place === "bar" ? "hidden min-[400px]:inline" : ""}`} data-testid="streak-waiting">
+        {state.waiting && place === "bar" ? (
+          <span className="sf-chip ml-1 hidden whitespace-nowrap rounded-full border px-1.5 text-[11px] font-semibold leading-4 min-[400px]:inline" data-testid="streak-waiting">
             Waiting on you
+          </span>
+        ) : null}
+        {/* The sidebar's row has no room for the words (they ran past its edge): an amber dot, the words for screen readers. */}
+        {state.waiting && place === "side" ? (
+          <span className="ml-1 inline-flex items-center" data-testid="streak-waiting">
+            <span className="sf-dot block h-2 w-2 rounded-full" aria-hidden="true" />
+            <span className="sr-only">Waiting on you</span>
           </span>
         ) : null}
       </button>

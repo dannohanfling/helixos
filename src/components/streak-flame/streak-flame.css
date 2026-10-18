@@ -8,6 +8,7 @@
 .sf-pill:focus-visible { outline: 2px solid #f0cf86; outline-offset: 2px; }
 .sf-muted { color: #a7997f; }
 .sf-chip { color: #e58b4b; border-color: #e58b4b; }
+.sf-dot { background: #e58b4b; }
 .sf-stage {
   background: radial-gradient(ellipse 70% 45% at 50% 30%, #4e2a0e 0%, #1a1009 55%, #0a0705 100%);
   border-color: #3a3022;

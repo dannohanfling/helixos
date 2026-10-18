@@ -77,6 +77,15 @@ async function main() {
     must((await seenOn()) === null, "nothing stored before the surge plays");
     const box = await pill.boundingBox();
     must(box && box.height >= 44, `the pill is at least 44 px tall (${box?.height})`);
+    // It fits its row: never past the sidebar's edge, Waiting on you or not (an amber dot there, the words only in the top bar).
+    const fit = await pill.evaluate((el) => {
+      const side = (el.closest("aside") ?? el.parentElement!.parentElement!) as HTMLElement;
+      const r = el.getBoundingClientRect();
+      const s = side.getBoundingClientRect();
+      return { right: r.right, edge: s.right, left: r.left, start: s.left };
+    });
+    must(fit.right <= fit.edge + 0.5 && fit.left >= fit.start - 0.5, `the sidebar pill stays inside the sidebar (${JSON.stringify(fit)})`);
+    if ((await pill.getAttribute("data-waiting")) === "true") must((await pill.locator('[data-testid="streak-waiting"] .sf-dot').count()) === 1 && (await pill.locator(".sf-chip").count()) === 0, "waiting in the sidebar: the amber dot, no words to overflow");
     // Close the welcome: Skip, then its button.
     await page.locator('[data-testid="welcome-skip"]').click();
     await page.locator('[data-testid="welcome-cta"]').click();
