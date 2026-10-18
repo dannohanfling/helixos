@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CALL_AUDIENCE_LABEL, DEFAULT_CALLS, callIcs, callOccurrences, dayHeading, joinOpensAt, joinState, lengthWords, nextCallDates, nextCallLine, nextCallWithin, offsetMinutes, readCall, readShared, readSkipDate, untilWords, visibleTo, vtimezone, type CallLike } from "../calls";
+import { CALL_AUDIENCE_LABEL, DEFAULT_CALLS, LOCKED_LABEL, listedFor, listedWeek, callIcs, callOccurrences, dayHeading, joinOpensAt, joinState, lengthWords, nextCallDates, nextCallLine, nextCallWithin, offsetMinutes, readCall, readShared, readSkipDate, untilWords, visibleTo, vtimezone, type CallLike } from "../calls";
 
 const call = (o: Partial<CallLike> = {}): CallLike => ({ id: "c1", name: "Academy call", weekday: 1, start: "10:00", minutes: 60, timezone: "America/Los_Angeles", audience: "academy", link: null, active: true, ...o });
 const shared = { link: "https://evolvecalls.com", passcode: "evolve" };
@@ -169,5 +169,34 @@ describe("the coach's form and the words", () => {
     expect([untilWords("2026-10-26T17:00:00Z", Date.parse("2026-10-26T16:35:00Z")), untilWords("2026-10-26T17:00:00Z", Date.parse("2026-10-26T15:55:00Z"))]).toEqual(["in 25 min", "in 1 h 5 min"]);
     expect([lengthWords(60), lengthWords(45), lengthWords(90)]).toEqual(["1 h", "45 min", "1 h 30 min"]);
     expect([dayHeading("2026-10-19", "2026-10-19"), dayHeading("2026-10-20", "2026-10-19"), dayHeading("2026-10-21", "2026-10-19")]).toEqual(["Today", "Tomorrow", "Wednesday 21 Oct"]);
+  });
+});
+
+describe("an Accelerator member's week lists the Academy calls locked (H-865)", () => {
+  const acc = { audience: "accelerator_academy" as const };
+  const aca = { audience: "academy" as const };
+  it("listedFor: locked for an Accelerator member, join for Academy and up, join for the coach", () => {
+    expect([listedFor(acc, { role: "client", programTier: "Accelerator" }), listedFor(aca, { role: "client", programTier: "Accelerator" })]).toEqual(["join", "locked"]);
+    for (const tier of ["Academy", "Elite", "Luxe"]) expect([listedFor(acc, { role: "client", programTier: tier }), listedFor(aca, { role: "client", programTier: tier })]).toEqual(["join", "join"]);
+    expect([listedFor(acc, { role: "coach", programTier: "Accelerator" }), listedFor(aca, { role: "coach", programTier: "Accelerator" })]).toEqual(["join", "join"]);
+    expect(LOCKED_LABEL.academy).toBe("Academy members");
+  });
+  it("listedWeek: the Academy calls in time order among an Accelerator member's own, never cutting their live window", () => {
+    const calls = [call({ id: "orient", name: "Accelerator Orientation", start: "09:00", audience: "accelerator_academy" }), call({ id: "aca" })];
+    const week = listedWeek(calls, [], "2026-10-26T15:00:00Z", "2026-10-27T15:00:00Z", shared, { role: "client", programTier: "Accelerator" });
+    expect(week.map((w) => [w.occ.call.id, w.listed])).toEqual([
+      ["orient", "join"],
+      ["aca", "locked"],
+    ]);
+    // Orientation stays live to 11:00 PT for them: the Academy call at 10:00 isn't theirs.
+    expect(week[0].occ.liveEndIso).toBe("2026-10-26T18:00:00.000Z");
+    // Academy and up: both to join, the Orientation cut at 10:00 by the Academy call.
+    const academy = listedWeek(calls, [], "2026-10-26T15:00:00Z", "2026-10-27T15:00:00Z", shared, { role: "client", programTier: "Academy" });
+    expect(academy.map((w) => [w.occ.call.id, w.listed, w.occ.liveEndIso])).toEqual([
+      ["orient", "join", "2026-10-26T17:00:00.000Z"],
+      ["aca", "join", "2026-10-26T19:00:00.000Z"],
+    ]);
+    // A locked call already under way isn't listed; one that hasn't started is.
+    expect(listedWeek(calls, [], "2026-10-26T17:30:00Z", "2026-10-27T15:00:00Z", shared, { role: "client", programTier: "Accelerator" }).map((w) => w.occ.call.id)).toEqual(["orient"]);
   });
 });

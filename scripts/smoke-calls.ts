@@ -7,7 +7,9 @@
  *     until its window, the passcode with Copy, and Add to calendar answering text/calendar with RRULE. A call id from nowhere is not found.
  *  3. A call that started this minute (a fixture, placed so no other call cuts its live window short): Live now at the top
  *     with Join live to the shared link, and Today's Next call line live with Join and the passcode, with no length or end.
- *  4. At the Accelerator level the Academy calls are gone, and their calendar files are not found; the Accelerator ones stay.
+ *  4. At the Accelerator level (H-865): the Accelerator calls to join, and the Academy calls listed greyed in time order, marked
+ *     "Academy members", with no Join, Add to calendar or sales line; their calendar files are not found, and Today never
+ *     names one.
  *  5. At 390 px Calls has no sideways scroll and every Join and Add to calendar is a 44 px tap target.
  *  6. The coach's Calls page shows every call with who it is for.
  */
@@ -41,7 +43,7 @@ async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
   const { newId } = await import("@/lib/ids");
-  const { DEFAULT_CALLS, CALL_AUDIENCE_LABEL, LIVE_HOURS, callOccurrences } = await import("@/lib/engine/calls");
+  const { DEFAULT_CALLS, CALL_AUDIENCE_LABEL, LIVE_HOURS, LOCKED_LABEL, callOccurrences, listedWeek } = await import("@/lib/engine/calls");
 
   const browser: Browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -195,17 +197,49 @@ async function main() {
     must((await todayLine.locator('[data-testid="today-next-call-week"]').getAttribute("href")) === "/calls", "See this week goes to Calls");
     console.log("✓ a call that started this minute: Live now at the top of Calls with Join live, and Today's Next call line with Join and the passcode");
 
-    // ── 4. The Accelerator level. ──
+    // ── 4. The Accelerator level: their own calls to join, the Academy calls listed greyed with nothing to press (H-865). ──
     await db.update(schema.memberships).set({ programTier: "Accelerator" }).where(eq(schema.memberships.id, mayaM.id));
     const wantAcc = await expected("Accelerator");
-    must(wantAcc.length > 0 && wantAcc.every((o) => o.audience === "accelerator_academy"), "the engine gives the Accelerator calls only");
+    must(wantAcc.length > 0 && wantAcc.every((o) => o.audience === "accelerator_academy"), "the engine gives the Accelerator calls only to join");
+    const accWeek = await (async () => {
+      const calls = await db.query.programCalls.findMany({ where: eq(schema.programCalls.workspaceId, ws) });
+      const skips = await db.query.programCallSkips.findMany();
+      const now = new Date();
+      return listedWeek(calls, skips, now, new Date(now.getTime() + 7 * 86_400_000), { link: null, passcode: null }, { role: "client", programTier: "Accelerator" });
+    })();
+    const wantLocked = accWeek.filter((w) => w.listed === "locked");
+    must(wantLocked.length > 0 && wantLocked.every((w) => w.occ.audience === "academy"), "the engine lists the Academy calls locked");
     await client.goto(`${base}/calls`);
     await client.locator('[data-testid="calls-item"]').first().waitFor({ timeout: 30000 });
     const accAud = await client.locator('[data-testid="calls-item"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-audience")));
-    must(accAud.length === wantAcc.length && accAud.every((a) => a === "accelerator_academy"), `an Accelerator member sees the ${wantAcc.length} Accelerator calls and no Academy call: ${accAud.join(", ")}`);
-    must((await client.request.get(`${base}/calls/${fixtureId}/calendar`)).status() === 404, "an Academy call's calendar file is not found at Accelerator");
+    must(accAud.length === wantAcc.length && accAud.every((a) => a === "accelerator_academy"), `an Accelerator member can join the ${wantAcc.length} Accelerator calls and no Academy call: ${accAud.join(", ")}`);
+    const locked = client.locator('[data-testid="calls-locked"]');
+    const lockedRows = await locked.evaluateAll((els) =>
+      els.map((e) => ({
+        audience: e.getAttribute("data-audience"),
+        disabled: e.getAttribute("aria-disabled"),
+        label: e.querySelector('[data-testid="calls-locked-label"]')?.textContent?.trim() ?? "",
+        controls: e.querySelectorAll("a, button, [data-testid='call-join'], [data-testid='calls-calendar']").length,
+        opacity: Number(getComputedStyle(e).opacity),
+        live: Boolean(e.closest('[data-testid="calls-live"]')),
+      })),
+    );
+    must(lockedRows.length === wantLocked.length, `the ${wantLocked.length} Academy calls of the week are listed: ${lockedRows.length}`);
+    must(lockedRows.every((r) => r.audience === "academy" && r.disabled === "true" && r.label === LOCKED_LABEL.academy && r.opacity < 1), `each greyed and marked "${LOCKED_LABEL.academy}": ${JSON.stringify(lockedRows.slice(0, 2))}`);
+    must(lockedRows.every((r) => r.controls === 0 && !r.live), "none has Join, Add to calendar or any other control, and none is under Live now");
+    const accText = await client.locator("main").innerText();
+    must(!/upgrade|unlock|upsell|join (the )?academy|become an academy/i.test(accText), "no sales line anywhere on the page");
+    const weekStarts = await client.locator('[data-testid="calls-week"] [data-start]').evaluateAll((els) => els.map((e) => e.getAttribute("data-start") ?? ""));
+    must(weekStarts.length > 0 && JSON.stringify(weekStarts) === JSON.stringify([...weekStarts].sort()), "the locked calls sit in time order among the member's own");
+    for (const w of wantLocked.slice(0, 2)) must((await client.request.get(`${base}/calls/${w.occ.call.id}/calendar`)).status() === 404, "an Academy call's calendar file is not found at Accelerator");
+    must((await client.request.get(`${base}/calls/${fixtureId}/calendar`)).status() === 404, "nor the fixture's");
+    // Today's Next call line never names a locked call.
+    await client.goto(`${base}/today`);
+    await client.locator("main").first().waitFor({ timeout: 30000 });
+    const todayCall = await client.locator('[data-testid="today-next-call"]').getAttribute("data-call", { timeout: 2000 }).catch(() => null);
+    if (todayCall) must((await db.query.programCalls.findFirst({ where: eq(schema.programCalls.id, todayCall) }))?.audience === "accelerator_academy", "Today's Next call is one the member can join");
     await db.update(schema.memberships).set({ programTier: mayaM.programTier }).where(eq(schema.memberships.id, mayaM.id));
-    console.log(`✓ at Accelerator: ${accAud.length} Accelerator calls, no Academy call, and the Academy calendar file is not found`);
+    console.log(`✓ at Accelerator: ${accAud.length} Accelerator calls to join, ${lockedRows.length} Academy calls greyed as "${LOCKED_LABEL.academy}" with nothing to press and no sales line, their calendar files not found, Today never names one`);
 
     // ── 5. A phone. ──
     await client.setViewportSize({ width: 390, height: 844 });

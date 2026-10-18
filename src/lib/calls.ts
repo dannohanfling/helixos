@@ -9,17 +9,12 @@
 import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays, todayInTz } from "@/lib/dates";
-import { callOccurrences, type CallOccurrence, type CallSeer } from "@/lib/engine/calls";
+import { callOccurrences, listedWeek, type CallOccurrence, type CallSeer, type Listed } from "@/lib/engine/calls";
 
 export type CallsWorkspace = { id: string; callsLink: string | null; callsPasscode: string | null };
 
-/**
- * Every occurrence of the workspace's active calls that is on during [from, to) (start to live end), sorted by start, each with
- * its link (the call's own, else the shared one) and the workspace's passcode. With `seer`, only the calls that member can
- * see, and a live end cut by the next call they can see (H-836). One query: the calls, their skips from just before the
- * window on, and the workspace's link, joined.
- */
-export async function callsBetween(workspaceId: string, from: Date | string, to: Date | string, seer?: CallSeer): Promise<CallOccurrence<schema.ProgramCall>[]> {
+/** The workspace's active calls, their skips from two days before `from` on, and its shared link and passcode: one query. */
+async function readCalls(workspaceId: string, from: Date | string) {
   // A skip is a call's own local date; two days before the window's UTC date covers every zone.
   const since = addDays(todayInTz("UTC", new Date(from)), -2);
   const rows = await db
@@ -28,10 +23,26 @@ export async function callsBetween(workspaceId: string, from: Date | string, to:
     .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.programCalls.workspaceId))
     .leftJoin(schema.programCallSkips, and(eq(schema.programCallSkips.callId, schema.programCalls.id), gte(schema.programCallSkips.date, since)))
     .where(and(eq(schema.programCalls.workspaceId, workspaceId), eq(schema.programCalls.active, true)));
-  if (!rows.length) return [];
+  if (!rows.length) return null;
   const calls = new Map(rows.map((r) => [r.call.id, r.call]));
   const skips = rows.flatMap((r) => (r.skip ? [{ callId: r.skip.callId, date: r.skip.date }] : []));
-  return callOccurrences([...calls.values()], skips, from, to, { link: rows[0].link, passcode: rows[0].passcode }, seer);
+  return { calls: [...calls.values()], skips, shared: { link: rows[0].link, passcode: rows[0].passcode } };
+}
+
+/**
+ * Every occurrence of the workspace's active calls that is on during [from, to) (start to live end), sorted by start, each with
+ * its link (the call's own, else the shared one) and the workspace's passcode. With `seer`, only the calls that member can
+ * join, and a live end cut by the next call they can join (H-836). Locked calls (H-865) are never in it.
+ */
+export async function callsBetween(workspaceId: string, from: Date | string, to: Date | string, seer?: CallSeer): Promise<CallOccurrence<schema.ProgramCall>[]> {
+  const r = await readCalls(workspaceId, from);
+  return r ? callOccurrences(r.calls, r.skips, from, to, r.shared, seer) : [];
+}
+
+/** The /calls week for one reader (H-865): their own calls to join, and the locked ones listed greyed among them. One query. */
+export async function callsListedFor(workspaceId: string, from: Date | string, to: Date | string, seer: CallSeer): Promise<{ occ: CallOccurrence<schema.ProgramCall>; listed: Listed }[]> {
+  const r = await readCalls(workspaceId, from);
+  return r ? listedWeek(r.calls, r.skips, from, to, r.shared, seer) : [];
 }
 
 /** Every call of the workspace, on or off, in the coach's order, with its skips from `since` on (the coach's card). */

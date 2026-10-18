@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
-import { callsBetween } from "@/lib/calls";
-import { CALL_AUDIENCE_LABEL, clockIn, dayHeading, joinState, type CallOccurrence } from "@/lib/engine/calls";
+import { callsListedFor } from "@/lib/calls";
+import { CALL_AUDIENCE_LABEL, LOCKED_LABEL, clockIn, dayHeading, joinState, type CallOccurrence } from "@/lib/engine/calls";
 import { OOH_FRIDAYS, upcomingFridays } from "@/lib/engine/office-hours";
 import { hostToday, oohSchedule, sessionStart } from "@/lib/engine/ooh-session";
 import { oohAccessFor } from "@/lib/office-hours-access";
@@ -14,13 +14,14 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 export const metadata = { title: "Calls" };
 
 const DAYS = 7;
-type Item = { kind: "call"; occ: CallOccurrence<ProgramCall> } | { kind: "ooh"; startIso: string };
-const startOf = (i: Item) => (i.kind === "call" ? i.occ.startIso : i.startIso);
+type Item = { kind: "call" | "locked"; occ: CallOccurrence<ProgramCall> } | { kind: "ooh"; startIso: string };
+const startOf = (i: Item) => (i.kind === "ooh" ? i.startIso : i.occ.startIso);
 
 /**
  * Calls (H-820, plan H-828): the next seven days of the weekly calls the member's level can see, in their own time, with Join
  * (from 10 minutes before the start until two hours after it or the next call, H-836), the passcode, and Add to calendar for
- * each. No length or end time is shown: calls often run long. A live call sits at the top. Each Office Hours session in the
+ * each. No length or end time is shown: calls often run long. A live call sits at the top. An Accelerator member also sees
+ * the Academy calls in their place, greyed and marked "Academy members", with nothing to press (H-865). Each Office Hours session in the
  * seven days is a row on its day, for a member who has Office Hours. The coach sees every call with who it
  * is for; a team member sees the owner's (their membership is the owner's, H-413). The stable address for the Wallet pass.
  */
@@ -29,10 +30,10 @@ export default async function CallsPage() {
   const now = new Date();
   const to = new Date(now.getTime() + DAYS * 86_400_000);
   const seer = { role: v.role, programTier: v.membership.programTier };
-  // The calls this member's level can see (a team member's are the owner's), each live until two hours after its start or the
-  // next of these calls, whichever is first (H-836).
-  const [visible, access] = await Promise.all([callsBetween(v.workspace.id, now, to, seer), oohAccessFor(v)]);
-  const items: Item[] = visible.map((occ) => ({ kind: "call", occ }));
+  // The calls this member's level can join (a team member's are the owner's), each live until two hours after its start or the
+  // next of these calls, whichever is first (H-836); and, for an Accelerator member, the Academy calls listed greyed (H-865).
+  const [listed, access] = await Promise.all([callsListedFor(v.workspace.id, now, to, seer), oohAccessFor(v)]);
+  const items: Item[] = listed.map(({ occ, listed: how }) => ({ kind: how === "join" ? "call" : "locked", occ }));
   // Every Office Hours session in the seven days, as /office-hours counts them (H-457): the host's dates, on their own day and
   // time in the list, for a member who has Office Hours. It keeps its own page; the row links there.
   if (access.open) {
@@ -67,6 +68,20 @@ export default async function CallsPage() {
         </li>
       );
     const o = i.occ;
+    // A locked call (H-865): who it is for, greyed, and nothing to press: no Join, passcode, calendar file or sales line.
+    if (i.kind === "locked")
+      return (
+        <li key={`locked-${o.call.id}-${o.startIso}`}>
+          <div role="group" aria-disabled="true" aria-label={`${o.call.name}, ${LOCKED_LABEL[o.audience]}`} className="flex flex-wrap items-center justify-between gap-2 py-2 text-ink-3 opacity-60" data-testid="calls-locked" data-call={o.call.id} data-start={o.startIso} data-audience={o.audience}>
+            <span className="min-w-0">
+              <span className="tabular">{clockIn(o.startIso, v.tz)}</span> <span>{o.call.name}</span>
+            </span>
+            <span className="text-xs" data-testid="calls-locked-label">
+              {LOCKED_LABEL[o.audience]}
+            </span>
+          </div>
+        </li>
+      );
     const state = joinState(o, now);
     return (
       <li key={`${o.call.id}-${o.startIso}`} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="calls-item" data-call={o.call.id} data-start={o.startIso} data-state={state} data-audience={o.audience}>

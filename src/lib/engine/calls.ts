@@ -118,6 +118,33 @@ export function visibleTo(occ: { audience: CallAudience }, seer: CallSeer): bool
   return seer.role === "coach" || programInAudience(occ.audience, seer.programTier);
 }
 
+/** How a call shows in a reader's week (H-865): "join" (theirs: Join, passcode, Add to calendar), "locked" (listed greyed with a plain label, nothing to do), or null (not listed). */
+export type Listed = "join" | "locked";
+/**
+ * Danno's decision (H-865): an Accelerator member's week also lists the Academy calls, greyed and marked "Academy members",
+ * with no Join, passcode, calendar file or sales line. A locked call is never anyone's next call, never live for them, and
+ * never cuts their own calls' live window; the H-771 reminders keep using `visibleTo`, so nothing is sent for it.
+ */
+export function listedFor(occ: { audience: CallAudience }, seer: CallSeer): Listed | null {
+  if (visibleTo(occ, seer)) return "join";
+  return occ.audience === "academy" ? "locked" : null;
+}
+/** The small label on a locked call: who it is for, and nothing else. */
+export const LOCKED_LABEL: Record<CallAudience, string> = { academy: "Academy members", accelerator_academy: "Accelerator members" };
+
+/**
+ * A reader's week as /calls lists it (H-865): their own calls (with live ends cut only by their own next call, as
+ * `callOccurrences` with a seer gives them) and, in time order among them, the locked calls that start in the window.
+ */
+export function listedWeek<C extends CallLike>(calls: C[], skips: SkipLike[], from: Date | string, to: Date | string, shared: Shared, seer: CallSeer): { occ: CallOccurrence<C>; listed: Listed }[] {
+  const mine = callOccurrences(calls, skips, from, to, shared, seer).map((occ) => ({ occ, listed: "join" as Listed }));
+  const a = toMs(from);
+  const locked = callOccurrences(calls, skips, from, to, shared)
+    .filter((o) => listedFor(o, seer) === "locked" && new Date(o.startIso).getTime() >= a)
+    .map((occ) => ({ occ, listed: "locked" as Listed }));
+  return [...mine, ...locked].sort((x, y) => x.occ.startIso.localeCompare(y.occ.startIso) || x.occ.call.name.localeCompare(y.occ.call.name));
+}
+
 /* ─────────── The coach's form, read ─────────── */
 
 export type CallFields = { name: string; weekday: number; start: string; minutes: number; timezone: string; audience: CallAudience; link: string | null };
