@@ -50,7 +50,6 @@ async function main() {
   writeFileSync(overridePath, JSON.stringify({ perMonth: "calendar", bookingLinks: LINKS }, null, 2));
   // Maya needs to be Sage with 1,250+ to spend; the seed varies, so top her up.
   await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: ws, userId: maya.id, type: "bonus", points: 2000, reason: "Smoke: top-up" });
-  const startPoints = await totalPoints(ws, maya.id);
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -85,6 +84,9 @@ async function main() {
 
     // A claim is an instant unlock: points off, that reward's booking link revealed, and following it is recorded
     const alignment = row(page, "Offer + Messaging Alignment Session");
+    // Read after the page has loaded (H-746): a visit on a Saturday or Sunday credits "Weekend streak +40" on its way in, and
+    // that must not be counted as part of the claim.
+    const startPoints = await totalPoints(ws, maya.id);
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), alignment.locator('button:has-text("Claim for 500")').click()]);
     await expectText(page, "the slot is yours to book", "claim granted");
     const bookHref = await alignment.locator('[data-testid="book-link"]').getAttribute("href");
