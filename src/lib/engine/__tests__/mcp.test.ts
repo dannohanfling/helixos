@@ -83,7 +83,7 @@ describe("MCP server: the auth holds where it must", () => {
     expect(read("lib/mcp/tools/whoami.ts")).toMatch(/defineScope\("body", \{ gate: \(v\) => canAiUseBody\(v, v\.user\.id\) \}\)/);
     const server = read("lib/mcp/server.ts");
     expect(server).toMatch(/const gate = def\.scope \? gateFor\(def\.scope\) : undefined;/);
-    expect(server).toMatch(/toolsFor\(grant\.scopes\)/);
+    expect(server).toMatch(/toolsFor\(grant\.scopes, grant\)/);
     // The audit row never carries the arguments.
     expect(server).toMatch(/values\(\{ id: newId\(\), workspaceId: grant\.viewer\.workspace\.id, userId: grant\.viewer\.user\.id, appId: grant\.app\.id, tool: def\.name, ok, error, ms \}\)/);
     expect(server).not.toMatch(/args/.source + /.*insert/.source);

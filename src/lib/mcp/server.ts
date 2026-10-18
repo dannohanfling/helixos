@@ -15,7 +15,7 @@ import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
 import { APP_VERSION } from "@/lib/version";
 import { authenticateBearer, issuer, type Grant } from "@/lib/mcp/oauth";
-import { gateFor, toolsFor, type ToolDef } from "@/lib/mcp/registry";
+import { gateFor, isCoachOwn, toolsFor, type ToolDef } from "@/lib/mcp/registry";
 import "@/lib/mcp/tools";
 
 /** Per grant: a minute's and a day's worth, the way the plan set them. */
@@ -28,8 +28,8 @@ function unauthorized(request: Request, why: string): Response {
   return new Response(JSON.stringify({ error: "invalid_token", error_description: why }), { status: 401, headers: { "content-type": "application/json", "www-authenticate": `Bearer realm="HelixOS", resource_metadata="${iss}/.well-known/oauth-protected-resource", error="invalid_token", error_description="${why}"` } });
 }
 
-function textResult(text: string, isError = false) {
-  return { content: [{ type: "text" as const, text }], isError };
+function textResult(text: string, isError = false, images: { data: string; mimeType: string }[] = []) {
+  return { content: [{ type: "text" as const, text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))], isError };
 }
 
 const SELF_LIT = new Set(["forum_report", "handoff_busy", "handoff_checkin", "whoami"]);
@@ -40,15 +40,22 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
   let ok = true;
   let error: string | null = null;
   let text = "";
+  let images: { data: string; mimeType: string }[] = [];
   try {
     const gate = def.scope ? gateFor(def.scope) : undefined;
-    if (gate && !(await gate(grant.viewer))) {
+    if (def.coachOnly && !isCoachOwn(grant)) {
+      // Never listed for this caller; called by name anyway, it answers as a tool that isn't there.
+      ok = false;
+      error = "coach-only";
+      text = `Tool ${def.name} not found`;
+    } else if (gate && !(await gate(grant.viewer))) {
       ok = false;
       error = "gate";
       text = def.scope === "body" ? "HumanOS's AI switch is off for this member, so HumanOS tools do nothing. They can turn it on in HumanOS settings." : def.scope === "inbox" ? "The Handoff inbox is the coach's own, so its tools do nothing here." : "This tool isn't available for this member right now.";
     } else {
       const r = await def.handler(grant.viewer, args, { scopes: grant.scopes, agentId: grant.agentId });
       text = r.data === undefined ? r.text : `${r.text}\n\n${JSON.stringify(r.data, null, 2)}`;
+      images = r.images ?? [];
     }
   } catch (e) {
     ok = false;
@@ -61,7 +68,7 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
   if (ok && grant.agentId && !SELF_LIT.has(def.name)) await agentCalled({ workspaceId: grant.viewer.workspace.id, userId: grant.viewer.user.id }, grant.agentId).catch(() => undefined);
   await db.insert(schema.mcpCalls).values({ id: newId(), workspaceId: grant.viewer.workspace.id, userId: grant.viewer.user.id, appId: grant.app.id, tool: def.name, ok, error, ms });
   await db.update(schema.connectedApps).set({ lastUsedAt: nowIso(), lastTool: def.name }).where(eq(schema.connectedApps.id, grant.app.id));
-  return textResult(text, !ok);
+  return textResult(text, !ok, images);
 }
 
 export async function handleMcpRequest(request: Request): Promise<Response> {
@@ -74,7 +81,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   if (!minute || !day) return new Response(JSON.stringify({ error: "rate_limited", error_description: `at most ${PER_MINUTE} calls a minute and ${PER_DAY} a day per connection` }), { status: 429, headers: { "content-type": "application/json", "retry-after": "60" } });
 
   const server = new McpServer({ name: "HelixOS", version: APP_VERSION });
-  for (const def of toolsFor(grant.scopes)) {
+  for (const def of toolsFor(grant.scopes, grant)) {
     server.registerTool(def.name, { description: def.description, inputSchema: def.input, annotations: { readOnlyHint: def.kind === "read", destructiveHint: false, openWorldHint: false } }, (args) => run(grant, def, (args ?? {}) as Record<string, unknown>));
   }
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });

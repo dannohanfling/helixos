@@ -109,8 +109,11 @@ export async function revokeByToken(token: string): Promise<void> {
   if (row) await revokeApp(row.appId);
 }
 
-/** `agentId`: the Forum agent this connection speaks as (rev 769), from its agent token or the owner's tie; null otherwise. */
-export type Grant = { app: schema.ConnectedApp; scopes: Scope[]; viewer: Viewer; agentId: string | null };
+/**
+ * `agentId`: the Forum agent this connection speaks as (rev 769), from its agent token or the owner's tie; null otherwise.
+ * `agentToken`: the call came on an agent token (hxa_), not on a connection the owner signed in with (H-591).
+ */
+export type Grant = { app: schema.ConnectedApp; scopes: Scope[]; viewer: Viewer; agentId: string | null; agentToken: boolean };
 
 /**
  * A bearer token to the member it acts as: the token unexpired and unrevoked, the grant live, the member still in the
@@ -126,7 +129,7 @@ export async function authenticateBearer(token: string): Promise<Grant | null> {
   const viewer = await viewerFor(app.userId, app.workspaceId);
   if (!viewer || viewer.membership.id !== app.membershipId) return null;
   if (viewer.role === "client" && !viewer.workspace.connectedAppsOpen) return null;
-  return { app, scopes: app.scopes.filter(isScope), viewer, agentId: app.agentId ?? null };
+  return { app, scopes: app.scopes.filter(isScope), viewer, agentId: app.agentId ?? null, agentToken: false };
 }
 
 /**
@@ -141,7 +144,7 @@ async function authenticateAgentToken(token: string): Promise<Grant | null> {
   if (!app || app.revokedAt || !app.agentId) return null;
   const viewer = await viewerFor(app.userId, app.workspaceId);
   if (!viewer || viewer.membership.id !== app.membershipId || viewer.role !== "coach") return null;
-  return { app, scopes: app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox"), viewer, agentId: app.agentId };
+  return { app, scopes: app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox"), viewer, agentId: app.agentId, agentToken: true };
 }
 
 /** What the consent form signs, so a POST can only approve the request the page rendered for this member. */
