@@ -106,7 +106,9 @@ async function main() {
     await page.waitForTimeout(1500);
     if (await page.locator('script[src*="communityloyalty.io"]').count()) throw new Error("no chat script on Today");
     const askItem = page.locator('[data-testid="side-nav"] a[href="/ask"]');
-    if (!/^💭?\s*Ask \S/.test((await askItem.innerText()).trim()) || /your coach/.test(await askItem.innerText())) throw new Error(`the menu's Ask item is named for the coach: ${await askItem.innerText()}`);
+    // Folded to icons, the menu carries the name as the item's accessible name; open, as its text.
+    const askName = ((await askItem.getAttribute("aria-label")) || (await askItem.innerText())).replace("💭", "").trim();
+    if (!/^Ask \S/.test(askName) || /your coach/.test(askName)) throw new Error(`the menu's Ask item is named for the coach: ${askName}`);
     await page.goto(`${base}/ask`);
     const widget = page.locator('[data-testid="chat-widget"]');
     if (!(await widget.count())) throw new Error("the widget is on the Ask page");
