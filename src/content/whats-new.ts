@@ -16,6 +16,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: "2026-10-18",
     title: "The Colosseum is back in your menu",
     lines: ["🏟️ The Colosseum in the menu opens straight onto the arena. Rewards is one tap away at the top of the page."],
+    audience: "everyone",
   },
   {
     n: 231,
