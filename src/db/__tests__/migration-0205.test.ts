@@ -28,7 +28,7 @@ describe("migration 0205: the brand kit's spelling, legal name and descriptor", 
     expect(tables).toEqual(["brand_kits"]);
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0205_brand_kit_fields");
-    expect(journal.entries[at - 1]?.tag).toBe("0202_eo_pass");
+    expect(journal.entries[at - 1]?.tag).toBe("0204_loyalty_health");
     expect(journal.entries[at]!.when).toBeGreaterThan(journal.entries[at - 1]!.when);
   });
 });

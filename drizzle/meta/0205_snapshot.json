@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "05a5ed76-13ae-4cc0-88e1-d49a139f7fa9",
-  "prevId": "87b69255-46e0-4795-8cad-dffa8577545d",
+  "id": "c533620d-ce7b-45b5-bd57-6d6a012cd18b",
+  "prevId": "ebf51a63-0488-4baa-a005-34b858586d26",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -12608,6 +12608,35 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
+        },
+        "pass_type_id": {
+          "name": "pass_type_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "cert_expires_at": {
+          "name": "cert_expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rate_limited_count": {
+          "name": "rate_limited_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "rate_limited_at": {
+          "name": "rate_limited_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "desk_check_at": {
           "name": "desk_check_at",
