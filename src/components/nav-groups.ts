@@ -88,7 +88,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/community", label: "Community Pass", icon: "🎟️", passOnly: true, hint: "Elite" },
       { href: "/numbers", label: "Numbers", icon: "📊", line: "your counts, week by week" },
       { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
-      // Rewards and the Colosseum are one page with two tabs (H-164 §4); /colosseum sends to the tab.
+      // Rewards and the Colosseum are one page with two tabs (H-164 §4); /colosseum sends to the tab. With the Colosseum on, this
+      // one item becomes The Colosseum and opens on the arena (H-588, plan H-592): see withColosseum.
       { href: "/rewards", label: "Rewards", icon: "🏆", line: "points, prizes and the arena" },
       // The loyalty leaderboard's editor (H-140): for any member whose workspace has a connected board, the owner, their team and a switched-in coach alike.
       { href: "/loyalty", label: "Loyalty leaderboard", icon: "🏅", line: "your members' points and tiers", loyaltyOnly: true, team: true },
@@ -157,6 +158,24 @@ export function withHorizon(items: NavItem[], shippedKeys: readonly string[]): N
   return items.map((n) => (n.menuKey ? { ...n, comingSoon: !shippedKeys.includes(n.menuKey) } : n));
 }
 
+/** The arena's address: the Rewards page's Colosseum tab (colosseumHref() with no section gives the same). */
+export const COLOSSEUM_HREF = "/rewards?tab=colosseum";
+
+/**
+ * The Colosseum back in the menu (H-588, plan H-592): with it on for the workspace, the one Rewards item reads "🏟️ The
+ * Colosseum" and opens on the arena; Rewards is a tab away at the top. Off, it stays Rewards. One item either way, in its place.
+ */
+export function withColosseum(items: NavItem[], on: boolean): NavItem[] {
+  if (!on) return items;
+  return items.map((n) => (n.href === "/rewards" ? { ...n, href: COLOSSEUM_HREF, label: "The Colosseum", icon: "🏟️", line: "the arena, points and prizes" } : n));
+}
+
+/** Whether a menu item is the current page: by its path alone, so The Colosseum (a tab of /rewards) is lit on both tabs. */
+export function navActive(pathname: string, href: string): boolean {
+  const path = href.split("?")[0];
+  return pathname === path || pathname.startsWith(path + "/");
+}
+
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
 export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
@@ -168,5 +187,5 @@ export const navVisible = (n: NavItem, m: NavMember): boolean =>
 
 /** The groups this member sees, each with only its visible items; a group with none isn't drawn at all (HumanOS without Body). */
 export function visibleGroups(m: NavMember, links: PlatformLinks = {}, ownCommunity: string | null = null, shippedKeys: readonly string[] = []) {
-  return NAV_GROUPS.map((g) => ({ ...g, items: withHorizon(withPlatformLinks(g.items, links, ownCommunity), shippedKeys).filter((n) => navVisible(n, m)) })).filter((g) => g.items.length);
+  return NAV_GROUPS.map((g) => ({ ...g, items: withColosseum(withHorizon(withPlatformLinks(g.items, links, ownCommunity), shippedKeys), Boolean(m.colosseumOn)).filter((n) => navVisible(n, m)) })).filter((g) => g.items.length);
 }

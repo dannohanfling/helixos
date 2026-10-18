@@ -1,7 +1,7 @@
 "use client";
 
 import { PinToViewport } from "@/components/pin-to-viewport";
-import { visibleGroups, type NavItem } from "./nav-groups";
+import { navActive, visibleGroups, type NavItem } from "./nav-groups";
 import type { PlatformLinks } from "@/lib/platforms";
 import { ComingSoonItem } from "./coming-soon-item";
 import { useNavState } from "./nav-state";
@@ -10,9 +10,7 @@ import { isOpen } from "@/lib/engine/nav-state";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(href + "/");
-}
+const isActive = navActive;
 
 /**
  * The desktop menu. Each group folds under its heading (H-333: remembered on the membership through the nav store, shared with

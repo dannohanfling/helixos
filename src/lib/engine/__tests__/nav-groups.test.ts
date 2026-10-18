@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { NAV, NAV_GROUPS, navVisible } from "@/components/nav-groups";
+import { COLOSSEUM_HREF, NAV, NAV_GROUPS, navActive, navVisible, visibleGroups, withColosseum } from "@/components/nav-groups";
+import { colosseumHref } from "@/components/colosseum-view";
 
 /** The menu after cleanup slice 1 (H-164 §5 and §7). */
 describe("the menu: subtitles and the coach's three groups", () => {
@@ -27,5 +28,26 @@ describe("the menu: subtitles and the coach's three groups", () => {
   it("Rewards and the Colosseum are one link (H-164 §4)", () => {
     expect(NAV.some((n) => n.href === "/colosseum")).toBe(false);
     expect(NAV.filter((n) => n.href === "/rewards")).toHaveLength(1);
+  });
+
+  it("with the Colosseum on, the one item is The Colosseum and opens on the arena; off, it stays Rewards (H-592)", () => {
+    const items = (on: boolean) => visibleGroups({ ...client, colosseumOn: on }).flatMap((g) => g.items);
+    const on = items(true).filter((n) => n.href === COLOSSEUM_HREF || n.href === "/rewards");
+    expect(on).toEqual([expect.objectContaining({ href: COLOSSEUM_HREF, label: "The Colosseum", icon: "🏟️", line: "the arena, points and prizes" })]);
+    const off = items(false).filter((n) => n.href === COLOSSEUM_HREF || n.href === "/rewards");
+    expect(off).toEqual([expect.objectContaining({ href: "/rewards", label: "Rewards", icon: "🏆" })]);
+    // The same place in its group, for coaches and team members too.
+    const at = (on2: boolean, m: typeof client | typeof coach) => visibleGroups({ ...m, colosseumOn: on2 }).find((g) => g.items.some((n) => n.href.startsWith("/rewards")))!;
+    expect(at(true, coach).items.findIndex((n) => n.href === COLOSSEUM_HREF)).toBe(at(false, coach).items.findIndex((n) => n.href === "/rewards"));
+    expect(withColosseum(NAV, false)).toBe(NAV);
+    expect(COLOSSEUM_HREF).toBe(colosseumHref());
+  });
+
+  it("The Colosseum is lit on both of its tabs, and only the menu goes to the arena (H-592)", () => {
+    expect(navActive("/rewards", COLOSSEUM_HREF)).toBe(true);
+    expect(navActive("/rewards/book", COLOSSEUM_HREF)).toBe(true);
+    expect(navActive("/rewardsx", COLOSSEUM_HREF)).toBe(false);
+    expect(navActive("/today", COLOSSEUM_HREF)).toBe(false);
+    expect(navActive("/body/foods", "/body")).toBe(true);
   });
 });
