@@ -45,25 +45,33 @@ export function ShareWin() {
  * other member's win has a ⋯ for Block and Report; a reported win leaves the list at once.
  */
 export function WinList({ wins, tz, removable = false, moderate = false }: { wins: ArenaWin[]; tz: string; removable?: boolean; moderate?: boolean }) {
-  if (!wins.length) return <p className="co-quiet" data-testid="no-wins">No wins shared yet. Be the first.</p>;
+  // The thanks for a report lives here, not on the win's row: the refresh that follows drops the reported win from the list,
+  // and the thanks has to outlast it.
+  const [reported, setReported] = useState<string[]>([]);
+  const shown = wins.filter((w) => !reported.includes(w.id));
   return (
-    <ul className="co-wins" data-testid="wins">
-      {wins.map((w) => (
-        <WinItem key={w.id} w={w} tz={tz} removable={removable} moderate={moderate && !w.mine} />
-      ))}
-    </ul>
+    <>
+      {reported.length ? (
+        <p className="co-ok" data-testid="win-reported" role="status">
+          {REPORTED}
+        </p>
+      ) : null}
+      {shown.length ? (
+        <ul className="co-wins" data-testid="wins">
+          {shown.map((w) => (
+            <WinItem key={w.id} w={w} tz={tz} removable={removable} moderate={moderate && !w.mine} onReported={() => setReported((r) => [...r, w.id])} />
+          ))}
+        </ul>
+      ) : reported.length ? null : (
+        <p className="co-quiet" data-testid="no-wins">
+          No wins shared yet. Be the first.
+        </p>
+      )}
+    </>
   );
 }
 
-function WinItem({ w, tz, removable, moderate }: { w: ArenaWin; tz: string; removable: boolean; moderate: boolean }) {
-  const [reported, setReported] = useState(false);
-  if (reported) {
-    return (
-      <li className="co-win" data-testid="win-reported" role="status">
-        <p className="co-ok">{REPORTED}</p>
-      </li>
-    );
-  }
+function WinItem({ w, tz, removable, moderate, onReported }: { w: ArenaWin; tz: string; removable: boolean; moderate: boolean; onReported: () => void }) {
   return (
     <li className={`co-win${moderate ? " co-win-mod" : ""}`} data-testid="win" data-kind={w.kind} data-win={w.id}>
       <span className="co-kindtag">{w.kind === "business" ? "Business" : "Community"}</span>
@@ -71,7 +79,7 @@ function WinItem({ w, tz, removable, moderate }: { w: ArenaWin; tz: string; remo
         <b>{w.who}</b> {w.text}
       </span>
       <span className="co-when">{formatDateTime(w.at, tz)}</span>
-      {moderate ? <ModerateMenu target={{ kind: "win", id: w.id, membershipId: w.authorId, name: w.who, coach: w.coach }} onReported={() => setReported(true)} /> : null}
+      {moderate ? <ModerateMenu target={{ kind: "win", id: w.id, membershipId: w.authorId, name: w.who, coach: w.coach }} onReported={onReported} /> : null}
       {removable && w.mine ? (
         <form action={removeWinAction}>
           <input type="hidden" name="id" value={w.id} />
