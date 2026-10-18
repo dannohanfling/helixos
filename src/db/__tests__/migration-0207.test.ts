@@ -3,21 +3,21 @@ import path from "node:path";
 import { createClient } from "@libsql/client";
 import { describe, expect, it } from "vitest";
 
-/** Migration 0203 (H-745): member_blocks, the Content report's target and Handled on member_reports, and a hidden win. */
+/** Migration 0207 (H-745): member_blocks, the Content report's target and Handled on member_reports, and a hidden win. */
 const read = (f: string) =>
   readFileSync(path.join(process.cwd(), "drizzle", f), "utf8")
     .split("--> statement-breakpoint")
     .map((s) => s.trim())
     .filter(Boolean);
 
-describe("migration 0203: block a member, report a win", () => {
+describe("migration 0207: block a member, report a win", () => {
   it("creates member_blocks with one row per pair, adds plain columns to member_reports and colosseum_wins, and rebuilds nothing", async () => {
     const c = createClient({ url: ":memory:" });
     for (const s of read("0105_member_reports.sql").filter((s) => s.includes("member_reports"))) await c.execute(s);
     for (const s of read("0158_colosseum.sql").filter((s) => s.includes("colosseum_wins"))) await c.execute(s);
     await c.execute("INSERT INTO member_reports (id, workspace_id, user_id, kind, severity, description) VALUES ('r', 'w', 'u', 'issue', 'red', 'It broke')");
     await c.execute("INSERT INTO colosseum_wins (id, workspace_id, user_id, kind, text) VALUES ('win', 'w', 'u', 'business', 'Three calls booked')");
-    const SQL = read("0203_block_report.sql");
+    const SQL = read("0207_block_report.sql");
     expect(SQL.filter((s) => /^(DROP|INSERT|UPDATE|DELETE)|__new_/i.test(s))).toEqual([]);
     for (const s of SQL) await c.execute(s);
     // Rows already there keep everything, the new columns empty.
@@ -30,9 +30,9 @@ describe("migration 0203: block a member, report a win", () => {
     await c.execute({ sql: block, args: ["b3", "m2", "m1"] });
     expect((await c.execute("SELECT created_at FROM member_blocks WHERE id = 'b1'")).rows[0]?.created_at).toBeTruthy();
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
-    const at = journal.entries.findIndex((e) => e.tag === "0203_block_report");
+    const at = journal.entries.findIndex((e) => e.tag === "0207_block_report");
     expect(at).toBeGreaterThan(0);
-    expect(journal.entries[at - 1]?.tag).toBe("0202_eo_pass");
+    expect(journal.entries[at - 1]?.tag).toBe("0204_loyalty_health");
     expect(journal.entries[at].when).toBeGreaterThan(journal.entries[at - 1].when);
   });
 });
