@@ -443,6 +443,7 @@ export default async function WebinarWizardPage({
               {WIZARD_STAGES[0]?.description}
             </p>
             <form
+              key={editing ? `draft-${editing.id}` : "saved"}
               action={updateWebinarFoundationAction}
               className="grid gap-3 sm:grid-cols-2"
             >
@@ -652,7 +653,7 @@ export default async function WebinarWizardPage({
         </p>
       ) : null}
       {step === "beliefs" ? (
-        <form action={updateWebinarBeliefsAction} className="space-y-4">
+        <form key={editing ? `draft-${editing.id}` : "saved"} action={updateWebinarBeliefsAction} className="space-y-4">
           <input type="hidden" name="id" value={w.id} />
           <DraftKeeper id={`webinar.${v.user.id}.${w.id}.beliefs${editing ? `.draft.${editing.id}` : ""}`} />
           {editing ? <input type="hidden" name="fromDraft" value={editing.id} /> : null}
@@ -1394,7 +1395,7 @@ export default async function WebinarWizardPage({
             <p className="mb-3 text-sm text-ink-2">
               {WIZARD_STAGES[6]?.description}
             </p>
-            <form action={linkOfferAction} className="space-y-3">
+            <form key={editing ? `draft-${editing.id}` : "saved"} action={linkOfferAction} className="space-y-3">
               <input type="hidden" name="id" value={w.id} />
               {editing ? <input type="hidden" name="fromDraft" value={editing.id} /> : null}
               <Field label="Which offer does this webinar sell?">
