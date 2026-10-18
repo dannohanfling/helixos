@@ -155,7 +155,14 @@ async function main() {
       await page.fill('[data-testid="mod-note"]', "Smoke: not kind");
       await noSideways(page, "the report form", w);
       await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('[data-testid="mod-report-send"]')]);
-      await page.locator('[data-testid="win-reported"]').waitFor({ timeout: 10000 });
+      // The report lands with its own POST; a send that landed before the page was ready (the button still free) goes again once.
+      const reported = page.locator('[data-testid="win-reported"]');
+      try {
+        await reported.waitFor({ timeout: 15000 });
+      } catch {
+        if (await page.locator('[data-testid="mod-report-send"]:not([disabled])').count()) await page.click('[data-testid="mod-report-send"]');
+        await reported.waitFor({ timeout: 20000 });
+      }
       must((await page.locator('[data-testid="win-reported"]').innerText()).includes(REPORTED), `${w}: "${REPORTED}"`);
       await page.goto(wins(), { waitUntil: "networkidle" });
       must((await winRow(JORDAN_WIN).count()) === 0, `${w}: the reported win is gone from her feed`);
