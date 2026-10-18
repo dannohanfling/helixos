@@ -139,20 +139,28 @@ async function main() {
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
     putBack();
     if (existsSync(path.join(ranksDir, `rank-${card.slug}.webm`))) {
+      // A fresh context, signed in the same: this page's cache still holds the broken file just played at the same address.
+      const real = await browser.newContext({ viewport: { width: 1280, height: 900 }, storageState: await ctx.storageState() });
+      const rp = await real.newPage();
+      rp.on("response", (r) => {
+        if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
+      });
       await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
-      await page.goto(`${base}/today`);
-      await rk.waitFor({ timeout: 15000 });
-      const clipEl = page.locator('[data-testid="rank-clip"]');
-      must((await rk.getAttribute("data-window")) === "clip" && (await clipEl.count()) === 1, "the real clip: the window plays it");
+      await rp.goto(`${base}/today`);
+      const rrk = rp.locator('[data-testid="rank-up"]');
+      await rrk.waitFor({ timeout: 15000 });
+      const clipEl = rp.locator('[data-testid="rank-clip"]');
+      must((await rrk.getAttribute("data-window")) === "clip" && (await clipEl.count()) === 1, "the real clip: the window plays it");
       must((await clipEl.getAttribute("poster")) === `/ranks/rank-${card.slug}-end.jpg`, "its last frame is the poster");
-      await page.waitForFunction(() => (document.querySelector('[data-testid="rank-clip"]') as HTMLVideoElement | null)?.ended === true, null, { timeout: 14000 });
+      await rp.waitForFunction(() => (document.querySelector('[data-testid="rank-clip"]') as HTMLVideoElement | null)?.ended === true, null, { timeout: 20000 });
       const played = await clipEl.evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, error: v.error?.code ?? null, duration: v.duration, w: v.videoWidth }));
       must(played.error === null && played.src.endsWith(`/ranks/rank-${card.slug}.webm`) && played.w === 1280 && played.duration > 5 && played.duration < 12, `the WebM played to its end: ${JSON.stringify(played)}`);
-      await page.waitForFunction(() => ["card", "ended"].includes(document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") ?? ""), null, { timeout: 5000 });
-      await page.keyboard.press("Escape");
-      await page.keyboard.press("Escape");
-      must((await rk.count()) === 0, "Escape twice closes it");
-      await page.waitForTimeout(800);
+      await rp.waitForFunction(() => ["card", "ended"].includes(document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") ?? ""), null, { timeout: 5000 });
+      await rp.keyboard.press("Escape");
+      await rp.keyboard.press("Escape");
+      must((await rrk.count()) === 0, "Escape twice closes it");
+      await rp.waitForTimeout(800);
+      await real.close();
       console.log(`✓ the real ${card.slug} clip played to its end (${played.duration.toFixed(1)} s, 1280 wide) with its last frame as the poster, then the card`);
     } else {
       console.log(`· no real clip for ${card.slug} in public/ranks: skipped the real-clip check`);
