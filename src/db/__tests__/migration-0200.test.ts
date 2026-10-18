@@ -24,7 +24,7 @@ describe("migration 0200: webinar drafts and history", () => {
     expect((await c.execute("SELECT by_connector, changed, before, undone_at FROM webinar_history")).rows[0]).toMatchObject({ by_connector: 0, changed: "[]", before: null, undone_at: null });
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0200_webinar_drafts");
-    expect(at).toBe(journal.entries.length - 1);
+    expect(journal.entries[at - 1]?.tag).toBe("0197_ooh_session");
     expect(journal.entries[at]!.when).toBeGreaterThan(journal.entries[at - 1]!.when);
   });
 });

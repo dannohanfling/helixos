@@ -149,9 +149,11 @@ async function main() {
   // Rewards pass card
   await page.goto(`${base}/rewards`);
   await expectText(page, "My Evolve Omega pass", "pass card");
-  // Passes aren't switched on: the card says so, and no test-push button is offered while nothing would be sent.
-  await expectText(page, "Wallet passes aren't switched on yet", "pass card says passes are off");
-  await expectText(page, "Test push: wallet passes aren't switched on yet.", "test push refused visibly");
+  // Maya's pass is in her wallet (seeded): the card says so, with the add link and its QR code for a computer (H-622); no
+  // "Get my pass" since she has one, and no test-push button while pushes aren't wired.
+  await expectText(page, "Your Evolve Omega pass lives in your phone's wallet", "pass card for a member who has one");
+  if (!(await page.locator('[data-testid="eo-pass-add"]').count()) || !(await page.locator('[data-testid="eo-pass-qr"] svg').count())) throw new Error("the card offers the add link and its QR code");
+  if (await page.locator('[data-testid="eo-pass-get"]').count()) throw new Error("no Get my pass for a member who already has a pass");
   if (await page.locator('button:has-text("Send me a test push")').count()) throw new Error("a test-push button is offered while nothing is sent");
   await shot(page, "x11-rewards-pass");
 

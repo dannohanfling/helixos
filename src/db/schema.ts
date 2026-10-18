@@ -1034,6 +1034,11 @@ export const leaderboardFeeds = sqliteTable(
     deskUserIds: text("desk_user_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
     /** The coach's pause: while on, moves wait in the outbox and nothing is sent to eLoyalty. */
     movesPaused: integer("moves_paused", { mode: "boolean" }).notNull().default(false),
+    /**
+     * The coach's own program only (the Evolve Omega pass, H-622, 0202): whether clients may get a pass on it ("Get my pass" on
+     * Rewards). Off until the coach's own live test has passed; the coach can always get their own.
+     */
+    issuePasses: integer("issue_passes", { mode: "boolean" }).notNull().default(false),
     /** The one add-and-deduct check on a team test pass (H-493): when it last ran, whether both moves landed, and what it saw, in words and numbers. The desk stays shut until it passes. */
     deskCheckAt: text("desk_check_at"),
     deskCheckOk: integer("desk_check_ok", { mode: "boolean" }),

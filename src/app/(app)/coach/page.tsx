@@ -33,6 +33,7 @@ import { setFeatureOnAction } from "@/lib/actions/bot-features";
 import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
 import { PointsCheck } from "@/components/leaderboard/points-check";
 import { DeskSettings } from "@/components/leaderboard/desk-settings";
+import { OwnProgramCard } from "@/components/leaderboard/own-program";
 import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -295,6 +296,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
             <Empty icon="👥" title="No clients yet" hint="Share your invite link from Settings." />
           )}
       </Card>
+        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt) }} /> : null}
         <Card className="mb-4" title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href={allOpen ? "/coach" : "/coach?connections=open"} className="underline" data-testid="connections-all">{allOpen ? "Close all" : "Open all"}</Link><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
         {rows.length ? (
             <ul className="divide-y">

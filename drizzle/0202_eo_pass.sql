@@ -1,0 +1,1 @@
+ALTER TABLE `leaderboard_feeds` ADD `issue_passes` integer DEFAULT false NOT NULL;
