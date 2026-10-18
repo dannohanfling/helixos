@@ -59,7 +59,7 @@ async function main() {
   const failures: string[] = [];
   try {
     const { db, schema } = await import("@/db");
-    const { eq } = await import("drizzle-orm");
+    const { and, eq } = await import("drizzle-orm");
     const { DEFAULT_PAGE, buildFeed, parseExport } = await import("@/lib/engine/leaderboard");
     const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     const m = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
@@ -335,6 +335,54 @@ async function main() {
     await login(page, "As the coach");
     console.log("✓ the Points desk: closed until the check passed (1 off, 1 back, lifetime unchanged); a deduct above available refused, one deduct sent and shown at once; a move held while paused and sent by the cron; none for the owner");
 
+    // The Evolve Omega pass (H-622): the coach's own program connected on Coach; a client kept out until Issue passes is on;
+    // the coach's own pass first, then the client's. Each press is one create by the program's template, nothing else.
+    // Maya's coach row is found by her seeded pass link, so her pass fields are cleared here and put back afterwards.
+    const coachM = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, feedRow.workspaceId), eq(schema.memberships.role, "coach")) }))!;
+    const mayaPass = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, feedRow.membershipId) }))!;
+    const noPass = { eoPassUrl: null, eoPassSerial: null, eoPassTypeId: null, eoPassInstalledAt: null, eoCustomerId: null };
+    await db.update(schema.memberships).set(noPass).where(eq(schema.memberships.id, coachM.id));
+    await db.update(schema.memberships).set(noPass).where(eq(schema.memberships.id, mayaPass.id));
+    await page.goto(`${base}/coach`);
+    await fillExact(page, '[data-testid="own-key"]', ELOYALTY_KEY);
+    await fillExact(page, '[data-testid="own-host"]', HOST);
+    await fillExact(page, '[data-testid="own-template"]', TEMPLATES[1].id);
+    await submit(page, '[data-testid="own-connect"]');
+    await page.locator('[data-testid="own-check"]').filter({ hasText: "Connected" }).waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="own-issue"]').isEnabled()) && !(await page.locator('[data-testid="own-issue"]').isChecked()), "Issue passes is off, and can be switched on once the program is checked");
+    must(!(await page.content()).includes(ELOYALTY_KEY), "the key is never shown back");
+    await logout(page);
+    await login(page, "As a client");
+    await page.goto(`${base}/rewards`);
+    must((await page.locator('[data-testid="eo-pass-closed"]').innerText()).includes("your coach opens it to members soon") && (await page.locator('[data-testid="eo-pass-get"]').count()) === 0, "a client gets no Get my pass while passes are off");
+    await logout(page);
+    await login(page, "As the coach");
+    const writes3 = (await mockCalls()).writes.length;
+    await page.goto(`${base}/rewards`);
+    await submit(page, '[data-testid="eo-pass-get"]');
+    await page.locator('[data-testid="eo-pass-made"]').waitFor({ timeout: 20000 });
+    const coachAfter = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!;
+    must(coachAfter.eoCustomerId === "cus_eo_1" && coachAfter.eoPassSerial === "SER-eo-1" && coachAfter.eoPassTypeId === "pass.com.evolveomega" && coachAfter.eoPassUrl === "https://pass.example/eo-1", "the coach's own pass is made and its ids are stored");
+    must((await page.locator('[data-testid="eo-pass-add"]').getAttribute("href")) === "https://pass.example/eo-1" && (await page.locator('[data-testid="eo-pass-qr"] svg').count()) === 1, "the card offers Add to wallet and its QR code");
+    must((await page.locator('[data-testid="eo-pass-get"]').count()) === 0, "no second Get my pass");
+    must(JSON.stringify((await mockCalls()).writes.slice(writes3)) === JSON.stringify([`POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`]), "one create, by the program's template");
+    await page.goto(`${base}/coach`);
+    await page.locator('[data-testid="own-issue"]').check();
+    await submit(page, '[data-testid="own-issue-save"]');
+    must((await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, coachM.id) }))!.issuePasses, "Issue passes is on");
+    await logout(page);
+    await login(page, "As a client");
+    await page.goto(`${base}/rewards`);
+    await submit(page, '[data-testid="eo-pass-get"]');
+    await page.locator('[data-testid="eo-pass-made"]').waitFor({ timeout: 20000 });
+    must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaPass.id) }))!.eoCustomerId === "cus_eo_2", "the client's pass is made once passes are on");
+    must(!(await page.content()).includes("cus_eo_") && !(await page.content()).includes("SER-eo-"), "no customer id or serial on the member's page");
+    must((await mockCalls()).writes.length === writes3 + 2, "two creates in all, one per pass");
+    await db.update(schema.memberships).set({ eoPassUrl: mayaPass.eoPassUrl, eoPassSerial: mayaPass.eoPassSerial, eoPassTypeId: mayaPass.eoPassTypeId, eoPassInstalledAt: mayaPass.eoPassInstalledAt, eoCustomerId: mayaPass.eoCustomerId }).where(eq(schema.memberships.id, mayaPass.id));
+    await logout(page);
+    await login(page, "As the coach");
+    console.log("✓ the Evolve Omega pass: the coach's own program connected (the key never shown back); no Get my pass for a client while off; the coach's own pass made by one create, stored, with Add to wallet and its QR; then the client's once Issue passes is on");
+
     // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
     await page.goto(`${base}/coach?connections=open`);
     must((await page.locator('li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-row"]').getAttribute("open")) !== null, "a client with a feed shows the block open");
@@ -361,7 +409,8 @@ async function main() {
 
     const writes = (await mockCalls()).writes;
     // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
-    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add"]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts: ${writes.join(", ")}`);
+    const create = `POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`;
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, create]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, and the two passes made by template: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {

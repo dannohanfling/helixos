@@ -5,7 +5,8 @@
  *
  * The points outbox (H-493): POST /api/public/admin/points/add and /deduct by customer id move an in-memory balance (an add
  * counts as earned; a deduct never goes below 0 and leaves earned alone), answer { success, eventId, newBalance }, and show
- * in that customer's events with their reason. GET /api/public/admin/customers/{id} reads one customer. Any other write is 405.
+ * in that customer's events with their reason. GET /api/public/admin/customers/{id} reads one customer. POST
+ * /api/external/v1/templates/{id}/pass creates a pass (H-622). Any other write is 405.
  */
 import { createServer } from "node:http";
 import { CUSTOMERS, ELOYALTY_KEY, TEMPLATES } from "./fixtures/eloyalty";
@@ -14,6 +15,7 @@ const port = Number(process.argv[2] ?? 4080);
 let forced = 200;
 let calls = 0;
 const writes: string[] = [];
+let created = 0;
 const balances = new Map(CUSTOMERS.map((c) => [c.id, { balance: c.points_balance, earned: c.points_earned }]));
 const moved: { id: string; type: string; points: number; reason: string; created_at: string }[] = [];
 const now = () => new Date().toISOString();
@@ -60,6 +62,18 @@ createServer((req, res) => {
       const eventId = `ev_${moved.length + 1}`;
       moved.push({ id, type: move[1] === "add" ? "points_added" : "points_deducted", points, reason: String(b.reason ?? ""), created_at: now() });
       json(200, { success: true, eventId, newBalance: bal.balance });
+    });
+    return;
+  }
+  // The Evolve Omega pass (H-622): creating a pass by its template answers the ids the stored pass needs.
+  const create = req.method === "POST" ? url.pathname.match(/^\/api\/external\/v1\/templates\/([^/]+)\/pass$/) : null;
+  if (create) {
+    if (req.headers.authorization !== `Bearer ${ELOYALTY_KEY}`) return json(401, { error: "invalid key" });
+    if (forced !== 200) return json(forced, { error: "forced" });
+    void body(req).then((b) => {
+      if (!b.Email || !b.Id) return json(400, { error: "Email and Id are required" });
+      created += 1;
+      json(200, { customerId: `cus_eo_${created}`, serialNumber: `SER-eo-${created}`, passTypeIdentifier: "pass.com.evolveomega", apple: { downloadUrl: `https://pass.example/eo-${created}` } });
     });
     return;
   }

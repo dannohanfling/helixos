@@ -23,7 +23,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Every move for every program waits while this is set in the environment: the switch for all of them at once. */
 export const allPaused = () => process.env.KK_MOVES_PAUSED === "1";
 
-async function postJson(host: string, key: string, path: string, body: unknown): Promise<{ status: number; json: unknown }> {
+/** One POST to eLoyalty with the program's key; the status and the parsed answer, or status 0 when nothing came back. */
+export async function postJson(host: string, key: string, path: string, body: unknown): Promise<{ status: number; json: unknown }> {
   try {
     const res = await fetch(`${host.replace(/\/$/, "")}${path}`, { method: "POST", headers: { authorization: `Bearer ${key}`, accept: "application/json", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15_000) });
     const text = await res.text();

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 254,
+    date: "2026-10-18",
+    title: "Your Evolve Omega pass: get it from Rewards, in one tap",
+    lines: [
+      "Rewards → My Evolve Omega pass: once the pass is open to you, \"Get my pass\" makes yours, then \"Add to wallet\" puts it in Apple Wallet or Google Wallet. On a computer, the card shows a QR code to scan with your phone. Until then, the card says it is on its way.",
+      "For the coach: Coach gains \"Your own program: the Evolve Omega pass\", with your eLoyalty key (sealed, shown by its last four), the pass template and the check. Clients can make their pass only once you tick Issue passes, and you can always make your own first to test it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 250,
     date: "2026-10-18",
     title: "One tap between your agent inbox and The Forum",

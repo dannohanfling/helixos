@@ -2,8 +2,6 @@ import Link from "next/link";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { markPassInstalledAction, sendTestPushAction } from "@/lib/actions/integrations";
-import { passWired } from "@/lib/integrations";
 import { Badge, Card, PageHeader, Progress } from "@/components/ui";
 import { ClaimButton } from "@/components/claim-button";
 import { TIERS, TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
@@ -14,8 +12,8 @@ import { claimDatesByName } from "@/lib/queries/rewards";
 import { formatDateTime, startOfWeek } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
-import { SubmitButton } from "@/components/submit-button";
 import { ColosseumView, colosseumHref, type ColosseumParams } from "@/components/colosseum-view";
+import { EoPassCard } from "@/components/eo-pass-card";
 
 export const metadata = { title: "Rewards" };
 
@@ -34,7 +32,7 @@ function RewardsTabs({ tab, on }: { tab: "rewards" | "colosseum"; on: boolean })
 
 const TYPE_ICON: Record<string, string> = { checkin: "☀️", close: "🌙", streak: "🔥", task: "✅", content: "✍️", dm: "💬", call: "📞", pathway: "🛣️", curriculum: "📆", bonus: "🎁", redeem: "🛍️" };
 
-export default async function RewardsPage({ searchParams }: { searchParams: Promise<{ tab?: string } & ColosseumParams> }) {
+export default async function RewardsPage({ searchParams }: { searchParams: Promise<{ tab?: string; pass?: string; passError?: string } & ColosseumParams> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   if (sp.tab === "colosseum" && v.workspace.colosseumOn) {
@@ -108,36 +106,7 @@ export default async function RewardsPage({ searchParams }: { searchParams: Prom
         </Card>
       </div>
 
-      <Card className="mb-4" title="🎫 My Evolve Omega pass" action={v.membership.eoPassInstalledAt ? <Badge tone="good">installed</Badge> : v.membership.eoPassUrl ? <Badge tone="accent">ready to add</Badge> : <Badge tone="neutral">coming</Badge>}>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="min-w-0 flex-1 text-sm">
-            <p className="text-ink-2">Your points are tracked here. Wallet passes aren&apos;t switched on yet — when they are, your balance comes with you.</p>
-            <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink-3">
-              {v.membership.eoPassSerial ? <span>Serial {v.membership.eoPassSerial}</span> : null}
-              {v.membership.eoPassLastPushAt ? <span>· last message {formatDateTime(v.membership.eoPassLastPushAt, v.tz)}</span> : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {v.membership.eoPassUrl ? (
-              <a href={v.membership.eoPassUrl} target="_blank" rel="noreferrer" className="btn btn-accent btn-sm">Add to wallet ↗</a>
-            ) : (
-              <span className="text-xs text-ink-3">Your coach will send your pass link.</span>
-            )}
-            {v.membership.eoPassUrl && !v.membership.eoPassInstalledAt ? (
-              <form action={markPassInstalledAction}>
-                <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…">I added it</SubmitButton>
-              </form>
-            ) : null}
-            {v.membership.eoPassSerial && passWired("walletpush") ? (
-              <form action={sendTestPushAction}>
-                <SubmitButton className="btn btn-ghost btn-sm" pendingText="Sending…">Send me a test push</SubmitButton>
-              </form>
-            ) : v.membership.eoPassSerial ? (
-              <span className="text-xs text-ink-3" data-testid="test-push-off">Test push: wallet passes aren&apos;t switched on yet.</span>
-            ) : null}
-          </div>
-        </div>
-      </Card>
+      <EoPassCard v={v} ready={sp.pass === "ready"} error={sp.passError} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Prizes you unlock" action={<span className="text-xs text-ink-3">milestones, no points spent</span>}>

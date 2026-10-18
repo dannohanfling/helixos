@@ -218,3 +218,18 @@ export async function runDeskCheckAction(formData: FormData): Promise<void> {
   refresh();
   redirect(`/coach?connections=open#leaderboard-${feed.id}`);
 }
+
+/**
+ * "Issue passes" on the coach's own program (H-622): lets clients press "Get my pass" on Rewards. Only on the coach's own
+ * feed, and it turns on only when the program is connected, checked and has its template.
+ */
+export async function setIssuePassesAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  const feed = await feedOfCoach(coach, formData);
+  if (!feed || feed.membershipId !== coach.membership.id) return;
+  const on = str(formData, "issuePasses") === "on";
+  if (on && !(feed.keyEncrypted && feed.templateId && feed.lastCheckOk)) return;
+  await db.update(schema.leaderboardFeeds).set({ issuePasses: on, updatedAt: nowIso() }).where(eq(schema.leaderboardFeeds.id, feed.id));
+  refresh();
+}
