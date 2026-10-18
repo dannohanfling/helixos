@@ -14,6 +14,8 @@ import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { ColosseumView, colosseumHref, type ColosseumParams } from "@/components/colosseum-view";
 import { EoPassCard } from "@/components/eo-pass-card";
+import { blockedFor } from "@/lib/blocks";
+import { boardName } from "@/lib/engine/blocks";
 
 export const metadata = { title: "Rewards" };
 
@@ -43,11 +45,13 @@ export default async function RewardsPage({ searchParams }: { searchParams: Prom
       </>
     );
   }
-  const [points, ledger, claims, board] = await Promise.all([
+  const [points, ledger, claims, board, blocks] = await Promise.all([
     totalPoints(v.workspace.id, v.user.id),
     recentLedger(v.workspace.id, v.user.id, 25),
     db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, v.workspace.id), eq(schema.rewardClaims.userId, v.user.id)), orderBy: desc(schema.rewardClaims.createdAt) }),
     leaderboard(v.workspace.id, `${startOfWeek(v.today)}T00:00:00`),
+    // The viewer's blocks (H-745): a member they blocked keeps their place here, as "A member".
+    blockedFor(v),
   ]);
   const tier = tierProgress(points);
   const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) });
@@ -127,12 +131,13 @@ export default async function RewardsPage({ searchParams }: { searchParams: Prom
           {topBoard.length ? (
             <ol className="space-y-1.5">
               {topBoard.map((b, i) => {
-                const u = nameOf.get(b.userId);
+                // "First L.", the arena's shape (H-745): never a member's full name on a list other members read.
+                const who = boardName(nameOf.get(b.userId), b.userId, blocks);
                 return (
-                  <li key={b.userId} className={`flex min-w-0 items-center gap-3 rounded-lg px-2 py-1.5 text-sm ${b.userId === v.user.id ? "bg-accent-soft" : ""}`}>
+                  <li key={b.userId} data-testid="leaderboard-row" className={`flex min-w-0 items-center gap-3 rounded-lg px-2 py-1.5 text-sm ${b.userId === v.user.id ? "bg-accent-soft" : ""}`}>
                     <span className="w-5 text-center text-xs font-bold text-ink-3">{i + 1}</span>
-                    <span className="text-base">{u?.avatarEmoji ?? "🧭"}</span>
-                    <span className="font-medium">{u?.name ?? "Member"}</span>
+                    <span className="text-base">{who.emoji}</span>
+                    <span className="min-w-0 font-medium [overflow-wrap:anywhere]" data-testid="leaderboard-name">{who.name}</span>
                     <span className="ml-auto tabular text-ink-2">{b.total.toLocaleString()}</span>
                   </li>
                 );

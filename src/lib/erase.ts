@@ -59,6 +59,10 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
     ids[label] = rows.map((r) => r.id);
   }
   for (const c of CHILD_TABLES) ids[c.label] = await childIds(c.table, c.fk, ids[c.parent] ?? []);
+  // Block and report (H-745): the blocks made against this member, and the Content reports about them, go with them as well.
+  ids.member_blocks = [...new Set([...ids.member_blocks, ...(await childIds(schema.memberBlocks, "blockedMembershipId", [m.id]))])];
+  const about = (await db.select({ id: schema.memberReports.id }).from(schema.memberReports).where(and(eq(schema.memberReports.workspaceId, workspaceId), eq(schema.memberReports.targetUserId, m.userId)))) as { id: string }[];
+  ids.member_reports = [...new Set([...ids.member_reports, ...about.map((r) => r.id)])];
 
   const elsewhere = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, m.userId), ne(schema.memberships.workspaceId, workspaceId)) });
   const userGoes = !elsewhere;
