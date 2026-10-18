@@ -85,7 +85,7 @@ async function main() {
       return { right: r.right, edge: s.right, left: r.left, start: s.left };
     });
     must(fit.right <= fit.edge + 0.5 && fit.left >= fit.start - 0.5, `the sidebar pill stays inside the sidebar (${JSON.stringify(fit)})`);
-    if ((await pill.getAttribute("data-waiting")) === "true") must((await pill.locator('[data-testid="streak-waiting"] .sf-dot').count()) === 1 && !(await pill.innerText()).includes("Waiting on you"), "waiting in the sidebar: the amber dot, no words to overflow");
+    if ((await pill.getAttribute("data-waiting")) === "true") must((await pill.locator('[data-testid="streak-waiting"] .sf-dot').count()) === 1 && (await pill.locator(".sf-chip").count()) === 0, "waiting in the sidebar: the amber dot, no words to overflow");
     // Close the welcome: Skip, then its button.
     await page.locator('[data-testid="welcome-skip"]').click();
     await page.locator('[data-testid="welcome-cta"]').click();
