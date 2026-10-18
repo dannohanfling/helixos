@@ -25,22 +25,22 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     n: 238,
     date: "2026-10-18",
-    title: "Office Hours in your own time zone",
-    lines: [
-      "Office Hours now shows every session on your own day, date and time, from the time zone in your Settings. A Thursday 5 PM Pacific call reads as Friday morning in Sydney, with Friday's date.",
-      "Coaches set the call as a day, a start time and a length on Office Hours requests. Each request shows the member's time beside yours.",
-      "Add to calendar on a booked request saves the session to your own calendar at the right local time.",
-    ],
-    audience: "everyone",
-  },
-  {
-    n: 237,
-    date: "2026-10-18",
     title: "Claude can draft your webinar, and you approve each step",
     lines: [
       "Through the HelixOS connector, Claude can now start a webinar and draft its Foundation, Beliefs and Offer steps, from your phone by voice or chat.",
       "A draft never changes your webinar. Each step shows Claude's draft beside what's there, with Approve, Edit and Discard, and History lists every change with Undo for seven days.",
       "A proof or story that needs permission is never used, and no income claim or figure you didn't give goes in. Reconnect HelixOS in Claude once and tick Webinars: draft to turn it on.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 238,
+    date: "2026-10-18",
+    title: "Office Hours in your own time zone",
+    lines: [
+      "Office Hours now shows every session on your own day, date and time, from the time zone in your Settings. A Thursday 5 PM Pacific call reads as Friday morning in Sydney, with Friday's date.",
+      "Coaches set the call as a day, a start time and a length on Office Hours requests. Each request shows the member's time beside yours.",
+      "Add to calendar on a booked request saves the session to your own calendar at the right local time.",
     ],
     audience: "everyone",
   },
