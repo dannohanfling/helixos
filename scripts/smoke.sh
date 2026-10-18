@@ -85,7 +85,11 @@ main() {
     npm run db:seed
     printf '\n== walk: %s ==\n' "$w"
     # tee keeps the full output on disk; pipefail keeps the walk's exit status, so a failing walk still fails this script.
-    timeout 600 npx tsx "$script" "$BASE_URL" 2>&1 | tee "screenshots/logs/smoke-$w.log"
+    # Ten minutes a walk, except the board walk: on 18 Oct it passed every check it reached on main and still ran out at
+    # 614 s, past the H-290 section with the council sections still to go (it plays the Boardroom's turns at speaking pace).
+    limit=600
+    [[ "$w" == "board" ]] && limit=1200
+    timeout "$limit" npx tsx "$script" "$BASE_URL" 2>&1 | tee "screenshots/logs/smoke-$w.log"
   done
 
   printf '\nsmoke: %s passed\n' "${walks[*]}"
