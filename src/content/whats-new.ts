@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 264,
+    date: "2026-10-18",
+    title: "Loyalty health: every loyalty program on one page",
+    lines: [
+      "Coach → Loyalty health shows each loyalty program on your account: whether its check passed, when its board last refreshed, how often eLoyalty said it was busy in the last day, and the points outbox (waiting, failed and sent).",
+      "Type in each program's Pass Type ID and certificate date from the eLoyalty portal. The date turns amber under 60 days and red under 14, and Coach names any program with under 30 days left.",
+      "Check all now runs the usual read-only check on every program, one at a time, and stops if eLoyalty says it's busy.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 259,
     date: "2026-10-18",
     title: "Your own agent inbox",

@@ -13,6 +13,7 @@ import { address } from "@/lib/engine/eloyalty";
 import { type BoardRow } from "@/lib/engine/leaderboard";
 import { type Balance, afterEventsRead, afterSend, checkVerdict, eventsHaveTag, patchRows, readAnswer, readBalance, tagFor, taggedReason } from "@/lib/engine/points-outbox";
 import { getJson, statusWords } from "@/lib/leaderboard";
+import { recordRateLimit } from "@/lib/loyalty-rate";
 
 /** A short pause between sends, as the points check paces its reads. */
 export const PACE_MS = 150;
@@ -112,7 +113,10 @@ export async function drainFeed(feed: schema.LeaderboardFeed, now = new Date(), 
     if (after.status === "sent") out.sent++;
     else if (after.status === "failed") out.failed++;
     else out.waiting++;
-    if (after.lastStatus === 429) break;
+    if (after.lastStatus === 429) {
+      await recordRateLimit(feed.id, now);
+      break;
+    }
     if (i + 1 < due.length) await sleep(PACE_MS);
   }
   if (out.sent || out.failed) console.log(`[points-outbox] ${feed.slug}: ${out.sent} sent, ${out.failed} failed, ${out.waiting} waiting`);

@@ -1039,6 +1039,12 @@ export const leaderboardFeeds = sqliteTable(
      * Rewards). Off until the coach's own live test has passed; the coach can always get their own.
      */
     issuePasses: integer("issue_passes", { mode: "boolean" }).notNull().default(false),
+    /** The loyalty health view (H-622 §2): the program's Pass Type ID and its certificate's expiry, typed in from the portal. */
+    passTypeId: text("pass_type_id"),
+    certExpiresAt: text("cert_expires_at"),
+    /** 429s from eLoyalty in the current 24-hour window, and when the last one came. */
+    rateLimitedCount: integer("rate_limited_count").notNull().default(0),
+    rateLimitedAt: text("rate_limited_at"),
     /** The one add-and-deduct check on a team test pass (H-493): when it last ran, whether both moves landed, and what it saw, in words and numbers. The desk stays shut until it passes. */
     deskCheckAt: text("desk_check_at"),
     deskCheckOk: integer("desk_check_ok", { mode: "boolean" }),

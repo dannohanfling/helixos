@@ -1240,6 +1240,13 @@
       "when": 1792351082214,
       "tag": "0202_eo_pass",
       "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "6",
+      "when": 1792355909074,
+      "tag": "0204_loyalty_health",
+      "breakpoints": true
     }
   ]
 }

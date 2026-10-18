@@ -34,6 +34,7 @@ import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardActi
 import { PointsCheck } from "@/components/leaderboard/points-check";
 import { DeskSettings } from "@/components/leaderboard/desk-settings";
 import { OwnProgramCard } from "@/components/leaderboard/own-program";
+import { certsToFlag } from "@/lib/engine/loyalty-health";
 import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -79,6 +80,10 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const claimsOpen = await openClaims(wsId);
   // Each client's loyalty leaderboard (rev 639): the key's last four and the last check, never the key.
   const feedOf = new Map((await db.query.leaderboardFeeds.findMany({ where: eq(schema.leaderboardFeeds.workspaceId, wsId) })).map((f) => [f.membershipId, f]));
+  // The loyalty health view (H-622 §2): its link, and a line when a program's certificate has under 30 days left.
+  const keyedFeeds = [...feedOf.values()].filter((f) => f.keyEncrypted);
+  const certNames = keyedFeeds.length ? await db.query.memberships.findMany({ where: inArray(schema.memberships.id, keyedFeeds.map((f) => f.membershipId)), columns: { id: true, businessName: true } }) : [];
+  const certFlags = certsToFlag(keyedFeeds.map((f) => ({ name: f.membershipId === v.membership.id ? "Your own program" : certNames.find((m) => m.id === f.membershipId)?.businessName || "A client's program", certExpiresAt: f.certExpiresAt })), new Date());
   // Bot Features (rev 618): what clients asked to have switched on, waiting first, then the last few switched on.
   const featureRows = await db.query.botFeatureRequests.findMany({ where: eq(schema.botFeatureRequests.workspaceId, wsId), orderBy: desc(schema.botFeatureRequests.requestedAt), limit: 60 });
   const featuresWaiting = featureRows.filter((r) => r.state === "requested");
@@ -296,6 +301,17 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
             <Empty icon="👥" title="No clients yet" hint="Share your invite link from Settings." />
           )}
       </Card>
+        {!v.switchedInto && keyedFeeds.length ? (
+          <p className="mb-2 text-sm" data-testid="loyalty-health-link">
+            <Link href="/coach/loyalty-health" className="underline">Loyalty health</Link>
+            {certFlags.length ? (
+              <span className="text-danger" data-testid="loyalty-cert-flag">
+                {" · "}
+                {certFlags.map((c) => `${c.name}: certificate ${c.days < 0 ? "expired" : `${c.days} day${c.days === 1 ? "" : "s"} left`}`).join("; ")}
+              </span>
+            ) : null}
+          </p>
+        ) : null}
         {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt) }} /> : null}
         <Card className="mb-4" title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href={allOpen ? "/coach" : "/coach?connections=open"} className="underline" data-testid="connections-all">{allOpen ? "Close all" : "Open all"}</Link><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
         {rows.length ? (

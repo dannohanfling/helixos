@@ -13,6 +13,7 @@ import { db, schema } from "@/db";
 import { open, seal } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
+import { recordRateLimit } from "@/lib/loyalty-rate";
 import { type BoardRow, type Customer, type ExportRow, type Feed, type PageConfig, type PageModel, type Source, SAMPLE_ROWS, boardRows, feedIsClean, feedSlug, fieldNames, mergeCustomers, normalizeSlug, pageMembersText, pageModel, publicFeed, readPageConfig, slugProblem, textIsClean } from "@/lib/engine/leaderboard";
 
 export const DEFAULT_HOST = "https://www.eloyalty.ai";
@@ -101,7 +102,7 @@ const hostWords = (h: string) => h.replace(/^https?:\/\//, "");
  * answers; find the template when it's blank; read every member; keep the board and say, in words, the host, how many are on
  * it and the field names eLoyalty sent (names only). A passed check is what lets the cron refresh this feed.
  */
-export async function checkFeed(feed: schema.LeaderboardFeed): Promise<{ ok: boolean; note: string }> {
+export async function checkFeed(feed: schema.LeaderboardFeed): Promise<{ ok: boolean; note: string; busy?: boolean }> {
   const key = open(feed.keyEncrypted);
   const done = async (ok: boolean, note: string, extra: Partial<schema.LeaderboardFeed> = {}) => {
     await db.update(schema.leaderboardFeeds).set({ lastCheckAt: nowIso(), lastCheckOk: ok, lastCheckNote: note, updatedAt: nowIso(), ...extra }).where(eq(schema.leaderboardFeeds.id, feed.id));
@@ -120,7 +121,10 @@ export async function checkFeed(feed: schema.LeaderboardFeed): Promise<{ ok: boo
     }
     if (r.status === 401 || r.status === 429) break;
   }
-  if (!host) return done(false, `${statusWords(last)}.`);
+  if (!host) {
+    if (last === 429) await recordRateLimit(feed.id);
+    return { ...(await done(false, `${statusWords(last)}.`)), busy: last === 429 };
+  }
   let templateId = feed.templateId;
   let templateNote: string | null = null;
   if (!templateId) {
@@ -129,7 +133,10 @@ export async function checkFeed(feed: schema.LeaderboardFeed): Promise<{ ok: boo
     templateNote = t.note;
   }
   const got = await customers(host, key, { templateId, templateIdAlt: feed.templateIdAlt });
-  if (!got.ok) return done(false, `${statusWords(got.status)} reading the members on ${hostWords(host)}.`, { host });
+  if (!got.ok) {
+    if (got.status === 429) await recordRateLimit(feed.id);
+    return { ...(await done(false, `${statusWords(got.status)} reading the members on ${hostWords(host)}.`, { host })), busy: got.status === 429 };
+  }
   const rows = boardRows(got.list);
   const config = readPageConfig(feed.pageJson);
   const onBoard = publicFeed(rows, feed.hidden, nowIso(), config).members.length;
@@ -307,6 +314,7 @@ export async function refreshFeeds(now = new Date()): Promise<RefreshResult[]> {
     const got = await customers(feed.host, key, feed);
     if (!got.ok) {
       const busy = got.status === 429 || got.status === 0;
+      if (got.status === 429) await recordRateLimit(feed.id, now);
       await db
         .update(schema.leaderboardFeeds)
         .set(busy ? { refreshAfter: new Date(now.getTime() + BACKOFF_MS).toISOString() } : { lastCheckNote: `${statusWords(got.status)} at the last refresh; the last good board is still served.`, lastCheckAt: now.toISOString() })
