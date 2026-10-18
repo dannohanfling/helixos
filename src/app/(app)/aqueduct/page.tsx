@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { aqueductFor } from "@/lib/aqueduct";
+import { aqueductRepairFor } from "@/lib/aqueduct-repair";
 import { setAqueductPeriodAction } from "@/lib/actions/aqueduct";
 import { pct, count, PERIODS } from "@/lib/engine/aqueduct";
 import { AqueductScene } from "@/components/aqueduct-scene";
@@ -17,6 +18,7 @@ export default async function AqueductPage() {
   const v = await requireViewer();
   const a = await aqueductFor(v);
   const p = a.panel;
+  const r = aqueductRepairFor(v, a);
   return (
     <div className="aq-page" data-testid="aqueduct">
       <header className="aq-head">
@@ -34,7 +36,7 @@ export default async function AqueductPage() {
           ))}
         </form>
       </header>
-      <AqueductScene initialLook={a.look} initialPaused={a.paused} ownLook={!v.switchedInto} now={a.now} leak={a.leak} stepRates={a.stepRates} />
+      <AqueductScene initialLook={a.look} initialPaused={a.paused} ownLook={!v.switchedInto} now={a.now} leak={a.leak} stepRates={a.stepRates} repair={r.repair} stamp={r.stamp} />
       {p ? (
         <section className="aq-panel" data-testid="aqueduct-leak" data-step={a.leak!.step}>
           <p className="aq-eyebrow">Where your water is leaking</p>
@@ -62,7 +64,7 @@ export default async function AqueductPage() {
           {a.missing}
         </p>
       ) : null}
-      <table className="aq-table" data-testid="aqueduct-table">
+      <table id="aqueduct-table" className="aq-table" data-testid="aqueduct-table">
         <caption className="sr-only">Every stage</caption>
         <thead>
           <tr>

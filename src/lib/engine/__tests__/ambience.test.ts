@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLOSSEUM_BIRDS, COLOSSEUM_CLOUD_S, COLOSSEUM_FLICKER, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES, top3CheerKey } from "../ambience";
+import { AQUEDUCT_FOUNTAIN, COLOSSEUM_BIRDS, COLOSSEUM_CLOUD_S, COLOSSEUM_FLICKER, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES, top3CheerKey } from "../ambience";
 
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100;
 
@@ -34,5 +34,35 @@ describe("the Colosseum's ambience (H-637 PR 1)", () => {
     expect(top3CheerKey("m1", "2026-10-12")).toBe("hx-top3-m1-2026-10-12");
     expect(top3CheerKey("m1", "2026-10-19")).not.toBe(top3CheerKey("m1", "2026-10-12"));
     expect(top3CheerKey("m2", "2026-10-12")).not.toBe(top3CheerKey("m1", "2026-10-12"));
+  });
+});
+
+describe("the Aqueduct's full fountain (H-637 PR 2)", () => {
+  it("draws four streaks, a mist, four spray drops and a ripple in both looks", () => {
+    for (const look of ["day", "night"] as const) {
+      const f = AQUEDUCT_FOUNTAIN[look];
+      expect(f.streaks).toHaveLength(4);
+      expect(f.spray).toHaveLength(4);
+    }
+  });
+
+  it("keeps golden hour on the mockup's coordinates", () => {
+    expect(AQUEDUCT_FOUNTAIN.day.streaks[0].d).toBe("M1392,392 C1410,450 1425,520 1430,612");
+    expect(AQUEDUCT_FOUNTAIN.day.mist).toEqual({ cx: 1452, cy: 628, rx: 60, ry: 18 });
+    expect(AQUEDUCT_FOUNTAIN.day.spray[0]).toEqual({ cx: 1528, cy: 598, r: 2.4, dl: 0 });
+  });
+
+  it("puts every point inside the 1680 by 944 picture, by the waterfall and fountain on the right", () => {
+    for (const look of ["day", "night"] as const) {
+      const f = AQUEDUCT_FOUNTAIN[look];
+      const pts = f.streaks.flatMap((s) => [...s.d.matchAll(/(\d+),(\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]));
+      pts.push([f.mist.cx, f.mist.cy], [f.ripple.cx, f.ripple.cy], ...f.spray.map((d) => [d.cx, d.cy]));
+      for (const [x, y] of pts) {
+        expect(x).toBeGreaterThan(1300);
+        expect(x).toBeLessThan(1680);
+        expect(y).toBeGreaterThan(300);
+        expect(y).toBeLessThan(944);
+      }
+    }
   });
 });

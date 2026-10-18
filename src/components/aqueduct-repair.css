@@ -1,0 +1,59 @@
+/*
+ * The Aqueduct's repair moment and the full fountain (H-327 §4, plan H-637 PR 2). Timings from
+ * docs/scenes/living-scenes-aqueduct.dc.html. `.aq-rep` is on the scene while a repair plays; `.aq-rep-wait` holds it while the
+ * tab is hidden, so it waits for the member to look. Amber and green only. Reduced motion stops every animation and the
+ * component draws only the end state.
+ */
+.aq-stage { position: relative; }
+
+/* The crossfade: the old leak's picture underneath, the current one fading in over it. */
+.aq-rep .aq-bg-now { animation: aq-fadeIn 1.4s ease 1.6s both; }
+/* What arrives with the new state: the fountain, or a new leak elsewhere. */
+.aq-rep .aq-rep-new { animation: aq-fadeIn 0.8s ease 2.2s both; }
+
+/* The repair over the old leak. */
+.aq-rep-burst { opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; animation: aq-burst 1s ease-out 0.3s both; }
+.aq-rep-leak { transform-box: fill-box; transform-origin: 50% 0%; animation: aq-stopLeak 0.9s ease-in 0.5s both; }
+.aq-rep-ripples { animation: aq-fadeOut 0.8s ease 1s both; }
+.aq-rep-amber { animation: aq-fadeOut 0.5s ease 1.4s both; }
+.aq-rep-green { transform-box: fill-box; transform-origin: 50% 50%; animation: aq-popIn 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) 1.6s both; }
+/* The channel after the leak widens to full: each path from 60% of its width to its own. */
+.aq-rep .aq-glow.aq-widen { animation: aq-widen 1.2s ease 1.2s both; }
+.aq-rep .aq-dash.aq-widen { animation: aq-flow 1.6s linear infinite, aq-widen 1.2s ease 1.2s both; }
+/* Held while the tab is hidden: the moment waits for the member. */
+.aq-rep-wait .aq-bg-now, .aq-rep-wait .aq-rep-new, .aq-rep-wait [class*="aq-rep-"], .aq-rep-wait .aq-widen, .aq-rep-wait + .aq-repcard { animation-play-state: paused !important; }
+
+/* The full fountain. */
+.aq-wf { fill: none; stroke: #ffffff; stroke-opacity: 0.55; stroke-width: 3; stroke-dasharray: 14 22; stroke-linecap: round; mix-blend-mode: screen; animation: aq-fallFast 0.7s linear infinite; }
+.aq-mist { transform-box: fill-box; transform-origin: 50% 50%; animation: aq-mist 3s ease-in-out infinite; }
+.aq-spray { animation: aq-spray 1.4s ease-out infinite; }
+.aq-still .aq-wf, .aq-still .aq-mist, .aq-still .aq-spray, .aq-still .aq-fountain .aq-ripple { animation-play-state: paused; }
+
+/* The card: over the picture's lower left on a wide screen, under it on a phone. */
+.aq-repcard { display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border-radius: 16px; background: rgba(16, 13, 9, 0.94); border: 1px solid #5e4c27; color: #f1e6cf; animation: aq-rise 0.6s ease 3s both; }
+.aq-repcard-eb { margin: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: #f0cf86; }
+.aq-repcard-tt { margin: 0; font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 26px; line-height: 1.1; }
+.aq-repcard-tl { margin: 0; font-size: 14px; line-height: 1.5; color: #c9bc9f; }
+.aq-repcard-act { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.aq-repcard-act .btn { min-height: 44px; display: inline-flex; align-items: center; }
+@media (min-width: 761px) {
+  .aq-repcard { position: absolute; left: 3%; bottom: 5%; width: min(380px, 46%); z-index: 2; }
+}
+@media (max-width: 760px) {
+  .aq-repcard { margin-top: 10px; }
+}
+
+@keyframes aq-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes aq-fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes aq-burst { 0% { opacity: 0; transform: scale(0.3); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes aq-stopLeak { from { transform: scaleY(1); opacity: 1; } to { transform: scaleY(0); opacity: 0; } }
+@keyframes aq-popIn { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes aq-widen { from { stroke-width: var(--w0); } to { stroke-width: var(--w1); } }
+@keyframes aq-fallFast { to { stroke-dashoffset: -36; } }
+@keyframes aq-mist { 0%, 100% { opacity: 0.35; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.08); } }
+@keyframes aq-spray { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 0.9; } 100% { transform: translateY(-26px); opacity: 0; } }
+@keyframes aq-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .aq-stage *, .aq-repcard { animation: none !important; }
+}

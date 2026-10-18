@@ -62,3 +62,45 @@ export const COLOSSEUM_CLOUD_S = 48;
 
 /** The browser's mark that the top-3 cheer played for this member this week: once a week, never on a reload. */
 export const top3CheerKey = (membershipId: string, monday: string): string => `hx-top3-${membershipId}-${monday}`;
+
+/**
+ * The Aqueduct's "none" picture (H-327 §4): falling streaks over the painted waterfall, a mist pulse at its foot, and a spray
+ * and ripple at the fountain, in the 1680×944 viewBox. Golden hour is the mockup's (living-scenes-aqueduct.dc.html); the night
+ * picture's waterfall starts about 60 px higher, so its streaks are matched to that picture by eye.
+ */
+export type Fountain = {
+  streaks: { d: string; dl: number }[];
+  mist: { cx: number; cy: number; rx: number; ry: number };
+  spray: { cx: number; cy: number; r: number; dl: number }[];
+  ripple: { cx: number; cy: number; rx: number; ry: number };
+};
+const SPRAY = [
+  { cx: 1528, cy: 598, r: 2.4, dl: 0 },
+  { cx: 1522, cy: 600, r: 2, dl: 0.35 },
+  { cx: 1534, cy: 600, r: 2, dl: 0.7 },
+  { cx: 1528, cy: 602, r: 1.8, dl: 1.05 },
+];
+export const AQUEDUCT_FOUNTAIN: Record<"day" | "night", Fountain> = {
+  day: {
+    streaks: [
+      { d: "M1392,392 C1410,450 1425,520 1430,612", dl: 0 },
+      { d: "M1408,388 C1428,450 1442,525 1448,618", dl: -0.2 },
+      { d: "M1424,392 C1444,455 1456,530 1462,622", dl: -0.45 },
+      { d: "M1440,400 C1458,460 1468,535 1472,620", dl: -0.3 },
+    ],
+    mist: { cx: 1452, cy: 628, rx: 60, ry: 18 },
+    spray: SPRAY,
+    ripple: { cx: 1530, cy: 636, rx: 46, ry: 11 },
+  },
+  night: {
+    streaks: [
+      { d: "M1392,332 C1412,420 1428,520 1432,606", dl: 0 },
+      { d: "M1408,328 C1430,420 1444,525 1450,610", dl: -0.2 },
+      { d: "M1424,332 C1446,425 1458,530 1464,614", dl: -0.45 },
+      { d: "M1440,340 C1460,430 1470,535 1474,612", dl: -0.3 },
+    ],
+    mist: { cx: 1455, cy: 614, rx: 60, ry: 18 },
+    spray: SPRAY,
+    ripple: { cx: 1530, cy: 634, rx: 46, ry: 11 },
+  },
+};

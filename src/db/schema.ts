@@ -111,6 +111,8 @@ export const memberships = sqliteTable(
     /** The Aqueduct (rev 711): "Pause the water", and the period (30 or 7 days), both remembered. */
     aqueductPaused: integer("aqueduct_paused", { mode: "boolean" }).notNull().default(false),
     aqueductPeriod: integer("aqueduct_period").notNull().default(30),
+    /** The Aqueduct's repair moment (H-327 §4, plan H-637): the leak the member last saw ({ step: -1 for none, rate, period, date }); null until the first visit. Read with readSeen. */
+    aqueductRepairSeen: text("aqueduct_repair_seen", { mode: "json" }).$type<{ step: number; rate: number | null; period: number; date: string }>(),
     /** The Setup card (H-270 §1): when the Start Here video played to the end (S1a), and when Settings → You was last saved by the member (S2: the time zone and reminder hours, chosen rather than defaulted). */
     startHereWatchedAt: text("start_here_watched_at"),
     profileSavedAt: text("profile_saved_at"),
