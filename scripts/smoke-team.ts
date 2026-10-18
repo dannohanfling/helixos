@@ -383,6 +383,10 @@ async function main() {
     must(await owner.locator('[data-testid="team-full"]').count() && !(await owner.locator('[data-testid="team-invite-form"]').count()), "at the cap (2 members, 1 invite open against 2 seats) there is no invite form");
     must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("2 of 2 seats used (1 invite open)"), "the seats line says so");
     // The coach: sees the team on the client page, raises the cap, removes Tess.
+    // By here the dev server has compiled the closed-page sweep and the team pages, and with the app's growth it now reaches
+    // the container's 13 GB in this section (18 Oct: next-server killed at 12.7 GB on main too). A fresh server, as before
+    // section 8; the sessions live in the database, so every signed-in browser carries on.
+    if (base === "http://localhost:3000") execSync("scripts/dev-server.sh fresh", { stdio: "inherit" });
     const coachPage = await browser.newPage();
     watch(coachPage);
     await login(coachPage, "As the coach");
