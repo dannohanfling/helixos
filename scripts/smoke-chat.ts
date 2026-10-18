@@ -107,7 +107,9 @@ async function main() {
     if (await page.locator('script[src*="communityloyalty.io"]').count()) throw new Error("no chat script on Today");
     const askItem = page.locator('[data-testid="side-nav"] a[href="/ask"]');
     // Folded to icons, the menu carries the name as the item's accessible name; open, as its text.
-    const askName = ((await askItem.getAttribute("aria-label")) || (await askItem.innerText())).replace("💭", "").trim();
+    // Open, the item's text also carries its line ("chat with your coach"), so only its first line is the name.
+    const askText = (await askItem.getAttribute("aria-label")) || (await askItem.innerText());
+    const askName = askText.replace("💭", "").split("\n").map((l) => l.trim()).filter(Boolean)[0] ?? "";
     if (!/^Ask \S/.test(askName) || /your coach/.test(askName)) throw new Error(`the menu's Ask item is named for the coach: ${askName}`);
     await page.goto(`${base}/ask`);
     const widget = page.locator('[data-testid="chat-widget"]');
@@ -161,6 +163,8 @@ async function main() {
       await ph.waitForURL(/\/today/);
       await ph.goto(`${base}/ask`);
       await ph.locator('[data-testid="chat-widget"]').waitFor({ state: "attached" });
+      // The real script loads only once the page is running, after it starts watching <body>; the stand-in waits for that too.
+      await ph.waitForFunction(() => document.documentElement.hasAttribute("data-chat-here"), null, { timeout: 15000 });
       await ph.evaluate(() => {
         const d = document.createElement("div");
         d.id = "walk-launcher";
