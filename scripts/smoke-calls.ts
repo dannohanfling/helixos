@@ -3,10 +3,10 @@
  *  1. The coach's Settings → Calls shows the usual week (read from DEFAULT_CALLS, in its order) with who each call is for, the
  *     shared link and the passcode. The coach moves one call's start, skips a date and undoes it, and changes the passcode.
  *  2. The client (Maya, Elite in the seed) opens Calls: this week's calls in start order, exactly the ones the engine computes
- *     for her level from the database, each Join greyed with "Join opens at" until its window, the passcode with Copy, and
- *     Add to calendar answering text/calendar with RRULE. A call id from nowhere is not found.
- *  3. A call that started five minutes ago (a fixture): Live now at the top with Join live to the shared link, and Today's Next
- *     call line live with Join and the passcode.
+ *     for her level from the database, no length or end time on any of them (H-836), each Join greyed with "Join opens at"
+ *     until its window, the passcode with Copy, and Add to calendar answering text/calendar with RRULE. A call id from nowhere is not found.
+ *  3. A call that started this minute (a fixture, placed so no other call cuts its live window short): Live now at the top
+ *     with Join live to the shared link, and Today's Next call line live with Join and the passcode, with no length or end.
  *  4. At the Accelerator level the Academy calls are gone, and their calendar files are not found; the Accelerator ones stay.
  *  5. At 390 px Calls has no sideways scroll and every Join and Add to calendar is a 44 px tap target.
  *  6. The coach's Calls page shows every call with who it is for.
@@ -41,7 +41,7 @@ async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
   const { newId } = await import("@/lib/ids");
-  const { DEFAULT_CALLS, CALL_AUDIENCE_LABEL, callOccurrences, visibleTo } = await import("@/lib/engine/calls");
+  const { DEFAULT_CALLS, CALL_AUDIENCE_LABEL, LIVE_HOURS, callOccurrences } = await import("@/lib/engine/calls");
 
   const browser: Browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -129,7 +129,7 @@ async function main() {
       const calls = await db.query.programCalls.findMany({ where: eq(schema.programCalls.workspaceId, ws) });
       const skips = await db.query.programCallSkips.findMany();
       const now = new Date();
-      return callOccurrences(calls, skips, now, new Date(now.getTime() + 7 * 86_400_000)).filter((o) => visibleTo(o, { role: "client", programTier: tier }));
+      return callOccurrences(calls, skips, now, new Date(now.getTime() + 7 * 86_400_000), undefined, { role: "client", programTier: tier });
     };
     const want = await expected(mayaM.programTier);
     await client.goto(`${base}/calls`);
@@ -140,6 +140,9 @@ async function main() {
     const live = await client.locator('[data-testid="calls-live"] [data-testid="calls-item"]').count();
     must(JSON.stringify(starts.slice(live)) === JSON.stringify([...starts.slice(live)].sort()), "in start order");
     must(JSON.stringify([...starts].sort()) === JSON.stringify(want.map((o) => o.startIso).sort()), "the same calls the engine computes");
+    // No length and no end time anywhere a member reads a call (H-836: calls often run long).
+    const weekText = await client.locator("main").innerText();
+    must(!/\b\d+ (min|h)\b/.test(weekText) && !/\d:\d{2}\s*[AP]M\s*[-–]\s*\d/.test(weekText), "no call shows a length or an end time");
     const later = client.locator('[data-testid="calls-item"][data-state="later"] [data-testid="call-join"]').first();
     must(await later.isDisabled(), "a later call's Join is greyed");
     must((await later.innerText()).startsWith("Join opens at"), `and says when it opens: ${await later.innerText()}`);
@@ -154,9 +157,21 @@ async function main() {
     console.log(`✓ the client's Calls: ${starts.length} calls in order, Join greyed with "Join opens at", the passcode with Copy, Add to calendar is a weekly text/calendar`);
 
     // ── 3. A call that is live now. ──
-    const t = new Date(Date.now() - 5 * 60_000);
+    // The fixture starts this minute, in UTC. A live call lasts until two hours after its start or the next call Maya can see
+    // (H-836), so if another call starts within three minutes the walk waits for it and starts the fixture after it.
     const p = (n: number) => String(n).padStart(2, "0");
-    await db.insert(schema.programCalls).values({ id: fixtureId, workspaceId: ws, name: "Walk live call", weekday: t.getUTCDay(), start: `${p(t.getUTCHours())}:${p(t.getUTCMinutes())}`, minutes: 60, timezone: "UTC", audience: "academy", link: null, active: true, sort: 99 });
+    let fixture: Awaited<ReturnType<typeof expected>>[number] | undefined;
+    for (let i = 0; i < 4 && !fixture; i++) {
+      const t = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+      await db.delete(schema.programCalls).where(eq(schema.programCalls.id, fixtureId));
+      await db.insert(schema.programCalls).values({ id: fixtureId, workspaceId: ws, name: "Walk live call", weekday: t.getUTCDay(), start: `${p(t.getUTCHours())}:${p(t.getUTCMinutes())}`, minutes: 60, timezone: "UTC", audience: "academy", link: null, active: true, sort: 99 });
+      const occ = (await expected(mayaM.programTier)).find((o) => o.call.id === fixtureId);
+      const left = occ ? new Date(occ.liveEndIso).getTime() - Date.now() : 0;
+      if (occ && left > 3 * 60_000) fixture = occ;
+      else await new Promise((r) => setTimeout(r, Math.max(left, 0) + 61_000));
+    }
+    must(fixture, "a live fixture call could be placed");
+    must(new Date(fixture!.liveEndIso).getTime() <= new Date(fixture!.startIso).getTime() + LIVE_HOURS * 3_600_000, "its live end is at most two hours after the start");
     await client.goto(`${base}/calls`);
     const liveItem = client.locator(`[data-testid="calls-live"] [data-testid="calls-item"][data-call="${fixtureId}"]`);
     await liveItem.waitFor({ timeout: 30000 });
@@ -173,11 +188,12 @@ async function main() {
     const todayLine = client.locator('[data-testid="today-next-call"]');
     await todayLine.waitFor({ timeout: 30000 });
     must((await todayLine.getAttribute("data-state")) === "live", "Today's Next call line is live");
-    must((await todayLine.locator('[data-testid="today-next-call-line"]').innerText()).includes("(live now)"), `and says so: ${await todayLine.innerText()}`);
+    const lineText = await todayLine.locator('[data-testid="today-next-call-line"]').innerText();
+    must(/^📅 Next call: .+, \w{3} \d{1,2}:\d{2} [AP]M \(live now\)$/.test(lineText.trim()), `and says so, with no length or end: ${lineText}`);
     must(await todayLine.locator('[data-testid="call-join"]').isVisible(), "with Join");
     must((await todayLine.locator('[data-testid="today-next-call-passcode"]').innerText()).includes(passcode), "and the passcode");
     must((await todayLine.locator('[data-testid="today-next-call-week"]').getAttribute("href")) === "/calls", "See this week goes to Calls");
-    console.log("✓ a call five minutes in: Live now at the top of Calls with Join live, and Today's Next call line with Join and the passcode");
+    console.log("✓ a call that started this minute: Live now at the top of Calls with Join live, and Today's Next call line with Join and the passcode");
 
     // ── 4. The Accelerator level. ──
     await db.update(schema.memberships).set({ programTier: "Accelerator" }).where(eq(schema.memberships.id, mayaM.id));

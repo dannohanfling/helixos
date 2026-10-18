@@ -5,13 +5,21 @@
 
 /** Join opens this many minutes before the start. */
 export const JOIN_EARLY_MINUTES = 10;
+/**
+ * Calls often run past the hour (Danno, H-836), so Join and "Live now" stay up until this long after the start, or until the
+ * next call the reader can see starts, whichever is first. The stored length is only for the calendar file's end.
+ */
+export const LIVE_HOURS = 2;
 
 export type JoinState = "later" | "soon" | "live" | "over";
-/** Where an occurrence stands at `now`: Join opens 10 minutes before the start ("soon"), "live" from start to end, then "over". */
-export function joinState(occ: { startIso: string; endIso: string }, now: Date | number = Date.now()): JoinState {
+/**
+ * Where an occurrence stands at `now`: Join opens 10 minutes before the start ("soon"), "live" from the start until its live
+ * end (two hours after the start, or the next visible call's start, whichever is first; see `callOccurrences`), then "over".
+ */
+export function joinState(occ: { startIso: string; liveEndIso: string }, now: Date | number = Date.now()): JoinState {
   const t = typeof now === "number" ? now : now.getTime();
   const start = new Date(occ.startIso).getTime();
-  if (t >= new Date(occ.endIso).getTime()) return "over";
+  if (t >= new Date(occ.liveEndIso).getTime()) return "over";
   if (t >= start) return "live";
   if (t >= start - JOIN_EARLY_MINUTES * 60_000) return "soon";
   return "later";

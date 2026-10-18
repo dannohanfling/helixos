@@ -2,23 +2,24 @@
  * The weekly calls (H-820, plan H-828), the server side: the reads the /calls page, the Next call line on Today, the Add to
  * calendar route and the coach's Settings → Calls card share. The rules are in src/lib/engine/calls.ts.
  *
- * `callsBetween` is the source for the H-771 reminders (morning of, 15 minutes before, "we're live"): every occurrence of the
- * workspace's active calls in a window, skipped dates left out, with how to join. The sender filters by `visibleTo` for each
- * member it writes to; nothing here knows about members.
+ * `callsBetween` is the source for the H-771 reminders (morning of, 15 minutes before, and "we're live", which goes at the
+ * start, `startIso`): every occurrence of the workspace's active calls in a window, skipped dates left out, with how to join.
+ * The sender passes each member's level as `seer`, so the calls and their live ends are that member's; nothing here reads members.
  */
 import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays, todayInTz } from "@/lib/dates";
-import { callOccurrences, type CallOccurrence } from "@/lib/engine/calls";
+import { callOccurrences, type CallOccurrence, type CallSeer } from "@/lib/engine/calls";
 
 export type CallsWorkspace = { id: string; callsLink: string | null; callsPasscode: string | null };
 
 /**
- * Every occurrence of the workspace's active calls that overlaps [from, to), sorted by start, each with its link (the call's
- * own, else the shared one) and the workspace's passcode. One query: the calls, their skips from the window's start on, and the
- * workspace's link, joined.
+ * Every occurrence of the workspace's active calls that is on during [from, to) (start to live end), sorted by start, each with
+ * its link (the call's own, else the shared one) and the workspace's passcode. With `seer`, only the calls that member can
+ * see, and a live end cut by the next call they can see (H-836). One query: the calls, their skips from just before the
+ * window on, and the workspace's link, joined.
  */
-export async function callsBetween(workspaceId: string, from: Date | string, to: Date | string): Promise<CallOccurrence<schema.ProgramCall>[]> {
+export async function callsBetween(workspaceId: string, from: Date | string, to: Date | string, seer?: CallSeer): Promise<CallOccurrence<schema.ProgramCall>[]> {
   // A skip is a call's own local date; two days before the window's UTC date covers every zone.
   const since = addDays(todayInTz("UTC", new Date(from)), -2);
   const rows = await db
@@ -30,7 +31,7 @@ export async function callsBetween(workspaceId: string, from: Date | string, to:
   if (!rows.length) return [];
   const calls = new Map(rows.map((r) => [r.call.id, r.call]));
   const skips = rows.flatMap((r) => (r.skip ? [{ callId: r.skip.callId, date: r.skip.date }] : []));
-  return callOccurrences([...calls.values()], skips, from, to, { link: rows[0].link, passcode: rows[0].passcode });
+  return callOccurrences([...calls.values()], skips, from, to, { link: rows[0].link, passcode: rows[0].passcode }, seer);
 }
 
 /** Every call of the workspace, on or off, in the coach's order, with its skips from `since` on (the coach's card). */

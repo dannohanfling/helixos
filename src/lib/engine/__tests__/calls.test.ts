@@ -26,7 +26,9 @@ describe("callOccurrences: the weekly calls as instants", () => {
     const occ = callOccurrences([call({ link: "https://example.com/room" })], [], "2026-10-26T17:30:00Z", "2026-10-26T20:00:00Z", shared);
     expect(occ).toHaveLength(1);
     expect(occ[0].link).toBe("https://example.com/room");
-    expect(callOccurrences([call()], [], "2026-10-26T18:00:00Z", "2026-10-26T20:00:00Z")).toEqual([]);
+    // A lone call stays on until two hours after its start (H-836), then it is gone.
+    expect(callOccurrences([call()], [], "2026-10-26T18:30:00Z", "2026-10-26T20:00:00Z").map((o) => o.liveEndIso)).toEqual(["2026-10-26T19:00:00.000Z"]);
+    expect(callOccurrences([call()], [], "2026-10-26T19:00:00Z", "2026-10-26T20:00:00Z")).toEqual([]);
   });
   it("a call in another zone reads its weekday there: Monday 10:00 Sydney is Sunday 23:00 UTC", () => {
     const occ = callOccurrences([call({ timezone: "Australia/Sydney" })], [], "2026-10-24T00:00:00Z", "2026-10-27T00:00:00Z");
@@ -46,14 +48,38 @@ describe("callOccurrences: the weekly calls as instants", () => {
   });
 });
 
-describe("joinState: Join from 10 minutes before to the end", () => {
-  const occ = { startIso: "2026-10-26T17:00:00.000Z", endIso: "2026-10-26T18:00:00.000Z" };
+describe("joinState: Join from 10 minutes before to the live end", () => {
+  const occ = { startIso: "2026-10-26T17:00:00.000Z", liveEndIso: "2026-10-26T19:00:00.000Z" };
   it("later, soon, live and over", () => {
     expect(joinState(occ, new Date("2026-10-26T16:49:59Z"))).toBe("later");
     expect(joinState(occ, new Date("2026-10-26T16:50:00Z"))).toBe("soon");
     expect(joinState(occ, new Date("2026-10-26T17:00:00Z"))).toBe("live");
-    expect(joinState(occ, new Date("2026-10-26T17:59:59Z"))).toBe("live");
-    expect(joinState(occ, new Date("2026-10-26T18:00:00Z"))).toBe("over");
+    expect(joinState(occ, new Date("2026-10-26T18:30:00Z"))).toBe("live");
+    expect(joinState(occ, new Date("2026-10-26T19:00:00Z"))).toBe("over");
+  });
+  it("a lone call is live until two hours after its start, past its stored hour (H-836)", () => {
+    const [o] = callOccurrences([call()], [], "2026-10-26T16:00:00Z", "2026-10-26T23:00:00Z");
+    expect([o.endIso, o.liveEndIso]).toEqual(["2026-10-26T18:00:00.000Z", "2026-10-26T19:00:00.000Z"]);
+    expect(joinState(o, new Date("2026-10-26T18:45:00Z"))).toBe("live");
+    expect(joinState(o, new Date("2026-10-26T19:00:00Z"))).toBe("over");
+  });
+  it("Monday 9:00 Orientation is live until 10:00, when the Academy call starts; for an Accelerator member, who can't see that call, until 11:00", () => {
+    const calls = [call({ id: "orient", name: "Accelerator Orientation", start: "09:00", audience: "accelerator_academy" }), call()];
+    const academy = callOccurrences(calls, [], "2026-10-26T15:00:00Z", "2026-10-26T23:00:00Z", undefined, { role: "client", programTier: "Academy" });
+    expect(academy.map((o) => [o.call.id, o.liveEndIso])).toEqual([
+      ["orient", "2026-10-26T17:00:00.000Z"],
+      ["c1", "2026-10-26T19:00:00.000Z"],
+    ]);
+    expect(joinState(academy[0], new Date("2026-10-26T16:59:00Z"))).toBe("live");
+    expect(joinState(academy[0], new Date("2026-10-26T17:00:00Z"))).toBe("over");
+    expect(callOccurrences(calls, [], "2026-10-26T15:00:00Z", "2026-10-26T23:00:00Z").map((o) => o.liveEndIso)).toEqual(["2026-10-26T17:00:00.000Z", "2026-10-26T19:00:00.000Z"]);
+    const accelerator = callOccurrences(calls, [], "2026-10-26T15:00:00Z", "2026-10-26T23:00:00Z", undefined, { role: "client", programTier: "Accelerator" });
+    expect(accelerator.map((o) => [o.call.id, o.liveEndIso])).toEqual([["orient", "2026-10-26T18:00:00.000Z"]]);
+  });
+  it("a next call just past the window still cuts the live end", () => {
+    const calls = [call({ id: "early", start: "09:00" }), call({ id: "late", start: "10:30" })];
+    const [o] = callOccurrences(calls, [], "2026-10-26T16:00:00Z", "2026-10-26T17:00:00Z");
+    expect([o.call.id, o.liveEndIso]).toEqual(["early", "2026-10-26T17:30:00.000Z"]);
   });
   it("says when Join opens in the reader's time", () => {
     expect(joinOpensAt(occ, "America/Los_Angeles")).toBe("9:50 AM");
@@ -68,6 +94,11 @@ describe("visibleTo: who sees which call", () => {
     expect([visibleTo(acc, { role: "client", programTier: "Accelerator" }), visibleTo(aca, { role: "client", programTier: "Accelerator" })]).toEqual([true, false]);
     for (const tier of ["Academy", "Elite", "Luxe"]) expect([visibleTo(acc, { role: "client", programTier: tier }), visibleTo(aca, { role: "client", programTier: tier })]).toEqual([true, true]);
     expect(visibleTo(aca, { role: "coach", programTier: "Accelerator" })).toBe(true);
+    const both = [call({ id: "acc", audience: "accelerator_academy" }), call({ id: "aca" })];
+    const ids = (role: "coach" | "client", programTier: string) => callOccurrences(both, [], "2026-10-26T00:00:00Z", "2026-10-27T00:00:00Z", undefined, { role, programTier }).map((o) => o.call.id).sort();
+    expect(ids("client", "Accelerator")).toEqual(["acc"]);
+    for (const tier of ["Academy", "Elite", "Luxe"]) expect(ids("client", tier)).toEqual(["aca", "acc"]);
+    expect(ids("coach", "Accelerator")).toEqual(["aca", "acc"]);
     expect(CALL_AUDIENCE_LABEL).toEqual({ accelerator_academy: "Accelerator and up", academy: "Academy and up" });
   });
 });

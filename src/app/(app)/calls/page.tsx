@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { callsBetween } from "@/lib/calls";
-import { CALL_AUDIENCE_LABEL, clockIn, dayHeading, joinState, lengthWords, visibleTo, type CallOccurrence } from "@/lib/engine/calls";
+import { CALL_AUDIENCE_LABEL, clockIn, dayHeading, joinState, type CallOccurrence } from "@/lib/engine/calls";
 import { OOH_FRIDAYS, upcomingFridays } from "@/lib/engine/office-hours";
 import { hostToday, oohSchedule, sessionStart } from "@/lib/engine/ooh-session";
 import { oohAccessFor } from "@/lib/office-hours-access";
@@ -14,13 +14,14 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 export const metadata = { title: "Calls" };
 
 const DAYS = 7;
-type Item = { kind: "call"; occ: CallOccurrence<ProgramCall> } | { kind: "ooh"; startIso: string; endIso: string };
+type Item = { kind: "call"; occ: CallOccurrence<ProgramCall> } | { kind: "ooh"; startIso: string };
 const startOf = (i: Item) => (i.kind === "call" ? i.occ.startIso : i.startIso);
 
 /**
  * Calls (H-820, plan H-828): the next seven days of the weekly calls the member's level can see, in their own time, with Join
- * (live from 10 minutes before the start to the end), the passcode, and Add to calendar for each. A live call sits at the top.
- * The next Office Hours session shows as its own row for a member who has Office Hours. The coach sees every call with who it
+ * (from 10 minutes before the start until two hours after it or the next call, H-836), the passcode, and Add to calendar for
+ * each. No length or end time is shown: calls often run long. A live call sits at the top. Each Office Hours session in the
+ * seven days is a row on its day, for a member who has Office Hours. The coach sees every call with who it
  * is for; a team member sees the owner's (their membership is the owner's, H-413). The stable address for the Wallet pass.
  */
 export default async function CallsPage() {
@@ -28,18 +29,20 @@ export default async function CallsPage() {
   const now = new Date();
   const to = new Date(now.getTime() + DAYS * 86_400_000);
   const seer = { role: v.role, programTier: v.membership.programTier };
-  const [all, access] = await Promise.all([callsBetween(v.workspace.id, now, to), oohAccessFor(v)]);
-  const items: Item[] = all.filter((o) => visibleTo(o, seer)).map((occ) => ({ kind: "call", occ }));
-  // The next Office Hours session, as /office-hours counts it (H-457): the host's dates, the first one not yet over.
+  // The calls this member's level can see (a team member's are the owner's), each live until two hours after its start or the
+  // next of these calls, whichever is first (H-836).
+  const [visible, access] = await Promise.all([callsBetween(v.workspace.id, now, to, seer), oohAccessFor(v)]);
+  const items: Item[] = visible.map((occ) => ({ kind: "call", occ }));
+  // Every Office Hours session in the seven days, as /office-hours counts them (H-457): the host's dates, on their own day and
+  // time in the list, for a member who has Office Hours. It keeps its own page; the row links there.
   if (access.open) {
     const session = oohSchedule(v.workspace);
     for (const day of upcomingFridays(hostToday(session), OOH_FRIDAYS, session.weekday)) {
       const at = sessionStart(day, session);
       if (!at) break;
-      const end = new Date(at.getTime() + session.minutes * 60_000);
-      if (end <= now) continue;
-      if (at < to) items.push({ kind: "ooh", startIso: at.toISOString(), endIso: end.toISOString() });
-      break;
+      if (at.getTime() + session.minutes * 60_000 <= now.getTime()) continue;
+      if (at >= to) break;
+      items.push({ kind: "ooh", startIso: at.toISOString() });
     }
   }
   items.sort((a, b) => startOf(a).localeCompare(startOf(b)));
@@ -71,7 +74,7 @@ export default async function CallsPage() {
           <span className="tabular font-medium" data-testid="calls-item-time">
             {clockIn(o.startIso, v.tz)}
           </span>{" "}
-          <span data-testid="calls-item-name">{o.call.name}</span> <span className="text-xs text-ink-3">· {lengthWords(o.call.minutes)}</span>
+          <span data-testid="calls-item-name">{o.call.name}</span>
           {v.role === "coach" ? (
             <span className="ml-1">
               <Badge tone={o.audience === "academy" ? "accent" : "neutral"}>
@@ -81,7 +84,7 @@ export default async function CallsPage() {
           ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-2">
-          <CallJoin startIso={o.startIso} endIso={o.endIso} link={o.link} tz={v.tz} initial={state} />
+          <CallJoin startIso={o.startIso} liveEndIso={o.liveEndIso} link={o.link} tz={v.tz} initial={state} />
           <a href={`/calls/${o.call.id}/calendar`} className="inline-flex min-h-11 items-center text-xs underline" data-testid="calls-calendar">
             Add to calendar
           </a>

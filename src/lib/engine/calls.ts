@@ -1,8 +1,9 @@
 /**
  * The weekly calls (H-820, plan H-828), the rules with no database in them. A call is a weekday and a start in its own zone
  * ("Monday 10:00 America/Los_Angeles"), so it stays at 10:00 Pacific for the host across a clock change and each member reads
- * it in theirs. Everything that shows a call works from `callOccurrences`: the /calls page, the Next call line on Today, the
- * Add to calendar file, and the H-771 reminders (morning of, 15 minutes before, "we're live"), which read the same
+ * it in theirs. Members never see a length or an end (H-836: calls often run long); Join and "Live now" last two hours from
+ * the start or until the next call they can see. Everything that shows a call works from `callOccurrences`: the /calls page,
+ * the Next call line on Today, and the H-771 reminders (morning of, 15 minutes before, "we're live" at the start), which read the same
  * occurrences through `callsBetween` in src/lib/calls.ts and add only the sending. Covered by
  * src/lib/engine/__tests__/calls.test.ts.
  */
@@ -11,9 +12,9 @@ import { addDays, todayInTz, wallTimeToUtc, weekday as weekdayOf } from "@/lib/d
 import { icsFold, icsStamp, icsText } from "@/lib/hermes/when";
 import { programInAudience } from "./recordings";
 import { validTimezone } from "./recording-rules";
-import { clockIn, joinState } from "./call-join";
+import { LIVE_HOURS, clockIn, joinState } from "./call-join";
 
-export { JOIN_EARLY_MINUTES, canJoin, clockIn, joinOpensAt, joinState, type JoinState } from "./call-join";
+export { JOIN_EARLY_MINUTES, LIVE_HOURS, canJoin, clockIn, joinOpensAt, joinState, type JoinState } from "./call-join";
 
 export const CALL_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 export const CALL_MINUTES_MIN = 5;
@@ -48,10 +49,12 @@ export type SkipLike = { callId: string; date: string };
 export type Shared = { link: string | null; passcode: string | null };
 
 /**
- * One occurrence of a call: the instants it starts and ends, the call's own local date (what a skip keys on), who it is for,
- * and how to join (the call's link, else the shared one, and the shared passcode).
+ * One occurrence of a call: the instant it starts, the end its stored length gives (for the calendar file only: members are
+ * never shown a length or an end, H-836), the live end (`liveEndIso`: two hours after the start, or the next visible call's
+ * start, whichever is first; Join and "Live now" last until then), the call's own local date (what a skip keys on), who it is
+ * for, and how to join (the call's link, else the shared one, and the shared passcode).
  */
-export type CallOccurrence<C extends CallLike = CallLike> = { call: C; startIso: string; endIso: string; localDate: string; audience: CallAudience; link: string | null; passcode?: string | null };
+export type CallOccurrence<C extends CallLike = CallLike> = { call: C; startIso: string; endIso: string; liveEndIso: string; localDate: string; audience: CallAudience; link: string | null; passcode?: string | null };
 
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 export const validCallStart = (s: string): boolean => TIME.test(s);
@@ -65,30 +68,48 @@ export function callStartOn(call: Pick<CallLike, "start" | "timezone">, localDat
 }
 
 /**
- * Every occurrence of the active calls that overlaps [from, to), skipped dates left out, sorted by start (then by name). A
- * call already running at `from` is included, so "from now" finds a live call too. The source for the H-771 reminders.
+ * Every occurrence of the active calls that is on during [from, to), skipped dates left out, sorted by start (then by name).
+ * "On" runs from the start to the live end (H-836): two hours after the start, or the start of the next call the reader can
+ * see, whichever is first, so a call that runs long stays joinable and a call already running at `from` is included. With a
+ * `seer`, only the calls they can see are listed, and the next call that cuts a live end is the next one they can see; without
+ * one, every call (the coach's view).
+ *
+ * The source for the H-771 reminders, through `callsBetween`: the morning-of and 15-minutes-before messages key on `startIso`,
+ * and "we're live" is sent at the start (`startIso`), not at any later moment in the live window.
  */
-export function callOccurrences<C extends CallLike>(calls: C[], skips: SkipLike[], from: Date | string, to: Date | string, shared: Shared = { link: null, passcode: null }): CallOccurrence<C>[] {
+export function callOccurrences<C extends CallLike>(calls: C[], skips: SkipLike[], from: Date | string, to: Date | string, shared: Shared = { link: null, passcode: null }, seer?: CallSeer): CallOccurrence<C>[] {
   const a = toMs(from);
   const b = toMs(to);
   if (!(b > a)) return [];
+  const live = LIVE_HOURS * 3_600_000;
   const skipped = new Set(skips.map((s) => `${s.callId}|${s.date}`));
-  const out: CallOccurrence<C>[] = [];
+  // Every start from a live window before `from` to a live window after `to`: enough to place each live end.
+  const all: Omit<CallOccurrence<C>, "liveEndIso">[] = [];
   for (const call of calls) {
     if (!call.active || !validTimezone(call.timezone) || !validCallStart(call.start)) continue;
-    // The call's local dates that can touch the window, one day of slack each side (a call can run past midnight).
-    const first = addDays(todayInTz(call.timezone, new Date(a)), -1);
-    const last = addDays(todayInTz(call.timezone, new Date(b)), 1);
+    if (seer && !visibleTo(call, seer)) continue;
+    // The call's local dates that can touch the window, one day of slack each side.
+    const first = addDays(todayInTz(call.timezone, new Date(a - live)), -1);
+    const last = addDays(todayInTz(call.timezone, new Date(b + live)), 1);
     for (let d = addDays(first, (call.weekday - weekdayOf(first) + 7) % 7); d <= last; d = addDays(d, 7)) {
       if (skipped.has(`${call.id}|${d}`)) continue;
       const start = callStartOn(call, d);
       if (!start) continue;
-      const end = start.getTime() + call.minutes * 60_000;
-      if (end <= a || start.getTime() >= b) continue;
-      out.push({ call, startIso: start.toISOString(), endIso: new Date(end).toISOString(), localDate: d, audience: call.audience, link: call.link || shared.link || null, passcode: shared.passcode ?? null });
+      const t = start.getTime();
+      if (t < a - live || t >= b + live) continue;
+      all.push({ call, startIso: start.toISOString(), endIso: new Date(t + call.minutes * 60_000).toISOString(), localDate: d, audience: call.audience, link: call.link || shared.link || null, passcode: shared.passcode ?? null });
     }
   }
-  return out.sort((x, y) => x.startIso.localeCompare(y.startIso) || x.call.name.localeCompare(y.call.name));
+  all.sort((x, y) => x.startIso.localeCompare(y.startIso) || x.call.name.localeCompare(y.call.name));
+  const out: CallOccurrence<C>[] = [];
+  for (const o of all) {
+    const t = new Date(o.startIso).getTime();
+    const next = all.find((n) => n.startIso > o.startIso);
+    const liveEnd = Math.min(t + live, next ? new Date(next.startIso).getTime() : Infinity);
+    if (liveEnd <= a || t >= b) continue;
+    out.push({ ...o, liveEndIso: new Date(liveEnd).toISOString() });
+  }
+  return out;
 }
 
 /** Who is reading: the coach sees every call; a member (and their team, on the owner's level) the calls their program is in. */
