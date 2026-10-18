@@ -17,7 +17,8 @@ async function login(page: Page, who: "As a client" | "As the coach") {
 }
 async function logout(page: Page) {
   await page.goto(`${base}/settings`);
-  await page.locator('button:has-text("Log out")').first().click();
+  // At phone width the sidebar's Log out is hidden, so take whichever Log out is on screen.
+  await page.locator('button:has-text("Log out"):visible').first().click();
   await page.waitForURL(/\/login/);
 }
 async function open(page: Page, url: string, testid: string) {
