@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `aqueduct_repair_seen` text;

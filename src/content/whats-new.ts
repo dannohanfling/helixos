@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 237,
+    date: "2026-10-18",
+    title: "The Aqueduct shows you when an arch is repaired",
+    lines: [
+      "When the step that was leaking has recovered, the Aqueduct plays the repair once: a gold burst at the arch, the leak stops, the channel fills and the tag turns green.",
+      "A card tells you which step came back and by how much, from the rate you saw it leaking at. It never plays on your first visit.",
+      "With no leak anywhere, the waterfall and the fountain now move. Pause the water and it all holds still.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 235,
     date: "2026-10-18",
     title: "Small sounds now mark the moments",
