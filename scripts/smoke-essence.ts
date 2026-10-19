@@ -158,6 +158,31 @@ async function main() {
     await db.update(schema.essences).set({ data: before }).where(eq(schema.essences.id, eRow.id));
     console.log("✓ wizard: sections save one at a time and count; a story from the bank; the cap refuses a save that grows it; one already over is flagged with its trim-to-fit and can be trimmed");
 
+    // Key outcomes as named rows (H-811 A2): an Essence saved with the three old boxes opens as rows of those names, and the
+    // member renames, adds one for another audience, and saves them in her order.
+    await db.update(schema.essences).set({ data: { ...(before as Record<string, unknown>), key_outcomes_for_users: { clarity: "They know what they want", impact: "", connection: "Taken seriously" } } }).where(eq(schema.essences.id, eRow.id));
+    await page.goto(`${base}/essence?step=key_outcomes_for_users`);
+    await page.locator('[data-testid="outcome-row"]').first().waitFor({ timeout: 15000 });
+    const names = await page.locator('[data-testid="outcome-name"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+    if (JSON.stringify(names.slice(0, 2)) !== JSON.stringify(["Clarity", "Connection"]) || names.length !== 4) throw new Error(`the old boxes open as rows of their own names, with room to add: ${names.join(", ")}`);
+    if ((await page.locator('[data-testid="outcome-line"]').first().inputValue()) !== "They know what they want") throw new Error("and keep their words");
+    await fillExact(page, '[data-testid="outcome-name"] >> nth=0', "Calm");
+    await fillExact(page, '[data-testid="outcome-name"] >> nth=2', "Craft");
+    await fillExact(page, '[data-testid="outcome-line"] >> nth=2', "They teach it to others");
+    await fillExact(page, '[data-testid="outcome-audience"] >> nth=2', "practitioners");
+    await submit(page, 'button:has-text("Save")');
+    await page.waitForURL(/saved=1/);
+    const saved = (((await db.query.essences.findFirst({ where: eq(schema.essences.id, eRow.id) }))!.data as Record<string, Record<string, unknown>>).key_outcomes_for_users ?? {}) as { outcomes?: { name: string; line: string; audience: string }[]; clarity?: string };
+    const rows = saved.outcomes ?? [];
+    if (rows.map((r) => r.name).join("|") !== "Calm|Connection|Craft" || rows[2]?.audience !== "practitioners" || saved.clarity !== undefined) throw new Error(`the rows save in her order, named, with an audience, and the old boxes go: ${JSON.stringify(saved)}`);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/essence?step=key_outcomes_for_users`);
+    await page.locator('[data-testid="outcome-row"]').first().waitFor({ timeout: 15000 });
+    if (!(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1))) throw new Error("the outcome rows fit a phone");
+    await page.setViewportSize({ width: 1400, height: 950 });
+    await db.update(schema.essences).set({ data: before }).where(eq(schema.essences.id, eRow.id));
+    console.log("✓ key outcomes: the three old boxes open as named rows; renamed, one added for practitioners, saved in order; fits 390");
+
     // Filled: the promise line no longer warns; the system message leads with the Essence, cached, then the task
     await page.goto(`${base}/content/ladders`);
     if ((await page.locator('[data-testid="ai-promise"]').first().getAttribute("data-voice")) !== "1") throw new Error("with an Essence the promise line must not warn");
