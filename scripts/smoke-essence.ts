@@ -114,13 +114,34 @@ async function main() {
     await expectText(page, "3 of 14 sections", "story section filled from the bank");
     if ((await page.locator('[data-testid="story-row"]').count()) < 2) throw new Error("the picked story should now be a row");
     await page.screenshot({ path: "screenshots/e01-essence.png", fullPage: true });
-    // The cap refuses, saving nothing
+    // The cap refuses, saving nothing, and keeps what was typed (H-802: the refusal used to read as a save, so the box came
+    // back empty and the draft was dropped)
     await page.goto(`${base}/essence?step=ethical_standards`);
-    await fillExact(page, '[data-testid="field-transparency"]', "x".repeat(20500));
+    const overText = `${"Tell the truth about what a program can do. ".repeat(470)}The end.`;
+    const boxHolds = (want: string) => page.waitForFunction((w) => (document.querySelector('[data-testid="field-transparency"]') as HTMLTextAreaElement | null)?.value === w, want, { timeout: 8000 });
+    await fillExact(page, '[data-testid="field-transparency"]', overText);
     await submit(page, 'button:has-text("Save")');
-    await page.waitForURL(/over=/);
+    await page.waitForURL(/error=over&chars=\d+/);
+    await page.locator('[data-testid="essence-over"]').waitFor({ timeout: 10000 });
     await expectText(page, "over the 20,000 limit", "cap refused");
     await expectText(page, "3 of 14 sections", "nothing saved past the cap");
+    await boxHolds(overText).catch(async () => {
+      await page.screenshot({ path: "screenshots/fail-essence-cap-kept.png", fullPage: true });
+      throw new Error("a save refused over the cap must keep the typed text in the box");
+    });
+    if (await page.locator('[data-testid="save-confirm"]').filter({ visible: true }).count()) throw new Error("a save refused over the cap must not show the green Saved");
+    // A reload still has it: the draft was kept, not dropped as if it had saved
+    await page.reload();
+    await boxHolds(overText).catch(() => {
+      throw new Error("the draft of a save refused over the cap must be kept, so a reload puts it back");
+    });
+    // The steps below start from the section as it was: its draft let go, here and on the server
+    const draftId = `essence.${mayaRow!.id}.ethical_standards`;
+    await page.evaluate(async (id) => {
+      localStorage.removeItem(`helix.draft.${id}`);
+      await fetch("/api/drafts", { method: "DELETE", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ keys: [id] }) });
+    }, draftId);
+    console.log("✓ over the cap: the red line, no green, and what was typed is still in the box and in its draft");
     // Already over (an Airtable import brings an Essence in whole, 28 Sep): flagged with its trim-to-fit, left out of the AI,
     // and a save that trims it goes through.
     const { and: andOp } = await import("drizzle-orm");

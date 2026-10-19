@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { MagnetContent, MagnetType } from "@/db/schema";
 import { BRAND } from "@/lib/brand";
+import { itemStyle } from "@/lib/engine/lead-magnet";
 
 const INK = "#1a1a1a";
 const MUTED = "#5a5a5a";
@@ -37,7 +38,7 @@ export async function renderMagnetPdf(m: { title: string; promise: string; audie
     doc.fillColor(INK).fontSize(12).text(m.content.intro, { width, lineGap: 3 });
     doc.moveDown(0.8);
   }
-  const tick = m.type === "checklist" || m.type === "audit";
+  const style = itemStyle(m.type);
   for (const s of m.content.sections) {
     if (doc.y > doc.page.height - 160) doc.addPage();
     doc.rect(64, doc.y, 4, 18).fill(BRAND.deepGold);
@@ -49,7 +50,10 @@ export async function renderMagnetPdf(m: { title: string; promise: string; audie
     for (const item of s.items) {
       if (doc.y > doc.page.height - 100) doc.addPage();
       const y = doc.y + 6;
-      if (tick) {
+      if (style === "paragraph") {
+        // An E-book's chapter: its paragraphs as paragraphs, full width, no mark before them.
+        doc.fillColor(INK).text(item, 64, y + 2, { width, lineGap: 3 });
+      } else if (style === "tick") {
         doc.rect(66, y + 1, 11, 11).lineWidth(1).stroke(INK);
         doc.text(item, 86, y, { width: width - 22, lineGap: 2 });
       } else {

@@ -267,7 +267,7 @@ async function main() {
     await expectText(page, "Add an email or phone to sync this contact", "a contact with no identity says so on the contact");
     await page.selectOption('select[name="stage"]', "call_booked");
     await submit(page, 'form:has(select[name="stage"]) button[type="submit"]');
-    await page.waitForURL(/needsIdentity=call_booked/);
+    await page.waitForURL(/identityError=call_booked/);
     await expectText(page, "Add an email or phone before marking the call booked", "the stage change is refused with which one is missing");
     if ((await mockContacts()).length) throw new Error("no call is made for a name alone");
     await page.fill('[data-testid="contact-email"]', "priya@example.com");

@@ -2880,7 +2880,7 @@ export const files = sqliteTable("files", {
 });
 
 /** Lead magnets: the reason someone comments in the first place. The keyword ties a comment to one magnet; the slug is its public address. */
-export const MAGNET_TYPES = ["checklist", "guide", "cheat_sheet", "swipe_file", "audit", "resource_list"] as const;
+export const MAGNET_TYPES = ["checklist", "guide", "cheat_sheet", "swipe_file", "audit", "resource_list", "ebook"] as const;
 export type MagnetType = (typeof MAGNET_TYPES)[number];
 export type MagnetSection = { heading: string; items: string[]; why?: string; how?: string };
 export type MagnetContent = { intro: string; sections: MagnetSection[]; closing: string };

@@ -44,7 +44,7 @@ export async function updateContactAction(formData: FormData): Promise<void> {
     { stage: CONTACT_STAGES.find((s) => s === str(formData, "stage")), email: keep("email"), phone: keep("phone"), warmth: str(formData, "warmth") || null, nextFollowUpAt: opt(formData, "nextFollowUpAt") ?? undefined, callAt: opt(formData, "callAt"), notes: keep("notes"), whatTheyreBuilding: keep("whatTheyreBuilding"), profileUrl: keep("profileUrl") },
   );
   // A stage that pushes needs an identity to push on. The refusal is said on the page, with which one is missing; nothing is saved.
-  if (!out.ok) redirect(`/conversations/${id}?needsIdentity=${out.needsIdentity}`);
+  if (!out.ok) redirect(`/conversations/${id}?identityError=${out.needsIdentity}`);
   refresh();
 }
 

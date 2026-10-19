@@ -16,7 +16,7 @@ export const metadata = { title: "Their bot" };
  * The coach's view of any member's bot: the same "Your bot" panel the member sees on their own page, read live, with the same
  * checks, approvals and one Push. The coach can push for any client, as before; the client can push their own.
  */
-export default async function BotPushPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ pushed?: string; changed?: string; failed?: string; note?: string; saved?: string }> }) {
+export default async function BotPushPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ pushed?: string; changed?: string; pushError?: string; note?: string; saved?: string; exampleError?: string; storyError?: string }> }) {
   const v = await requireCoach();
   const { clientId } = await params;
   const sp = await searchParams;

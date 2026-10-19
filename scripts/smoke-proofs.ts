@@ -149,7 +149,7 @@ async function main() {
     await page.goto(`${base}/proof/${proofId}`);
     await page.check('[data-testid="permission-tick"] input');
     await submit(page, '[data-testid="approve"]');
-    await page.waitForURL(/needsAttachmentConsent=1/);
+    await page.waitForURL(/consentError=1/);
     await expectText(page, "One attachment shows a person and has no permission recorded yet", "approval held");
     if ((await db.query.proofs.findFirst({ where: eq(schema.proofs.id, proofId) }))?.status !== "draft") throw new Error("the proof was approved past an open permission");
     await page.fill('[data-testid="attachment-consent-name"]', "Dana R.");

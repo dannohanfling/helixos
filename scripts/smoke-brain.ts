@@ -141,7 +141,7 @@ async function main() {
     await sendButton.dblclick();
     await page.locator('[data-testid="send-bot"][data-pending="true"]').waitFor({ timeout: 1000 });
     if (!(await sendButton.isDisabled()) || (await sendButton.innerText()).trim() !== "Sending to your bot…") throw new Error(`while the send is out the button is disabled and says so, got "${await sendButton.innerText()}"`);
-    await page.waitForURL(/sent=1|error=|failed=/, { timeout: 20000 });
+    await page.waitForURL(/sent=1|error=|sendError=/, { timeout: 20000 });
     if (!page.url().includes("sent=1")) throw new Error(`the send is accepted and read back, got ${decodeURIComponent(page.url())}`);
     if ((await syncs()).length - syncsBefore !== 1) throw new Error(`a double press records one sync, got ${(await syncs()).length - syncsBefore}`);
     console.log('✓ pressed twice while the bot is slow: "Sending to your bot…", disabled, one sync record');
@@ -317,7 +317,7 @@ async function main() {
 
     // A send the platform refuses: the red line beside the button with the platform's own words, the bot unchanged, logged.
     await fetch(`${mock}/__refuse-next`, { method: "POST" });
-    await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
+    await Promise.all([clientPage.waitForURL(/sent=1|sendError=/), clientPage.click('[data-testid="send-bot"]')]);
     const failedLine = (await clientPage.locator('[data-testid="brain-send-failed"]').innerText()).trim();
     if (!failedLine.startsWith("Couldn't update your bot. Nothing changed there. Community Loyalty said: \"The data.0.value may not be greater than 20000 characters.\" (422)")) throw new Error(`a refused send says so beside the button, with the platform's reason, got "${failedLine}"`);
     if (!(await clientPage.locator('[data-testid="send-bot"]').count())) throw new Error("the button stays as it was after a refused send");
@@ -332,7 +332,7 @@ async function main() {
     await clientPage.goto(`${base}/brain`);
     await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
     const readsBeforeSend = ((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads;
-    await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
+    await Promise.all([clientPage.waitForURL(/sent=1|sendError=/), clientPage.click('[data-testid="send-bot"]')]);
     if (!clientPage.url().includes("sent=1")) throw new Error(`clearing the answers is a send, got ${decodeURIComponent(clientPage.url())}`);
     // The check before a push and the read-back after it read live, never the cached list.
     if (((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads < readsBeforeSend + 2) throw new Error("the pre-push check and the read-back each read the agent list live");
@@ -360,7 +360,7 @@ async function main() {
     await submit(clientPage, '[data-testid="accept-safe"]');
     await clientPage.goto(`${base}/brain`);
     if (await clientPage.locator('[data-testid="brief-blocked"]').count()) throw new Error(`the no-answers sentence is not foreign text: "${await clientPage.locator('[data-testid="brief-blocked"]').innerText()}"`);
-    await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
+    await Promise.all([clientPage.waitForURL(/sent=1|sendError=/), clientPage.click('[data-testid="send-bot"]')]);
     if (!clientPage.url().includes("sent=1")) throw new Error(`an answer sends over the no-answers sentence, got ${decodeURIComponent(clientPage.url())}`);
     if (!(await store())[field].includes("When do the calls happen?")) throw new Error("the bot holds the new answer");
     console.log("✓ a real answer sends straight over the no-answers sentence, with no overwrite refusal");

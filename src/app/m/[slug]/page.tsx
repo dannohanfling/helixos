@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { publicUrls } from "@/lib/storage";
+import { itemStyle } from "@/lib/engine/lead-magnet";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function MagnetPage({ params }: { params: Promise<{ slug: s
   const { slug } = await params;
   const m = await load(slug);
   if (!m) notFound();
-  const tick = m.type === "checklist" || m.type === "audit";
+  const style = itemStyle(m.type);
   const urlOf = await publicUrls([m.pdfKey, m.fileKey]);
   const pdf = m.formats.pdf && m.pdfKey ? urlOf(m.pdfKey) : null;
   const file = m.fileKey ? urlOf(m.fileKey) : null;
@@ -42,11 +43,17 @@ export default async function MagnetPage({ params }: { params: Promise<{ slug: s
           <h2 className="text-xl font-semibold">{s.heading}</h2>
           {s.why ? <p className="mt-1 text-sm"><span className="font-medium">Why:</span> {s.why}</p> : null}
           {s.how ? <p className="mt-1 text-sm"><span className="font-medium">How:</span> {s.how}</p> : null}
-          {s.items.length ? (
+          {s.items.length && style === "paragraph" ? (
+            <div className="mt-3 space-y-3" data-testid="magnet-paragraphs">
+              {s.items.map((it, j) => (
+                <p key={j} className="whitespace-pre-wrap leading-relaxed">{it}</p>
+              ))}
+            </div>
+          ) : s.items.length ? (
             <ul className="mt-2 space-y-1">
               {s.items.map((it, j) => (
                 <li key={j} className="flex gap-2">
-                  <span aria-hidden="true">{tick ? "☐" : "•"}</span>
+                  <span aria-hidden="true">{style === "tick" ? "☐" : "•"}</span>
                   <span>{it}</span>
                 </li>
               ))}

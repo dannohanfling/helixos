@@ -30,7 +30,7 @@ export async function pushYourBotAction(formData: FormData): Promise<void> {
   refresh();
   if (out.status === "sent") redirect(`${back}?pushed=${out.fields.length}#your-bot`);
   if (out.status === "changed") redirect(`${back}?changed=1#your-bot`);
-  redirect(`${back}?${out.status === "failed" ? "failed" : "note"}=${encodeURIComponent(out.note)}#your-bot`);
+  redirect(`${back}?${out.status === "failed" ? "pushError" : "note"}=${encodeURIComponent(out.note)}#your-bot`);
 }
 
 /** Approve one Needs-your-eyes line: its exact text as composed now, never a line the page merely named. One at a time. */
@@ -89,7 +89,7 @@ export async function saveBotExampleAction(formData: FormData): Promise<void> {
   const { v, workspaceId } = await ctx();
   const { m, back } = await botOwner(v, formData);
   const row: BotExampleRow = { id: str(formData, "id") || newId(), moment: str(formData, "moment").trim(), them: opt(formData, "them"), me: str(formData, "me").trim(), kind: str(formData, "kind") === "objection" ? "objection" : "normal" };
-  if (!row.moment || !row.me) redirect(`${back}?exampleMissing=1#examples`);
+  if (!row.moment || !row.me) redirect(`${back}?exampleError=1#examples`);
   const list = m.botExamples.some((e) => e.id === row.id) ? m.botExamples.map((e) => (e.id === row.id ? row : e)) : [...m.botExamples, row];
   await db.update(schema.memberships).set({ botExamples: list }).where(and(eq(schema.memberships.id, m.id), eq(schema.memberships.workspaceId, workspaceId)));
   refresh();
@@ -110,7 +110,7 @@ export async function saveBotStoryAction(formData: FormData): Promise<void> {
   const { m, back } = await botOwner(v, formData);
   const kind = str(formData, "kind") === "belief" ? "belief" : "plain";
   const row: BotStoryRow = { id: str(formData, "id") || newId(), text: str(formData, "text").trim(), kind, when: kind === "plain" ? opt(formData, "when") : null, belief: kind === "belief" ? opt(formData, "belief") : null };
-  if (!row.text || (kind === "belief" && !row.belief)) redirect(`${back}?storyMissing=1#stories`);
+  if (!row.text || (kind === "belief" && !row.belief)) redirect(`${back}?storyError=1#stories`);
   const list = m.botStories.some((e) => e.id === row.id) ? m.botStories.map((e) => (e.id === row.id ? row : e)) : [...m.botStories, row];
   await db.update(schema.memberships).set({ botStories: list }).where(and(eq(schema.memberships.id, m.id), eq(schema.memberships.workspaceId, workspaceId)));
   refresh();

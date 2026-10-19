@@ -10,11 +10,17 @@ describe("the one GoHighLevel scope list", () => {
   it("covers what the app calls now and within two releases, once each", () => {
     expect(new Set(REQUIRED_SCOPES).size).toBe(REQUIRED_SCOPES.length);
     for (const s of ["socialplanner/account.readonly", "socialplanner/post.readonly", "socialplanner/post.write", "contacts.write", "locations.readonly", "medias.write", "users.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("now");
-    for (const s of ["socialplanner/stat.readonly", "emails/builder.write", "locations/customFields.write", "locations/customFields.readonly", "contacts.readonly", "opportunities.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
+    for (const s of ["socialplanner/statistics.readonly", "emails/builder.write", "locations/customFields.write", "locations/customFields.readonly", "contacts.readonly", "opportunities.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
     // Nothing this product will ever touch.
     for (const s of ["category", "tag", "csv", "watermark"]) expect(REQUIRED_SCOPES.some((x) => x.includes(s))).toBe(false);
-    // H-294: every id spelled as GoHighLevel's own scope list spells it (checked against its OpenAPI specs, 16 Oct): no "statistics", no "comments".
-    for (const s of ["statistics", "comments"]) expect(REQUIRED_SCOPES.some((x) => x.includes(s))).toBe(false);
+    // H-294: no "comments" scope; GoHighLevel has none. H-802: the statistics scope is spelled as GoHighLevel's Private
+    // Integration picker spells it (a member confirmed), statistics, never the stat the scope list once showed.
+    expect(REQUIRED_SCOPES.some((x) => x.includes("comments"))).toBe(false);
+    expect(REQUIRED_SCOPES).toContain("socialplanner/statistics.readonly");
+    expect(REQUIRED_SCOPES).not.toContain("socialplanner/stat.readonly");
+    const stats = GHL_SCOPES.find((x) => x.scope === "socialplanner/statistics.readonly")!;
+    expect(pickerName(stats)).toBe("View Social Planner Statistics");
+    expect(searchText(stats)).toBe("Social Planner Statistic");
   });
   it("each row carries the picker's own name and a search text that finds it, one at a time (H-233)", () => {
     for (const s of GHL_SCOPES) {

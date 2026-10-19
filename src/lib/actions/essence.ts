@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { ESSENCE_CAP, essenceChars, normalizeEssence, sectionByKey, type EssenceData, type Story } from "@/lib/engine/essence";
+import { ESSENCE_CAP, essenceChars, essenceOverAddress, normalizeEssence, sectionByKey, type EssenceData, type Story } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 
@@ -43,7 +43,7 @@ export async function saveEssenceSectionAction(formData: FormData): Promise<void
   const next: EssenceData = normalizeEssence({ ...current, [section.key]: values });
   const chars = essenceChars(next);
   // Over the cap only refuses a save that grows it: an Essence already over (an import) can always be trimmed.
-  if (chars > ESSENCE_CAP && chars > essenceChars(current)) redirect(`/essence?step=${section.key}&over=${chars}`);
+  if (chars > ESSENCE_CAP && chars > essenceChars(current)) redirect(essenceOverAddress(section.key, chars));
   const existing = await db.query.essences.findFirst({ where: and(eq(schema.essences.workspaceId, workspaceId), eq(schema.essences.userId, userId)) });
   if (existing) await db.update(schema.essences).set({ data: next, updatedAt: nowIso() }).where(eq(schema.essences.id, existing.id));
   else await db.insert(schema.essences).values({ id: newId(), workspaceId, userId, data: next });
