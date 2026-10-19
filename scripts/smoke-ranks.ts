@@ -13,11 +13,12 @@ const must = (ok: unknown, msg: string) => {
 
 async function main() {
   const { db, schema } = await import("@/db");
-  const { eq } = await import("drizzle-orm");
+  const { and, eq } = await import("drizzle-orm");
   const { tierFor, TIERS } = await import("@/lib/engine/tiers");
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
-  const total = async () => (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id) })).reduce((s, r) => s + r.points, 0);
+  // The app's own count: this workspace's rows only.
+  const total = async () => (await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.workspaceId, mm.workspaceId)) })).reduce((s, r) => s + r.points, 0);
   const member = async () => (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!;
   const was = { kept: mm.rankKeptLevel, celebrated: mm.celebratedTierLevel, welcome: mm.welcomeShownOn };
   const sentinel = TIERS.find((t) => t.name === "Sentinel")!;
@@ -54,7 +55,8 @@ async function main() {
     must(kept.current === "Sentinel" && kept.next === "Centurion", `the ladder keeps Sentinel, Centurion next (${JSON.stringify(kept)})`);
     must(kept.reached === sentinel.level - 1, `every rank below Sentinel shows as reached (${kept.reached})`);
     const nextLine = (await page.locator('[data-testid="tier-ladder"] [data-state="next"]').innerText()).replace(/\s+/g, " ");
-    must(nextLine.includes((centurion.minPoints - points).toLocaleString()), `Centurion's distance is counted from the real points: ${nextLine}`);
+    const now = await total();
+    must(nextLine.includes((centurion.minPoints - now).toLocaleString()), `Centurion's distance is counted from the real points (${now.toLocaleString()} points, ${(centurion.minPoints - now).toLocaleString()} to go): ${nextLine}`);
     must((await member()).rankKeptLevel === sentinel.level, "the kept rank is not lowered by an open");
     await ctx.close();
 
