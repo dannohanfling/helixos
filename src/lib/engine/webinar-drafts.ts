@@ -1,6 +1,6 @@
 /**
  * Claude's webinar drafts (H-181, plan H-684), the pure parts: which fields each step takes, named exactly as the wizard names
- * them; reading a connector's fields (an unlisted field is refused, never ignored); taking out an income claim or a figure that
+ * them (PR 2 adds a script section's fields and the deck's slides); reading a connector's fields (an unlisted field is refused, never ignored); taking out an income claim or a figure that
  * isn't in the offer or the member's own words; and the panel's "now beside the draft" rows. No database, no request.
  */
 import { stripFabricated } from "@/lib/engine/blacklist";
@@ -16,9 +16,11 @@ export const CTA_TYPES = ["Book a call", "Buy now", "Apply", "Join the community
 export const BELIEF_TYPES = ["vehicle", "internal", "external"] as const;
 export type BeliefType = (typeof BELIEF_TYPES)[number];
 
-/** The steps PR 1 drafts. Script and deck come in PR 2. */
-export const DRAFTABLE_STEPS = ["foundation", "beliefs", "offer"] as const;
-export type DraftableStep = (typeof DRAFTABLE_STEPS)[number];
+/** The steps webinar_draft_step drafts. The deck has its own tool (webinar_deck_draft), one draft per section. */
+export const DRAFTABLE_STEPS = ["foundation", "beliefs", "offer", "script"] as const;
+export type DraftableStep = (typeof DRAFTABLE_STEPS)[number] | "deck";
+/** The steps whose drafts are one per section: the section's key rides beside the fields. */
+export const SECTION_STEPS: readonly DraftableStep[] = ["script", "deck"];
 
 /** Foundation's plain text fields, in the form's order, with the label the panel shows. */
 export const FOUNDATION_TEXT: { key: FoundationTextKey; label: string; max: number }[] = [
@@ -44,17 +46,39 @@ export const FOUNDATION_FIELDS = [...FOUNDATION_TEXT.map((f) => f.key), "categor
 export const BELIEF_FIELDS = ["from", "to", "proofId", "storyId", "evidenceId"] as const;
 export type BeliefField = (typeof BELIEF_FIELDS)[number];
 export const OFFER_FIELDS = ["offerId", "ctaType"] as const;
+/**
+ * A script section's fields (PR 2), named as the section form names them, with the panel's label. keyPoints is one slide per
+ * line (a list is joined one per line); durationMin is whole minutes; buildStyle is none or reveal.
+ */
+export const SCRIPT_TEXT: { key: ScriptTextKey; label: string; max: number }[] = [
+  { key: "keyPoints", label: "Key points (one slide per line)", max: 4000 },
+  { key: "script", label: "Script", max: 20000 },
+  { key: "transitionIn", label: "Transition in", max: 1000 },
+  { key: "transitionOut", label: "Transition out", max: 1000 },
+  { key: "deliveryNote", label: "Delivery note", max: 1000 },
+];
+export const SCRIPT_FIELDS = [...SCRIPT_TEXT.map((f) => f.key), "durationMin", "buildStyle"] as const;
+export const BUILD_STYLES = ["none", "reveal"] as const;
+/** A section slide carries one line on its face (the deck's rule): a title past the longest headline tier is refused. */
+export const SLIDE_TITLE_MAX = 160;
+export const SLIDE_FIELDS = ["sectionKey", "title", "body", "speakerNote", "imageId", "pictureIdea"] as const;
+export const DECK_MAX_SLIDES = 30;
 
 /** The webinar's column each belief field writes. */
 export const BELIEF_COLUMN: Record<BeliefField, "fromBelief" | "toBelief" | "proofId" | "storyAssetId" | "evidenceId"> = { from: "fromBelief", to: "toBelief", proofId: "proofId", storyId: "storyAssetId", evidenceId: "evidenceId" };
 export const BELIEF_LABEL: Record<BeliefField, string> = { from: "They believe now", to: "They must believe by the end", proofId: "Proof", storyId: "Story", evidenceId: "Evidence" };
 export const TYPE_LABEL: Record<BeliefType, string> = { vehicle: "Vehicle", internal: "Internal", external: "External" };
 
+type ScriptTextKey = "keyPoints" | "script" | "transitionIn" | "transitionOut" | "deliveryNote";
+export type ScriptDraft = Partial<Record<ScriptTextKey, string>> & { durationMin?: number; buildStyle?: (typeof BUILD_STYLES)[number] };
+/** One slide of a deck draft, as the draft keeps it. */
+export type SlideDraft = { title: string; body?: string[]; speakerNote?: string; imageId?: string; pictureIdea?: string };
+export type DeckDraft = { slides: SlideDraft[] };
 type FoundationTextKey = "title" | "audience" | "coreProblem" | "desiredResult" | "promise" | "mechanismName" | "mechanismWaivedReason" | "presenter" | "stayLine" | "promiseLine" | "chatPrompt" | "groundRule" | "sessionGoal" | "permissionLine" | "reflectionPrompt" | "footerBrand";
 export type FoundationDraft = Partial<Record<FoundationTextKey | "category" | "ctaType", string>> & { outcomes?: string[]; originStory?: Record<string, string> };
 export type BeliefDraft = Partial<Record<BeliefType, Partial<Record<BeliefField, string>>>>;
 export type OfferDraft = { offerId?: string; ctaType?: string };
-export type DraftFields = FoundationDraft | BeliefDraft | OfferDraft;
+export type DraftFields = FoundationDraft | BeliefDraft | OfferDraft | ScriptDraft | DeckDraft;
 
 export type ReadFields = { fields: Record<string, unknown>; refused: string[]; problems: string[] };
 
@@ -119,6 +143,23 @@ export function readDraftFields(step: DraftableStep, raw: unknown): ReadFields {
       }
       if (Object.keys(one).length) fields[type] = one;
     }
+  } else if (step === "script") {
+    for (const [k, v] of Object.entries(raw)) {
+      const text = SCRIPT_TEXT.find((f) => f.key === k);
+      if (text) {
+        const value = k === "keyPoints" && Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]).map((x) => x.trim()).filter(Boolean).join("\n") : v;
+        if (typeof value !== "string") problems.push(`${k} must be text${k === "keyPoints" ? " (one slide per line) or a list of lines" : ""}`);
+        else if (value.trim()) fields[k] = clip(value, text.max);
+      } else if (k === "durationMin") {
+        if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 60) problems.push("durationMin must be whole minutes, 1 to 60");
+        else fields.durationMin = v;
+      } else if (k === "buildStyle") {
+        if (typeof v !== "string" || !(BUILD_STYLES as readonly string[]).includes(v)) problems.push(`buildStyle must be one of: ${BUILD_STYLES.join(", ")}`);
+        else fields.buildStyle = v;
+      } else refused.push(k);
+    }
+  } else if (step === "deck") {
+    return { fields, refused, problems: ["the deck is drafted with webinar_deck_draft"] };
   } else {
     for (const [k, v] of Object.entries(raw)) {
       if (k === "offerId") {
@@ -131,6 +172,55 @@ export function readDraftFields(step: DraftableStep, raw: unknown): ReadFields {
     }
   }
   return { fields, refused, problems };
+}
+
+/**
+ * A deck draft's slides, grouped by section in the order given. Each slide takes only SLIDE_FIELDS: a title (one line, the
+ * slide's face), and optionally body lines, a speaker note, an image by id (from images_find) or a picture idea. Anything else
+ * is refused by name; a slide without a title, or one too long for a face, is a problem.
+ */
+export function readDeckSlides(raw: unknown): { sections: { sectionKey: string; slides: SlideDraft[] }[]; refused: string[]; problems: string[] } {
+  const refused: string[] = [];
+  const problems: string[] = [];
+  const sections: { sectionKey: string; slides: SlideDraft[] }[] = [];
+  if (!Array.isArray(raw) || !raw.length) return { sections, refused, problems: ["slides must be a list of slides, each with sectionKey and title"] };
+  if (raw.length > DECK_MAX_SLIDES * 4) problems.push(`at most ${DECK_MAX_SLIDES * 4} slides in one call`);
+  raw.forEach((one, i) => {
+    const at = `slide ${i + 1}`;
+    if (!isObj(one)) {
+      problems.push(`${at} must be an object`);
+      return;
+    }
+    for (const k of Object.keys(one)) if (!(SLIDE_FIELDS as readonly string[]).includes(k)) refused.push(`${at}.${k}`);
+    const key = typeof one.sectionKey === "string" ? one.sectionKey.trim() : "";
+    const title = typeof one.title === "string" ? one.title.replace(/\s+/g, " ").trim() : "";
+    if (!key) problems.push(`${at} needs its sectionKey (webinar_read's script lists them)`);
+    if (!title) problems.push(`${at} needs a title, the one line on its face`);
+    else if (title.length > SLIDE_TITLE_MAX) problems.push(`${at}'s title is ${title.length} characters; a slide's line is at most ${SLIDE_TITLE_MAX}. Put the rest in body or speakerNote`);
+    const slide: SlideDraft = { title };
+    if (one.body !== undefined) {
+      const body = typeof one.body === "string" ? [one.body] : one.body;
+      if (!Array.isArray(body) || body.some((b) => typeof b !== "string")) problems.push(`${at}.body must be text or a list of lines`);
+      else {
+        const lines = (body as string[]).map((b) => clip(b, 300)).filter(Boolean);
+        if (lines.length > 3) problems.push(`${at}.body takes at most 3 lines`);
+        else if (lines.length) slide.body = lines;
+      }
+    }
+    for (const [k, max] of [["speakerNote", 2000], ["imageId", 40], ["pictureIdea", 300]] as const) {
+      const v = one[k];
+      if (v === undefined) continue;
+      if (typeof v !== "string") problems.push(`${at}.${k} must be text`);
+      else if (v.trim()) slide[k] = clip(v, max);
+    }
+    if (slide.imageId && slide.pictureIdea) problems.push(`${at} takes an imageId or a pictureIdea, not both`);
+    if (!key || !title) return;
+    let group = sections.find((g) => g.sectionKey === key);
+    if (!group) sections.push((group = { sectionKey: key, slides: [] }));
+    group.slides.push(slide);
+  });
+  for (const g of sections) if (g.slides.length > DECK_MAX_SLIDES) problems.push(`${g.sectionKey} has ${g.slides.length} slides; at most ${DECK_MAX_SLIDES} per section`);
+  return { sections, refused, problems };
 }
 
 /** Every figure a text names, digits only: "$1,997" is "1997", "47%" is "47". The same reading the slide check uses. */
@@ -174,6 +264,41 @@ export function cleanFields(step: DraftableStep, fields: Record<string, unknown>
   };
   const out: Record<string, unknown> = {};
   if (step === "offer") return { fields: { ...fields }, removed };
+  if (step === "script") {
+    for (const [k, v] of Object.entries(fields)) {
+      if (k === "durationMin" || k === "buildStyle") out[k] = v;
+      else if (k === "keyPoints") {
+        // One slide per line: each line on its own, so one bad line goes and the rest stand.
+        const lines = String(v).split("\n").map(one).filter(Boolean);
+        if (lines.length) out.keyPoints = lines.join("\n");
+      } else {
+        const t = one(String(v));
+        if (t) out[k] = t;
+      }
+    }
+    return { fields: out, removed };
+  }
+  if (step === "deck") {
+    const slides: SlideDraft[] = [];
+    for (const sl of ((fields as DeckDraft).slides ?? [])) {
+      const title = one(sl.title);
+      if (!title) continue;
+      const next: SlideDraft = { title };
+      const body = (sl.body ?? []).map(one).filter(Boolean);
+      if (body.length) next.body = body;
+      if (sl.speakerNote) {
+        const t = one(sl.speakerNote);
+        if (t) next.speakerNote = t;
+      }
+      if (sl.pictureIdea) {
+        const t = one(sl.pictureIdea);
+        if (t) next.pictureIdea = t;
+      }
+      if (sl.imageId) next.imageId = sl.imageId;
+      slides.push(next);
+    }
+    return { fields: slides.length ? { slides } : {}, removed };
+  }
   if (step === "beliefs") {
     for (const [type, v] of Object.entries(fields)) {
       const b = { ...(v as Record<string, string>) };
@@ -236,13 +361,46 @@ export function beliefRows(now: Partial<Record<BeliefType, Partial<Record<Belief
   return rows;
 }
 
+/** The panel's rows for a script draft: only the fields the draft sets, in the section form's order. */
+export function scriptRows(now: Record<string, unknown>, draft: ScriptDraft): DraftRow[] {
+  const rows: DraftRow[] = [];
+  const order = [...SCRIPT_TEXT, { key: "durationMin", label: "Minutes" }, { key: "buildStyle", label: "Build" }];
+  const said = (k: string, v: unknown) => (k === "buildStyle" ? (v === "reveal" ? "Build it up, one point per slide" : "One point per slide") : show(v));
+  for (const f of order) if (f.key in draft) rows.push({ key: f.key, label: f.label, now: said(f.key, now[f.key]), draft: said(f.key, (draft as Record<string, unknown>)[f.key]) });
+  return rows;
+}
+
+/**
+ * What a deck draft writes into its section on Approve. A section slide carries one line on its face, so the titles become the
+ * section's key points, one per line. The body lines and speaker notes go to the talk track: they become the section's script
+ * only when it has none (a script already there is never replaced; the notes stay in the draft and the history). A picture goes
+ * into the slide's own picture slot when its line asks for one.
+ */
+export function deckWrite(slides: SlideDraft[], section: { script: string | null }): { keyPoints: string; script: string | null; scriptKept: boolean } {
+  const talk = slides.map((sl) => [...(sl.body ?? []), sl.speakerNote ?? ""].filter(Boolean).join(" ")).filter(Boolean);
+  const hasScript = Boolean(section.script?.trim());
+  return { keyPoints: slides.map((sl) => sl.title).join("\n"), script: !hasScript && talk.length ? talk.join("\n\n") : null, scriptKept: hasScript && talk.length > 0 };
+}
+
+/** The panel's rows for a deck draft: one per slide, what the section's line says now beside the draft's slide. */
+export function deckRows(nowKeyPoints: string | null, draft: DeckDraft, imageName: (id: string) => string): DraftRow[] {
+  const now = (nowKeyPoints ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  return draft.slides.map((sl, i) => ({
+    key: `slide${i + 1}`,
+    label: `Slide ${i + 1}`,
+    now: now[i] ?? "",
+    draft: [sl.title, ...(sl.body ?? []).map((b) => `· ${b}`), sl.speakerNote ? `Notes: ${sl.speakerNote}` : "", sl.imageId ? `Picture: ${imageName(sl.imageId)}` : sl.pictureIdea ? `Picture idea: ${sl.pictureIdea}` : ""].filter(Boolean).join("\n"),
+  }));
+}
+
 /** Whether a change can still be undone. */
 export const undoOpen = (at: string, nowMs: number): boolean => nowMs - Date.parse(at.includes("T") ? at : `${at.replace(" ", "T")}Z`) < UNDO_DAYS * 24 * 60 * 60 * 1000;
 
 /** The plain line a history row reads as. */
-export function historyLine(h: { action: string; step: string | null; byLabel: string; byConnector: boolean; changed: string[] }): string {
-  const step = h.step ? `${h.step[0]!.toUpperCase()}${h.step.slice(1)}` : "Webinar";
-  const what = h.changed.length ? ` (${h.changed.length} field${h.changed.length === 1 ? "" : "s"})` : "";
+export function historyLine(h: { action: string; step: string | null; sectionKey?: string | null; byLabel: string; byConnector: boolean; changed: string[] }): string {
+  const step = h.step ? `${h.step[0]!.toUpperCase()}${h.step.slice(1)}${h.sectionKey ? ` (${h.sectionKey})` : ""}` : "Webinar";
+  const unit = h.step === "deck" ? "slide" : "field";
+  const what = h.changed.length ? ` (${h.changed.length} ${unit}${h.changed.length === 1 ? "" : "s"})` : "";
   const by = h.byConnector ? `by ${CONNECTOR_LABEL}` : `by ${h.byLabel}`;
   switch (h.action) {
     case "created":

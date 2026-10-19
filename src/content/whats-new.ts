@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 282,
+    date: "2026-10-19",
+    title: "Claude can draft your webinar's script and slides through the HelixOS connector",
+    lines: [
+      "From Claude on your phone or computer, with the HelixOS connector: Claude can now write a draft of any script section, and slides for a section. Each waits in the wizard beside what you have, with Approve, Edit and Discard, as the Foundation, Beliefs and Offer drafts already do.",
+      "Approving slides puts each slide's line into that section's key points, one slide per line. Their notes become the section's script only if it has none yet: a script you wrote is never replaced.",
+      "Claude can also ask what still stands between your webinar and Run it. Nothing it does approves a step, sets a date or starts Run it. Undo is under History for seven days.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 272,
     date: "2026-10-19",
     title: "Your HelixOS points can go to the Evolve Omega pass",
