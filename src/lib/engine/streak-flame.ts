@@ -1,23 +1,12 @@
 /**
  * The streak flame (H-552, plan H-558): the tiers, the state the pill shows, when the daily surge is due, and the surge's
- * envelope. Pure, so the pill, the sheet, the layout and the tests all read the same rules. No new scoring: the streak is
+ * envelope, and which filmed loop each look plays (H-952). Pure, so the pill, the sheet, the layout and the tests all read the same rules. No new scoring: the streak is
  * the one the daily loop already keeps (`streakFor`).
  */
 
 export type FlameTier = "ember" | "torch" | "gold";
 /** What the fire draws: a tier, or the dim, still ember of a day not closed yet. */
 export type FlameLook = FlameTier | "risk";
-
-/** The shader's settings per look (the approved Cowork mockup). `speed` scales its clock. */
-export type FlameSettings = { h: number; heat: number; gold: number; sparks: number; speed: number };
-
-export const FLAME_SETTINGS: Record<FlameLook, FlameSettings> = {
-  ember: { h: 0.52, heat: 0.85, gold: 0, sparks: 0.45, speed: 0.8 },
-  torch: { h: 0.84, heat: 1.0, gold: 0, sparks: 1, speed: 1 },
-  gold: { h: 0.86, heat: 1.06, gold: 1, sparks: 1, speed: 1 },
-  // Not done yet: lower, cooler and still; no sparks.
-  risk: { h: 0.42, heat: 0.62, gold: 0, sparks: 0, speed: 0 },
-};
 
 export const FLAME_TIERS: { tier: FlameTier; name: string; from: number }[] = [
   { tier: "ember", name: "Ember", from: 1 },
@@ -109,26 +98,24 @@ export function surgeEnvelope(since: number): number {
   return Math.sin(Math.min(since / SURGE_SECONDS, 1) * Math.PI) * Math.exp(-since * 0.6);
 }
 
-/** The bar's narrower fire; the sheet draws at full width. */
-export const BAR_WIDTH = 1.7;
+/**
+ * The filmed loops (H-952): per tier, a pill (360x540) for the top bar and the sidebar, a stage (1280x720) for the sheet, and
+ * a still for reduced motion and a video that won't play. Photoreal fire on true black, so a screen blend lets the dark UI
+ * show through. The waiting ember is the Ember loop, dimmed and slowed.
+ */
+export type FlameClip = { webm: string; mp4: string; still: string; rate: number; brightness: number };
 
-/** The uniforms for one frame: about 30% taller and hotter at the surge's peak, sparks off in the bar. */
-export function flameUniforms(look: FlameLook, boost: number, place: "bar" | "stage"): { uH: number; uHeat: number; uGold: number; uSparks: number; uW: number } {
-  const c = FLAME_SETTINGS[look];
-  const b = look === "risk" ? 0 : Math.max(0, boost);
-  return {
-    uH: Math.min(c.h * (1 + 0.32 * b), 1),
-    uHeat: c.heat * (1 + 0.35 * b),
-    uGold: c.gold,
-    uSparks: place === "bar" ? 0 : c.sparks * (1 + 1.5 * b),
-    uW: place === "bar" ? BAR_WIDTH : 1,
-  };
+const FLAME_FILE: Record<FlameLook, FlameTier> = { ember: "ember", torch: "torch", gold: "gold", risk: "ember" };
+
+export function flameClip(look: FlameLook, place: "bar" | "stage"): FlameClip {
+  const base = `/streak/streak-${FLAME_FILE[look]}`;
+  const size = place === "bar" ? "pill" : "stage";
+  const waiting = look === "risk";
+  return { webm: `${base}-${size}.webm`, mp4: `${base}-${size}.mp4`, still: `${base}-still.jpg`, rate: waiting ? 0.7 : 1, brightness: waiting ? 0.6 : 1 };
 }
 
-/** The clock a still frame is drawn at (reduced motion, and the waiting ember). */
-export const STILL_TIME = 1.7;
-
-/** Device pixel ratio, capped at 2. */
-export function cappedDpr(dpr: number | undefined): number {
-  return Math.min(Math.max(dpr || 1, 1), 2);
+/** The surge drawn over the loop: up to about 30% larger and brighter at its peak; the waiting ember never swells. */
+export function surgeLook(look: FlameLook, boost: number): { scale: number; brightness: number; glow: number } {
+  const b = look === "risk" ? 0 : Math.max(0, Math.min(boost, 1));
+  return { scale: 1 + 0.3 * b, brightness: 1 + 0.45 * b, glow: b };
 }

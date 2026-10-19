@@ -148,8 +148,9 @@ function StreakSheet({ state, onClose }: { state: FlameState; onClose: () => voi
         onClick={(e) => e.stopPropagation()}
         data-testid="streak-sheet"
       >
-        <div className="flex items-end justify-center pt-6">
-          <Fire look={look} place="stage" width={200} height={240} />
+        {/* The stage loop, 16:9 on the dark stage; its file loads now, when the sheet opens (H-952). */}
+        <div className="flex items-end justify-center px-4 pt-6">
+          <Fire look={look} place="stage" width={336} height={189} className="max-w-full" />
         </div>
         <div className="px-6 pb-6 pt-2 text-center">
           <div className={`${lbSerif.className} sf-count text-7xl font-semibold leading-none`} data-testid="streak-sheet-count">

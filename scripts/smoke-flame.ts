@@ -3,7 +3,9 @@
  * Settings on the folded rail and at the right of the phone's top bar. Its name is "{n}-day streak. Open streak details"; it
  * opens the detail sheet (the fire large, the count, "Day streak", the tier and the days to the next one). The daily surge
  * waits for the daily welcome to close, plays once (the count ticks up by one) and is stored, so a reload doesn't play it again.
- * WebGL contexts: never more than two. Reduced motion: no surge, still stored. No WebGL: the SVG flame. Nothing wider than
+ * The filmed loops (H-952): the pill plays its tier's pill loop and the page fetches no other tier's file; the sheet's stage loop
+ * loads when it opens; never more than two playing. Reduced motion: the still, no surge, the day still stored. A loop that won't
+ * load: the still. Nothing wider than
  * 390 px. Waiting on you (H-927): the sheet's button reads Close the day and opens the close on Today; Not now only shuts it.
  * Runs against the dev server; fixtures go straight to the database.
  */
@@ -51,8 +53,17 @@ async function main() {
     });
     page.on("pageerror", (e) => failures.push(`pageerror: ${e.message}`));
   };
-  const webgl = (page: Page) => page.locator('[data-flame="fire"][data-flame-mode="webgl"]').count();
-  const fires = (page: Page) => page.locator('[data-flame="fire"][data-flame-mode="webgl"], [data-flame="fire"][data-flame-mode="svg"]').count();
+  const playing = (page: Page) => page.locator('[data-flame="fire"][data-flame-mode="video"]').count();
+  const stills = (page: Page) => page.locator('[data-flame="fire"][data-flame-mode="still"]').count();
+  // Which flame files a page fetched, by name.
+  const flameFiles = (page: Page) => {
+    const got: string[] = [];
+    page.on("request", (r) => {
+      const m = /\/streak\/(streak-[a-z]+-[a-z]+\.[a-z0-9]+)/.exec(r.url());
+      if (m) got.push(m[1]);
+    });
+    return got;
+  };
   const noSideways = async (page: Page, what: string) => {
     const w = await page.evaluate(() => document.documentElement.scrollWidth);
     must(w <= 390, `${what}: nothing wider than 390 (${w})`);
@@ -62,6 +73,7 @@ async function main() {
     await reset({ welcome: true });
     const ctx: BrowserContext = await browser.newContext({ viewport: { width: 1280, height: 860 } });
     const page = await ctx.newPage();
+    const fetched = flameFiles(page);
     watch(page);
     await login(page);
     const dw = page.locator('[data-testid="daily-welcome"]');
@@ -103,9 +115,14 @@ async function main() {
     for (let i = 0; i < 20 && (await seenOn()) !== after.asOf; i++) await sleep(250);
     must((await seenOn()) === after.asOf, `the surge is stored for the streak day (${await seenOn()})`);
     must((await played()).filter((n) => n === "tick").length === ticksBefore + 1, `one tick as the count goes up: ${JSON.stringify(await played())}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "video", null, { timeout: 10000 });
     const mode = await pill.locator('[data-flame="fire"]').getAttribute("data-flame-mode");
-    must(mode === "webgl", `the pill draws the live fire (${mode})`);
-    must((await webgl(page)) <= 1, "one WebGL context with the sheet closed");
+    const fileTier = (await pill.getAttribute("data-waiting")) === "true" ? "ember" : flameTier(days);
+    const src = await pill.locator("video").evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, paused: v.paused, rate: v.playbackRate }));
+    must(src.src.endsWith(`/streak/streak-${fileTier}-pill.webm`) && !src.paused, `the pill plays its tier's pill loop: ${JSON.stringify(src)}`);
+    must(src.rate === ((await pill.getAttribute("data-waiting")) === "true" ? 0.7 : 1), `the loop's speed (${src.rate})`);
+    must(fetched.every((f) => f.startsWith(`streak-${fileTier}-pill.`) || f === `streak-${fileTier}-still.jpg`), `only the current tier's pill was fetched: ${JSON.stringify(fetched)}`);
+    must((await playing(page)) <= 1, "one loop playing with the sheet closed");
     await page.screenshot({ path: "screenshots/fl00-desktop.png" });
     // A reload: no surge.
     await page.reload();
@@ -122,31 +139,33 @@ async function main() {
     must((await page.locator('[data-testid="streak-sheet-next"]').innerText()).trim() === nextTierLine(days), "the days to the next tier");
     must((await sheet.locator('[data-flame="fire"]').count()) === 1, "the sheet's own fire");
     await sleep(300);
-    must((await webgl(page)) <= 2, `at most two WebGL contexts with the sheet open (${await webgl(page)})`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="streak-sheet"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "video", null, { timeout: 10000 });
+    must(fetched.some((f) => f === `streak-${fileTier}-stage.webm`), `the stage loop loads when the sheet opens: ${JSON.stringify(fetched)}`);
+    must((await playing(page)) <= 2, `at most two loops playing with the sheet open (${await playing(page)})`);
     must((await page.locator('[data-testid="streak-sheet-close"]').boundingBox())!.height >= 44, "Close is 44 px");
     await page.screenshot({ path: "screenshots/fl01-sheet.png" });
     await page.keyboard.press("Escape");
     must((await sheet.count()) === 0, "Escape closes the sheet");
     must(await pill.evaluate((el) => el === document.activeElement), "focus goes back to the pill");
     await sleep(300);
-    must((await webgl(page)) <= 1, "the sheet's context is given back");
+    must((await playing(page)) <= 1, "the sheet's loop goes with it");
     // Folded to the rail: the rail's pill, above Settings.
     await page.locator('[data-testid="nav-rail-toggle"]').click();
     const railPill = page.locator('[data-testid="streak-pill-rail"]');
     await railPill.waitFor({ state: "visible", timeout: 5000 });
-    await page.waitForFunction(() => document.querySelector('[data-testid="streak-pill-rail"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "webgl", null, { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('[data-testid="streak-pill-rail"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "video", null, { timeout: 5000 });
     must(!(await pill.isVisible()), "the sidebar's pill hides on the rail");
     const rb = await railPill.boundingBox();
     const sb = await page.locator('[data-testid="rail-settings"]').boundingBox();
     must(rb && sb && rb.y < sb.y, "the rail's pill sits above Settings");
     await sleep(400);
-    must((await webgl(page)) <= 1, `the folded sidebar keeps one context (${await webgl(page)})`);
+    must((await playing(page)) <= 1, `the folded sidebar plays one loop (${await playing(page)})`);
     await page.locator('[data-testid="nav-rail-toggle"]').click();
     await pill.waitFor({ state: "visible", timeout: 5000 });
-    // Back from the rail, the sidebar's fire is live again (its context given back and restored, not an SVG).
-    await page.waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "webgl", null, { timeout: 5000 });
-    must((await webgl(page)) <= 1, "still one context after the rail");
-    console.log(`✓ a computer: the pill by the name (${days} days, ${mode}), the surge after the welcome and once, the sheet, the rail, at most two contexts`);
+    // Back from the rail, the sidebar's loop plays again.
+    await page.waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "video", null, { timeout: 5000 });
+    must((await playing(page)) <= 1, "still one loop after the rail");
+    console.log(`✓ a computer: the pill by the name (${days} days, ${mode}, the ${fileTier} loop), the surge after the welcome and once, the sheet's stage loop on tap, the rail, at most two playing`);
     await ctx.close();
 
     // ── 2. A phone at 390: the pill at the right of the top bar, the sheet, nothing sideways. ──
@@ -181,29 +200,23 @@ async function main() {
     for (let i = 0; i < 20 && (await seenOn()) === null; i++) await sleep(250);
     must((await seenOn()) === after.asOf, "reduced motion: the day is stored without a surge");
     must((await qp.getAttribute("data-surge")) !== "playing" && (await qp.locator('[data-testid="streak-count"]').innerText()).trim() === String(days), "reduced motion: no surge, the count as it is");
-    console.log("✓ reduced motion: no surge, the day stored");
+    must((await qp.locator('[data-flame="fire"]').getAttribute("data-flame-mode")) === "still" && (await qp.locator("video").count()) === 0 && (await playing(q)) === 0, "reduced motion: the tier's still, no video");
+    console.log("✓ reduced motion: the still, no surge, the day stored");
     await still.close();
 
-    // ── 4. No WebGL: the SVG flame. ──
+    // ── 4. A loop that won't load: the still. ──
     await unfold();
     const flat = await browser.newContext({ viewport: { width: 1280, height: 860 } });
-    await flat.addInitScript(() => {
-      // A device with no WebGL: every webgl context request fails.
-      const proto = HTMLCanvasElement.prototype as unknown as { getContext: (...a: unknown[]) => unknown };
-      const orig = proto.getContext;
-      proto.getContext = function (this: unknown, ...a: unknown[]) {
-        return typeof a[0] === "string" && a[0].includes("webgl") ? null : orig.apply(this, a);
-      };
-    });
     const f = await flat.newPage();
     watch(f);
+    await f.route(/\/streak\/.*\.(webm|mp4)$/, (r) => r.abort());
     await login(f);
     const fp = f.locator('[data-testid="streak-pill-side"]');
     await fp.waitFor({ timeout: 15000 });
-    await f.waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "svg", null, { timeout: 5000 });
-    must((await webgl(f)) === 0 && (await fires(f)) >= 1, "no WebGL: the SVG flame, no canvas context");
-    await fp.screenshot({ path: "screenshots/fl04-svg.png" });
-    console.log("✓ no WebGL: the static SVG flame");
+    await f.waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "still", null, { timeout: 10000 });
+    must((await playing(f)) === 0 && (await stills(f)) >= 1, "no loop: the still, nothing playing");
+    await fp.screenshot({ path: "screenshots/fl04-still.png" });
+    console.log("✓ a loop that won't load: the tier's still");
     await flat.close();
 
     // ── 5. Waiting on you (H-927), at any hour of the run: Maya's own zone is set to one where it's evening now. ──
