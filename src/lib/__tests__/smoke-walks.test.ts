@@ -48,19 +48,19 @@ describe("the walk list and smoke.sh's fresh servers (H-1163)", () => {
     expect(readFileSync(join(ROOT, "scripts/smoke.sh"), "utf8")).not.toMatch(/ALL=\([a-z]/);
   });
 
-  it("plans a fresh server every 10 walks and before tenancy and team, in the list's order", () => {
+  it("plans a fresh server every 10 walks and before tenancy, team and body, in the list's order", () => {
     const out = execFileSync("bash", ["scripts/smoke.sh", "--plan", "all"], { cwd: ROOT, encoding: "utf8", env: { ...process.env, SMOKE_FRESH_EVERY: "10" } });
     const rows = out.trim().split("\n").map((l) => l.split("\t"));
     expect(rows.map((r) => r[0])).toEqual(listed());
     rows.forEach(([w, mark], i) => {
-      const due = w === "tenancy" || w === "team" || (i > 0 && i % 10 === 0);
+      const due = w === "tenancy" || w === "team" || w === "body" || (i > 0 && i % 10 === 0);
       expect(Boolean(mark), `${i} ${w}`).toBe(due);
     });
     expect(rows.filter((r) => r[1]).length).toBeGreaterThanOrEqual(Math.floor((rows.length - 1) / 10));
   });
 
-  it("SMOKE_FRESH_EVERY=0 keeps only the two named fresh servers", () => {
+  it("SMOKE_FRESH_EVERY=0 keeps only the three named fresh servers", () => {
     const out = execFileSync("bash", ["scripts/smoke.sh", "--plan", "all"], { cwd: ROOT, encoding: "utf8", env: { ...process.env, SMOKE_FRESH_EVERY: "0" } });
-    expect(out.split("\n").filter((l) => l.includes("\tfresh")).map((l) => l.split("\t")[0])).toEqual(["tenancy", "team"]);
+    expect(out.split("\n").filter((l) => l.includes("\tfresh")).map((l) => l.split("\t")[0])).toEqual(["tenancy", "body", "team"]);
   });
 });

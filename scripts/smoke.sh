@@ -65,6 +65,8 @@ main() {
   planned_fresh() {
     local i="$1" w="$2"
     if [[ "$w" == "tenancy" || "$w" == "team" ]]; then echo "the $w walk opens many pages at once"; return; fi
+    # 19 Oct: body grew next-server from a few GB to 12.8 GB inside the one walk, twice, and passed on a fresh server.
+    if [[ "$w" == "body" ]]; then echo "the body walk alone grows the server close to the limit"; return; fi
     if (( FRESH_EVERY > 0 && i > 0 && i % FRESH_EVERY == 0 )); then echo "every $FRESH_EVERY walks"; return; fi
   }
   if (( plan )); then
@@ -131,6 +133,9 @@ main() {
       if [[ -n "$why" ]]; then
         printf '\n== fresh server before %s (%s) ==\n' "$w" "$why"
         scripts/dev-server.sh fresh
+      else
+        # The size each walk starts at, so the thresholds can be tuned from the logs.
+        printf '\n== server at %s MB before %s ==\n' "$mb" "$w"
       fi
     fi
     printf '\n== reseed ==\n'
