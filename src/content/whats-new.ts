@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 302,
+    date: "2026-10-19",
+    title: "Name your own key outcomes in your Essence",
+    lines: [
+      "Essence → Key outcomes for users: instead of three fixed boxes, add as many outcomes as you have, each with your own name and line, in the order you want the AI to read them.",
+      "Each can say who it's for, so clients and practitioners can have their own. What you'd already written under Clarity, Impact and Connection is carried over as rows with those names.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 301,
     date: "2026-10-19",
     title: "The Council Chamber comes alive",
@@ -30,16 +40,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "Coach → Your own program: once your pass is made, \"Send to my pass\" puts one message in the Latest Message on the back of your pass, and your phone shows it on the lock screen. It starts as \"Welcome to Evolve Omega\". It writes to your pass only, once per press.",
     ],
     audience: "coach",
-  },
-  {
-    n: 285,
-    date: "2026-10-19",
-    title: "Name your own key outcomes in your Essence",
-    lines: [
-      "Essence → Key outcomes for users: instead of three fixed boxes, add as many outcomes as you have, each with your own name and line, in the order you want the AI to read them.",
-      "Each can say who it's for, so clients and practitioners can have their own. What you'd already written under Clarity, Impact and Connection is carried over as rows with those names.",
-    ],
-    audience: "everyone",
   },
   {
     n: 283,
