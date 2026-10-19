@@ -366,6 +366,34 @@ async function main() {
     must((await page.locator('[data-testid="eo-pass-add"]').getAttribute("href")) === "https://pass.example/eo-1" && (await page.locator('[data-testid="eo-pass-qr"] svg').count()) === 1, "the card offers Add to wallet and its QR code");
     must((await page.locator('[data-testid="eo-pass-get"]').count()) === 0, "no second Get my pass");
     must(JSON.stringify((await mockCalls()).writes.slice(writes3)) === JSON.stringify([`POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`]), "one create, by the program's template");
+    // Step D (H-734): one Latest Message on the coach's own pass, only when Send is pressed, into Push_Notification once.
+    const writes4 = (await mockCalls()).writes.length;
+    await page.goto(`${base}/coach`);
+    must((await mockCalls()).writes.length === writes4, "opening Coach sends no message");
+    must((await page.locator('[data-testid="own-message-text"]').inputValue()) === "Welcome to Evolve Omega", "the message starts as the welcome");
+    await submit(page, '[data-testid="own-message-send"]');
+    await page.locator('[data-testid="own-message-result"]').waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="own-message-result"]').innerText()).startsWith("Sent."), "the card says the message was sent");
+    const msgWrites = (await mockCalls()).writes.slice(writes4);
+    must(JSON.stringify(msgWrites) === JSON.stringify(["PUT /api/external/v1/passes/pass.com.evolveomega/SER-eo-1/values/Push_Notification"]), `one write, to the coach's own pass's Push_Notification: ${msgWrites.join(", ")}`);
+    const msgFields = ((await (await fetch(`${HOST}/__calls`)).json()) as { fields: Record<string, string> }).fields;
+    must(msgFields["SER-eo-1/Push_Notification"] === "Welcome to Evolve Omega", "the message is on the pass");
+    must(Boolean((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.eoPassLastPushAt), "the time of the last message is kept");
+    console.log("✓ step D: one Latest Message on the coach's own pass, only on Send, one write");
+    // Step E (H-734): on the coach's own program the desk check offers the coach's own pass, without hiding it. A new pass has
+    // 0 available, so the check stops with words and writes nothing.
+    const ownDesk = () => page.locator('[data-testid="own-program"] [data-testid="desk-settings"]');
+    const ownCheck = async () => {
+      await page.goto(`${base}/coach`);
+      await ownDesk().locator("summary").evaluate((el) => ((el.parentElement as HTMLDetailsElement).open = true));
+      await ownDesk().locator('[data-testid="desk-check-pass"]').selectOption("own");
+      await submit(page, '[data-testid="own-program"] [data-testid="desk-check-run"]');
+      return (await page.locator('[data-testid="own-program"] [data-testid="desk-check-note"]').textContent()) ?? "";
+    };
+    const writesE0 = (await mockCalls()).writes.length;
+    const zeroNote = await ownCheck();
+    must(zeroNote.startsWith("Your pass has 0 available"), `the check on a new own pass says it has nothing to deduct: ${zeroNote}`);
+    must((await mockCalls()).writes.length === writesE0, "the check on a 0 pass writes nothing");
     await page.goto(`${base}/coach`);
     await page.locator('[data-testid="own-issue"]').check();
     await submit(page, '[data-testid="own-issue-save"]');
@@ -377,7 +405,7 @@ async function main() {
     await page.locator('[data-testid="eo-pass-made"]').waitFor({ timeout: 20000 });
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaPass.id) }))!.eoCustomerId === "cus_eo_2", "the client's pass is made once passes are on");
     must(!(await page.content()).includes("cus_eo_") && !(await page.content()).includes("SER-eo-"), "no customer id or serial on the member's page");
-    must((await mockCalls()).writes.length === writes3 + 2, "two creates in all, one per pass");
+    must((await mockCalls()).writes.length === writes3 + 2 + msgWrites.length, "two creates in all, one per pass, besides the one message");
     // The points sync and the invitations (H-867 parts 3 and 4): off until the coach turns them on; "own" reaches only the
     // coach's pass; each member's first sync is one opening move of their HelixOS total, then one move per new ledger row; the
     // Level goes to the pass; an invitation is written once, only with a booking link; never Tier, never Points.
@@ -450,6 +478,14 @@ async function main() {
     sa = await mock();
     must(!sa.writes.slice(syncStart).some((w) => /\/values\/(Tier|Points)$/.test(w)), "the sync never writes Tier or Points");
     const syncWrites = sa.writes.slice(syncStart);
+    // Step E (H-734) again, once the sync has sent the coach's points: 1 off and 1 back on the coach's own pass, read back.
+    const ownBefore = sa.balances["cus_eo_1"]?.balance ?? 0;
+    const ownNote = await ownCheck();
+    must(ownBefore > 1 && ownNote.startsWith(`Passed: deduct 1: available ${ownBefore} → ${ownBefore - 1}`), `the check on the coach's own pass (${ownBefore}): ${ownNote}`);
+    const ownCheckWrites = (await mock()).writes.slice(sa.writes.length);
+    must(JSON.stringify(ownCheckWrites) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add"]), `one deduct and one add on the coach's own pass: ${ownCheckWrites.join(", ")}`);
+    must((await mock()).balances["cus_eo_1"]?.balance === ownBefore, "the coach's balance is back where it was");
+    console.log("✓ step E: the desk check on the coach's own pass, without hiding it; stops with words at 0, then 1 off and 1 back");
     // Back as it was: both off, the client's program and links restored, the walk's own awards removed.
     await db.update(schema.leaderboardFeeds).set({ syncMode: "off", inviteMode: "off", inviteLinks: {} }).where(eq(schema.leaderboardFeeds.id, syncFeedRow.id));
     await db.update(schema.memberships).set({ programTier: mayaM.programTier, eoLevelSent: null, eoOffersSent: [] }).where(eq(schema.memberships.id, mayaM.id));
@@ -473,7 +509,7 @@ async function main() {
     const lhNames = await page.locator('[data-testid="lh-name"]').allTextContents(); // as written: card titles show in capitals
     must(lhNames[0]?.includes("(your own program)"), `the coach's own program comes first: saw ${lhNames.length} cards, own first ${String(lhNames[0]?.includes("(your own program)"))}, own anywhere ${String(lhNames.some((n) => n.includes("(your own program)")))}`);
     const lhText = await page.locator("main").innerText();
-    must(/Busy answers \(429\) in 24 hours: 1\b/.test(lhText), "the earlier busy refresh is counted on the client's program");
+    must(/Busy answers \(429\) in 24 hours: 1\b/.test(lhText), `the earlier busy refresh is counted on the client's program: ${(lhText.match(/Busy answers[^\n]*/g) ?? []).join(" | ")}`);
     must(!lhText.includes(ELOYALTY_KEY) && !(await page.content()).includes(ELOYALTY_KEY), "no key on Loyalty health");
     const soon = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
     const ownCard = page.locator('[data-testid="lh-row"]').first();
@@ -534,7 +570,7 @@ async function main() {
     const writes = (await mockCalls()).writes;
     // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
     const create = `POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`;
-    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, create, ...syncWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, and the sync's moves and fields: ${writes.join(", ")}`);
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...syncWrites, ...ownCheckWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, the one message, the sync's moves and fields, and the check on the coach's own pass: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {

@@ -7,12 +7,25 @@
 .aq-scene { position: relative; width: 100%; aspect-ratio: 1680 / 944; border-radius: 20px; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #2b3140 0%, #171a22 70%); }
 .aq-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .aq-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.aq-dash { animation: aq-flow 1.6s linear infinite; }
-.aq-falling { animation: aq-flow 1.2s linear infinite; }
+/*
+ * The water (H-966). The channel's flow layers all run one keyframes block, each at its own speed (--s); every dash pattern's
+ * period divides 144 (RUN_PERIOD), so the loop never jumps. Falling streaks run `aq-drop` the same way (DROP_PERIOD 120). The
+ * front fills the channel when the scene opens (a mask, --len long), and what waits for the water fades in when it arrives (--at).
+ */
+.aq-run { animation: aq-run var(--s, 4s) linear infinite; }
+.aq-drop { animation: aq-drop var(--s, 0.8s) linear infinite; }
+.aq-sway { transform-box: fill-box; transform-origin: 50% 0%; animation: aq-sway 3.2s ease-in-out infinite; }
+.aq-spark { animation: aq-run var(--s, 5s) linear infinite, aq-glint 1.7s ease-in-out infinite; }
+.aq-front { stroke-dashoffset: var(--len); animation: aq-front var(--fill, 2.4s) cubic-bezier(0.45, 0.05, 0.4, 1) both; }
+.aq-after { animation: aq-fadeIn 0.6s ease var(--at, 0s) both; }
 .aq-ripple { transform-box: fill-box; transform-origin: center; animation: aq-ripple 2.4s ease-out infinite; }
 .aq-ripple-2 { animation-delay: 1.2s; }
-.aq-still .aq-dash, .aq-still .aq-falling, .aq-still .aq-ripple { animation-play-state: paused; }
-@keyframes aq-flow { to { stroke-dashoffset: -28; } }
+.aq-still .aq-water *, .aq-still .aq-fall, .aq-still .aq-fall *, .aq-still .aq-fountain, .aq-still .aq-fountain *, .aq-still .aq-front, .aq-still .aq-rep-leak * { animation-play-state: paused; }
+@keyframes aq-run { to { stroke-dashoffset: -144; } }
+@keyframes aq-drop { to { stroke-dashoffset: -120; } }
+@keyframes aq-sway { 0%, 100% { transform: skewX(-1.2deg); } 50% { transform: skewX(1.2deg); } }
+@keyframes aq-glint { 0%, 100% { stroke-opacity: 0.95; } 50% { stroke-opacity: 0.35; } }
+@keyframes aq-front { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
 @keyframes aq-ripple { 0% { transform: scale(0.4); opacity: 0.85; } 100% { transform: scale(1.5); opacity: 0; } }
 .aq-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 10px; }
 .aq-ctrl { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -31,6 +44,7 @@
 @media (max-width: 760px) {
   .aq-tags { display: none; }
 }
+/* Reduced motion: the same water, still (the front is never drawn). */
 @media (prefers-reduced-motion: reduce) {
-  .aq-dash, .aq-falling, .aq-ripple { animation: none; }
+  .aq-run, .aq-drop, .aq-sway, .aq-spark, .aq-after, .aq-ripple { animation: none; }
 }

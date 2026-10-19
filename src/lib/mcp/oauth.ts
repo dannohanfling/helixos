@@ -133,8 +133,10 @@ export async function authenticateBearer(token: string): Promise<Grant | null> {
 }
 
 /**
- * An agent token (rev 769): made on Coach → Agents, sent as a bearer token by a Code session. It acts through its own
- * connection row, as the coach, for its one agent and only The Forum and the inbox. Revoking either ends it on the next call.
+ * An agent token (rev 769): made on Coach → Agents, or by a member on their own Forum (H-727 PR 2), sent as a bearer token by
+ * a Code session. It acts through its own connection row, as its owner, for its one agent and only The Forum and the inbox.
+ * A member's token follows the same rule as their connected apps: it works while the coach keeps connected apps open.
+ * Revoking either ends it on the next call.
  */
 async function authenticateAgentToken(token: string): Promise<Grant | null> {
   const { agentTokenRow } = await import("@/lib/handoff");
@@ -143,7 +145,8 @@ async function authenticateAgentToken(token: string): Promise<Grant | null> {
   const app = await db.query.connectedApps.findFirst({ where: eq(schema.connectedApps.id, row.appId) });
   if (!app || app.revokedAt || !app.agentId) return null;
   const viewer = await viewerFor(app.userId, app.workspaceId);
-  if (!viewer || viewer.membership.id !== app.membershipId || viewer.role !== "coach") return null;
+  if (!viewer || viewer.membership.id !== app.membershipId || viewer.team) return null;
+  if (viewer.role === "client" && !viewer.workspace.connectedAppsOpen) return null;
   return { app, scopes: app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox"), viewer, agentId: app.agentId, agentToken: true };
 }
 

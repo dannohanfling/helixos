@@ -75,6 +75,7 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
       ids[label] = ((await db.select({ id: col(table, key) }).from(table).where(eq(col(table, "workspaceId"), workspaceId))) as { id: string }[]).map((r) => r.id);
     }
     ids.lessons = await childIds(schema.lessons, "courseId", ids.courses ?? []);
+    ids.program_call_skips = await childIds(schema.programCallSkips, "callId", ids.program_calls ?? []);
     // The Board's seat library sits in board_seats beside members' custom seats, with no user: it goes with the workspace.
     ids.board_seat_library = ((await db.select({ id: schema.boardSeats.id }).from(schema.boardSeats).where(and(eq(schema.boardSeats.workspaceId, workspaceId), isNull(schema.boardSeats.userId)))) as { id: string }[]).map((r) => r.id);
   }
@@ -208,6 +209,7 @@ export async function eraseMember(plan: ErasePlan, ranByUserId: string): Promise
   if (plan.workspaceGoes) {
     await db.transaction(async (tx) => {
       await drop(tx, schema.lessons, plan.ids.lessons ?? []);
+      await drop(tx, schema.programCallSkips, plan.ids.program_call_skips ?? []);
       await drop(tx, schema.boardSeats, plan.ids.board_seat_library ?? []);
       for (const [label, table] of Object.entries(WORKSPACE_TABLES)) await drop(tx, table, plan.ids[label] ?? [], label === "files" ? "key" : "id");
       await drop(tx, schema.workspaces, [plan.workspaceId]);
