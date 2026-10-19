@@ -127,10 +127,12 @@ async function main() {
     // The identity call (rev 270): the SDK's host is unreachable here, so a stand-in $chatbot records what setUser gets.
     // Loaded before the page's script mounts: called at once. Not loaded: nothing until the SDK's own ready event.
     for (const loaded of [true, false]) {
+      await db.delete(schema.syncEvents).where(and(eq(schema.syncEvents.workspaceId, ws), eq(schema.syncEvents.event, "chat.identity")));
       const ctxt = await browser.newContext();
       const p2 = await ctxt.newPage();
       // As a string: a function here would be transpiled with a helper (__name) the page doesn't have.
-      await p2.addInitScript({ content: `window.$chatbot = { hasLoaded: ${loaded}, setUser: function (id, u) { window.__setUser = { id: id, u: u }; }, open: function () { window.__opened = true; } };` });
+      // It logs the order and time of every call, so the walk can prove the identity lands before the chat opens (H-1203).
+      await p2.addInitScript({ content: `window.__calls = []; window.$chatbot = { hasLoaded: ${loaded}, setUser: function (id, u) { window.__setUser = { id: id, u: u }; window.__calls.push({ c: "setUser", t: Date.now() }); }, open: function () { window.__opened = true; window.__calls.push({ c: "open", t: Date.now() }); } };` });
       await p2.goto(`${base}/login`);
       await p2.click('button:has-text("As a client")');
       await p2.waitForURL(/\/today/);
@@ -149,7 +151,26 @@ async function main() {
       const by = await p2.locator("html").getAttribute("data-chat-identified-by");
       if (got.id !== client.id || got.u.identifier_hash !== expected || got.u.email !== "client@demo.helixos.app" || got.u.name !== client.name) throw new Error(`setUser gets the member's id, name, email and the hex hash over that id: ${JSON.stringify(got)}`);
       if (by !== (loaded ? "loaded" : "ready")) throw new Error(`the shell says how it was identified: ${by}`);
-      if (!(await p2.evaluate(() => (window as unknown as { __opened?: boolean }).__opened))) throw new Error("the chat is opened on the Ask page once it knows who this is");
+      // Identity first (H-1199, plan H-1203): the chat opens only after setUser, with time for its request to land.
+      await p2.waitForFunction(() => (window as unknown as { __opened?: boolean }).__opened === true, null, { timeout: 8000 }).catch(() => undefined);
+      type Call = { c: string; t: number };
+      const calls = await p2.evaluate(() => (window as unknown as { __calls: { c: string; t: number }[] }).__calls);
+      const firstSet = calls.find((c: Call) => c.c === "setUser");
+      const firstOpen = calls.find((c: Call) => c.c === "open");
+      if (!firstSet || !firstOpen) throw new Error(`the chat is opened on the Ask page once it knows who this is: ${JSON.stringify(calls.map((c: Call) => c.c))}`);
+      if (calls.indexOf(firstOpen) < calls.indexOf(firstSet) || firstOpen.t - firstSet.t < 1000) throw new Error(`setUser first, then the chat opens once it has settled: ${firstOpen.t - firstSet.t} ms`);
+      // A reconnect (another ready) tells the chat again.
+      const before = calls.filter((c: Call) => c.c === "setUser").length;
+      await p2.evaluate(() => window.dispatchEvent(new Event("chatbot:ready")));
+      await p2.waitForFunction((n) => (window as unknown as { __calls: { c: string }[] }).__calls.filter((c) => c.c === "setUser").length > n, before, { timeout: 5000 });
+      // The page's one report: the cause only, with no member on the row.
+      const cause = loaded ? "identified-loaded" : "identified-ready";
+      let seen: { userId: string | null; payload: unknown }[] = [];
+      for (let i = 0; i < 40 && !seen.length; i++) {
+        seen = (await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, ws), eq(schema.syncEvents.event, "chat.identity")) })).filter((r) => (r.payload as { cause?: string }).cause === cause);
+        if (!seen.length) await p2.waitForTimeout(250);
+      }
+      if (seen.length !== 1 || seen[0].userId !== null || JSON.stringify(seen[0].payload) !== JSON.stringify({ cause })) throw new Error(`the page reports ${cause} once, with no member: ${JSON.stringify(seen)}`);
       await ctxt.close();
     }
     // The bubble on a phone (rev 468): the real launcher can't load here, so a stand-in is added the way the script adds its
@@ -230,7 +251,7 @@ async function main() {
     console.log("✓ the Ask page is the chat's one home: none on Today, hidden after leaving by the menu, back on returning, none on a fresh load");
     console.log("✓ the bubble on a phone: 12 px above the tab bar and above a sticky row of buttons; back in place once opened, and on a wide screen");
     await logout(page);
-    console.log("✓ a member's page: the widget with the identifier hash, the CSP naming its host, no secret in the page; setUser called once the SDK has loaded (at once, or on chatbot:ready), and the shell says so");
+    console.log("✓ a member's page: the widget with the identifier hash, the CSP naming its host, no secret in the page; setUser called once the SDK has loaded (at once, or on chatbot:ready), and the shell says so; the chat opens only after setUser has settled, a second ready tells it again, and the page reports the cause once with no member (H-1203)");
 
     // ── 3. Switched in: no widget. ──
     await login(page, "As the coach");
