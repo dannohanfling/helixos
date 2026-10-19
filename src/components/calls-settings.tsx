@@ -61,7 +61,7 @@ function CallForm({ call }: { call?: ProgramCall }) {
         <input className="field" name="link" type="url" placeholder="https://" defaultValue={call?.link ?? ""} data-testid="call-link" />
       </label>
       <div className="sm:col-span-2">
-        <SubmitButton className="btn btn-primary btn-sm min-h-11" pendingText="Saving…" data-testid={call ? "call-save" : "call-add"}>
+        <SubmitButton className="btn btn-primary btn-sm min-h-11!" pendingText="Saving…" data-testid={call ? "call-save" : "call-add"}>
           {call ? "Save the call" : "Add the call"}
         </SubmitButton>
       </div>
@@ -96,7 +96,7 @@ export function CallsSettingsCard({ rows, workspace, notice, error, openCall, fi
           <span className="text-xs text-ink-2">Passcode</span>
           <input className="field" name="passcode" maxLength={60} defaultValue={workspace.callsPasscode ?? ""} data-testid="calls-passcode" />
         </label>
-        <SubmitButton className="btn btn-soft btn-sm min-h-11" pendingText="Saving…" data-testid="calls-shared-save">
+        <SubmitButton className="btn btn-soft btn-sm min-h-11!" pendingText="Saving…" data-testid="calls-shared-save">
           Save
         </SubmitButton>
       </form>
@@ -182,7 +182,7 @@ export function CallsSettingsCard({ rows, workspace, notice, error, openCall, fi
                     <span className="text-xs text-ink-2">Note (optional)</span>
                     <input className="field" name="note" maxLength={80} placeholder="Holiday" data-testid="calls-skip-note" />
                   </label>
-                  <SubmitButton className="btn btn-soft btn-sm min-h-11" pendingText="Skipping…" data-testid="calls-skip">
+                  <SubmitButton className="btn btn-soft btn-sm min-h-11!" pendingText="Skipping…" data-testid="calls-skip">
                     No call that day
                   </SubmitButton>
                 </form>
@@ -202,7 +202,7 @@ export function CallsSettingsCard({ rows, workspace, notice, error, openCall, fi
         <div className="rounded-lg bg-surface-2 p-3 text-sm" data-testid="calls-empty">
           <p className="mb-2">No calls yet. Start from the usual week: the Academy call Monday to Thursday at 10:00 and Friday at 13:00, the Accelerator Orientation Monday at 9:00 and the Accelerator call Wednesday at 10:00, all Pacific. You can change each one after.</p>
           <form action={addDefaultCallsAction}>
-            <SubmitButton className="btn btn-primary btn-sm min-h-11" pendingText="Adding…" data-testid="calls-defaults">
+            <SubmitButton className="btn btn-primary btn-sm min-h-11!" pendingText="Adding…" data-testid="calls-defaults">
               Add the usual week
             </SubmitButton>
           </form>

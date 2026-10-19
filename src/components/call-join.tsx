@@ -36,7 +36,7 @@ export function CallJoin({ startIso, liveEndIso, link, tz, initial, badge = true
   if (!link) return <span className="text-xs text-ink-3" data-testid="call-join-nolink">Your coach hasn&apos;t set the link yet</span>;
   if (state === "later")
     return (
-      <button type="button" className="btn btn-soft btn-sm min-h-11" disabled data-testid="call-join" data-state={state}>
+      <button type="button" className="btn btn-soft btn-sm min-h-11!" disabled data-testid="call-join" data-state={state}>
         Join opens at {joinOpensAt({ startIso }, tz)}
       </button>
     );
@@ -47,7 +47,7 @@ export function CallJoin({ startIso, liveEndIso, link, tz, initial, badge = true
           Live now
         </span>
       ) : null}
-      <a href={link} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm min-h-11" data-testid="call-join" data-state={state}>
+      <a href={link} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm min-h-11!" data-testid="call-join" data-state={state}>
         Join ↗
       </a>
     </span>

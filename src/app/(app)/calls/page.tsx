@@ -62,7 +62,7 @@ export default async function CallsPage() {
           <span className="min-w-0">
             <span className="tabular font-medium">{clockIn(i.startIso, v.tz)}</span> <span>🙋 Office Hours</span>
           </span>
-          <Link href="/office-hours" className="btn btn-soft btn-sm min-h-11" data-testid="calls-ooh-link">
+          <Link href="/office-hours" className="btn btn-soft btn-sm min-h-11!" data-testid="calls-ooh-link">
             Office Hours →
           </Link>
         </li>
@@ -126,7 +126,7 @@ export default async function CallsPage() {
               <span>
                 Passcode: <b className="tabular" data-testid="calls-passcode-value">{passcode}</b>
               </span>
-              <CopyButton text={passcode} className="btn btn-soft btn-sm min-h-11" testId="calls-passcode-copy" />
+              <CopyButton text={passcode} className="btn btn-soft btn-sm min-h-11!" testId="calls-passcode-copy" />
             </>
           ) : null}
         </p>
