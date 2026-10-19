@@ -261,7 +261,16 @@ async function main() {
     await login(f);
     const fp = f.locator('[data-testid="streak-pill-side"]');
     await fp.waitFor({ timeout: 15000 });
-    await f.waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "still", null, { timeout: 10000 });
+    await f
+      .waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "still", null, { timeout: 10000 })
+      .catch(async (e) => {
+        const at = await fp.evaluate((el) => {
+          const fire = el.querySelector('[data-flame="fire"]');
+          const v = el.querySelector("video");
+          return { mode: fire?.getAttribute("data-flame-mode"), networkState: v?.networkState, readyState: v?.readyState, error: v?.error?.code ?? null, preload: v?.getAttribute("preload"), sources: Array.from(v?.querySelectorAll("source") ?? []).map((s) => s.getAttribute("src")) };
+        });
+        throw new Error(`a loop that won't load never fell back to the still: ${JSON.stringify(at)} (${String(e).split("\n")[0]})`);
+      });
     must((await playing(f)) === 0 && (await stills(f)) >= 1, "no loop: the still, nothing playing");
     await fp.screenshot({ path: "screenshots/fl04-still.png" });
     console.log("✓ a loop that won't load: the tier's still");
