@@ -191,7 +191,7 @@ export async function seedDemo(): Promise<void> {
     callsLink: DEFAULT_CALLS_LINK,
     callsPasscode: DEFAULT_CALLS_PASSCODE,
   });
-  // The weekly calls (H-828): the usual week, as migration 0206 gives every workspace with a coach.
+  // The weekly calls (H-828): the usual week, as migration 0211 gives every workspace with a coach.
   await db.insert(schema.programCalls).values(DEFAULT_CALLS.map((c) => ({ id: newId(), workspaceId: wsId, ...c, link: null, active: true })));
   const password = await hashPassword("demo1234");
   const coachId = newId();

@@ -4,21 +4,21 @@ import { createClient } from "@libsql/client";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CALLS, DEFAULT_CALLS_LINK, DEFAULT_CALLS_PASSCODE } from "@/lib/engine/calls";
 
-/** Migration 0206 (H-820, plan H-828): the weekly calls, their skipped dates, the shared link and passcode, and the usual week for every workspace with a coach. */
+/** Migration 0211 (H-820, plan H-828): the weekly calls, their skipped dates, the shared link and passcode, and the usual week for every workspace with a coach. */
 const read = (f: string) =>
   readFileSync(path.join(process.cwd(), "drizzle", f), "utf8")
     .split("--> statement-breakpoint")
     .map((s) => s.trim())
     .filter(Boolean);
 
-describe("migration 0206: the weekly calls", () => {
+describe("migration 0211: the weekly calls", () => {
   it("adds the two tables and two columns, and gives each workspace with a coach the usual week, matching the engine's defaults", async () => {
     const c = createClient({ url: ":memory:" });
     await c.execute("CREATE TABLE `workspaces` (`id` text PRIMARY KEY NOT NULL, `name` text NOT NULL)");
     await c.execute("CREATE TABLE `memberships` (`id` text PRIMARY KEY NOT NULL, `workspace_id` text NOT NULL, `user_id` text NOT NULL, `role` text NOT NULL, `removed_at` text)");
     await c.execute("INSERT INTO workspaces (id, name) VALUES ('w1', 'With a coach'), ('w2', 'No coach'), ('w3', 'Coach removed')");
     await c.execute("INSERT INTO memberships (id, workspace_id, user_id, role, removed_at) VALUES ('m1', 'w1', 'u1', 'coach', NULL), ('m2', 'w1', 'u2', 'client', NULL), ('m3', 'w2', 'u3', 'client', NULL), ('m4', 'w3', 'u4', 'coach', '2026-01-01')");
-    const SQL = read("0206_calls.sql");
+    const SQL = read("0211_calls.sql");
     for (const s of SQL) await c.execute(s);
     const rows = (await c.execute("SELECT workspace_id, name, weekday, start, minutes, timezone, audience, link, active, sort FROM program_calls ORDER BY workspace_id, sort")).rows;
     expect(rows.map((r) => r.workspace_id)).toEqual(DEFAULT_CALLS.map(() => "w1"));
@@ -37,8 +37,8 @@ describe("migration 0206: the weekly calls", () => {
   });
   it("follows 0202 on main in the journal, with a later timestamp", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
-    const at = journal.entries.findIndex((e) => e.tag === "0206_calls");
-    expect(journal.entries[at - 1]?.tag).toBe("0205_brand_kit_fields");
+    const at = journal.entries.findIndex((e) => e.tag === "0211_calls");
+    expect(journal.entries[at - 1]?.tag).toBe("0209_points_sync");
     expect(journal.entries[at]!.when).toBeGreaterThan(journal.entries[at - 1]!.when);
   });
 });

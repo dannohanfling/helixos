@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 270,
+    n: 277,
     date: "2026-10-18",
     title: "Calls: this week's calls, in your time",
     lines: [

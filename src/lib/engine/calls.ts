@@ -29,8 +29,8 @@ export const CALL_AUDIENCE_LABEL: Record<CallAudience, string> = { accelerator_a
 export type CallDefault = { name: string; weekday: number; start: string; minutes: number; timezone: string; audience: CallAudience; sort: number };
 /**
  * The program's usual week (H-828 defaults, all Pacific, an hour each): the Academy call Monday to Thursday at 10:00 and
- * Friday at 13:00, the Accelerator Orientation Monday at 9:00 and the Accelerator call Wednesday at 10:00. Migration 0206 writes
- * the same rows for every workspace with a coach; src/db/__tests__/migration-0206.test.ts holds the two together.
+ * Friday at 13:00, the Accelerator Orientation Monday at 9:00 and the Accelerator call Wednesday at 10:00. Migration 0211 writes
+ * the same rows for every workspace with a coach; src/db/__tests__/migration-0211.test.ts holds the two together.
  */
 export const DEFAULT_CALLS: CallDefault[] = [
   { name: "Academy call", weekday: 1, start: "10:00", minutes: 60, timezone: CALL_TZ_DEFAULT, audience: "academy", sort: 0 },
