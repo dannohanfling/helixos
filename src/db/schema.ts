@@ -191,6 +191,9 @@ export const memberships = sqliteTable(
     eoPassSerial: text("eo_pass_serial"),
     eoPassTypeId: text("eo_pass_type_id"),
     eoPassInstalledAt: text("eo_pass_installed_at"),
+    /** The points sync (H-867): the Level last written to the pass, and the invitations already sent (each goes once). */
+    eoLevelSent: text("eo_level_sent"),
+    eoOffersSent: text("eo_offers_sent", { mode: "json" }).$type<string[]>().notNull().default([]),
     eoPassLastPushAt: text("eo_pass_last_push_at"),
     /** The coach's Community Loyalty inbound webhook for the Rung Dripper: the URL is the credential (no auth on it), sealed at rest, never rendered, never logged. */
     clDripWebhookUrl: text("cl_drip_webhook_url"),
@@ -902,6 +905,8 @@ export const pointsLedger = sqliteTable(
     adjustedBy: text("adjusted_by"),
     reason: text("reason").notNull(),
     refId: text("ref_id"),
+    /** The points sync (H-867): set once this row has been queued to eLoyalty, alone or inside a member's opening move. */
+    eoMirrored: integer("eo_mirrored", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index("points_user").on(t.userId, t.createdAt), uniqueIndex("points_ref").on(t.userId, t.type, t.refId)],
@@ -1045,6 +1050,11 @@ export const leaderboardFeeds = sqliteTable(
     /** 429s from eLoyalty in the current 24-hour window, and when the last one came. */
     rateLimitedCount: integer("rate_limited_count").notNull().default(0),
     rateLimitedAt: text("rate_limited_at"),
+    /** The points sync on the coach's own program (H-867 part 3): "off", "own" (the coach's pass only, step G) or "all" (step H). */
+    syncMode: text("sync_mode", { enum: ["off", "own", "all"] }).notNull().default("off"),
+    /** The invitations (H-867 part 4): "off", "own" (the coach's own test, step I) or "all"; and each rung's booking link. */
+    inviteMode: text("invite_mode", { enum: ["off", "own", "all"] }).notNull().default("off"),
+    inviteLinks: text("invite_links", { mode: "json" }).$type<Partial<Record<"academy" | "elite" | "lux", string>>>().notNull().default({}),
     /** The one add-and-deduct check on a team test pass (H-493): when it last ran, whether both moves landed, and what it saw, in words and numbers. The desk stays shut until it passes. */
     deskCheckAt: text("desk_check_at"),
     deskCheckOk: integer("desk_check_ok", { mode: "boolean" }),

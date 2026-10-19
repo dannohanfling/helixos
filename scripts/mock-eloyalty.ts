@@ -6,7 +6,8 @@
  * The points outbox (H-493): POST /api/public/admin/points/add and /deduct by customer id move an in-memory balance (an add
  * counts as earned; a deduct never goes below 0 and leaves earned alone), answer { success, eventId, newBalance }, and show
  * in that customer's events with their reason. GET /api/public/admin/customers/{id} reads one customer. POST
- * /api/external/v1/templates/{id}/pass creates a pass (H-622). Any other write is 405.
+ * /api/external/v1/templates/{id}/pass creates a pass (H-622) with a zero balance. PUT .../passes/{type}/{serial}/values/{Field}
+ * keeps a pass field (H-867), refusing Points. Any other write is 405.
  */
 import { createServer } from "node:http";
 import { CUSTOMERS, ELOYALTY_KEY, TEMPLATES } from "./fixtures/eloyalty";
@@ -16,6 +17,7 @@ let forced = 200;
 let calls = 0;
 const writes: string[] = [];
 let created = 0;
+const fields = new Map<string, string>();
 const balances = new Map(CUSTOMERS.map((c) => [c.id, { balance: c.points_balance, earned: c.points_earned }]));
 const moved: { id: string; type: string; points: number; reason: string; created_at: string }[] = [];
 const now = () => new Date().toISOString();
@@ -42,7 +44,7 @@ createServer((req, res) => {
     forced = Number(url.searchParams.get("status") ?? 200);
     return json(200, { forced });
   }
-  if (url.pathname === "/__calls") return json(200, { calls, writes });
+  if (url.pathname === "/__calls") return json(200, { calls, writes, fields: Object.fromEntries(fields), balances: Object.fromEntries(balances) });
   const move = req.method === "POST" ? url.pathname.match(/^\/api\/public\/admin\/points\/(add|deduct)$/) : null;
   if (req.method !== "GET") writes.push(`${req.method} ${url.pathname}`);
   if (move) {
@@ -73,7 +75,20 @@ createServer((req, res) => {
     void body(req).then((b) => {
       if (!b.Email || !b.Id) return json(400, { error: "Email and Id are required" });
       created += 1;
+      balances.set(`cus_eo_${created}`, { balance: 0, earned: 0 });
       json(200, { customerId: `cus_eo_${created}`, serialNumber: `SER-eo-${created}`, passTypeIdentifier: "pass.com.evolveomega", apple: { downloadUrl: `https://pass.example/eo-${created}` } });
+    });
+    return;
+  }
+  // A pass field (H-867): PUT /api/external/v1/passes/{passTypeId}/{serial}/values/{Field} keeps the value, never Points.
+  const field = req.method === "PUT" ? url.pathname.match(/^\/api\/external\/v1\/passes\/([^/]+)\/([^/]+)\/values\/([^/]+)$/) : null;
+  if (field) {
+    if (req.headers.authorization !== `Bearer ${ELOYALTY_KEY}`) return json(401, { error: "invalid key" });
+    if (forced !== 200) return json(forced, { error: "forced" });
+    if (decodeURIComponent(field[3]) === "Points") return json(400, { error: "Points is not set directly" });
+    void body(req).then((b) => {
+      fields.set(`${decodeURIComponent(field[2])}/${decodeURIComponent(field[3])}`, String(b.value ?? ""));
+      json(200, { success: true });
     });
     return;
   }

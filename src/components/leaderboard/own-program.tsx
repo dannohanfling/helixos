@@ -3,6 +3,8 @@ import { Card } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { DeskSettings } from "@/components/leaderboard/desk-settings";
 import { checkLeaderboardAction, saveLeaderboardAction, setIssuePassesAction } from "@/lib/actions/leaderboard";
+import { setInvitesAction, setSyncModeAction } from "@/lib/actions/points-sync";
+import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
 
 /**
  * The coach's own program on Coach (H-622): the Evolve Omega pass. The same connection as a client's loyalty program (the
@@ -55,8 +57,66 @@ export function OwnProgramCard({ membershipId, feed, ownPass }: { membershipId: 
             {!ready ? <span className="text-ink-3">Opens once the program is connected, checked and has its template.</span> : null}
           </form>
         ) : null}
+        {feed ? <SyncSettings feed={feed} ready={ready} /> : null}
         {feed?.keyEncrypted ? <DeskSettings feed={feed} /> : null}
       </div>
     </Card>
+  );
+}
+
+const MODE_WORDS = { off: "Off", own: "Your own pass only (the test first)", all: "Everyone with a pass" } as const;
+const RUNG_WORDS = { academy: "Academy call (Accelerator members at Sentinel)", elite: "Elite call (Academy members at Centurion)", lux: "Lux Partnership Conversation (anyone at Olympian)" } as const;
+
+/**
+ * The points sync and the invitations (H-867 parts 3 and 4): both off until the coach turns them on, the coach's own pass
+ * first. The sync sends HelixOS points (an opening move, then one move per new ledger row) and the Level; eLoyalty sets the
+ * rank from the points (H-890). An invitation is written once, only when its rung has a booking link.
+ */
+function SyncSettings({ feed, ready }: { feed: schema.LeaderboardFeed; ready: boolean }) {
+  return (
+    <div className="mt-3 space-y-3 border-t border-line pt-3" data-testid="own-sync">
+      <form action={setSyncModeAction} className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2">
+          Sync points to the pass:
+          <select name="syncMode" defaultValue={feed.syncMode} disabled={!ready} className="field py-1 text-xs" data-testid="own-sync-mode">
+            {(["off", "own", "all"] as const).map((m) => (
+              <option key={m} value={m}>
+                {MODE_WORDS[m]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…" disabled={!ready} data-testid="own-sync-save">
+          Save
+        </SubmitButton>
+        <span className="basis-full text-ink-3">
+          Each member&apos;s HelixOS points so far go as one move, then each new award or spend as its own move, through the points outbox. Their level goes on the back of the pass. eLoyalty sets the rank from the points.
+        </span>
+      </form>
+      <form action={setInvitesAction} className="space-y-2">
+        <label className="flex flex-wrap items-center gap-2">
+          Invitations on the pass:
+          <select name="inviteMode" defaultValue={feed.inviteMode} disabled={!ready} className="field py-1 text-xs" data-testid="own-invite-mode">
+            {(["off", "own", "all"] as const).map((m) => (
+              <option key={m} value={m}>
+                {MODE_WORDS[m]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {INVITE_KEYS.map((k) => (
+          <label key={k} className="block">
+            <span className="text-ink-3">
+              {RUNG_WORDS[k]}: &quot;{INVITES[k].text}&quot;
+            </span>
+            <input className="field mt-1 w-full py-1 text-xs" type="url" pattern="https://.*" name={`link_${k}`} defaultValue={feed.inviteLinks[k] ?? ""} placeholder="https:// booking link (blank: this invitation is not sent)" aria-label={`${RUNG_WORDS[k]} booking link`} data-testid={`own-invite-${k}`} />
+          </label>
+        ))}
+        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…" disabled={!ready} data-testid="own-invite-save">
+          Save invitations
+        </SubmitButton>
+        <p className="text-ink-3">Each invitation goes once per member, never to someone already on that program or above.</p>
+      </form>
+    </div>
   );
 }

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 272,
+    date: "2026-10-19",
+    title: "Your HelixOS points can go to the Evolve Omega pass",
+    lines: [
+      "Coach → Your own program has \"Sync points to the pass\": off, your own pass only, or everyone with a pass. Each member's HelixOS points so far go as one move, then each new award or spend as its own. Their level shows on the back of the pass, and eLoyalty sets the rank from the points.",
+      "Invitations on the pass: an Accelerator member at Sentinel gets the Academy call, an Academy member at Centurion gets Elite, and anyone at Olympian gets the Lux Partnership Conversation. Each goes once, and only once you add its booking link.",
+      "Both start off, and your own pass comes first.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 269,
     date: "2026-10-18",
     title: "Brand has its own budget, British spelling, and a legal name for your decks",

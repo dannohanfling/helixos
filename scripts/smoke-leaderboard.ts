@@ -59,7 +59,7 @@ async function main() {
   const failures: string[] = [];
   try {
     const { db, schema } = await import("@/db");
-    const { and, eq } = await import("drizzle-orm");
+    const { and, eq, inArray } = await import("drizzle-orm");
     const { DEFAULT_PAGE, buildFeed, parseExport } = await import("@/lib/engine/leaderboard");
     const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     const m = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
@@ -378,6 +378,85 @@ async function main() {
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaPass.id) }))!.eoCustomerId === "cus_eo_2", "the client's pass is made once passes are on");
     must(!(await page.content()).includes("cus_eo_") && !(await page.content()).includes("SER-eo-"), "no customer id or serial on the member's page");
     must((await mockCalls()).writes.length === writes3 + 2, "two creates in all, one per pass");
+    // The points sync and the invitations (H-867 parts 3 and 4): off until the coach turns them on; "own" reaches only the
+    // coach's pass; each member's first sync is one opening move of their HelixOS total, then one move per new ledger row; the
+    // Level goes to the pass; an invitation is written once, only with a booking link; never Tier, never Points.
+    await logout(page);
+    await login(page, "As the coach");
+    const syncFeedRow = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, coachM.id) }))!;
+    must(syncFeedRow.syncMode === "off" && syncFeedRow.inviteMode === "off", "the sync and the invitations start off");
+    const mock = async () => (await (await fetch(`${HOST}/__calls`)).json()) as { writes: string[]; fields: Record<string, string>; balances: Record<string, { balance: number }> };
+    const runCron = async () => (await (await fetch(`${base}/api/cron/leaderboards`, { headers: CRON })).json()) as { sync: { queued: number; fields: number; failed: number }[] };
+    const syncStart = (await mock()).writes.length;
+    const added: string[] = [];
+    const award = async (userId: string, points: number) => {
+      const id = crypto.randomUUID();
+      added.push(id);
+      await db.insert(schema.pointsLedger).values({ id, workspaceId: feedRow.workspaceId, userId, type: "bonus", points, reason: "Smoke: sync" });
+    };
+    const totalOf = async (userId: string) => (await db.select({ p: schema.pointsLedger.points }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, feedRow.workspaceId), eq(schema.pointsLedger.userId, userId)))).reduce((n, r) => n + r.p, 0);
+    await award(coachM.userId, 120);
+    let sb = await mock();
+    await runCron();
+    must((await mock()).writes.length === sb.writes.length, "with the sync off, the cron writes nothing to eLoyalty");
+    await page.goto(`${base}/coach`);
+    await page.locator('[data-testid="own-sync-mode"]').selectOption("own");
+    await submit(page, '[data-testid="own-sync-save"]');
+    must((await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, syncFeedRow.id) }))!.syncMode === "own", "Sync points saved as your own pass only");
+    const coachTotal = await totalOf(coachM.userId);
+    sb = await mock();
+    await runCron();
+    let sa = await mock();
+    must(sa.balances["cus_eo_1"]?.balance === coachTotal, `the coach's pass got one opening move of the HelixOS total (${coachTotal}), saw ${sa.balances["cus_eo_1"]?.balance}`);
+    must(sa.fields["SER-eo-1/Level"] === "Coach", "the coach's Level is on the pass");
+    must((sa.balances["cus_eo_2"]?.balance ?? 0) === 0 && !sa.fields["SER-eo-2/Level"], "nothing reaches a client while the sync is on your own pass only");
+    must(JSON.stringify(sa.writes.slice(sb.writes.length).sort()) === JSON.stringify(["POST /api/public/admin/points/add", "PUT /api/external/v1/passes/pass.com.evolveomega/SER-eo-1/values/Level"].sort()), `one add and one Level: ${sa.writes.slice(sb.writes.length).join(", ")}`);
+    sb = sa;
+    await runCron();
+    must((await mock()).writes.length === sb.writes.length, "a second run sends nothing again");
+    await page.goto(`${base}/coach`);
+    await page.locator('[data-testid="own-sync-mode"]').selectOption("all");
+    await submit(page, '[data-testid="own-sync-save"]');
+    const mayaM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaPass.id) }))!;
+    const mayaTotal = await totalOf(mayaM.userId);
+    await runCron();
+    sa = await mock();
+    must(sa.balances["cus_eo_2"]?.balance === mayaTotal && sa.fields["SER-eo-2/Level"] === mayaM.programTier, `the client's opening move (${mayaTotal}) and Level (${mayaM.programTier}) once the sync is on for everyone`);
+    await award(mayaM.userId, 15);
+    await runCron();
+    must((await mock()).balances["cus_eo_2"]?.balance === mayaTotal + 15, "a new award goes as one move of its own");
+    // The invitation: an Accelerator member at Sentinel gets the Academy call once, only with its link.
+    await db.update(schema.memberships).set({ programTier: "Accelerator" }).where(eq(schema.memberships.id, mayaM.id));
+    const need = 3000 - (mayaTotal + 15);
+    if (need > 0) await award(mayaM.userId, need + 10);
+    await page.goto(`${base}/coach`);
+    await page.locator('[data-testid="own-invite-mode"]').selectOption("all");
+    await submit(page, '[data-testid="own-invite-save"]');
+    sb = await mock();
+    await runCron();
+    sa = await mock();
+    must(!sa.fields["SER-eo-2/Current_Offer"], "with no booking link, no invitation is written");
+    const academyLink = "https://book.example/academy";
+    await page.goto(`${base}/coach`);
+    await page.locator('[data-testid="own-invite-academy"]').fill(academyLink);
+    await submit(page, '[data-testid="own-invite-save"]');
+    await runCron();
+    sa = await mock();
+    must(sa.fields["SER-eo-2/Offer_Link"] === academyLink && sa.fields["SER-eo-2/Current_Offer"] === "You've earned a call about Academy", "the Academy invitation is on the client's pass, with its link");
+    must(!sa.fields["SER-eo-1/Current_Offer"], "the coach gets no invitation");
+    sb = sa;
+    await runCron();
+    must((await mock()).writes.length === sb.writes.length, "the invitation goes once");
+    sa = await mock();
+    must(!sa.writes.slice(syncStart).some((w) => /\/values\/(Tier|Points)$/.test(w)), "the sync never writes Tier or Points");
+    const syncWrites = sa.writes.slice(syncStart);
+    // Back as it was: both off, the client's program and links restored, the walk's own awards removed.
+    await db.update(schema.leaderboardFeeds).set({ syncMode: "off", inviteMode: "off", inviteLinks: {} }).where(eq(schema.leaderboardFeeds.id, syncFeedRow.id));
+    await db.update(schema.memberships).set({ programTier: mayaM.programTier, eoLevelSent: null, eoOffersSent: [] }).where(eq(schema.memberships.id, mayaM.id));
+    await db.update(schema.memberships).set({ eoLevelSent: null, eoOffersSent: [] }).where(eq(schema.memberships.id, coachM.id));
+    await db.delete(schema.pointsLedger).where(inArray(schema.pointsLedger.id, added));
+    console.log(`✓ the points sync and invitations: off by default and the cron writes nothing; your own pass first (one opening move of the total, the Level), then everyone; a new award is one move; the Academy invitation once, only with its link, never to the coach; never Tier or Points (${syncWrites.length} writes)`);
+
     await db.update(schema.memberships).set({ eoPassUrl: mayaPass.eoPassUrl, eoPassSerial: mayaPass.eoPassSerial, eoPassTypeId: mayaPass.eoPassTypeId, eoPassInstalledAt: mayaPass.eoPassInstalledAt, eoCustomerId: mayaPass.eoCustomerId }).where(eq(schema.memberships.id, mayaPass.id));
     await logout(page);
     await login(page, "As the coach");
@@ -455,7 +534,7 @@ async function main() {
     const writes = (await mockCalls()).writes;
     // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
     const create = `POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`;
-    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, create]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, and the two passes made by template: ${writes.join(", ")}`);
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, create, ...syncWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, and the sync's moves and fields: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {
