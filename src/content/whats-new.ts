@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 284,
+    date: "2026-10-19",
+    title: "A lead colour for each pathway, in its decks",
+    lines: [
+      "Settings → Brand kit: if your offers are split into pathways, each pathway now has its own lead colour. A webinar whose offer sits in that pathway uses it as its deck's accent, over the rest of your brand kit.",
+      "The accent draws rules and fills, never words, so your text still reads. A colour your brand bans is refused, and leaving it empty keeps your kit's own accent.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 272,
     date: "2026-10-19",
     title: "Your HelixOS points can go to the Evolve Omega pass",

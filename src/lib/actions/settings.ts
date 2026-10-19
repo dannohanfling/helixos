@@ -12,7 +12,7 @@ import { newId } from "@/lib/ids";
 import { inviteCode } from "@/lib/ids";
 import { redirect } from "next/navigation";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
-import { brandKitProblems, normaliseHex } from "@/lib/engine/subject";
+import { brandKitProblems, leadColourProblem, normaliseHex } from "@/lib/engine/subject";
 import { parseSpelling } from "@/lib/engine/spelling";
 import { cleanDescriptor } from "@/lib/engine/deck";
 import { syncFieldTasks } from "@/lib/queries/pathway";
@@ -154,6 +154,30 @@ export async function rotateInviteAction(formData: FormData): Promise<void> {
   const which = str(formData, "which") === "coach" ? "coachInviteCode" : "clientInviteCode";
   await db.update(schema.workspaces).set({ [which]: inviteCode() }).where(eq(schema.workspaces.id, coach.workspace.id));
   refresh();
+}
+
+/**
+ * A lead colour for each of the member's pathways (H-811 B1): the accent in decks for that pathway's webinars. Each is a
+ * six-digit hex their kit doesn't ban, or empty to use the kit's own accent; one bad colour refuses the save and names it.
+ */
+export async function savePathwayColoursAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx();
+  const [pathways, kit] = await Promise.all([
+    db.query.pathways.findMany({ where: and(eq(schema.pathways.workspaceId, workspaceId), eq(schema.pathways.userId, userId)) }),
+    db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)), columns: { bannedColors: true } }),
+  ]);
+  const banned = kit?.bannedColors ?? [];
+  const problems = pathways.map((p) => {
+    const why = leadColourProblem(str(formData, `lead_${p.id}`), banned);
+    return why ? `${p.name}: ${why}` : null;
+  }).filter((x): x is string => Boolean(x));
+  if (problems.length) redirect(`/settings?brand=${encodeURIComponent(problems.join(" "))}#brand-kit`);
+  for (const p of pathways) {
+    const hex = normaliseHex(str(formData, `lead_${p.id}`)) || null;
+    if (hex !== (p.leadColor ?? null)) await db.update(schema.pathways).set({ leadColor: hex }).where(eq(schema.pathways.id, p.id));
+  }
+  refresh();
+  redirect("/settings?brand=pathways#brand-kit");
 }
 
 /** Back to the house starter kit (first-deck brief §1): the member's own kit goes; their decks use the starter until a new one is saved. */

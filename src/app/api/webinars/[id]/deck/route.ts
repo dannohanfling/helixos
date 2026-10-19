@@ -1,3 +1,4 @@
+import { deckKitFor } from "@/lib/queries/brand-kit";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
@@ -32,7 +33,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) return NextResponse.json({ error: "not found" }, { status: 404 });
   const [context, kit] = await Promise.all([contextFor(w), db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, w.workspaceId), eq(schema.brandKits.userId, w.userId)) })]);
-  const deck = deckSlides(context, kit ?? null);
+  // The pathway's lead colour over the kit (H-811 B1), the same as the Deck step shows.
+  const deck = deckSlides(context, await deckKitFor(w, kit ?? null));
   if (deck.refused.length) return NextResponse.json({ error: "not exported", refused: deck.refused }, { status: 409 });
   // The provenance gate, on the export: a webinar carrying AI-drafted sections nobody reviewed leaves only under a confirm the
   // Deck step logged for this user and this webinar (Continue anyway), naming exactly these drafts. The step shows the same line.

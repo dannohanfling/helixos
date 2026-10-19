@@ -1,3 +1,4 @@
+import { deckKitFor } from "@/lib/queries/brand-kit";
 import { DeckImageUpload } from "@/components/deck-image-upload";
 import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
@@ -215,7 +216,8 @@ export default async function WebinarWizardPage({
   const presenterName = presenterOf(w, v.user.name);
   // The deck as the export will make it, from the same function the route runs: what refuses there refuses here, before the click, and the twelfth check reads it.
   const context = await contextFor(w);
-  const deck: DeckResult = deckSlides(context, brandKit ?? null);
+  // The pathway's lead colour, when its offer's pathway has one (H-811 B1), as this deck's accent; the export reads the same.
+  const deck: DeckResult = deckSlides(context, await deckKitFor(w, brandKit ?? null));
   const pace: DeckPace = deckPace(context, deck);
   // The suggested picture slots, each resolved to the coach's own image or to why it is empty, and the coach's whole library to
   // fill them from. Read once here, so the Deck step and the export agree on which slots carry a picture.

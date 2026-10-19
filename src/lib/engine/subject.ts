@@ -167,3 +167,24 @@ export function kitProposals(kit: Pick<BrandKitInput, "ground" | "ink" | "accent
   }
   return out;
 }
+
+/**
+ * A pathway's lead colour over the member's kit (H-811 B1): the accent in decks for that pathway's webinars. The accent only
+ * ever draws rules and fills, never letters, so it needs no contrast; a colour the kit bans, or one that isn't a six-digit hex,
+ * leaves the kit as it is. With no kit of their own the starter kit stays, and the deck says so.
+ */
+export function withLeadColour<K extends { accent: string; bannedColors: string[] }>(kit: K | null, lead: string | null | undefined): K | null {
+  const hex = normaliseHex(lead);
+  if (!kit || !isHex(hex)) return kit;
+  if (kit.bannedColors.map(normaliseHex).includes(hex)) return kit;
+  return { ...kit, accent: hex };
+}
+
+/** Why a lead colour can't be saved, or null: a six-digit hex the member's kit doesn't ban. Empty clears it. */
+export function leadColourProblem(lead: string, banned: string[]): string | null {
+  const hex = normaliseHex(lead);
+  if (!lead.trim()) return null;
+  if (!isHex(hex)) return `${lead.trim()} isn't a six-digit hex colour, like 6E6256.`;
+  if (banned.map(normaliseHex).includes(hex)) return `${hex} is one of your brand's banned colours.`;
+  return null;
+}

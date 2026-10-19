@@ -7,7 +7,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
-import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, savePathwayColoursAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { BrandKitEditor } from "@/components/brand-kit-editor";
@@ -101,6 +101,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   };
   const attempted = parseDraft(draft);
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
+  // A lead colour per pathway (H-811 B1): the member's own pathways, for the Brand kit card.
+  const pathways = await db.query.pathways.findMany({ where: and(eq(schema.pathways.workspaceId, v.workspace.id), eq(schema.pathways.userId, v.user.id)), orderBy: (t, { asc }) => [asc(t.order), asc(t.name)] });
   const [goal, conn, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), linkedChats(v.workspace.id, v.user.id)]);
   const forumHook = await forumSettingsFor({ workspaceId: v.workspace.id, userId: v.user.id });
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
@@ -732,7 +734,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <strong>House starter kit — replace with your own.</strong> Your decks use these colours and faces until you save your own. Change any of them, give the kit your business name, pick your logo, and save.
             </p>
           ) : null}
-          {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice === "reset" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-reset" role="status">Back to the house starter kit.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
+          {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice === "pathways" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-pathways-saved" role="status">Pathway colours saved.</p> : brandNotice === "reset" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-reset" role="status">Back to the house starter kit.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
           <form action={saveBrandKitAction} className="grid gap-3 sm:grid-cols-2" data-testid="brand-form">
             <BrandKitEditor
               kit={{
@@ -845,6 +847,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <SubmitButton className="btn btn-primary" pendingText="Saving…">Save brand kit</SubmitButton>
             </div>
           </form>
+          {pathways.length ? (
+            <form action={savePathwayColoursAction} className="mt-4 space-y-2 border-t pt-3" data-testid="brand-pathways">
+              <p className="text-sm font-semibold">A lead colour for each pathway</p>
+              <p className="text-xs text-ink-3">
+                Used as the accent in decks for that pathway&apos;s webinars (a webinar takes its offer&apos;s pathway), over your brand kit. The accent draws rules and fills, never words. Empty uses your kit&apos;s own accent{savedKit ? ` (#${savedKit.accent})` : ""}.{savedKit ? "" : " Save your brand kit first: with the house starter kit, decks keep its colours."}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {pathways.map((p) => (
+                  <label key={p.id} className="flex min-w-0 items-center gap-2 text-sm">
+                    <span className="h-5 w-5 shrink-0 rounded border border-line" style={{ background: p.leadColor ? `#${p.leadColor}` : "transparent" }} aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                    <input className="field w-28 font-mono" name={`lead_${p.id}`} defaultValue={p.leadColor ?? ""} maxLength={7} placeholder={savedKit?.accent ?? "hex"} aria-label={`${p.name} lead colour`} data-testid="brand-pathway-colour" data-pathway={p.name} />
+                  </label>
+                ))}
+              </div>
+              <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="brand-pathways-save">
+                Save pathway colours
+              </SubmitButton>
+            </form>
+          ) : null}
           {savedKit ? (
             <form action={resetBrandKitAction} className="mt-3 border-t pt-3">
               <ConfirmButton message="Go back to the house starter kit? Your saved colours, faces and logo choice are cleared from the kit; your logo stays in Images." className="btn btn-ghost btn-sm" pendingText="Resetting…">
