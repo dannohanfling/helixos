@@ -2435,7 +2435,7 @@ export type FathomWorkspaceConnection = typeof fathomWorkspaceConnections.$infer
 /* ───────────────────────── Issues and suggestions (rev 432, items 2 to 4) ───────────────────────── */
 
 /** An issue (something broken), a suggestion (an idea), or an Ask Danno answer that was wrong or out of date. */
-export const MEMBER_REPORT_KINDS = ["issue", "suggestion", "ask_danno"] as const;
+export const MEMBER_REPORT_KINDS = ["issue", "suggestion", "ask_danno", "content"] as const;
 export type MemberReportKind = (typeof MEMBER_REPORT_KINDS)[number];
 /** Red blocks the member, orange annoys them, green is an idea. */
 export const REPORT_SEVERITIES = ["red", "orange", "green"] as const;
@@ -2489,6 +2489,15 @@ export const memberReports = sqliteTable(
     screenshotType: text("screenshot_type"),
     seenAt: text("seen_at"),
     doneAt: text("done_at"),
+    /**
+     * A Content report (H-745): what was reported, a Colosseum win or a member (their membership id), and whose it is. The reason
+     * (spam, harassment or hurtful, something else) is the severity: red, orange, green. Null on every other kind.
+     */
+    targetKind: text("target_kind", { enum: ["win", "member"] }),
+    targetId: text("target_id"),
+    targetUserId: text("target_user_id"),
+    /** When the coach acted on a Content report (Hide this win): the reporter's Settings → Your reports then reads "Handled". */
+    handledAt: text("handled_at"),
     createdAt: createdAt(),
   },
   (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId)],
@@ -2812,11 +2821,32 @@ export const colosseumWins = sqliteTable(
     userId: text("user_id").notNull(),
     kind: text("kind", { enum: ["business", "community"] }).notNull(),
     text: text("text").notNull(),
+    /** Hidden for everyone by the coach from a Content report (H-745), and who did it; clearing both is the undo. The author isn't told. */
+    hiddenAt: text("hidden_at"),
+    hiddenBy: text("hidden_by"),
     createdAt: createdAt(),
   },
   (t) => [index("colosseum_wins_workspace").on(t.workspaceId, t.createdAt)],
 );
 export type ColosseumWin = typeof colosseumWins.$inferSelect;
+
+/**
+ * Block a member (H-745, App Store guideline 1.2): the blocker no longer sees the blocked member's wins, name or photo in the
+ * Colosseum, its standings or the Rewards leaderboard. One row per pair, both sides by membership id. The blocked member is never
+ * told. Erased with either member (src/lib/erase.ts).
+ */
+export const memberBlocks = sqliteTable(
+  "member_blocks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    blockerMembershipId: text("blocker_membership_id").notNull(),
+    blockedMembershipId: text("blocked_membership_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("member_blocks_pair").on(t.blockerMembershipId, t.blockedMembershipId), index("member_blocks_blocked").on(t.blockedMembershipId)],
+);
+export type MemberBlock = typeof memberBlocks.$inferSelect;
 
 /**
  * A login-email change (H-47): the new address holds the link (sha256 of the token only), 24 hours, single use; the change
