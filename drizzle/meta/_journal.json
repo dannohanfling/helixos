@@ -1254,6 +1254,13 @@
       "when": 1792364383672,
       "tag": "0205_brand_kit_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "6",
+      "when": 1792374535572,
+      "tag": "0209_points_sync",
+      "breakpoints": true
     }
   ]
 }
