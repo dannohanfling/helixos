@@ -12,10 +12,20 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 306,
+    n: 307,
     date: "2026-10-19",
     title: "Your streak flame starts sooner on a phone",
     lines: ["On a phone, the streak flame shows at once and starts moving sooner."],
+    audience: "everyone",
+  },
+  {
+    n: 306,
+    date: "2026-10-18",
+    title: "Counts in the phone menu",
+    lines: [
+      "On your phone, More now shows how many things are waiting beside each item, the same numbers as the menu on a computer: Intentions, Recordings, your Agent inbox, and for the coach Inbox, Clients, Issues and ideas, and Feedback.",
+      "The More tab at the bottom shows the total as a number. What's new keeps its dot.",
+    ],
     audience: "everyone",
   },
   {
