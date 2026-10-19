@@ -15,12 +15,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-<<<<<<< HEAD
-import { Fire, warmStage } from "./fire";
-=======
 import Link from "next/link";
-import { Fire } from "./fire";
->>>>>>> origin/main
+import { Fire, warmStage } from "./fire";
 import { playTick } from "@/lib/synth-sounds";
 import { WELCOME_CLOSED } from "@/components/rank-up";
 import { ARRIVAL_CLOSED } from "@/components/first-arrival";

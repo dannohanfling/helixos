@@ -12,15 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-<<<<<<< HEAD
-    n: 300,
+    n: 302,
     date: "2026-10-19",
     title: "Your streak flame starts sooner on a phone",
     lines: ["On a phone, the streak flame shows at once and starts moving sooner."],
     audience: "everyone",
   },
   {
-=======
     n: 301,
     date: "2026-10-19",
     title: "The Council Chamber comes alive",
@@ -41,7 +39,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "coach",
   },
   {
->>>>>>> origin/main
     n: 283,
     date: "2026-10-19",
     title: "Connect your own agents to your agent inbox",

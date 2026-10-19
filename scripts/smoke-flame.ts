@@ -5,15 +5,10 @@
  * waits for the daily welcome to close, plays once (the count ticks up by one) and is stored, so a reload doesn't play it again.
  * The filmed loops (H-952): the pill plays its tier's pill loop and the page fetches no other tier's file; the sheet's stage loop
  * loads when it opens; never more than two playing. Reduced motion: the still, no surge, the day still stored. A loop that won't
-<<<<<<< HEAD
  * load: the still. On a phone (H-1063): the light copies, the poster at once and the video only once it plays, the stage loop
  * started on the press, the files cached as immutable; playback refused leaves the poster. Nothing wider than
- * 390 px. Runs against the dev server; fixtures go straight to the database.
-=======
- * load: the still. Nothing wider than
  * 390 px. Waiting on you (H-927): the sheet's button reads Close the day and opens the close on Today; Not now only shuts it.
  * Runs against the dev server; fixtures go straight to the database.
->>>>>>> origin/main
  */
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
