@@ -16,7 +16,7 @@ const browserZone = () => canonicalZone(Intl.DateTimeFormat().resolvedOptions().
  * Got it stamps it seen. A line at the top of the page, never over it. Never shown to a coach switched in or a team member
  * (the layout decides).
  */
-export function ZoneNotice({ saved, workspaceTz }: { saved: string | null; workspaceTz: string }) {
+export function ZoneNotice({ saved, workspaceTz, savedText, workspaceText }: { saved: string | null; workspaceTz: string; savedText: string | null; workspaceText: string }) {
   const router = useRouter();
   const [gone, setGone] = useState(false);
   const browser = useSyncExternalStore(never, browserZone, () => "");
@@ -28,14 +28,15 @@ export function ZoneNotice({ saved, workspaceTz }: { saved: string | null; works
   }, [saved, browser, router]);
   if (gone) return null;
   const zone = saved || browser || workspaceTz;
-  const fromWorkspace = !saved && !browser;
+  // The server's words for the first paint (its zone names can differ from the browser's); the browser's own zone only after.
+  const text = saved ? (savedText ?? zoneNoticeText(saved, zoneName(saved), false)) : browser ? zoneNoticeText(browser, zoneName(browser), false) : workspaceText;
   const dismiss = () => {
     setGone(true);
     void dismissZoneNoticeAction();
   };
   return (
     <div role="status" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-surface px-3 py-2" data-testid="zone-notice" data-zone={zone}>
-      <p className="min-w-0 flex-1 text-sm">{zoneNoticeText(zone, zoneName(zone), fromWorkspace)}</p>
+      <p className="min-w-0 flex-1 text-sm">{text}</p>
       <div className="flex flex-wrap gap-2">
         <Link href="/settings#timezone" onClick={dismiss} className="btn btn-primary btn-sm" data-testid="zone-notice-settings">
           Change it in Settings
