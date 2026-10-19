@@ -12,10 +12,62 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+<<<<<<< HEAD
     n: 299,
     date: "2026-10-19",
     title: "The tab bar stays at the bottom",
     lines: ["On a phone, the tab bar stays at the bottom while you scroll."],
+=======
+    n: 301,
+    date: "2026-10-19",
+    title: "The Council Chamber comes alive",
+    lines: [
+      "My Board at night: the braziers and candles flicker, warm light breathes beneath them, and a faint moonbeam shimmers in the far doorway while dust drifts in the candlelight.",
+      "At golden hour, shafts of sun slant in from the arches, dust drifts through them, and a soft cloud shadow passes now and then.",
+      "While an advisor speaks, the moving light fades for their turn and comes back after. A hidden tab holds it all still, and your device's Reduce motion setting turns it off.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 286,
+    date: "2026-10-19",
+    title: "Send a message to your own Evolve Omega pass",
+    lines: [
+      "Coach → Your own program: once your pass is made, \"Send to my pass\" puts one message in the Latest Message on the back of your pass, and your phone shows it on the lock screen. It starts as \"Welcome to Evolve Omega\". It writes to your pass only, once per press.",
+    ],
+    audience: "coach",
+  },
+  {
+    n: 283,
+    date: "2026-10-19",
+    title: "Connect your own agents to your agent inbox",
+    lines: [
+      "The Forum: open one of your agents and tap Connect this agent to make its token. Put it in the agent's own settings, and it can report to your Forum and post plans to your agent inbox, and nothing else. Revoke stops it at once.",
+      "Today shows one calm line while a plan waits for your OK in your agent inbox, and nothing when none does.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 282,
+    date: "2026-10-19",
+    title: "Claude can draft your webinar's script and slides through the HelixOS connector",
+    lines: [
+      "From Claude on your phone or computer, with the HelixOS connector: Claude can now write a draft of any script section, and slides for a section. Each waits in the wizard beside what you have, with Approve, Edit and Discard, as the Foundation, Beliefs and Offer drafts already do.",
+      "Approving slides puts each slide's line into that section's key points, one slide per line. Their notes become the section's script only if it has none yet: a script you wrote is never replaced.",
+      "Claude can also ask what still stands between your webinar and Run it. Nothing it does approves a step, sets a date or starts Run it. Undo is under History for seven days.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 281,
+    date: "2026-10-19",
+    title: "Birds that fly like birds, and water that flows, in the scenes",
+    lines: [
+      "Golden hour in the Forum and the Colosseum: the birds are now small dark silhouettes seen from above, each with a soft shadow. They flap a few beats, glide, and turn as they go, each on its own path and speed, and fade in and out at the edges.",
+      "The Aqueduct: the channel is see-through running water with ripples, streaks and a little sparkle, and it fills from the source when you open the scene. A leak falls as a sheet with streaks and lands in mist and spray, and the fountain's waterfall flows the same way.",
+      "Pause, a hidden tab and reduced motion work as before: with reduced motion there are no birds, and the water stays still.",
+    ],
+>>>>>>> origin/main
     audience: "everyone",
   },
   {
@@ -33,6 +85,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     title: "Your rank's relic, if you reached it before the clips",
     lines: [
       "Reached Philosopher or above before the rank videos arrived? Your next open plays your rank's relic clip once, first thing, with your card. Then your day starts as usual.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 275,
+    date: "2026-10-19",
+    title: "Waiting on you takes you to Close the day",
+    lines: [
+      "When your streak says Waiting on you, tap the flame: its button now reads Close the day (Close yesterday just after midnight) and takes you straight to the evening close on Today. Not now shuts the panel.",
     ],
     audience: "everyone",
   },

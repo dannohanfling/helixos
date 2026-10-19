@@ -345,3 +345,6 @@ export function cleanSessionUrl(raw: string): string | null {
     return null;
   }
 }
+
+/** Today's one line while plans wait in a member's agent inbox (H-727 PR 2): "1 plan waits for your OK in your agent inbox". */
+export const plansWaitingLine = (n: number): string => `${n} ${n === 1 ? "plan waits" : "plans wait"} for your OK in your agent inbox`;

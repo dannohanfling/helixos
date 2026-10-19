@@ -8,15 +8,19 @@
  * The daily surge plays once per streak day, on the first open after the day has counted: the fire swells for 2.2 s and the
  * count ticks up by one. Only the pill the layout actually shows plays it (the others are hidden by the layout), and it waits
  * for the daily welcome or the first arrival to close. Reduced motion: no surge; the day is still marked seen.
+ *
+ * While the day waits, the sheet's main button goes to the close on Today, "Close the day" (or "Close yesterday" in the late
+ * window), and a separate "Not now" dismisses it (H-927: a lone "Close" read as closing the day and only shut the sheet).
  */
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { Fire } from "./fire";
 import { playTick } from "@/lib/synth-sounds";
 import { WELCOME_CLOSED } from "@/components/rank-up";
 import { ARRIVAL_CLOSED } from "@/components/first-arrival";
-import { flameLabel, nextTierLine, tierName, type FlameState } from "@/lib/engine/streak-flame";
+import { flameLabel, nextTierLine, sheetAction, tierName, type FlameState } from "@/lib/engine/streak-flame";
 import { lbSerif } from "@/components/leaderboard/fonts";
 import "./streak-flame.css";
 
@@ -91,6 +95,7 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
         aria-haspopup="dialog"
         data-testid={`streak-pill-${place}`}
         data-waiting={state.waiting ? "true" : "false"}
+        data-late={state.late ? "true" : "false"}
         data-surge={surgeAt !== null ? "playing" : state.surge ? "due" : "none"}
         className={`sf-pill shrink-0 overflow-hidden max-w-full rounded-full border ${rail ? "flex w-11 flex-col items-center px-0 py-1" : "flex min-h-11 items-center gap-1 py-0.5 pl-1.5 pr-3"}`}
       >
@@ -120,8 +125,10 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
 
 function StreakSheet({ state, onClose }: { state: FlameState; onClose: () => void }) {
   const close = useRef<HTMLButtonElement>(null);
+  const act = useRef<HTMLAnchorElement>(null);
+  const action = sheetAction(state);
   useEffect(() => {
-    close.current?.focus();
+    (act.current ?? close.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
@@ -166,9 +173,20 @@ function StreakSheet({ state, onClose }: { state: FlameState; onClose: () => voi
           ) : (
             <p className={`${lbSerif.className} sf-muted mt-4 text-lg italic`}>The fire is yours to keep lit.</p>
           )}
-          <button ref={close} type="button" onClick={onClose} className="sf-close mt-5 min-h-11 w-full rounded-full border px-4 text-sm font-semibold" data-testid="streak-sheet-close">
-            Close
-          </button>
+          {action ? (
+            <>
+              <Link ref={act} href={action.href} onClick={onClose} className="btn btn-accent mt-5 flex min-h-11 w-full items-center justify-center rounded-full px-4 text-sm font-semibold" data-testid="streak-sheet-act">
+                {action.label}
+              </Link>
+              <button ref={close} type="button" onClick={onClose} className="sf-muted mt-2 min-h-11 w-full rounded-full px-4 text-sm font-semibold underline-offset-4 hover:underline" data-testid="streak-sheet-close">
+                Not now
+              </button>
+            </>
+          ) : (
+            <button ref={close} type="button" onClick={onClose} className="sf-close mt-5 min-h-11 w-full rounded-full border px-4 text-sm font-semibold" data-testid="streak-sheet-close">
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>,
