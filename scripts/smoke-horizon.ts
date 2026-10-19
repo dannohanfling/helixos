@@ -116,7 +116,11 @@ async function main() {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/more`);
     await page.locator("main").waitFor({ timeout: 20000 });
+    // Magic funnel sits in Get leads, which starts shut (H-1010): open it on More first.
+    const leadsCard = page.locator('[data-testid="more-group"][data-group="Get leads"]');
+    if ((await leadsCard.getAttribute("data-open")) !== "true") await leadsCard.locator('[data-testid="more-group-toggle"]').click();
     const soon = page.locator('main [data-testid="nav-coming-soon"]');
+    await soon.first().waitFor({ timeout: 10000 });
     must((await soon.count()) === 1 && (await soon.first().getAttribute("data-href")) === "/magic-funnel", "Magic funnel is the one Coming soon item on More");
     await page.setViewportSize({ width: 1280, height: 900 });
     console.log("✓ Magic funnel reads Coming soon while its item is on Next up");
@@ -160,6 +164,9 @@ async function main() {
     await page.locator('[data-testid="horizon-notice"]').waitFor({ timeout: 20000 });
     const noticeText = await page.locator('[data-testid="horizon-notice"]').innerText();
     must(noticeText.toLowerCase().includes("something you wanted just shipped") && noticeText.includes(mf.title), `the notice names the item: ${JSON.stringify(noticeText)} vs ${mf.title}`);
+    // Magic funnel sits in Get leads, which starts shut (H-1010): open it first.
+    const leads = page.locator('[data-testid="nav-group"][data-group="Get leads"] [data-testid="nav-group-toggle"]');
+    if ((await leads.getAttribute("aria-expanded")) === "false") await leads.click();
     must((await page.locator('nav a[href="/magic-funnel"]').count()) === 1 && (await page.locator('nav [data-testid="nav-coming-soon"][data-href="/magic-funnel"]').count()) === 0, "Magic funnel is a link in the menu once shipped");
     await page.click('[data-testid="horizon-notice-dismiss"]');
     for (let i = 0; i < 20 && !(await db.query.horizonWants.findFirst({ where: and(eq(schema.horizonWants.userId, maya.id), eq(schema.horizonWants.itemId, mf.id)) }))!.notifiedAt; i++) await sleep(300);

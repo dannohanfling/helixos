@@ -6,11 +6,11 @@ describe("navStateOf", () => {
     expect(navStateOf(raw)).toEqual({ collapsed: {}, rail: false });
   });
   it("round-trips valid state", () => {
-    const state = { collapsed: { Work: true, Learn: true }, rail: true };
+    const state = { collapsed: { Work: true, Extra: true }, rail: true };
     expect(navStateOf(state)).toEqual(state);
   });
   it("keeps only true collapsed entries with labels at most 40 characters", () => {
-    expect(navStateOf({ collapsed: { Work: true, Learn: false, Other: "true", Count: 1, ["x".repeat(40)]: true, ["x".repeat(41)]: true }, rail: 1 }))
+    expect(navStateOf({ collapsed: { Work: true, Extra: false, Other: "true", Count: 1, ["x".repeat(40)]: true, ["x".repeat(41)]: true }, rail: 1 }))
       .toEqual({ collapsed: { Work: true, ["x".repeat(40)]: true }, rail: false });
   });
   it("accepts partial objects", () => {
@@ -23,20 +23,20 @@ describe("menu groups", () => {
   const state = Object.freeze({ collapsed: Object.freeze({ Work: true }), rail: true });
   it("always opens the current group", () => {
     expect(isOpen(state, "Work", "Work")).toBe(true);
-    expect(isOpen(state, "Work", "Learn")).toBe(false);
-    expect(isOpen(state, "Learn", null)).toBe(true);
+    expect(isOpen(state, "Work", "Extra")).toBe(false);
+    expect(isOpen(state, "Extra", null)).toBe(true);
     expect(isOpen(state, "Work", null)).toBe(false);
   });
   it("requires a nonempty list of entirely collapsed labels", () => {
     expect(allCollapsed(state, [])).toBe(false);
     expect(allCollapsed(state, ["Work"])).toBe(true);
-    expect(allCollapsed(state, ["Work", "Learn"])).toBe(false);
+    expect(allCollapsed(state, ["Work", "Extra"])).toBe(false);
   });
   it("toggles a group in a new state without mutating either input object", () => {
     const expanded = toggleGroup(state, "Work");
-    const collapsed = toggleGroup(state, "Learn");
+    const collapsed = toggleGroup(state, "Extra");
     expect(expanded).toEqual({ collapsed: {}, rail: true });
-    expect(collapsed).toEqual({ collapsed: { Work: true, Learn: true }, rail: true });
+    expect(collapsed).toEqual({ collapsed: { Work: true, Extra: true }, rail: true });
     for (const result of [expanded, collapsed]) {
       expect(result).not.toBe(state);
       expect(result.collapsed).not.toBe(state.collapsed);
@@ -44,13 +44,13 @@ describe("menu groups", () => {
     expect(state).toEqual({ collapsed: { Work: true }, rail: true });
   });
   it("collapses exactly the named groups and expands all once they are collapsed", () => {
-    const collapsed = toggleAll(state, ["Learn", "Play"]);
-    expect(collapsed).toEqual({ collapsed: { Learn: true, Play: true }, rail: true });
+    const collapsed = toggleAll(state, ["Extra", "Play"]);
+    expect(collapsed).toEqual({ collapsed: { Extra: true, Play: true }, rail: true });
     Object.freeze(collapsed.collapsed);
     Object.freeze(collapsed);
-    const expanded = toggleAll(collapsed, ["Learn", "Play"]);
+    const expanded = toggleAll(collapsed, ["Extra", "Play"]);
     expect(expanded).toEqual({ collapsed: {}, rail: true });
-    expect(collapsed.collapsed).toEqual({ Learn: true, Play: true });
+    expect(collapsed.collapsed).toEqual({ Extra: true, Play: true });
     expect(state.collapsed).toEqual({ Work: true });
     expect(collapsed).not.toBe(state);
     expect(expanded).not.toBe(collapsed);
@@ -76,5 +76,28 @@ describe("rail shortcut", () => {
     expect(isTypingIn(null)).toBe(false);
     expect(isTypingIn({ tagName: "DIV" } as Element)).toBe(false);
     expect(isTypingIn({ tagName: "BUTTON", isContentEditable: false } as unknown as Element)).toBe(false);
+  });
+});
+
+describe("groups that start shut (H-164 §10)", () => {
+  const fresh = { collapsed: {}, rail: false };
+  it("My business, Get leads, My bot and Learn start shut; Daily and the rest start open", () => {
+    for (const g of ["My business", "Get leads", "My bot", "Learn"]) expect(isOpen(fresh, g, null)).toBe(false);
+    for (const g of ["Daily", "HumanOS", "Socrates Domain", "Platforms"]) expect(isOpen(fresh, g, null)).toBe(true);
+    expect(isOpen(fresh, "Learn", "Learn")).toBe(true);
+  });
+  it("remembers a shut group the member opened, and forgets it once it's back at its default", () => {
+    const opened = toggleGroup(fresh, "Learn");
+    expect(opened.collapsed).toEqual({ Learn: false });
+    expect(isOpen(opened, "Learn", null)).toBe(true);
+    expect(navStateOf(opened)).toEqual(opened);
+    expect(toggleGroup(opened, "Learn").collapsed).toEqual({});
+  });
+  it("Expand all opens the shut ones too", () => {
+    const all = ["Daily", "Learn"];
+    const shut = toggleAll(fresh, all);
+    expect(allCollapsed(shut, all)).toBe(true);
+    const open = toggleAll(shut, all);
+    expect(all.every((g) => isOpen(open, g, null))).toBe(true);
   });
 });

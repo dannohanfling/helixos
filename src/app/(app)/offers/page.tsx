@@ -4,7 +4,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { createOfferAction } from "@/lib/actions/offers";
-import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
+import { Badge, Disclosure, Empty, Field, PageHeader, Progress, Tabs } from "@/components/ui";
 import { scoreOffer } from "@/lib/engine/offer-score";
 import { SubmitButton } from "@/components/submit-button";
 import { MoneyInput } from "@/components/money-input";
@@ -44,6 +44,8 @@ export default async function OffersPage({ searchParams }: { searchParams: Promi
           </Disclosure>
         }
       />
+      {/* Avatars is a tab inside Offers (H-164 §10): one menu item, two tabs. */}
+      <Tabs current="offers" items={[{ key: "offers", label: "Offers", href: "/offers" }, { key: "avatars", label: "Avatars", href: "/avatars" }]} />
       {list.length ? (
         <div className="grid gap-3 md:grid-cols-2">
           {list.map((o) => {

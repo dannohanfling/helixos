@@ -232,3 +232,10 @@ export async function setAvatarEmojiAction(emoji: string): Promise<{ ok: true } 
   refresh();
   return { ok: true };
 }
+
+/** "Show all tools" (H-164 §12): every tool in the member's menu now, or back to opening them by stage. A coach working in their HelixOS may set it too. */
+export async function setShowAllToolsAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx();
+  await db.update(schema.memberships).set({ showAllTools: formData.get("showAllTools") === "on" }).where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)));
+  refresh();
+}

@@ -5,7 +5,7 @@ import { archiveAvatarAction, saveAvatarAction } from "@/lib/actions/avatars";
 import { startInterviewAction } from "@/lib/actions/avatar-interview";
 import { NO_KEY, canInterview, openInterviews } from "@/lib/avatar-interview";
 import { avatarTree, filledCount, IMPORTED_NOTE, offersOf, type AvatarRow, type LinkRow, type OfferRef } from "@/lib/engine/avatars";
-import { Badge, Card, Disclosure, Empty, Field, PageHeader } from "@/components/ui";
+import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Avatars" };
@@ -92,6 +92,8 @@ export default async function AvatarsPage({ searchParams }: { searchParams: Prom
           </Disclosure>
         }
       />
+      {/* Avatars is a tab inside Offers (H-164 §10): one menu item, two tabs. */}
+      <Tabs current="avatars" items={[{ key: "offers", label: "Offers", href: "/offers" }, { key: "avatars", label: "Avatars", href: "/avatars" }]} />
       {v.switchedInto ? null : (
         <Card id="interview" className="mb-3" title="Interview me">
           {sp.interview ? (

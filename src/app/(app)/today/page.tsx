@@ -56,6 +56,8 @@ import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 import { logTiming, tick } from "@/lib/timing";
+import { after } from "next/server";
+import { markAnnounced, newlyOpen, refreshTools } from "@/lib/tools-open";
 
 export const metadata = { title: "Today" };
 
@@ -124,6 +126,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const tData = tick();
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
+  // Tools open as a client reaches them (H-164 §12): what opened since Today last said so, said once; then, once the page has
+  // shown, My Helix is read again so the next opening is ready. Never for a team member; a coach switched in doesn't use it up.
+  const opened = v.role === "client" && !v.team ? newlyOpen(v.membership) : [];
+  if (v.role === "client" && !v.team) {
+    after(async () => {
+      if (opened.length && !v.switchedInto) await markAnnounced(v.membership.id, v.membership.toolsPhase);
+      await refreshTools(v);
+    });
+  }
   const [share, goals, workout] = await Promise.all([
     week ? shareFor(v.workspace.id, v.user.id, week) : Promise.resolve(null),
     // Goals (rev 508 §5): the two that need it most, under the HumanOS line.
@@ -235,6 +246,18 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               Board check-in: {b.due} step{b.due === 1 ? "" : "s"} from &ldquo;{b.decision}&rdquo; {b.due === 1 ? "is" : "are"} due →
             </Link>
           ))}
+        </div>
+      ) : null}
+      {opened.length ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-good bg-good-soft px-3 py-2 text-sm" data-testid="today-tools-opened">
+          <span className="font-medium">New:</span>
+          {opened.map((n, i) => (
+            <span key={n.href}>
+              <Link href={n.href} className="font-medium underline">{n.label}</Link>
+              {i < opened.length - 1 ? "," : ""}
+            </span>
+          ))}
+          <span>{opened.length === 1 ? "is" : "are"} open in your menu, for the stage you&apos;ve reached.</span>
         </div>
       ) : null}
       {tools && tools.done < tools.total ? (

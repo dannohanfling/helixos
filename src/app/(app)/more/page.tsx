@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
-import { NAV_GROUPS, navVisible, withCoachName, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
+import { NAV_GROUPS, navVisible, toolsPhaseOf, withCoachName, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
 import { chatWidgetProps } from "@/lib/chat";
 import { horizonShell } from "@/lib/horizon";
 import { oohAccessFor } from "@/lib/office-hours-access";
@@ -37,7 +37,7 @@ export default async function MorePage() {
   // The Agent inbox (H-727): the same rule as the side menu's, worked out in the layout.
   const agentsOn = v.role === "client" && !v.switchedInto && !v.team ? await agentsOnFor({ workspaceId: v.workspace.id, userId: v.user.id }) : false;
   const chatOn = (await chatWidgetProps(v)) !== null;
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn })) }))
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, toolsPhase: toolsPhaseOf({ role: v.role, team: Boolean(v.team), showAllTools: v.membership.showAllTools, toolsPhase: v.membership.toolsPhase }) })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length);
   return (
@@ -47,6 +47,18 @@ export default async function MorePage() {
         <div className="flex justify-end">
           <CollapseAllButton labels={groups.map((g) => g.label)} />
         </div>
+        {/* My Helix as a progress line (H-164 §10), on the phone as under the logo on a desktop. */}
+        {v.role === "client" && !v.team ? (
+          <Link href="/my-helix" className="card block p-3" data-testid="helix-progress">
+            <span className="flex items-center justify-between text-sm font-medium">
+              <span>🌀 My Helix</span>
+              <span className="tabular text-ink-2">{v.membership.helixPct}%</span>
+            </span>
+            <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
+              <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(2, Math.min(100, v.membership.helixPct))}%` }} />
+            </span>
+          </Link>
+        ) : null}
         {groups.map((g) => (
           <NavGroupCard key={g.label} label={g.label}>
             {g.items.map((n) =>
@@ -89,8 +101,9 @@ export default async function MorePage() {
             </SubmitButton>
           </form>
         </div>
-        <Link href="/whats-new" className="block text-center text-[11px] text-ink-3" data-testid="app-version">
-          {APP_VERSION}
+        <Link href="/whats-new" className="flex items-center justify-center gap-1.5 text-[11px] text-ink-3" data-testid="app-version">
+          {APP_VERSION} · What&apos;s new
+          {unseen ? <NewDot /> : null}
         </Link>
       </div>
     </>

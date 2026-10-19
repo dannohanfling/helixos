@@ -14,7 +14,8 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `menuKey` (H-385): the On the horizon item that drives this entry. It reads as Coming soon until that item has shipped
  * (`withHorizon` below), then becomes a normal link; the coach moves the item, no deploy needed.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; agentsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
+/** `phase` (H-164 §12): the My Helix phase that opens the item for a client still finding their way; none means always open. */
+export type NavItem = { href: string; label: string; icon: string; phase?: number; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; agentsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -22,11 +23,9 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Daily",
     items: [
       { href: "/today", label: "Today", icon: "☀️", team: true },
-      { href: "/my-helix", label: "My Helix", icon: "🌀", line: "your progress at a glance" },
       { href: "/intentions", label: "Intentions", icon: "🌱", line: "this week and this month" },
       { href: "/tasks", label: "Tasks", icon: "✅", team: true, line: "what's on your plate" },
       { href: "/content", label: "Content", icon: "✍️", team: true, line: "write, schedule, ship" },
-      { href: "/library", label: "Library", icon: "🗂️", team: true, line: "posts and assets to reuse" },
       { href: "/conversations", label: "DMs", icon: "💬", team: true, line: "every conversation, logged" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
       // Team access (H-413): a team member books office hours for the owner and says who's attending.
@@ -34,6 +33,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true, oohOnly: true },
       // The coach's chat on its own page (H-693, plan H-700): only where the chat is set up, named for the coach (withCoachName).
       { href: "/ask", label: "Ask your coach", icon: "💭", line: "chat with your coach", chatOnly: true },
+      // Rewards and the Colosseum are one page with two tabs (H-164 §4); /colosseum sends to the tab. With the Colosseum on, this
+      // one item becomes The Colosseum and opens on the arena (H-588, plan H-592): see withColosseum.
+      { href: "/rewards", label: "Rewards", icon: "🏆", line: "points, prizes and the arena" },
+      { href: "/community", label: "Community Pass", icon: "🎟️", passOnly: true, hint: "Elite" },
     ],
   },
   {
@@ -51,57 +54,70 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/settings#humanos", label: "Turn on HumanOS", icon: "🧬", line: "Food, training, sleep, practices", bodyOffOnly: true },
     ],
   },
+  // The client's five groups (H-164 §10, plan H-209 §11): Daily above, then these four, closed until opened (DEFAULT_CLOSED in
+  // engine/nav-state). `phase`: the My Helix phase that opens the page for a new client (§12, toolsOpenTo); Show all tools opens all.
   {
-    label: "Build",
+    label: "My business",
     items: [
-      { href: "/my-board", label: "My Board", icon: "🧭", line: "five advisors on a decision" },
+      { href: "/essence", label: "Essence", icon: "🧬", line: "who you are and who you serve", phase: 0 },
+      // Avatars is a tab inside Offers (H-164 §10): the Offers and Avatars pages share a tab row; one menu item.
+      { href: "/offers", label: "Offers", icon: "🎁", line: "what you sell, and to whom", phase: 1 },
+      { href: "/pathway", label: "Pathway", icon: "🛣️", line: "the stages of your business, in order", phase: 2 },
+      { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results", phase: 2 },
+      { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives", phase: 2 },
+      { href: "/numbers", label: "Numbers", icon: "📊", line: "your counts, week by week", phase: 2 },
+      { href: "/clients", label: "Clients", icon: "🤝", team: true, hint: "your clients", phase: 6 },
+    ],
+  },
+  {
+    label: "Get leads",
+    items: [
+      { href: "/magnets", label: "Lead magnets", icon: "🧲", hint: "keyword + link", phase: 4 },
+      { href: "/webinars", label: "Webinars", icon: "🎤", team: true, line: "the wizard, start to Run it", phase: 4 },
+      { href: "/images", label: "Images", icon: "🖼️", team: true, line: "photos, logos, graphics", phase: 3 },
+      { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak", phase: 4 },
+      // The loyalty leaderboard's editor (H-140): for any member whose workspace has a connected board, the owner, their team and a switched-in coach alike.
+      { href: "/loyalty", label: "Loyalty leaderboard", icon: "🏅", line: "your members' points and tiers", loyaltyOnly: true, team: true, phase: 4 },
+      { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", menuKey: "magic-funnel", phase: 7 },
+    ],
+  },
+  {
+    label: "My bot",
+    items: [
+      { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent", phase: 7 },
+      { href: "/bot-features", label: "Bot Features", icon: "🔓", team: true, line: "New skills for your bot", phase: 7 },
+    ],
+  },
+  {
+    label: "Learn",
+    items: [
+      { href: "/courses", label: "Courses", icon: "📚", line: "the lessons, in order" },
+      { href: "/recordings", label: "Recordings", icon: "🎥", line: "your calls, with action steps", recordingsOnly: true },
+      { href: "/library", label: "Library", icon: "🗂️", team: true, line: "posts and assets to reuse", phase: 3 },
+      { href: "/doctrine", label: "Doctrine", icon: "🏛️", line: "the principles behind the method" },
+      { href: "/evidence", label: "Evidence", icon: "📚", line: "published research" },
+      { href: "/glossary", label: "Building with AI", icon: "📖", line: "the words, in plain English" },
+    ],
+  },
+  {
+    // Kept in sight as they are (H-164 §10: Danno chose No on hiding them): My Board, The Forum and a member's agent inbox.
+    label: "Board and agents",
+    items: [
+      { href: "/my-board", label: "My Board", icon: "🧭", line: "five advisors on a decision", phase: 3 },
       // The coach finds The Forum under Agents (H-164 §7); a client keeps it here.
       { href: "/forum", label: "The Forum", icon: "🏛️", line: "watch your AI agents work", clientOnly: true },
       // A member's own Handoff inbox (H-727), once they have an agent; the coach's is Coach → Inbox, under Agents.
       { href: "/forum/inbox", label: "Agent inbox", icon: "📥", line: "your agents' plans for your OK", clientOnly: true, agentsOnly: true },
-      { href: "/webinars", label: "Webinars", icon: "🎤", team: true, line: "the wizard, start to Run it" },
-      { href: "/images", label: "Images", icon: "🖼️", team: true, line: "photos, logos, graphics" },
-      { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent" },
-      { href: "/bot-features", label: "Bot Features", icon: "🔓", team: true, line: "New skills for your bot" },
-      { href: "/offers", label: "Offers", icon: "🎁", line: "what you sell, and to whom" },
-      { href: "/avatars", label: "Avatars", icon: "🧭", line: "Who each offer is for" },
-      { href: "/pathway", label: "Pathway", icon: "🛣️", line: "the stages of your business, in order" },
-      { href: "/courses", label: "Courses", icon: "📚", line: "the lessons, in order" },
-      { href: "/recordings", label: "Recordings", icon: "🎥", line: "your calls, with action steps", recordingsOnly: true },
-      { href: "/doctrine", label: "Doctrine", icon: "🏛️", line: "the principles behind the method" },
-      { href: "/glossary", label: "Building with AI", icon: "📖", line: "the words, in plain English" },
-      { href: "/essence", label: "Essence", icon: "🧬", line: "who you are and who you serve" },
-      { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results" },
-      { href: "/evidence", label: "Evidence", icon: "📚", line: "published research" },
-      { href: "/magnets", label: "Lead magnets", icon: "🧲", hint: "keyword + link" },
     ],
   },
   {
     label: "Socrates Domain",
     items: [
-      { href: "/socrates/foundations", label: "Foundations", icon: "🧭", hint: "7 lessons" },
-      { href: "/socrates/questions", label: "Questions", icon: "❓", hint: "library" },
-      { href: "/socrates/reframes", label: "Reframes", icon: "🔁", hint: "the four groups" },
-      { href: "/socrates/objections", label: "Objections", icon: "🧱", hint: "one record" },
-      { href: "/socrates/scripts", label: "Scripts", icon: "📝", hint: "wizard" },
-    ],
-  },
-  {
-    label: "Grow",
-    items: [
-      { href: "/clients", label: "Clients", icon: "🤝", team: true, hint: "your clients" },
-      { href: "/community", label: "Community Pass", icon: "🎟️", passOnly: true, hint: "Elite" },
-      { href: "/numbers", label: "Numbers", icon: "📊", line: "your counts, week by week" },
-      { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
-      // Rewards and the Colosseum are one page with two tabs (H-164 §4); /colosseum sends to the tab. With the Colosseum on, this
-      // one item becomes The Colosseum and opens on the arena (H-588, plan H-592): see withColosseum.
-      { href: "/rewards", label: "Rewards", icon: "🏆", line: "points, prizes and the arena" },
-      // The loyalty leaderboard's editor (H-140): for any member whose workspace has a connected board, the owner, their team and a switched-in coach alike.
-      { href: "/loyalty", label: "Loyalty leaderboard", icon: "🏅", line: "your members' points and tiers", loyaltyOnly: true, team: true },
-      { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak" },
-      { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", menuKey: "magic-funnel" },
-      { href: "/whats-new", label: "What's new", icon: "✨", team: true, hint: "latest changes" },
-      { href: "/connect", label: "Connect to Claude", icon: "🔌", hint: "HelixOS from a chat" },
+      { href: "/socrates/foundations", label: "Foundations", icon: "🧭", hint: "7 lessons", phase: 5 },
+      { href: "/socrates/questions", label: "Questions", icon: "❓", hint: "library", phase: 5 },
+      { href: "/socrates/reframes", label: "Reframes", icon: "🔁", hint: "the four groups", phase: 5 },
+      { href: "/socrates/objections", label: "Objections", icon: "🧱", hint: "one record", phase: 5 },
+      { href: "/socrates/scripts", label: "Scripts", icon: "📝", hint: "wizard", phase: 5 },
     ],
   },
   {
@@ -190,8 +206,9 @@ export function navActive(pathname: string, href: string): boolean {
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean; /** The coach's chat is set up and on for this person (H-693): never for a team member or while switched in. */ chatOn?: boolean; /** H-727: an agent of their own on the Forum, or anything in their agent inbox (agentsOnFor). */ agentsOn?: boolean; /** The coach's first name, for a client's "Ask Danno". */ coachFirst?: string | null };
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean; /** The coach's chat is set up and on for this person (H-693): never for a team member or while switched in. */ chatOn?: boolean; /** H-727: an agent of their own on the Forum, or anything in their agent inbox (agentsOnFor). */ agentsOn?: boolean; /** The coach's first name, for a client's "Ask Danno". */ coachFirst?: string | null; /** H-164 §12: the highest My Helix phase whose tools are open; null or absent, every tool (the coach, a team, Show all tools). */ toolsPhase?: number | null };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
+  (n.phase === undefined || m.toolsPhase == null || m.role === "coach" || n.phase <= m.toolsPhase) &&
   (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
   (!n.loyaltyOnly || Boolean(m.loyaltyOn)) &&
   (!n.oohOnly || m.role === "coach" || Boolean(m.oohOn)) &&
@@ -199,6 +216,12 @@ export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.agentsOnly || Boolean(m.agentsOn)) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 
+
+/** The highest phase whose tools are open for this member, or null for every tool (H-164 §12). */
+export const toolsPhaseOf = (m: { role: string; team?: boolean; showAllTools: boolean; toolsPhase: number }): number | null => (m.role === "coach" || m.team || m.showAllTools ? null : m.toolsPhase);
+
+/** The pages a phase opens, for "New: … is open" on Today (H-164 §12). */
+export const toolsOpenedAt = (phase: number): NavItem[] => NAV.filter((n) => n.phase === phase);
 
 /** The groups this member sees, each with only its visible items; a group with none isn't drawn at all (HumanOS without Body). */
 export function visibleGroups(m: NavMember, links: PlatformLinks = {}, ownCommunity: string | null = null, shippedKeys: readonly string[] = []) {

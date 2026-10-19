@@ -10,7 +10,7 @@ import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { BottomNav, SideNav } from "./nav";
 import { NavStateProvider } from "./nav-state";
 import { Sidebar, SidebarFoot } from "./sidebar";
-import { visibleGroups } from "./nav-groups";
+import { toolsPhaseOf, visibleGroups } from "./nav-groups";
 import { navStateOf } from "@/lib/engine/nav-state";
 import { LegalFooter } from "./legal-footer";
 import { SubmitButton } from "@/components/submit-button";
@@ -28,6 +28,8 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
   // except a team member, who is shown as themself.
   const who = team ? viewer.actor : viewer.user;
+  // Tools open as a client reaches them (H-164 §12): the highest phase whose pages show, or null for every page.
+  const toolsPhase = toolsPhaseOf({ role: viewer.role, team, showAllTools: viewer.membership.showAllTools, toolsPhase: viewer.membership.toolsPhase });
   return (
     <NavStateProvider initial={navStateOf(viewer.membership.navState)} persist={!viewer.switchedInto && !viewer.team}>
     <div className="min-h-screen md:flex" data-app-shell>
@@ -41,14 +43,26 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
             <div className="text-[11px] text-ink-3">{viewer.workspace.name}</div>
           </div>
         </Link>
+        {/* My Helix as a progress line under the logo (H-164 §10), in place of its menu item. Not for the coach or a team member. */}
+        {viewer.role === "client" && !team ? (
+          <Link href="/my-helix" className="rail-hide -mt-2 mb-4 block px-5" data-testid="helix-progress" title="My Helix: your progress at a glance">
+            <span className="flex items-center justify-between text-[11px] text-ink-3">
+              <span>🌀 My Helix</span>
+              <span className="tabular">{viewer.membership.helixPct}%</span>
+            </span>
+            <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(2, Math.min(100, viewer.membership.helixPct))}%` }} />
+            </span>
+          </Link>
+        ) : null}
         <Link href="/today" className="rail-only mx-auto mb-3" aria-label="HelixOS, Today" title="Today">
           <AppLogo size={40} />
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 [aside[data-rail=true]_&]:px-1">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} chatOn={chatOn} agentsOn={agentsOn} coachFirst={coachFirst} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} chatOn={chatOn} agentsOn={agentsOn} coachFirst={coachFirst} toolsPhase={toolsPhase} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
         </div>
         {/* The sidebar's controls (H-499): fold and Collapse all, at the bottom left, open or folded. */}
-        <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
+        <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst, toolsPhase }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
         {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
         <div className="rail-only mt-1 flex flex-col items-center gap-1">
           {flame ? <StreakPill state={flame} place="rail" afterWelcome={flameAfterWelcome} /> : null}
@@ -114,8 +128,10 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
             </form>
           </div>
           {/* The version this deploy is (rev 193), from the build's own commit; it opens What's new. */}
-          <Link href="/whats-new" className="block pb-1 text-[11px] text-ink-3 hover:text-ink" data-testid="app-version">
+          <Link href="/whats-new" className="flex items-center gap-1.5 pb-1 text-[11px] text-ink-3 hover:text-ink" data-testid="app-version" title="What's new">
             {APP_VERSION}
+            {/* What's new lives only behind the version line (H-164 §10): its dot moves here from the menu. */}
+            {badges["/whats-new"] ? <span className="h-2 w-2 rounded-full bg-accent" aria-label="Something new" data-testid="whats-new-dot" /> : null}
           </Link>
         </div>
       </Sidebar>

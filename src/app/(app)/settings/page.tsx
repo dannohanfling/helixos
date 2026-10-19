@@ -7,7 +7,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
-import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, setShowAllToolsAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { BrandKitEditor } from "@/components/brand-kit-editor";
@@ -300,6 +300,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
           </Card>
         )}
+        {v.role === "client" && !v.team ? (
+          <Card id="menu" className="min-w-0" title="Your menu">
+            {/* Tools open as a client reaches them (H-164 §12); "Show all tools" puts every one in the menu now. */}
+            <form action={setShowAllToolsAction} className="flex flex-wrap items-center gap-2 text-sm">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="showAllTools" defaultChecked={v.membership.showAllTools} data-testid="show-all-tools" /> Show all tools
+              </label>
+              <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="show-all-tools-save">Save</SubmitButton>
+            </form>
+            <p className="mt-2 text-xs text-ink-3">Off: your menu opens each tool as you reach its stage in My Helix, and Today says when one opens. On: every tool is there from now.</p>
+          </Card>
+        ) : null}
         {v.team ? null : (
           <Card id="sounds" className="min-w-0" title="Sounds">
             {/* The living scenes' sounds (H-400): one switch for the crowd, the applause and the fire, on by default, the member's own. */}
@@ -545,7 +557,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </p>
           </Card>
         ) : null}
-        <Card id="connected-apps" title="Connected apps">
+        <Card id="connected-apps" title="Connected apps" action={<Link href="/connect" className="text-xs text-ink-2 hover:underline" data-testid="settings-connect-claude">Connect to Claude, step by step →</Link>}>
           {/* The MCP server (rev 224): the apps this member let act as them, and the way to cut each one. */}
           {appsNote ? <p className="mb-2 text-sm text-good" data-testid="apps-note">{appsNote}</p> : null}
           {v.role === "coach" ? (
