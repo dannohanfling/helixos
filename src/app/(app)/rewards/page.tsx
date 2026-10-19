@@ -49,7 +49,7 @@ export default async function RewardsPage({ searchParams }: { searchParams: Prom
     db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, v.workspace.id), eq(schema.rewardClaims.userId, v.user.id)), orderBy: desc(schema.rewardClaims.createdAt) }),
     leaderboard(v.workspace.id, `${startOfWeek(v.today)}T00:00:00`),
   ]);
-  const tier = tierProgress(points);
+  const tier = tierProgress(points, v.membership.rankKeptLevel);
   const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) });
   const optedIn = new Set(members.filter((m) => m.leaderboardOptIn).map((m) => m.userId));
   const users = members.length ? await db.query.users.findMany({ where: inArray(schema.users.id, members.map((m) => m.userId)) }) : [];
@@ -89,7 +89,8 @@ export default async function RewardsPage({ searchParams }: { searchParams: Prom
         <Card title="The ladder" action={<span className="text-xs text-ink-3">{TIERS.length} tiers · locked rungs shown</span>}>
           <ol className="space-y-1" data-testid="tier-ladder">
             {TIERS.map((t) => {
-              const reached = points >= t.minPoints;
+              // Reached by rank, so a kept rank above the points still shows as reached (H-1088).
+              const reached = t.level <= tier.current.level;
               const isCurrent = t.level === tier.current.level;
               const isNext = tier.next?.level === t.level;
               const status = isCurrent ? "you are here" : reached ? "reached" : isNext ? `${(t.minPoints - points).toLocaleString()} more to unlock` : "locked";

@@ -7,7 +7,7 @@
 import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { champions, initials, readWin, seatRings, standings, weekByDay, type RingSeat, type Standing, type WinKind } from "@/lib/engine/colosseum";
-import { tierFor, tierProgress } from "@/lib/engine/tiers";
+import { rankOf, tierProgress } from "@/lib/engine/tiers";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { leaderboard } from "@/lib/queries/points";
@@ -44,7 +44,7 @@ export type Arena = {
 export async function arenaFor(v: { workspace: { id: string; colosseumOn: boolean }; user: { id: string }; membership: { id: string; arenaHidden: boolean; arenaPhoto: boolean; arenaPaused: boolean } }, today: string): Promise<Arena> {
   const monday = mondayOf(today);
   const [members, all, week, winRows] = await Promise.all([
-    db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), isNull(schema.memberships.removedAt)), columns: { id: true, userId: true, role: true, arenaHidden: true, arenaPhoto: true, headshotUrl: true, headshotSource: true } }),
+    db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), isNull(schema.memberships.removedAt)), columns: { id: true, userId: true, role: true, arenaHidden: true, arenaPhoto: true, headshotUrl: true, headshotSource: true, rankKeptLevel: true } }),
     leaderboard(v.workspace.id),
     leaderboard(v.workspace.id, `${monday} 00:00:00`),
     db.query.colosseumWins.findMany({ where: eq(schema.colosseumWins.workspaceId, v.workspace.id), orderBy: desc(schema.colosseumWins.createdAt), limit: 60 }),
@@ -57,13 +57,14 @@ export async function arenaFor(v: { workspace: { id: string; colosseumOn: boolea
     .filter((m) => m.role === "client" || m.role === "coach")
     .map((m) => {
       const points = total.get(m.userId) ?? 0;
-      return { userId: m.userId, membershipId: m.id, name: nameOf.get(m.userId) ?? "Member", points, week: wk.get(m.userId) ?? 0, tier: tierFor(points).name, hidden: m.arenaHidden, photo: m.arenaPhoto && Boolean(m.headshotUrl) && m.headshotSource !== "removed", isYou: m.userId === v.user.id };
+      return { userId: m.userId, membershipId: m.id, name: nameOf.get(m.userId) ?? "Member", points, week: wk.get(m.userId) ?? 0, tier: rankOf(m, points).name, hidden: m.arenaHidden, photo: m.arenaPhoto && Boolean(m.headshotUrl) && m.headshotSource !== "removed", isYou: m.userId === v.user.id };
     });
   const champs = champions(rows);
   const { rings, more } = seatRings(rows, champs);
   const mine = rows.find((r) => r.isYou) ?? null;
   const myPoints = mine?.points ?? total.get(v.user.id) ?? 0;
-  const progress = tierProgress(myPoints);
+  // My own kept rank (H-1088): the seat and the bar never drop.
+  const progress = tierProgress(myPoints, members.find((m) => m.userId === v.user.id)?.rankKeptLevel ?? null);
   const wins: ArenaWin[] = winRows.map((w) => ({ id: w.id, who: shortName(nameOf.get(w.userId) ?? "Member"), kind: w.kind, text: w.text, at: w.createdAt, mine: w.userId === v.user.id }));
   // My week: the ledger by day since Monday, my shared wins this week, and the biggest win from my own close-outs.
   const [ledger, closes] = await Promise.all([

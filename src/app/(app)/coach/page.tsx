@@ -16,7 +16,7 @@ import { money, rollup } from "@/lib/engine/ai-usage";
 import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
 import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVIDENCE_GLOBAL_BUDGET, lastDays, quotaState, utcDay } from "@/lib/engine/evidence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
+import { TIER_ICONS, rankOf } from "@/lib/engine/tiers";
 import { activeDaysOf, runningStreak, streakDayOf } from "@/lib/engine/streak";
 import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
@@ -128,7 +128,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
         m,
         u,
         pts,
-        tier: tierFor(pts),
+        // The kept rank (H-1088): the roster never shows a rank the member has dropped from.
+        tier: rankOf(m, pts),
         streak: runningStreak(active, streakDayOf(active, ctoday, hourInTz(ctz)), m.workDays),
         lastActive,
         daysSilent,

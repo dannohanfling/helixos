@@ -12,7 +12,7 @@ import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { catchUpCard, catchUpFor, closeSceneFor, rankCard, rankUpFor, type CloseScene, type RankCard, type RankClip } from "@/lib/engine/scenes";
 import type { WorkDays } from "@/lib/engine/streak";
-import { tierFor } from "@/lib/engine/tiers";
+import { rankOf } from "@/lib/engine/tiers";
 
 export type RankUpShell = { card: RankCard; clip: RankClip | null; stampOnly: false } | { card: null; clip: null; stampOnly: true; level: number };
 
@@ -33,9 +33,10 @@ export function rankClip(slug: string): RankClip | null {
 export function rankUpShell(v: Viewer, points: number): RankUpShell | null {
   if (v.role !== "client" || v.switchedInto || v.team) return null;
   const celebrated = v.membership.celebratedTierLevel;
-  const tier = rankUpFor(points, celebrated);
+  const kept = v.membership.rankKeptLevel;
+  const tier = rankUpFor(points, celebrated, kept);
   if (tier) return { card: rankCard(tier, points), clip: rankClip(tier.name.toLowerCase()), stampOnly: false };
-  if (celebrated === null) return { card: null, clip: null, stampOnly: true, level: tierFor(points).level };
+  if (celebrated === null) return { card: null, clip: null, stampOnly: true, level: rankOf(v.membership, points).level };
   return null;
 }
 
@@ -62,13 +63,13 @@ async function reachedAt(workspaceId: string, userId: string, min: number): Prom
 export async function catchUpShell(v: Viewer, points: number, stamping = false): Promise<CatchUpShell | null> {
   if (v.role !== "client" || v.switchedInto || v.team) return null;
   const m = v.membership;
-  const t = tierFor(points);
+  const t = rankOf(m, points);
   // A rank never recorded is stamped silently on this same open: the catch-up reads it as already celebrated, so a member who
   // reached it before the clips gets their clip on this first open, not the next one.
   const celebrated = stamping ? t.level : m.celebratedTierLevel;
   // Cheap first: nothing to read for an Artisan or once the current rank's clip is seen.
   if (celebrated === null || t.level <= 1 || (m.rankClipSeenLevel ?? 0) >= t.level) return null;
-  const due = catchUpFor({ points, celebrated, clipSeen: m.rankClipSeenLevel, reachedAt: await reachedAt(v.workspace.id, v.user.id, t.minPoints) });
+  const due = catchUpFor({ points, celebrated, kept: m.rankKeptLevel, clipSeen: m.rankClipSeenLevel, reachedAt: await reachedAt(v.workspace.id, v.user.id, t.minPoints) });
   if (!due) return null;
   if (due.kind === "stamp") return due;
   const clip = rankClip(due.tier.name.toLowerCase());

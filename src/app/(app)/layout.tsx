@@ -11,6 +11,7 @@ import { DailyWelcome } from "@/components/daily-welcome";
 import { totalPoints } from "@/lib/queries/points";
 import { RankUp } from "@/components/rank-up";
 import { catchUpShell, rankUpShell } from "@/lib/scenes";
+import { keepRank } from "@/lib/ranks";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { SoundsConfig } from "@/components/sounds-config";
 import { VoiceProvider } from "@/components/voice-context";
@@ -66,6 +67,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const memberView = viewer.role === "client" && !viewer.switchedInto && !viewer.team;
   const agentsOn = memberView ? await agentsOnFor({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : false;
   const memberInboxNew = agentsOn ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
+  // The kept rank climbs with the points (H-1088), before anything below reads the member's rank.
+  await keepRank(viewer, points);
   const rank = rankUpShell(viewer, points);
   // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);

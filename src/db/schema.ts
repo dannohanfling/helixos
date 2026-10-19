@@ -290,6 +290,11 @@ export const memberships = sqliteTable(
     celebratedTierLevel: integer("celebrated_tier_level"),
     /** The highest rank whose relic clip the member has seen (H-934): the catch-up plays once for a rank reached before the clips. */
     rankClipSeenLevel: integer("rank_clip_seen_level"),
+    /**
+     * The highest rank this member has ever held (H-1088): backfilled once from the old thresholds, raised whenever points take
+     * them past it, never lowered. Their rank is the higher of this and the rank their points earn under the current table.
+     */
+    rankKeptLevel: integer("rank_kept_level"),
     /** The newest What's new entry (its `n`, src/content/whats-new.ts) this member has opened the page since: the menu dot. */
     whatsNewSeen: integer("whats_new_seen"),
     /** The member's own timezone. Null means the workspace's. "Today", reminder hours and streak boundaries all follow it. */

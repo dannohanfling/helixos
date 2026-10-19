@@ -6,7 +6,7 @@
 import { addDays, instantOf, weekday } from "@/lib/dates";
 import { TIER_RING } from "./colosseum";
 import { bonusFor, countsDay, type WorkDays } from "./streak";
-import { TIERS, tierFor, tierProgress, type Tier } from "./tiers";
+import { TIERS, keptTier, tierProgress, type Tier } from "./tiers";
 
 export const RANK_COUNT = TIERS.length;
 export const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"] as const;
@@ -24,9 +24,10 @@ const fmt = (n: number): string => n.toLocaleString("en-US");
  * silently so nobody is congratulated for where they already were. Several ranks crossed at once give only the highest; Artisan,
  * the starting rank, never has a ceremony.
  */
-export function rankUpFor(points: number, celebrated: number | null): Tier | null {
+export function rankUpFor(points: number, celebrated: number | null, kept: number | null = null): Tier | null {
   if (celebrated === null) return null;
-  const t = tierFor(points);
+  // The rank the member holds (H-1088): a kept rank counts, so a higher table never takes one back or replays it.
+  const t = keptTier(points, kept);
   if (t.level <= 1 || t.level <= celebrated) return null;
   return t;
 }
@@ -58,7 +59,8 @@ export function rankCard(tier: Tier, points: number): RankCard {
   const ringBefore = before ? (TIER_RING[before.name] ?? 3) : 3;
   const seat = SEAT_WORDS[ring] ?? "the stands";
   const line = `You've passed ${fmt(tier.minPoints)} points. ${ring < ringBefore ? `Your seat moves up to ${seat}` : `Your seat keeps its place in ${seat}`} of the Colosseum.`;
-  const p = tierProgress(points);
+  // The next rank from this card's own rank: a kept rank above the points still points on to the one after it (H-1088).
+  const p = tierProgress(points, tier.level);
   const next = p.next ? { name: p.next.name, points: p.next.minPoints, toGo: p.toNext, pct: p.pct } : null;
   return {
     level: tier.level,
@@ -92,10 +94,10 @@ export type CatchUp = { kind: "play"; tier: Tier } | { kind: "stamp"; level: num
  * total first reached the current rank (null when the ledger can't say, read as before the clips). Reached after the clips
  * went live: they saw it then, so the seen rank is stamped silently and nothing plays.
  */
-export function catchUpFor(i: { points: number; celebrated: number | null; clipSeen: number | null; reachedAt: string | null }): CatchUp | null {
+export function catchUpFor(i: { points: number; celebrated: number | null; clipSeen: number | null; reachedAt: string | null; kept?: number | null }): CatchUp | null {
   if (i.celebrated === null) return null;
-  const t = tierFor(i.points);
-  if (t.level <= 1 || rankUpFor(i.points, i.celebrated)) return null;
+  const t = keptTier(i.points, i.kept ?? null);
+  if (t.level <= 1 || rankUpFor(i.points, i.celebrated, i.kept ?? null)) return null;
   if ((i.clipSeen ?? 0) >= t.level) return null;
   if (i.reachedAt !== null && instantOf(i.reachedAt).getTime() >= instantOf(CLIPS_LIVE_AT).getTime()) return { kind: "stamp", level: t.level };
   return { kind: "play", tier: t };

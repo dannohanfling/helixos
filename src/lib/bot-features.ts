@@ -6,7 +6,7 @@
 import { and, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { BOT_FEATURES, DEFAULT_RULES, featureState, ruleOf, unlockState, type Behavior, type BotFeature, type BotFeatureKey, type FeatureState, type UnlockRule } from "@/lib/engine/bot-features";
-import { TIERS } from "@/lib/engine/tiers";
+import { TIERS, keptTier } from "@/lib/engine/tiers";
 import { totalPoints } from "@/lib/queries/points";
 
 export async function rulesFor(workspaceId: string): Promise<Record<BotFeatureKey, UnlockRule>> {
@@ -17,6 +17,7 @@ export async function rulesFor(workspaceId: string): Promise<Record<BotFeatureKe
 }
 
 const tierMin = (name: string): number | null => TIERS.find((t) => t.name === name)?.minPoints ?? null;
+const levelOf = (name: string): number | null => TIERS.find((t) => t.name === name)?.level ?? null;
 const one = async (q: Promise<unknown[]>) => (await q).length > 0;
 
 /** The milestones HelixOS can see for this member, and the ones the coach toggled on their row. A toggle always counts. */
@@ -41,14 +42,15 @@ export async function behaviorsOf(workspaceId: string, userId: string, toggled: 
 export type FeatureView = { feature: BotFeature; state: FeatureState; unlockLine: string; progress: number | null; request: schema.BotFeatureRequest | null };
 
 /** Every feature for one member, in Danno's order, with its state, the locked line and any progress bar (a tier or points rule). */
-export async function featuresFor(m: Pick<schema.Membership, "workspaceId" | "userId" | "botUnlocks">): Promise<FeatureView[]> {
+export async function featuresFor(m: Pick<schema.Membership, "workspaceId" | "userId" | "botUnlocks"> & { rankKeptLevel?: number | null }): Promise<FeatureView[]> {
   const [rules, behaviors, points, requests] = await Promise.all([
     rulesFor(m.workspaceId),
     behaviorsOf(m.workspaceId, m.userId, m.botUnlocks ?? []),
     totalPoints(m.workspaceId, m.userId),
     db.query.botFeatureRequests.findMany({ where: and(eq(schema.botFeatureRequests.workspaceId, m.workspaceId), eq(schema.botFeatureRequests.userId, m.userId)) }),
   ]);
-  const facts = { behaviors, points, tierName: "", tierMin };
+  // A tier rule is met by the rank the member holds, a kept rank included (H-1088), not only by that rank's points.
+  const facts = { behaviors, points, tierName: "", tierMin, heldLevel: keptTier(points, m.rankKeptLevel ?? null).level, levelOf };
   return BOT_FEATURES.map((feature) => {
     const u = unlockState(ruleOf(rules, feature.key), facts);
     const request = requests.find((r) => r.featureKey === feature.key) ?? null;
