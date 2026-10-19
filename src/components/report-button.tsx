@@ -143,10 +143,13 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
         {result?.ok ? (
           <div className="space-y-3 p-5" data-testid="report-sent">
             <h2 id="report-title" className="text-lg font-semibold">Sent to {coachFirst}</h2>
+            {/* The instant receipt (H-202), the same words as on the report. */}
+            <p className="font-medium" data-testid="report-receipt">Got it, {coachFirst} will see this soon.</p>
             <p className="text-sm text-ink-2">
               It&apos;s in {coachFirst}&apos;s inbox with the page you were on.{result.screenshot === "kept" ? " The screenshot went with it." : result.screenshot === "not-stored" ? " The screenshot couldn't be kept, so it went without one." : ""}
             </p>
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-2">
+              <a href="/reports" className="text-sm underline" data-testid="report-my-reports">My reports</a>
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
@@ -164,6 +167,9 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
             <h2 id="report-title" className="text-lg font-semibold">
               Tell {coachFirst}
             </h2>
+            <p className="-mt-2 text-xs text-ink-3">
+              <a href="/reports" className="underline" data-testid="report-form-my-reports">My reports</a>: what you sent and every reply.
+            </p>
             <input type="hidden" name="page" value={pathname ?? ""} />
             <fieldset className="space-y-1 text-sm">
               <legend className="font-medium">What is it?</legend>

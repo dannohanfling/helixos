@@ -2409,6 +2409,10 @@ export const formDrafts = sqliteTable(
 );
 export type FormDraft = typeof formDrafts.$inferSelect;
 
+/** Where a member report stands (H-202): New, Seen, Working on it, Done, or Not now (always with a reason). */
+export const REPORT_STATUSES = ["new", "seen", "working", "done", "not_now"] as const;
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+
 /**
  * What a member sends from "I have an issue or a suggestion" in the menu: their words, the page they were on, how much it gets
  * in their way, and an optional screenshot, kept in the private store under reports/<workspace>/. For an Ask Danno answer, the
@@ -2434,11 +2438,43 @@ export const memberReports = sqliteTable(
     screenshotType: text("screenshot_type"),
     seenAt: text("seen_at"),
     doneAt: text("done_at"),
+    /** Where it stands (H-202): New until the coach answers; seenAt and doneAt follow it for older readers. */
+    status: text("status", { enum: REPORT_STATUSES }).notNull().default("new"),
+    /** The 3 to 6 words a reply calls it ("the GoHighLevel connection"); the coach's to edit. Null reads it from the words. */
+    topic: text("topic"),
     createdAt: createdAt(),
   },
   (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId)],
 );
 export type MemberReport = typeof memberReports.$inferSelect;
+
+/**
+ * Everything said on a report after it was sent (H-202): the instant receipt, each reply the coach sent with a status, and the
+ * member's follow-ups. Who, when and the words, kept for good; the member reads their own, newest first, on My reports.
+ */
+export const REPORT_MESSAGE_KINDS = ["receipt", "status", "followup"] as const;
+export const reportMessages = sqliteTable(
+  "report_messages",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    reportId: text("report_id").notNull(),
+    /** The member the report is from. */
+    userId: text("user_id").notNull(),
+    /** Who wrote it: the coach for a status reply, the member for a follow-up; null for the automatic receipt. */
+    byUserId: text("by_user_id"),
+    kind: text("kind", { enum: REPORT_MESSAGE_KINDS }).notNull(),
+    status: text("status", { enum: REPORT_STATUSES }),
+    body: text("body").notNull(),
+    /** Whether an email went (only a status reply, and only while the member's Emails from HelixOS is on). */
+    emailed: integer("emailed", { mode: "boolean" }).notNull().default(false),
+    /** When the member saw it on My reports; a status reply unread shows a line on their Today. */
+    readAt: text("read_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("report_messages_report").on(t.reportId, t.createdAt), index("report_messages_user").on(t.workspaceId, t.userId)],
+);
+export type ReportMessage = typeof reportMessages.$inferSelect;
 
 export const RECORDING_SOURCES = ["webhook", "sync", "backfill"] as const;
 /** exact: the title names a series (rev 491; rev 261 phrases before); slot: placed by its start time; close: rev 261 only, kept for old rows. */

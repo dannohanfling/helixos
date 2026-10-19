@@ -170,6 +170,8 @@ export const MEMBER_TABLES = {
   recording_views: schema.recordingViews,
   // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row).
   member_reports: schema.memberReports,
+  // H-202: everything said on the member's reports (the receipt, the coach's replies, their follow-ups).
+  report_messages: schema.reportMessages,
   // Rev 444: a form's unsent draft, kept so it follows the member to another device.
   form_drafts: schema.formDrafts,
 } as const;
