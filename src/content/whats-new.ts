@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 329,
+    date: "2026-10-21",
+    title: "Preview the Aqueduct's repair moment",
+    lines: [
+      "Coaches: under your own Aqueduct, Preview the repair plays the moment an arch is mended, with sample numbers and the card marked Preview. It saves nothing and never counts as a repair. Members never see it.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 328,
     date: "2026-10-19",
     title: "Every date and time in your own time zone",
