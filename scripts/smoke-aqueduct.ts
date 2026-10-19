@@ -3,7 +3,9 @@
  * in both looks with the waterfall on the painted one and the leak panel's words right; a period switch that moves the leak
  * swaps the picture; a missing count shows "—", its steps are left out and one quiet line says so; the water's widths follow
  * the counts; 1440, 1024 and 390 (the tags hide under 760px, no sideways scroll); reduced motion, Pause remembered, the tab
- * hidden, and keyboard reach for every toggle.
+ * hidden, and keyboard reach for every toggle. H-966: the water's body and three flow layers at their own speeds, the channel
+ * filling when the scene opens (not when it was left paused), the leak as a sheet with streaks and a splash, and under reduced
+ * motion the same water, still.
  */
 import { chromium, type Page } from "@playwright/test";
 
@@ -89,6 +91,10 @@ async function main() {
       must((await page.locator('[data-testid="aqueduct-photo"]').evaluate((el) => (el as HTMLImageElement).naturalWidth)) === 1680, `fixture ${b}: the picture loads`);
       const fall = page.locator('[data-testid="aqueduct-fall"]');
       must((await fall.getAttribute("data-step")) === String(b) && Number(await fall.getAttribute("data-x")) === FALLS.day[b][0], `fixture ${b}: the waterfall sits on the painted one (x ${FALLS.day[b][0]})`);
+      if (b === 0) {
+        // H-966: a falling sheet with five streaks, and a splash (mist, spray, ripples) where it lands; not a single stroke.
+        must((await fall.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1 && (await fall.locator('[data-testid="aqueduct-fall-streak"]').count()) === 5 && (await fall.locator('[data-testid="aqueduct-mist"]').count()) === 1 && (await fall.locator(".aq-spray").count()) === 4 && (await fall.locator(".aq-ripple").count()) === 2, "the leak falls as a sheet with five streaks and lands in a splash");
+      }
       must((await page.locator(`[data-testid="aqueduct-step-${b}"]`).getAttribute("data-kind")) === "leak" && (await page.locator('[data-testid^="aqueduct-step-"][data-kind="leak"]').count()) === 1, `fixture ${b}: only the leak's tag is amber`);
       const { n, expected } = slipped(now, leak);
       const headline = await page.locator('[data-testid="aqueduct-headline"]').innerText();
@@ -161,12 +167,27 @@ async function main() {
 
     // ── Motion: Pause remembered, reduced motion, the tab hidden; keyboard reach. ──
     await page.goto(url(), { waitUntil: "networkidle" });
-    must((await page.locator(".aq-dash").first().evaluate((el) => getComputedStyle(el).animationName)) === "aq-flow", "the water moves");
+    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "aq-run", "the water moves");
+    // H-966: every segment carries the body and the three flow layers, each running at its own speed.
+    const layers = await page.locator('[data-testid="aqueduct-segment"]').evaluateAll((els) => els.map((el) => [...el.querySelectorAll("[data-flow]")].map((p) => p.getAttribute("data-flow")).join(",")));
+    must(layers.length === 7 && layers.every((l) => l === "band,streak-a,streak-b,spark"), `each segment runs ripple bands, two lanes of streaks and a sparkle: ${layers[0]}`);
+    const speeds = await page.locator('[data-testid="aqueduct-segment"]').first().evaluate((el) => [...el.querySelectorAll("[data-flow]")].map((p) => getComputedStyle(p).animationDuration.split(",")[0]));
+    must(new Set(speeds).size === 4, `the layers run at their own speeds: ${speeds.join(" ")}`);
+    // The channel fills when the scene opens: the front runs, then the mask goes and the water keeps flowing.
+    await page.goto(url(), { waitUntil: "domcontentloaded" });
+    must((await page.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "1" && (await page.locator("mask#aq-front").count()) === 1, "the channel fills when the scene opens");
+    await page.waitForFunction("document.querySelector('[data-testid=\"aqueduct-water\"]')?.getAttribute('data-filling') === '0'", undefined, { timeout: 8000 });
+    must((await page.locator("mask#aq-front").count()) === 0 && (await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "running", "once full, the front's mask goes and the water keeps flowing");
+    await page.waitForLoadState("networkidle");
     await page.click('[data-testid="aqueduct-pause"]');
     must((await page.locator('[data-testid="aqueduct-scene"]').getAttribute("data-paused")) === "1", "Pause the water holds it");
-    must((await page.locator(".aq-dash").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused", "every stroke pauses");
+    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused" && (await page.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused", "every stroke pauses, the channel and the fall");
     await page.waitForTimeout(400);
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.aqueductPaused, "Pause is remembered");
+    // Left paused, the scene opens full and still: no front waiting on a Play.
+    await page.goto(url(), { waitUntil: "domcontentloaded" });
+    must((await page.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0", "a paused scene opens with the channel already full");
+    await page.waitForLoadState("networkidle");
     await page.click('[data-testid="aqueduct-pause"]');
     await page.evaluate("Object.defineProperty(document, 'hidden', { get: () => true, configurable: true }); document.dispatchEvent(new Event('visibilitychange'))");
     await page.waitForTimeout(200);
@@ -174,7 +195,10 @@ async function main() {
     const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
     const sp = await still.newPage();
     await sp.goto(url(), { waitUntil: "networkidle" });
-    must((await sp.locator(".aq-dash").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none", "reduced motion stops all animation");
+    must((await sp.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationName)) === "none", "reduced motion stops all animation");
+    // The still still looks like water: the body and its layers are drawn, with no front.
+    must((await sp.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0" && (await sp.locator("[data-flow]").count()) === 28 && (await sp.locator(".aq-core").count()) === 7 && (await sp.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1, "reduced motion: the same water, still, with no front");
+    await sp.screenshot({ path: "screenshots/aqueduct-reduced-1440.png" });
     await still.close();
     await page.goto(url(), { waitUntil: "networkidle" });
     const reached = { pause: false, look: false, period: false };
