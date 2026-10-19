@@ -4,10 +4,11 @@
  * The Colosseum, alive (H-327 §3, plan H-637 PR 1): under the orbiting avatars, over the photo. Night: three high-contrast copies
  * of the photo, each clipped to a third and screen-blended, flicker on their own timings so only the lit arches move; twelve city
  * lights twinkle round the rim; a warm haze drifts over the sand. Golden hour: a cloud shadow crosses about every 48 s, dust
- * drifts over the floor, three birds cross. Pause and a hidden tab hold it; reduced motion draws none of it. It only draws.
+ * drifts over the floor, three birds flap and glide across (H-966). Pause and a hidden tab hold it; reduced motion draws none of it. It only draws.
  */
-import { COLOSSEUM_BIRDS, COLOSSEUM_FLICKER, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES } from "@/lib/engine/ambience";
+import { COLOSSEUM_FLICKER, COLOSSEUM_FLIGHTS, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES } from "@/lib/engine/ambience";
 import { useHidden, useQuiet } from "@/components/scene-life";
+import { Flock } from "@/components/flock";
 import "@/components/ambience.css";
 
 type Look = "day" | "night";
@@ -40,17 +41,7 @@ export function ColosseumAmbience({ look, paused }: { look: Look; paused: boolea
           {COLOSSEUM_MOTES.map((m, i) => (
             <span key={i} className="amb-mote" style={{ left: `${m.x}%`, top: `${m.y}%`, "--dx": `${m.dx}px`, "--dy": `${m.dy}px`, animationDuration: s(m.d), animationDelay: s(m.dl) } as React.CSSProperties} data-testid="amb-mote" />
           ))}
-          {COLOSSEUM_BIRDS.map((b, i) => (
-            <div key={i} className="amb-lane" style={{ top: `${b.y}%`, animationDuration: s(b.d), animationDelay: s(b.dl) }}>
-              <span className="amb-bird" data-testid="amb-bird">
-                <svg viewBox="0 0 24 12">
-                  <g className="amb-wing" style={{ animationDelay: s(-i * 0.15) }}>
-                    <path d="M0 7 Q6 0 12 7 Q18 0 24 7" fill="none" stroke="#2A1E10" strokeWidth={1.6} strokeLinecap="round" />
-                  </g>
-                </svg>
-              </span>
-            </div>
-          ))}
+          <Flock scene="co" flights={COLOSSEUM_FLIGHTS} />
         </>
       )}
     </div>
