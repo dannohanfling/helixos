@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 332,
+    date: "2026-10-19",
+    title: "Your evening reminder now comes at 7 PM",
+    lines: ["The evening reminder to close out your day now comes at 7 PM in your own time zone, unless you'd already picked a different hour. Change it any time in Settings."],
+    audience: "everyone",
+  },
+  {
     n: 331,
     date: "2026-10-19",
     title: "HelixOS on your phone's home screen",

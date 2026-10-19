@@ -56,7 +56,7 @@ async function updateProfile(formData: FormData): Promise<void> {
       bigPromise: opt(formData, "bigPromise"),
       audience: opt(formData, "audience"),
       reminderHour: Math.min(23, Math.max(0, num(formData, "reminderHour") || 8)),
-      eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 17)),
+      eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 19)),
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",
       scoreboardEmail: formData.get("scoreboardEmail") === "on",
       // A typo keeps the zone the member had (H-457); choosing one here also retires the one-time "We're showing times in" line.
