@@ -39,11 +39,11 @@ describe("migration 0222: the kept rank", () => {
     expect(kept).toEqual({ new: 1, sage: 3, "sentinel-3181": 5, "alchemist-1800": 4, olympian: 9, "celebrated-higher": 4 });
   });
 
-  it("follows main's 0210 in the journal, with a later time", () => {
+  it("follows main's 0211 in the journal, with a later time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0222_rank_kept");
     expect(at).toBeGreaterThan(0);
-    expect(journal.entries[at - 1]?.tag).toBe("0210_rank_clip_seen");
+    expect(journal.entries[at - 1]?.tag).toBe("0211_calls");
     expect(journal.entries[at].when).toBeGreaterThan(journal.entries[at - 1].when);
   });
 });

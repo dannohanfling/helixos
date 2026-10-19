@@ -153,3 +153,31 @@ describe("the birds (H-966)", () => {
     expect(sheet).not.toMatch(/amb-dove|amb-lane|amb-flap|amb-ox/);
   });
 });
+
+describe("the Council Chamber's ambience (Roma Vivit 2, H-1060)", () => {
+  it("draws ten flames on the painted candles, four glow pools, a moonbeam, and motes and shafts by day", async () => {
+    const m = await import("../ambience");
+    expect(m.COUNCIL_FLAMES).toHaveLength(10);
+    expect(m.COUNCIL_GLOWS).toHaveLength(4);
+    expect(m.COUNCIL_MOTES_NIGHT).toHaveLength(8);
+    expect(m.COUNCIL_SHAFTS).toHaveLength(3);
+    expect(m.COUNCIL_MOTES_DAY).toHaveLength(14);
+    expect(m.COUNCIL_CLOUD_S).toBe(60);
+  });
+
+  it("puts every flame, glow and mote inside the picture, each flame with a size and a positive timing", async () => {
+    const m = await import("../ambience");
+    for (const f of m.COUNCIL_FLAMES) {
+      expect(inside(f) && f.w > 0 && f.h > 0 && f.d > 0).toBe(true);
+      expect(f.y - f.h).toBeGreaterThan(0);
+    }
+    for (const g of m.COUNCIL_GLOWS) expect(inside(g)).toBe(true);
+    for (const p of [...m.COUNCIL_MOTES_NIGHT, ...m.COUNCIL_MOTES_DAY]) expect(inside(p) && p.d > 0).toBe(true);
+  });
+
+  it("keeps the braziers on the photo's measured wicks", async () => {
+    const m = await import("../ambience");
+    expect(m.COUNCIL_FLAMES[0]).toMatchObject({ x: 15.65, y: 23.52 });
+    expect(m.COUNCIL_FLAMES[1]).toMatchObject({ x: 82.56, y: 22.46 });
+  });
+});

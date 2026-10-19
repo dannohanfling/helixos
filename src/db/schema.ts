@@ -49,6 +49,9 @@ export const workspaces = sqliteTable("workspaces", {
   oohWeekday: integer("ooh_weekday").notNull().default(5),
   oohStart: text("ooh_start"),
   oohMinutes: integer("ooh_minutes").notNull().default(60),
+  /** The weekly calls (H-820, plan H-828): the shared join link every call without its own uses, and its passcode. Coach-edited under Settings → Calls. */
+  callsLink: text("calls_link"),
+  callsPasscode: text("calls_passcode"),
   /** The Start Here orientation (H-270 §1, S1a): the coach's welcome video, a link HelixOS plays itself (mp4, webm) or opens (a Recordings share link). Null shows "Coming soon". */
   startHereVideo: text("start_here_video"),
   /** Recordings' publishing rules (rev 491): series names and time slots, coach-edited. Null keeps the defaults in recording-rules.ts. */
@@ -670,6 +673,56 @@ export const officeHoursRequests = sqliteTable(
   (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday), uniqueIndex("office_hours_requests_airtable").on(t.workspaceId, t.airtableId)],
 );
 export type OfficeHoursRequest = typeof officeHoursRequests.$inferSelect;
+
+/* ───────────────────────── The weekly calls (H-820, plan H-828) ───────────────────────── */
+/** Who a scheduled call is for, the program audiences Recordings uses: Accelerator and up, or Academy and up. */
+export const CALL_AUDIENCES = ["accelerator_academy", "academy"] as const;
+export type CallAudience = (typeof CALL_AUDIENCES)[number];
+/**
+ * One weekly call on the program's schedule (H-820, plan H-828), the coach's to edit under Settings → Calls: a weekday and a
+ * start in the call's own zone, so a 10:00 Pacific call stays at 10:00 Pacific across a clock change and each member reads it
+ * in theirs. A blank link means the workspace's shared link (`workspaces.calls_link`). Office Hours is not one of these.
+ */
+export const programCalls = sqliteTable(
+  "program_calls",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    name: text("name").notNull(),
+    /** 0 Sunday to 6 Saturday, in the call's zone. */
+    weekday: integer("weekday").notNull(),
+    /** "HH:MM", 24-hour, the call's wall time in its zone. */
+    start: text("start").notNull(),
+    minutes: integer("minutes").notNull().default(60),
+    timezone: text("timezone").notNull().default("America/Los_Angeles"),
+    audience: text("audience", { enum: CALL_AUDIENCES }).notNull().default("academy"),
+    link: text("link"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    sort: integer("sort").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("program_calls_ws").on(t.workspaceId, t.sort)],
+);
+export type ProgramCall = typeof programCalls.$inferSelect;
+
+/** A date one call doesn't happen ("No call on Thu 27 Nov"): the call's own local date in its zone. */
+export const programCallSkips = sqliteTable(
+  "program_call_skips",
+  {
+    id: id(),
+    callId: text("call_id")
+      .notNull()
+      .references(() => programCalls.id, { onDelete: "cascade" }),
+    /** "YYYY-MM-DD", the call's local date in its zone. */
+    date: text("date").notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("program_call_skips_call_date").on(t.callId, t.date)],
+);
+export type ProgramCallSkip = typeof programCallSkips.$inferSelect;
 
 /* ───────────────────────── Monthly intention (handoff rev 129) ───────────────────────── */
 export const monthlyIntentions = sqliteTable(
