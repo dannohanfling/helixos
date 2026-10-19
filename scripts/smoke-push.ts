@@ -49,7 +49,15 @@ async function main() {
     });
     await login(page, "As a client");
 
-    // ── 1. The phone is recorded, once per install. ──
+    // ── 0. Get the app (H-655, H-731): Coming soon while no store link is set, on More, its own page and Settings. ──
+    await page.goto(`${base}/more`);
+    must((await page.locator('main [data-testid="nav-coming-soon"][data-href="/get-the-app"]').count()) === 1, "More shows Get the app as Coming soon");
+    await page.goto(`${base}/get-the-app`);
+    await page.getByTestId("get-app-soon").waitFor();
+    await page.goto(`${base}/settings`);
+    await page.getByTestId("account-app-soon").waitFor();
+    console.log("✓ Get the app: Coming soon on More, on its page and in Settings while no store link is set");
+
     const post = (data: unknown) => page.request.post(`${base}/api/app/device`, { data });
     must((await post({ installId: "smoke-install-0001", platform: "ios", appVersion: "1.0 (1)" })).ok(), "the app records the phone");
     must((await post({ installId: "smoke-install-0001", platform: "ios", token: "a1b2c3d4e5f60718293a4b5c6d7e8f90" })).ok(), "the token is added on a later open");
@@ -58,6 +66,11 @@ async function main() {
     const rows = await db.query.pushDevices.findMany({ where: eq(schema.pushDevices.membershipId, m.id) });
     must(rows.length === 1 && rows[0].token === "a1b2c3d4e5f60718293a4b5c6d7e8f90" && rows[0].appVersion === "1.0 (1)" && rows[0].platform === "ios", `one row per install, token added: ${JSON.stringify(rows.map((r) => ({ t: r.token, v: r.appVersion })))}`);
     console.log("✓ the app records the phone once per install; the token comes later; bad input is refused");
+    await page.goto(`${base}/more`);
+    must((await page.locator('[data-href="/get-the-app"], a[href="/get-the-app"]').count()) === 0, "Get the app is gone from More once the app was opened");
+    await page.goto(`${base}/settings`);
+    must((await page.getByTestId("account-app-have").innerText()).includes("iPhone"), "Settings says which phone has the app");
+    console.log("✓ Get the app: gone from More once the app was opened; Settings says it's on iPhone");
 
     // ── 2. The HelixOS card. ──
     const closes = (await db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.workspaceId, ws.id), isNotNull(schema.dailyLogs.eveningDoneAt)) })).length;

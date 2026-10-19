@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 330,
+    date: "2026-10-19",
+    title: "The HelixOS app is on its way",
+    lines: [
+      "HelixOS is coming to iPhone and Android as an app. Get the app sits in your menu and in Settings → Account, marked Coming soon for now.",
+      "Once it's ready, Get the app shows the steps for your phone, and it leaves your menu once you have the app.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 329,
     date: "2026-10-21",
     title: "Preview the Aqueduct's repair moment",

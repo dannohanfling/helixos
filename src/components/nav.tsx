@@ -19,12 +19,12 @@ const isActive = navActive;
  * rail (the sidebar folded), every item is its icon alone with its name as the tooltip and the accessible name, and group
  * headings become thin dividers.
  */
-export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, colosseumOn = false, loyaltyOn = false, oohOn = false, chatOn = false, agentsOn = false, coachFirst = null, badges = {}, platformLinks = {}, ownCommunity = null, shippedKeys = [] }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; oohOn?: boolean; /** The coach's chat is on for this person (H-693): the Ask item shows. */ chatOn?: boolean; agentsOn?: boolean; coachFirst?: string | null; badges?: Record<string, number>; platformLinks?: PlatformLinks; ownCommunity?: string | null; /** The horizon's shipped menu keys (H-385): an entry with a menuKey is Coming soon until its key is here. */ shippedKeys?: string[] }) {
+export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, colosseumOn = false, loyaltyOn = false, oohOn = false, chatOn = false, agentsOn = false, coachFirst = null, appLinks = false, hasApp = false, badges = {}, platformLinks = {}, ownCommunity = null, shippedKeys = [] }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; oohOn?: boolean; /** The coach's chat is on for this person (H-693): the Ask item shows. */ chatOn?: boolean; agentsOn?: boolean; coachFirst?: string | null; /** Get the app (H-655): a store link is set, and whether this member has the app. */ appLinks?: boolean; hasApp?: boolean; badges?: Record<string, number>; platformLinks?: PlatformLinks; ownCommunity?: string | null; /** The horizon's shipped menu keys (H-385): an entry with a menuKey is Coming soon until its key is here. */ shippedKeys?: string[] }) {
   const pathname = usePathname();
   const nav = useNavState();
   const rail = nav.state.rail;
   // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
-  const groups = visibleGroups({ role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst }, platformLinks, ownCommunity, shippedKeys);
+  const groups = visibleGroups({ role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst, appLinks, hasApp }, platformLinks, ownCommunity, shippedKeys);
   // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
   const activeHref = groups
     .flatMap((g) => g.items)
@@ -63,7 +63,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                 {g.items.map((n) =>
                   n.comingSoon ? (
                     rail ? (
-                      <span key={n.href} className="flex justify-center py-2 text-base opacity-50" title={`${n.label} (coming soon)`} aria-label={`${n.label}, coming soon`}>
+                      <span key={n.href} className="flex justify-center py-2 text-base opacity-50" title={`${n.label} (coming soon)`} aria-label={`${n.label}, coming soon`} data-app-off={n.appOffOnly || undefined}>
                         {n.icon}
                       </span>
                     ) : (
@@ -84,7 +84,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                       )}
                     </a>
                   ) : (
-                    <Link key={n.href} href={n.href} className={itemClass(n.href === activeHref)} title={rail ? n.label : undefined} aria-label={rail ? n.label : undefined} aria-current={n.href === activeHref ? "page" : undefined}>
+                    <Link key={n.href} href={n.href} className={itemClass(n.href === activeHref)} data-app-off={n.appOffOnly || undefined} title={rail ? n.label : undefined} aria-label={rail ? n.label : undefined} aria-current={n.href === activeHref ? "page" : undefined}>
                       <span className="relative w-5 text-center text-base">
                         {n.icon}
                         {rail && (badges[n.href] || badges[`draft:${n.href}`]) ? <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-accent" aria-hidden /> : null}
