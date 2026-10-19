@@ -119,6 +119,12 @@ async function main() {
     const sceneEl = page.locator('[data-testid="aqueduct-scene"]');
     const loopEl = page.locator('[data-testid="aqueduct-loop"]');
     const tagAt = async () => JSON.stringify(await page.locator('[data-testid="aqueduct-stage-3"]').boundingBox());
+    // Back to no leak right after a leak is a repair moment (the old picture under the new, the drawn water, no loop). Once it
+    // has been seen the page opens on the plain scene, so reload until then.
+    for (let i = 0; i < 20 && (await sceneEl.getAttribute("data-loop")) !== "1"; i++) {
+      await page.waitForTimeout(500);
+      await page.goto(url(), { waitUntil: "networkidle" });
+    }
     must((await sceneEl.getAttribute("data-loop")) === "1" && (await page.locator('[data-testid="aqueduct-photo"]').count()) === 1, "no leak, Golden hour: the photo, with its loop listed");
     await page.waitForFunction(() => document.querySelector('[data-testid="aqueduct-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
     const src = await loopEl.evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, paused: v.paused, opacity: getComputedStyle(v).opacity, auto: v.autoplay }));
