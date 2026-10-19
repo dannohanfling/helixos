@@ -48,7 +48,7 @@ async function main() {
     await page.waitForURL(/\/today/);
     const horizon = page.locator('[data-testid="horizon-notice-dismiss"]');
     if (await horizon.isVisible().catch(() => false)) await horizon.click();
-    await page.goto(`${base}/content`);
+    await page.goto(`${base}/content?view=posted`);
     const line = page.locator('[data-testid="zone-notice"]');
     await line.waitFor({ timeout: 20000 });
     let saved: string | null = null;
@@ -57,7 +57,7 @@ async function main() {
       if (!saved) await page.waitForTimeout(250);
     }
     must(saved === "Australia/Sydney", `the browser's zone is saved for a member who had none: ${saved}`);
-    await page.goto(`${base}/content`);
+    await page.goto(`${base}/content?view=posted`);
     await line.waitFor({ timeout: 20000 });
     must((await line.getAttribute("data-zone")) === "Australia/Sydney", "the line names her zone");
     const words = await line.innerText();
@@ -94,7 +94,7 @@ async function main() {
     await picker.fill("Mars/Olympus_Mons");
     await submit(page, 'form:has([data-testid="zone-picker"]) button[type="submit"]');
     must((await member()).timezone === "Europe/London", "a typo keeps the zone she had");
-    await page.goto(`${base}/content`);
+    await page.goto(`${base}/content?view=posted`);
     await row.waitFor({ timeout: 20000 });
     must((await row.innerText()).includes("Oct 12"), `in London the same post is the 12th: ${await row.innerText()}`);
 
@@ -102,7 +102,7 @@ async function main() {
     await page.goto(`${base}/settings`);
     await picker.waitFor({ timeout: 20000 });
     await noSideways(page, "Settings");
-    await page.goto(`${base}/content`);
+    await page.goto(`${base}/content?view=posted`);
     await page.waitForTimeout(400);
     await noSideways(page, "Content");
     must(!failures.length, `no server errors: ${failures.join(", ")}`);
