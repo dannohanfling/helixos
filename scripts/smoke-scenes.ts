@@ -74,6 +74,7 @@ async function main() {
   let ledgerMoved = false;
   // The coach's own catch-up (H-1047) borrows one ledger row and the coach's clip seen; both go back whatever happens.
   let coachRow: string | null = null;
+  let coachOffset: string | null = null;
   let coachWas: { id: string; seen: number | null; welcome: string | null } | null = null;
   const moveLedger = async (to: string) => {
     await retry(() => db.run(sql`DROP TABLE IF EXISTS smoke_ledger_times`));
@@ -449,8 +450,13 @@ async function main() {
       coachWas = { id: cm.id, seen: cm.rankClipSeenLevel, welcome: cm.welcomeShownOn };
       const coachTotal = async () => (await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, coach.id), eq(schema.pointsLedger.workspaceId, mm.workspaceId)) })).reduce((s, r) => s + r.points, 0);
       const had = await coachTotal();
+      // The rank must be reached before the clips: the whole of it lands in one row dated then, and a second row today takes
+      // away what the coach already had, so the total is exactly the rank's floor. (The seed's own rows are recent, so topping
+      // them up would reach the rank after the clips, which has no catch-up.)
       coachRow = crypto.randomUUID();
-      await retry(() => db.insert(schema.pointsLedger).values({ id: coachRow!, workspaceId: mm.workspaceId, userId: coach.id, type: "bonus", points: Math.max(0, held.minPoints - had), reason: "Smoke: coach catch-up", adjustedBy: "smoke", createdAt: beforeClips }));
+      coachOffset = crypto.randomUUID();
+      await retry(() => db.insert(schema.pointsLedger).values({ id: coachRow!, workspaceId: mm.workspaceId, userId: coach.id, type: "bonus", points: held.minPoints, reason: "Smoke: coach catch-up", adjustedBy: "smoke", createdAt: beforeClips }));
+      await retry(() => db.insert(schema.pointsLedger).values({ id: coachOffset!, workspaceId: mm.workspaceId, userId: coach.id, type: "bonus", points: -had, reason: "Smoke: coach catch-up offset", adjustedBy: "smoke" }));
       const coachHeld = tierFor(await coachTotal());
       must(coachHeld.level === held.level, `the coach holds ${held.name} (${coachHeld.name})`);
       await db.update(schema.memberships).set({ rankClipSeenLevel: null, welcomeShownOn: today }).where(eq(schema.memberships.id, cm.id));
@@ -484,6 +490,8 @@ async function main() {
       await ox.close();
       await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachRow!)));
       coachRow = null;
+      await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachOffset!)));
+      coachOffset = null;
       await db.update(schema.memberships).set({ rankClipSeenLevel: coachWas.seen, welcomeShownOn: coachWas.welcome }).where(eq(schema.memberships.id, cm.id));
       coachWas = null;
     }
@@ -505,6 +513,7 @@ async function main() {
     // Put the ledger back without hiding whatever failed above.
     await restoreLedger().catch((e) => console.error(`the ledger's times were not put back: ${String(e)}`));
     if (coachRow) await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachRow!))).catch((e) => console.error(`the coach's smoke row was not removed: ${String(e)}`));
+    if (coachOffset) await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachOffset!))).catch((e) => console.error(`the coach's smoke offset was not removed: ${String(e)}`));
     if (coachWas) await db.update(schema.memberships).set({ rankClipSeenLevel: coachWas.seen, welcomeShownOn: coachWas.welcome }).where(eq(schema.memberships.id, coachWas.id)).catch(() => undefined);
     if (fakeClip && existsSync(fakeClip)) rmSync(fakeClip);
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
