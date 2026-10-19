@@ -11,6 +11,7 @@ import { newId } from "@/lib/ids";
 import { ctx, money, opt, refresh, str } from "@/lib/action-helpers";
 import { BOT_ROLES } from "@/lib/engine/bot-fields";
 import { createOffer } from "@/lib/offers-core";
+import { markDraftEdited } from "@/lib/claude-drafts";
 
 async function own(id: string, userId: string) {
   const o = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, userId)) });
@@ -26,7 +27,7 @@ export async function createOfferAction(formData: FormData): Promise<void> {
 }
 
 export async function updateOfferAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx();
   const id = str(formData, "id");
   await own(id, userId);
   const steps = [1, 2, 3, 4, 5].map((i) => str(formData, `step${i}`)).filter(Boolean);
@@ -80,9 +81,12 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
     })
     .where(eq(schema.offers.id, id));
   queueProgress(workspaceId, userId, "offer_changed");
+  // Saved from the form opened with Claude's draft in it (H-184): that draft is settled as edited.
+  const draftId = str(formData, "draftId");
+  if (draftId) await markDraftEdited({ workspaceId, userId }, draftId, id, { name: v.actor.name, connector: false });
   refresh();
   const anchor = str(formData, "anchor");
-  redirect(`/offers/${id}${anchor ? `#${anchor}` : ""}`);
+  redirect(`/offers/${id}${draftId ? "?draftNote=edited" : ""}${anchor ? `#${anchor}` : ""}`);
 }
 
 export async function addComponentAction(formData: FormData): Promise<void> {

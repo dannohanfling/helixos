@@ -28,6 +28,7 @@ import { choicesFor } from "@/lib/team";
 import { horizonShell } from "@/lib/horizon";
 import { HorizonNotice } from "@/components/horizon-notice";
 import { flameStateOf } from "@/lib/engine/streak-flame";
+import { waitingByMenu } from "@/lib/claude-drafts";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
@@ -66,6 +67,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const memberView = viewer.role === "client" && !viewer.switchedInto && !viewer.team;
   const agentsOn = memberView ? await agentsOnFor({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : false;
   const memberInboxNew = agentsOn ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
+  // Claude's drafts waiting (H-184): an amber dot on the menu item that holds one. Never a team member's.
+  const drafts = viewer.team ? {} : await waitingByMenu({ workspaceId: viewer.workspace.id, userId: viewer.user.id });
   const rank = rankUpShell(viewer, points);
   // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
@@ -85,7 +88,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     ? null
     : flameStateOf({ running: flameStreak.running, asOf: flameStreak.asOf, today: viewer.today, hour: viewer.hour, active: flameStreak.activity.active, closed: flameStreak.closed, seenOn: viewer.switchedInto ? flameStreak.asOf : viewer.membership.streakSurgeSeenOn });
   return (
-    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew }}>
+    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew, ...Object.fromEntries(Object.entries(drafts).map(([href, n]) => [`draft:${href}`, n])) }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

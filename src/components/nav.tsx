@@ -86,7 +86,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                     <Link key={n.href} href={n.href} className={itemClass(n.href === activeHref)} title={rail ? n.label : undefined} aria-label={rail ? n.label : undefined} aria-current={n.href === activeHref ? "page" : undefined}>
                       <span className="relative w-5 text-center text-base">
                         {n.icon}
-                        {rail && badges[n.href] ? <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-accent" aria-hidden /> : null}
+                        {rail && (badges[n.href] || badges[`draft:${n.href}`]) ? <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-accent" aria-hidden /> : null}
                       </span>
                       {rail ? null : (
                         <>
@@ -94,7 +94,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                             {n.label}
                             {n.line ? <span className="text-[11px] font-normal text-ink-3">{n.line}</span> : null}
                           </span>
-                          {badges[n.href] ? n.href === "/whats-new" ? <NewDot /> : <DueBadge count={badges[n.href]} /> : null}
+                          {badges[n.href] ? n.href === "/whats-new" ? <NewDot /> : <DueBadge count={badges[n.href]} /> : badges[`draft:${n.href}`] ? <DraftDot count={badges[`draft:${n.href}`]!} /> : null}
                         </>
                       )}
                     </Link>
@@ -144,6 +144,11 @@ export function BottomNav({ role, badges = {} }: { role: "coach" | "client"; bad
 /** A small dot beside What's new while there's an entry this member hasn't opened the page since (rev 193). */
 export function NewDot() {
   return <span className="ml-auto h-2 w-2 rounded-full bg-accent" aria-label="New" data-testid="whats-new-dot" />;
+}
+
+/** The small amber dot on a menu item that holds one of Claude's drafts waiting for the member (H-184). */
+export function DraftDot({ count }: { count: number }) {
+  return <span className="ml-auto h-2 w-2 rounded-full border border-accent-ink bg-accent" aria-label={`Claude's draft${count === 1 ? "" : "s"} waiting`} title={`${count} of Claude's draft${count === 1 ? "" : "s"} waiting`} data-testid="draft-dot" />;
 }
 
 /** A small dot with a count beside a menu item while something there is due (rev 157: Intentions). */

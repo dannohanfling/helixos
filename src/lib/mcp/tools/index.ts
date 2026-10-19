@@ -13,3 +13,4 @@ import "./forum";
 import "./handoff";
 import "./reports";
 import "./webinars";
+import "./offers";

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 291,
+    date: "2026-10-19",
+    title: "Claude drafts your offers, you approve them",
+    lines: [
+      "Through the HelixOS connector, Claude can now write a draft of one of your offers, or a new one. It sits on the offer in amber, \"Claude's draft: not approved yet\", and nothing changes until you press Approve.",
+      "Edit opens the offer with the draft filled in, and Discard drops it. Anything Claude got wrong, like a price you haven't given it, shows in red, and Approve waits until you've checked it.",
+      "\"Drafts waiting\" on Today lists every draft for you, and an amber dot marks the menu item that holds one.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 272,
     date: "2026-10-19",
     title: "Your HelixOS points can go to the Evolve Omega pass",

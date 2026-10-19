@@ -1683,6 +1683,65 @@ export const webinarHistory = sqliteTable(
 );
 export type WebinarHistoryRow = typeof webinarHistory.$inferSelect;
 
+/**
+ * Claude's drafts everywhere else (H-184, plan H-220 PR D2): one table for every area a connector drafts in (offers first; Essence,
+ * lead magnets, content, Pathway, courses and the bot profile next). A draft sits beside what's approved and never writes into it
+ * until the member's Approve. `targetId` is the row it changes, null for a new one; `base` is what those fields said when it was
+ * written, so a later change shows as a conflict.
+ */
+export const DRAFT_AREAS = ["offer", "essence", "magnet", "content", "pathway", "course", "bot_profile"] as const;
+export type DraftArea = (typeof DRAFT_AREAS)[number];
+export const DRAFT_STATUSES = ["pending", "approved", "edited", "discarded", "replaced"] as const;
+export const drafts = sqliteTable(
+  "drafts",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    area: text("area", { enum: DRAFT_AREAS }).notNull(),
+    targetId: text("target_id"),
+    fields: text("fields", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+    base: text("base", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+    /** The member's own words the draft was built from (the connector's source_words): a figure in them counts as theirs. */
+    source: text("source").notNull().default(""),
+    /** What the tool took out on the way in (an income claim, a figure not in the member's own facts), in plain words. */
+    notes: text("notes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    byLabel: text("by_label").notNull(),
+    appId: text("app_id"),
+    agentId: text("agent_id"),
+    status: text("status", { enum: DRAFT_STATUSES }).notNull().default("pending"),
+    decidedAt: text("decided_at"),
+    decidedBy: text("decided_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("drafts_member").on(t.workspaceId, t.userId, t.status), index("drafts_target").on(t.area, t.targetId)],
+);
+export type Draft = typeof drafts.$inferSelect;
+
+/** Every draft written, approved, edited, discarded or undone (H-184), with what an Approve replaced, so Undo (seven days) puts it back. */
+export const CHANGE_ACTIONS = ["drafted", "approved", "edited", "discarded", "undone"] as const;
+export const changeHistory = sqliteTable(
+  "change_history",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    area: text("area", { enum: DRAFT_AREAS }).notNull(),
+    targetId: text("target_id"),
+    draftId: text("draft_id"),
+    action: text("action", { enum: CHANGE_ACTIONS }).notNull(),
+    byLabel: text("by_label").notNull(),
+    byConnector: integer("by_connector", { mode: "boolean" }).notNull().default(false),
+    changed: text("changed", { mode: "json" }).$type<string[]>().notNull().default([]),
+    before: text("before", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    undoneAt: text("undone_at"),
+    undoneBy: text("undone_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("change_history_target").on(t.area, t.targetId, t.createdAt), index("change_history_member").on(t.workspaceId, t.userId)],
+);
+export type ChangeHistoryRow = typeof changeHistory.$inferSelect;
+
 /** The coach's choice of which image fills a suggested slot on a webinar's slide, keyed by the slot's stable key. */
 export const deckSlots = sqliteTable(
   "deck_slots",

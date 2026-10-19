@@ -56,6 +56,7 @@ import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 import { logTiming, tick } from "@/lib/timing";
+import { waitingByMenu, waitingCount } from "@/lib/claude-drafts";
 
 export const metadata = { title: "Today" };
 
@@ -124,6 +125,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const tData = tick();
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
+  // Claude's drafts waiting for this member's Approve (H-184), the webinar wizard's included: one line, to the list.
+  const draftsWaiting = v.team ? 0 : waitingCount(await waitingByMenu({ workspaceId: v.workspace.id, userId: v.user.id }));
   const [share, goals, workout] = await Promise.all([
     week ? shareFor(v.workspace.id, v.user.id, week) : Promise.resolve(null),
     // Goals (rev 508 §5): the two that need it most, under the HumanOS line.
@@ -236,6 +239,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
+      ) : null}
+      {draftsWaiting ? (
+        <Link href="/drafts" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-drafts">
+          Drafts waiting ({draftsWaiting}): Claude&apos;s drafts for you to approve, edit or discard →
+        </Link>
       ) : null}
       {tools && tools.done < tools.total ? (
         <Link href="/connect-tools" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-connect-tools">
