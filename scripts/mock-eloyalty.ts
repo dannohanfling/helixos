@@ -107,8 +107,12 @@ createServer((req, res) => {
   }
   const one = url.pathname.match(/^\/api\/public\/admin\/customers\/([^/]+)$/);
   if (one) {
-    const c = CUSTOMERS.find((x) => x.id === decodeURIComponent(one[1]));
-    return c ? json(200, { data: live(c) }) : json(404, { error: "not found" });
+    const id = decodeURIComponent(one[1]);
+    const c = CUSTOMERS.find((x) => x.id === id);
+    if (c) return json(200, { data: live(c) });
+    // A pass made in the walk (cus_eo_N) reads back with its own balance.
+    const made = balances.get(id);
+    return made ? json(200, { data: { id, points_balance: made.balance, points_earned: made.earned } }) : json(404, { error: "not found" });
   }
   if (url.pathname === "/api/external/v1/customers") {
     const tpl = url.searchParams.get("template_id");

@@ -170,6 +170,8 @@ export async function runDeskCheck(feed: schema.LeaderboardFeed, customerId: str
   if (!key) return done(false, "No eLoyalty key is saved on this row.");
   const stamp = now.toISOString();
   const before = await liveBalance(feed, key, customerId);
+  // The coach's own pass is a real pass, so nothing is deducted blind: without a balance read, the check stops.
+  if (own && !before) return done(false, "Your pass's balance could not be read from eLoyalty, so nothing was sent. Press Check again on this card, then try once more.");
   if (before && before.balance < 1) return done(false, own ? "Your pass has 0 available, so there is nothing to deduct. Turn on the sync for your own pass first (it sends your HelixOS points), or add 1 to it in eLoyalty." : "That test pass has 0 available, so there is nothing to deduct. Pick another, or add 1 to it in eLoyalty first.");
   const d = await queueMove(feed, { customerId, delta: -1, reason: "HelixOS desk check: deduct 1", source: `check:${feed.id}:${stamp}:deduct`, byUserId });
   const deduct = d.status === "pending" ? await sendMove(feed, key, d, now) : d;
