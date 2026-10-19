@@ -168,7 +168,8 @@ export const MEMBER_TABLES = {
   recording_steps: schema.recordingSteps,
   // Rev 498: when the member first saw a published recording (opened it, or pressed Watch in Fathom).
   recording_views: schema.recordingViews,
-  // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row).
+  // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row). A
+  // Content report about the member (H-745, target_user_id) is erased with them too (src/lib/erase.ts), never exported to them.
   member_reports: schema.memberReports,
   // Rev 444: a form's unsent draft, kept so it follows the member to another device.
   form_drafts: schema.formDrafts,
@@ -197,6 +198,9 @@ export const CHILD_TABLES = [
   { label: "ladder_material", table: schema.ladderMaterial, fk: "ladderId", parent: "ladders" },
   { label: "coach_notes", table: schema.coachNotes, fk: "membershipId", parent: "membership" },
   { label: "bot_approvals", table: schema.botApprovals, fk: "membershipId", parent: "membership" },
+  // Block a member (H-745): the blocks this member made hang off their membership. The blocks made against them go with them
+  // too (src/lib/erase.ts, by blocked_membership_id), so a block never outlives either side.
+  { label: "member_blocks", table: schema.memberBlocks, fk: "blockerMembershipId", parent: "membership" },
   { label: "handoff_deliveries", table: schema.handoffDeliveries, fk: "messageId", parent: "handoff_messages" },
   // A leaderboard's earlier addresses (H-109): slugs only, no member data of their own; they go with the feed row.
   { label: "leaderboard_slug_aliases", table: schema.leaderboardSlugAliases, fk: "feedId", parent: "leaderboard_feeds" },

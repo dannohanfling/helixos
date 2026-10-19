@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3155c826-4ea3-43b9-91e4-4a8fca6e07e3",
-  "prevId": "5b091f08-363e-4142-8040-e9a0ac2e37de",
+  "id": "87a46cca-0552-4abe-a9bf-f84790d0cb6e",
+  "prevId": "5bd59e5e-5516-4371-bfdc-f5ef98a0ac61",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -5768,6 +5768,20 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "hidden_at": {
+          "name": "hidden_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "hidden_by": {
+          "name": "hidden_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "created_at": {
@@ -13660,6 +13674,68 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "member_blocks": {
+      "name": "member_blocks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "blocker_membership_id": {
+          "name": "blocker_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "blocked_membership_id": {
+          "name": "blocked_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "member_blocks_pair": {
+          "name": "member_blocks_pair",
+          "columns": [
+            "blocker_membership_id",
+            "blocked_membership_id"
+          ],
+          "isUnique": true
+        },
+        "member_blocks_blocked": {
+          "name": "member_blocks_blocked",
+          "columns": [
+            "blocked_membership_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "member_points": {
       "name": "member_points",
       "columns": {
@@ -13856,6 +13932,34 @@
         },
         "done_at": {
           "name": "done_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "target_kind": {
+          "name": "target_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "target_user_id": {
+          "name": "target_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "handled_at": {
+          "name": "handled_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
