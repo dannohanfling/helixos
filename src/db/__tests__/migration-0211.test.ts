@@ -35,10 +35,10 @@ describe("migration 0211: the weekly calls", () => {
     await c.execute({ sql: "INSERT INTO program_call_skips (id, call_id, date, note) VALUES ('s1', ?, '2026-11-26', 'Holiday')", args: [id] });
     await expect(c.execute({ sql: "INSERT INTO program_call_skips (id, call_id, date) VALUES ('s2', ?, '2026-11-26')", args: [id] })).rejects.toThrow(/UNIQUE/);
   });
-  it("follows 0202 on main in the journal, with a later timestamp", () => {
+  it("follows 0210 on main in the journal, with a later timestamp", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0211_calls");
-    expect(journal.entries[at - 1]?.tag).toBe("0209_points_sync");
+    expect(journal.entries[at - 1]?.tag).toBe("0210_rank_clip_seen");
     expect(journal.entries[at]!.when).toBeGreaterThan(journal.entries[at - 1]!.when);
   });
 });
