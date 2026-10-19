@@ -32,7 +32,7 @@ describe("telling the chat who the member is (H-1199, plan H-1203)", () => {
     expect(w).not.toMatch(/bot\.open\?\.\(\);/);
     // Every ready identifies again: the handler has no once-only guard.
     expect(w).toMatch(/const onReady = \(\) => identify\("ready"\);/);
-    expect(w).toMatch(/if \(reported\) return;/);
+    expect(w).toMatch(/if \(reportedThisLoad\) return;\n  reportedThisLoad = true;/);
     expect(w).toMatch(/report\("sdk-never-loaded"\)/);
     expect(w).toMatch(/report\("csp-blocked", host\)/);
     // The client widget never imports the server's chat engine (it holds node:crypto).

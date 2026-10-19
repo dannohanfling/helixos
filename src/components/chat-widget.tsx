@@ -27,8 +27,13 @@ type Chatbot = { hasLoaded?: boolean; setUser?: (id: string, user: { name: strin
 /** The chat's own hosts, for telling a CSP block of the chat from any other. */
 const CHAT_HOST_RE = /(^|\.)(communityloyalty\.io|dfktv2\.com|ipapi\.co)$/;
 
-/** One report a page: how the chat was told who this is, or what stopped it. Fire and forget; a failure changes nothing. */
+/** Held outside the component, so a remount (React runs effects twice in development) never reports twice. */
+let reportedThisLoad = false;
+
+/** One report a page load: how the chat was told who this is, or what stopped it. Fire and forget; a failure changes nothing. */
 function reportCause(cause: ChatCause, host?: string) {
+  if (reportedThisLoad) return;
+  reportedThisLoad = true;
   try {
     void fetch("/api/chat-seen", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(host ? { cause, host } : { cause }), keepalive: true }).catch(() => undefined);
   } catch {
@@ -162,12 +167,7 @@ export function ChatWidget({ src, userId, name, email, hash, flowNs }: { src: st
   useEffect(() => {
     const w = window as Window & { $chatbot?: Chatbot };
     let gone = false;
-    let reported = false;
-    const report = (cause: ChatCause, host?: string) => {
-      if (reported) return;
-      reported = true;
-      reportCause(cause, host);
-    };
+    const report = (cause: ChatCause, host?: string) => reportCause(cause, host);
     const identify = (why: "ready" | "loaded") => {
       const bot = w.$chatbot;
       if (!bot?.setUser) return false;
