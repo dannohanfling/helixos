@@ -10,7 +10,7 @@ import { FirstArrival } from "@/components/first-arrival";
 import { DailyWelcome } from "@/components/daily-welcome";
 import { totalPoints } from "@/lib/queries/points";
 import { RankUp } from "@/components/rank-up";
-import { rankUpShell } from "@/lib/scenes";
+import { catchUpShell, rankUpShell } from "@/lib/scenes";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { SoundsConfig } from "@/components/sounds-config";
 import { VoiceProvider } from "@/components/voice-context";
@@ -76,6 +76,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // The first arrival (H-472): once per person on their first open, instead of the daily welcome, which starts the next day.
   const arrival = await firstArrivalFor(viewer, pathNow);
   const welcome = arrival ? null : await welcomeFor(viewer, pathNow);
+  // The catch-up ceremony (H-934): a rank reached before the relic clips gets its clip once, first thing, when no rank-up is due.
+  const catchUp = (rank && !rank.stampOnly) || arrival ? null : await catchUpShell(viewer, points, rank?.stampOnly === true);
+  const catchUpPlays = catchUp?.kind === "play";
   // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
   const horizon = await horizonShell(viewer);
   // The streak flame (H-558): read after the welcome, which counts the first open of the day as showing up. A team member has
@@ -85,16 +88,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     ? null
     : flameStateOf({ running: flameStreak.running, asOf: flameStreak.asOf, today: viewer.today, hour: viewer.hour, active: flameStreak.activity.active, closed: flameStreak.closed, seenOn: viewer.switchedInto ? flameStreak.asOf : viewer.membership.streakSurgeSeenOn });
   return (
-    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew }}>
+    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival || catchUpPlays)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>
       <SoundsConfig on={viewer.membership.soundsOn} />
       {arrival ? <FirstArrival card={arrival} /> : null}
-      {welcome ? <DailyWelcome card={welcome} /> : null}
-      {horizon.notice && !welcome ? <HorizonNotice notice={horizon.notice} /> : null}
+      {welcome ? <DailyWelcome card={welcome} afterRank={catchUpPlays} /> : null}
+      {horizon.notice && !welcome && !catchUpPlays ? <HorizonNotice notice={horizon.notice} /> : null}
       {/* The rank-up ceremony (H-327 §1): once per rank, after the welcome when both are due; never on /coach, never switched in. */}
       {rank ? <RankUp {...(rank.stampOnly ? rank : { ...rank, afterWelcome: Boolean(welcome) })} /> : null}
+      {catchUp?.kind === "play" ? <RankUp stampOnly={false} card={catchUp.card} clip={catchUp.clip} afterWelcome={false} catchUp={welcome ? "first" : "alone"} /> : null}
+      {catchUp?.kind === "stamp" ? <RankUp stampOnly level={catchUp.level} clipOnly /> : null}
     </AppShell>
   );
 }
