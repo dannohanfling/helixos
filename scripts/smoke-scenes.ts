@@ -100,6 +100,12 @@ async function main() {
     await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: mm.workspaceId, userId: maya.id, type: "bonus", points: next2!.minPoints - before + 40, reason: "Smoke: two ranks at once", adjustedBy: "smoke" });
     const points = await total();
     const card = rankCard(next2!, points);
+    // Sets the rank seen back one so the ceremony plays again. The last ceremony's close writes the rank seen a moment after it
+    // goes; wait for that write first, or it lands after this reset and the next open has nothing to celebrate.
+    const resetRank = async () => {
+      for (let i = 0; i < 20 && (await member()).celebratedTierLevel !== next2!.level; i++) await new Promise((r) => setTimeout(r, 250));
+      await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
+    };
     await db.update(schema.memberships).set({ celebratedTierLevel: now.level, welcomeShownOn: null, soundsOn: true }).where(eq(schema.memberships.id, mm.id));
 
     // ── After the welcome: the ceremony waits while the welcome plays, then opens on its close. The medal, no clip yet. ──
@@ -147,7 +153,7 @@ async function main() {
     mkdirSync(ranksDir, { recursive: true });
     fakeClip = path.join(ranksDir, `rank-${card.slug}.webm`);
     writeFileSync(fakeClip, "not a video");
-    await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
+    await resetRank();
     await page.goto(`${base}/today`);
     await rk.waitFor({ timeout: 15000 });
     must((await rk.getAttribute("data-window")) === "clip" && (await page.locator('[data-testid="rank-clip"]').count()) === 1, "a clip file in public/ranks: the window plays it");
@@ -172,7 +178,7 @@ async function main() {
       rp.on("response", (r) => {
         if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
       });
-      await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
+      await resetRank();
       await rp.goto(`${base}/today`);
       const rrk = rp.locator('[data-testid="rank-up"]');
       await rrk.waitFor({ timeout: 15000 });
@@ -195,7 +201,7 @@ async function main() {
     setAside();
 
     // ── Reduced motion: the finished card at once. Then 390 and 1440, Skip, a hidden tab. ──
-    await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
+    await resetRank();
     const quiet = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
     const q = await quiet.newPage();
     await q.goto(`${base}/today`);
@@ -207,7 +213,7 @@ async function main() {
     await q.waitForTimeout(800);
     await quiet.close();
     for (const width of [390, 1440]) {
-      await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
+      await resetRank();
       await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
       await page.goto(`${base}/today`);
       await rk.waitFor({ timeout: 15000 });
@@ -253,7 +259,7 @@ async function main() {
     // The box unticks at once; the save lands a moment later.
     for (let i = 0; i < 20 && (await member()).soundsOn !== false; i++) await page.waitForTimeout(250);
     must((await member()).soundsOn === false, "the switch is remembered on the membership");
-    await db.update(schema.memberships).set({ celebratedTierLevel: next2!.level - 1 }).where(eq(schema.memberships.id, mm.id));
+    await resetRank();
     await page.goto(`${base}/today`);
     await rk.waitFor({ timeout: 15000 });
     await page.mouse.click(5, 5);
