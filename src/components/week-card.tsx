@@ -94,9 +94,9 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
                   {t.taskId ? (
                     <form action={tickIntentionTaskAction}>
                       <input type="hidden" name="id" value={t.taskId} />
-                      <button type="submit" className={`grid h-5 w-5 place-items-center rounded border text-xs ${taskDone[t.taskId] ? "border-good bg-good text-white" : ""}`} aria-label={taskDone[t.taskId] ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`} data-testid="week-task-tick">
+                      <SubmitButton className={`grid h-5 w-5 place-items-center rounded border text-xs ${taskDone[t.taskId] ? "border-good bg-good text-white" : ""}`} pendingText="…" aria-label={taskDone[t.taskId] ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`} data-testid="week-task-tick">
                         {taskDone[t.taskId] ? "✓" : ""}
-                      </button>
+                      </SubmitButton>
                     </form>
                   ) : null}
                   <span>{t.title}</span>
