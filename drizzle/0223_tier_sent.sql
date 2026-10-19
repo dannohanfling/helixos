@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `eo_tier_sent` text;
