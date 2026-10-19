@@ -85,3 +85,26 @@ describe("§6.1: the contrast check proposes a fix", () => {
   });
 });
 
+
+describe("a pathway's lead colour (H-811 B1)", () => {
+  const kit = { name: "Mine", accent: "0F766E", bannedColors: ["FF0000"] };
+  it("becomes the deck's accent over the member's own kit", async () => {
+    const { withLeadColour } = await import("../subject");
+    expect(withLeadColour(kit, "#c05a2b")).toEqual({ ...kit, accent: "C05A2B" });
+    expect(withLeadColour(kit, "c05a2b")!.name).toBe("Mine");
+  });
+  it("leaves the kit as it is for no colour, a bad one, a banned one, or no kit of their own", async () => {
+    const { withLeadColour } = await import("../subject");
+    expect(withLeadColour(kit, null)).toBe(kit);
+    expect(withLeadColour(kit, "orange")).toBe(kit);
+    expect(withLeadColour(kit, "#ff0000")).toBe(kit);
+    expect(withLeadColour(null, "C05A2B")).toBeNull();
+  });
+  it("names why a colour can't be saved, and lets an empty one clear it", async () => {
+    const { leadColourProblem } = await import("../subject");
+    expect(leadColourProblem("", ["FF0000"])).toBeNull();
+    expect(leadColourProblem("#C05A2B", ["FF0000"])).toBeNull();
+    expect(leadColourProblem("orange", [])).toBe("orange isn't a six-digit hex colour, like 6E6256.");
+    expect(leadColourProblem("#ff0000", ["FF0000"])).toBe("FF0000 is one of your brand's banned colours.");
+  });
+});

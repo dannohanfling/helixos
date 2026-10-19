@@ -1329,6 +1329,8 @@ export const pathways = sqliteTable(
     tagline: text("tagline"),
     audiencePromise: text("audience_promise"),
     promiseEvidence: text("promise_evidence"),
+    /** Its lead colour (H-811 B1), a six-digit hex: the accent in decks for its offers' webinars, over the member's own kit. */
+    leadColor: text("lead_color"),
     /** Where an imported pathway came from, so a re-run updates it. */
     sourceRef: text("source_ref"),
     createdAt: createdAt(),

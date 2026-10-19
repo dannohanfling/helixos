@@ -1,0 +1,1 @@
+ALTER TABLE `pathways` ADD `lead_color` text;

@@ -7,9 +7,22 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { BrandKit } from "@/db/schema";
 import { parseSpelling, type Spelling } from "@/lib/engine/spelling";
+import { withLeadColour } from "@/lib/engine/subject";
 
 export async function kitFor(workspaceId: string, userId: string): Promise<BrandKit | null> {
   return (await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) })) ?? null;
+}
+
+/**
+ * The kit a webinar's deck renders in (H-811 B1): the owner's kit, with the lead colour of the pathway its offer belongs to as
+ * the accent, when that pathway has one. Read by the webinar's owner, never the signed-in person.
+ */
+export async function deckKitFor<K extends { accent: string; bannedColors: string[] }>(w: { workspaceId: string; userId: string; offerId: string | null }, kit: K | null): Promise<K | null> {
+  if (!kit || !w.offerId) return kit;
+  const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, w.offerId), eq(schema.offers.workspaceId, w.workspaceId), eq(schema.offers.userId, w.userId)), columns: { pathwayId: true } });
+  if (!offer?.pathwayId) return kit;
+  const pathway = await db.query.pathways.findFirst({ where: and(eq(schema.pathways.id, offer.pathwayId), eq(schema.pathways.workspaceId, w.workspaceId), eq(schema.pathways.userId, w.userId)), columns: { leadColor: true } });
+  return withLeadColour(kit, pathway?.leadColor);
 }
 
 /** How this member's AI drafts spell (H-811): their kit's setting, American with no kit. One column read. */
