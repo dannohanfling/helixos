@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 286,
+    date: "2026-10-19",
+    title: "Send a message to your own Evolve Omega pass",
+    lines: [
+      "Coach → Your own program: once your pass is made, \"Send to my pass\" puts one message in the Latest Message on the back of your pass, and your phone shows it on the lock screen. It starts as \"Welcome to Evolve Omega\". It writes to your pass only, once per press.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 283,
     date: "2026-10-19",
     title: "Connect your own agents to your agent inbox",
