@@ -27,6 +27,8 @@ async function main() {
   const { shouldAsk } = await import("@/lib/engine/push");
   const { sendPush, sendTestPush } = await import("@/lib/push/send");
   const { runDailyPushes } = await import("@/lib/push/daily");
+  const { runCallPushes } = await import("@/lib/push/calls");
+  const { callsBetween } = await import("@/lib/calls");
 
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const m = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
@@ -85,12 +87,13 @@ async function main() {
     // ── 3. Settings → Notifications. ──
     await page.goto(`${base}/settings/notifications`, { waitUntil: "networkidle" });
     must(await page.locator('[data-testid="notifications-devices"]').innerText().then((t) => /iPhone/.test(t) && /Notifications on/.test(t)), "the phone is listed with notifications on");
-    must(await page.locator('[data-testid="notifications-type-call"]').isDisabled(), "a Coming soon kind can't be changed yet");
+    must(await page.locator('[data-testid="notifications-type-bot_call"]').isDisabled(), "a Coming soon kind can't be changed yet");
+    must(!(await page.locator('[data-testid="notifications-type-call"]').isDisabled()) && (await page.locator('[data-testid="notifications-type-call"]').isChecked()), "live call reminders are ready: on by default, and can be switched");
     await page.uncheck('[data-testid="notifications-type-morning"]');
     await page.selectOption('[data-testid="notifications-quiet-start"]', "22");
     await Promise.all([page.waitForURL(/saved=1/), page.click('[data-testid="notifications-save"]')]);
     const prefs = (await db.query.pushPrefs.findFirst({ where: eq(schema.pushPrefs.membershipId, m.id) }))!;
-    must(prefs.types.morning === false && !("call" in prefs.types) && prefs.quietStart === 22 && prefs.enabled, `saved: morning off, call untouched, quiet from 10 PM: ${JSON.stringify(prefs)}`);
+    must(prefs.types.morning === false && !("call" in prefs.types) && !("bot_call" in prefs.types) && prefs.quietStart === 22 && prefs.enabled, `saved: morning off, call untouched, quiet from 10 PM: ${JSON.stringify(prefs)}`);
     await page.goto(`${base}/settings/notifications`, { waitUntil: "networkidle" });
     await page.check('[data-testid="notifications-type-morning"]');
     await page.selectOption('[data-testid="notifications-quiet-start"]', "21");
@@ -138,6 +141,19 @@ async function main() {
     must(log?.morningDoneAt ? mine.length === 0 : mine.length === 1 && mine[0].outcome.sent, `the daily run: morning ${log?.morningDoneAt ? "skipped, already locked in" : "sent"}: ${JSON.stringify(run)}`);
     must((await runDailyPushes(at(m.reminderHour), fake)).filter((r) => r.type === "morning" && r.outcome.sent).length === 0, "a second run the same hour sends nothing new");
     console.log(`✓ the daily run: the morning push ${log?.morningDoneAt ? "held (already locked in)" : "sent once"}, and a second run sends nothing new`);
+
+    // ── 4b. The live call reminders (H-771): 15 minutes before a call she can join, once; "We're live" at the start. ──
+    await db.update(schema.pushDevices).set({ disabledAt: null }).where(eq(schema.pushDevices.membershipId, m.id));
+    const nextCall = (await callsBetween(ws.id, new Date(), new Date(Date.now() + 8 * 86_400_000), { role: "client", programTier: m.programTier }))[0];
+    must(nextCall, "the seeded calls give her a call to join this week");
+    const before = new Date(Date.parse(nextCall.startIso) - 14 * 60_000);
+    sent.length = 0;
+    const soon = await runCallPushes(before, fake);
+    must(soon.some((r) => r.step === "soon" && r.outcome.sent) && sent.some((x) => x.body === "We start in 15 minutes. Tap to join." && x.path === "/calls"), `15 minutes before: ${JSON.stringify(soon)}`);
+    must((await runCallPushes(new Date(before.getTime() + 5 * 60_000), fake)).every((r) => !r.outcome.sent), "the next run sends nothing new");
+    const live = await runCallPushes(new Date(Date.parse(nextCall.startIso) + 60_000), fake);
+    must(live.some((r) => r.step === "live" && r.outcome.sent) && sent.some((x) => x.body === "We're live now. Tap to join."), `at the start: ${JSON.stringify(live)}`);
+    console.log("✓ live call reminders: 15 minutes before and at the start, each once, for a call she can join");
 
     // ── 5. The cron needs its secret. ──
     must((await page.request.get(`${base}/api/cron/push`)).status() === 401, "the push cron answers only with the cron secret");
