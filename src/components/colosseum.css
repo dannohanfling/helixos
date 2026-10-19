@@ -63,7 +63,7 @@
 .co-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; margin: 8px 0 0; }
 .co-filters a.co-on { color: var(--co-ink); font-weight: 700; }
 .co-list { list-style: none; margin: 8px 0 0; padding: 0; }
-.co-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) 100px 80px; gap: 12px; align-items: center; min-height: 52px; border-top: 1px solid var(--co-line); }
+.co-item { display: grid; grid-template-columns: 40px minmax(0, 1fr) 100px 80px 44px; gap: 12px; align-items: center; min-height: 52px; border-top: 1px solid var(--co-line); }
 .co-item.co-mine .co-name { color: var(--co-gold-text); }
 .co-pos { font-family: "Cormorant Garamond", Georgia, serif; font-size: 22px; color: var(--co-muted); }
 .co-name { min-width: 0; font-family: "Cormorant Garamond", Georgia, serif; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
@@ -71,12 +71,24 @@
 .co-chg { text-align: right; color: var(--co-muted); font-size: 13px; }
 .co-wins { list-style: none; margin: 10px 0 0; padding: 0; }
 .co-win { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--co-line); font-size: 15px; }
-.co-win form { grid-column: 2; }
+.co-win > form { grid-column: 2; }
 .co-kindtag { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--co-gold-text); }
 .co-wintext { min-width: 0; overflow-wrap: anywhere; }
 .co-wintext b { font-family: "Cormorant Garamond", Georgia, serif; font-size: 18px; }
 .co-when { font-size: 12px; color: var(--co-muted); white-space: nowrap; }
 .co-link { background: none; border: 0; padding: 0; color: var(--co-gold-text); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; }
+/* Block and Report (H-745): a quiet ⋯ on a win or a standing, and its panel on a row of its own under it. */
+.co-dots { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--co-muted); font: inherit; font-size: 20px; line-height: 1; cursor: pointer; border-radius: 999px; }
+.co-dots:hover, .co-dots[aria-expanded="true"] { color: var(--co-ink); background: var(--co-line); }
+.co-win-mod { grid-template-columns: auto minmax(0, 1fr) auto 44px; }
+.co-mod { grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px 0 4px; min-width: 0; }
+.co-mod-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.co-mod-form { display: grid; gap: 8px; min-width: 0; }
+.co-mod-form .co-line { margin: 0; }
+.co-mod-form .field { display: block; width: 100%; margin-top: 4px; }
+.co-mod-reasons { display: flex; flex-wrap: wrap; gap: 6px 16px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.co-mod-reasons legend { padding: 0; margin-bottom: 4px; }
+.co-wrap > .co-mod { padding-top: 14px; }
 .co-share { display: grid; gap: 8px; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; margin: 12px 0 4px; }
 .co-share .field { min-width: 0; }
 .co-kind { font-size: 13px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -86,12 +98,15 @@
 
 @media (max-width: 860px) {
   .co-zone { grid-template-columns: minmax(0, 1fr); }
-  .co-item { grid-template-columns: 32px minmax(0, 1fr) 80px; }
+  .co-item { grid-template-columns: 32px minmax(0, 1fr) 80px 44px; }
   .co-chg { display: none; }
   .co-share { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .co-share .field, .co-share .co-btn { grid-column: span 2; }
   .co-win { grid-template-columns: minmax(0, 1fr); }
-  .co-win form { grid-column: 1; }
+  .co-win > form { grid-column: 1; }
+  .co-win-mod { grid-template-columns: minmax(0, 1fr) 44px; }
+  .co-win-mod .co-kindtag, .co-win-mod .co-wintext, .co-win-mod .co-when { grid-column: 1; }
+  .co-win-mod .co-dots { grid-column: 2; grid-row: 1; }
 }
 @media (max-width: 560px) {
   .co-stats dd { font-size: 24px; }

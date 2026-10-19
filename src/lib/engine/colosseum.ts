@@ -5,6 +5,7 @@
  * numbers are the Rewards ledger's; the ranks are the Rewards tiers. Nothing here invents a member, a point or a win.
  */
 import { sceneLookFor, type SceneLook } from "@/lib/engine/board-view";
+import { hasBlockedWord, WIN_REFUSED } from "@/lib/engine/word-filter";
 
 export const ARENA = { w: 1680, h: 944 } as const;
 /** % of the arena box, front tier first (rev 720's table), the same for both pictures. */
@@ -35,7 +36,7 @@ export const TABS = ["arena", "standings", "wins", "challenges", "week"] as cons
 export type Tab = (typeof TABS)[number];
 export const TAB_WORDS: Record<Tab, string> = { arena: "The Arena", standings: "Standings", wins: "Wins", challenges: "Challenges", week: "My week" };
 
-export type Standing = { userId: string; membershipId: string; name: string; points: number; week: number; tier: string; hidden: boolean; photo: boolean; isYou: boolean };
+export type Standing = { userId: string; membershipId: string; name: string; points: number; week: number; tier: string; hidden: boolean; photo: boolean; isYou: boolean; /** The workspace's coach: never blocked, reported only to Support (H-745). */ coach?: boolean; /** Blocked by the viewer: "A member", no photo, the seat kept so the counts add up (H-745). */ veiled?: boolean };
 
 /** Initials from a name: first letters of the first two words, upper case; one word gives its first two letters. */
 export function initials(name: string): string {
@@ -120,5 +121,7 @@ export function readWin(kind: unknown, text: unknown): { ok: true; kind: WinKind
   if (!t) return { ok: false, error: "Write the win first." };
   if (t.length > WIN_MAX) return { ok: false, error: `Keep it under ${WIN_MAX} characters.` };
   if (/@|\+?\d[\d\s().-]{8,}\d/.test(t)) return { ok: false, error: "No emails or phone numbers in a win." };
+  // The word filter (H-745): a slur or an explicit word and the win isn't saved; the member's text stays in the box to reword.
+  if (hasBlockedWord(t)) return { ok: false, error: WIN_REFUSED };
   return { ok: true, kind: k as WinKind, text: t };
 }

@@ -5,6 +5,7 @@
  * tier's ring, slowly circling from one rAF loop (one transform per avatar, back to front), and this week's champions still
  * on the sand. Pause is remembered; reduced motion holds every avatar at its spread position; a hidden tab pauses the loop.
  * Tap an avatar for its card. Avatars are initials, or the member's own photo when they've opted in; never under 44px.
+ * With `moderate` (a member in their own account), another member's card offers Block or report (H-745), under the arena.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { setArenaPausedAction } from "@/lib/actions/colosseum";
@@ -12,14 +13,16 @@ import { setSceneLookAction } from "@/lib/actions/scene";
 import { CHAMPION_SPOTS, LAP_SECONDS, RING_WORDS, seatAngle, seatPlace } from "@/lib/engine/colosseum";
 import type { ArenaSeat } from "@/lib/colosseum";
 import { ColosseumAmbience } from "@/components/colosseum-ambience";
+import { ModeratePanel } from "@/components/colosseum-moderate";
 import { top3CheerKey } from "@/lib/engine/ambience";
 import { armSounds, playSound } from "@/lib/sounds";
 
 type Look = "day" | "night";
 type RingSeat = ArenaSeat & { ring: number; index: number; of: number };
 
-export function ColosseumArena({ rings, champs, more, initialLook, initialPaused, ownLook, cheerWeek }: { rings: RingSeat[][]; champs: ArenaSeat[]; more: number[]; initialLook: Look; initialPaused: boolean; ownLook: boolean; cheerWeek: string | null }) {
+export function ColosseumArena({ rings, champs, more, initialLook, initialPaused, ownLook, cheerWeek, moderate = false }: { rings: RingSeat[][]; champs: ArenaSeat[]; more: number[]; initialLook: Look; initialPaused: boolean; ownLook: boolean; cheerWeek: string | null; moderate?: boolean }) {
   const [look, setLook] = useState<Look>(initialLook);
+  const [modFor, setModFor] = useState<string | null>(null);
   const [paused, setPaused] = useState(initialPaused);
   const [picked, setPicked] = useState<string | null>(null);
   const [broken, setBroken] = useState<Set<Look>>(() => new Set());
@@ -213,10 +216,30 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
           <span>
             {pick.points.toLocaleString()} points · +{pick.week.toLocaleString()} this week{pick.champ ? ` · Champion #${pick.champ} of the week` : ""}
           </span>
+          {moderate && !pick.isYou && !pick.veiled ? (
+            <button
+              type="button"
+              className="co-btn"
+              onClick={() => {
+                setModFor(pick.id);
+                setPicked(null);
+              }}
+              data-testid="arena-card-mod"
+            >
+              Block or report
+            </button>
+          ) : null}
           <button type="button" className="co-btn" onClick={() => setPicked(null)} aria-label="Close">
             Close
           </button>
         </div>
+      ) : null}
+      {modFor && byId.get(modFor) ? (
+        <ModeratePanel
+          key={modFor}
+          target={{ kind: "member", id: byId.get(modFor)!.membershipId, membershipId: byId.get(modFor)!.membershipId, name: byId.get(modFor)!.name, coach: byId.get(modFor)!.coach }}
+          onClose={() => setModFor(null)}
+        />
       ) : null}
       <p className="sr-only">One lap of the front rows takes {LAP_SECONDS[0]} seconds; the top rows {LAP_SECONDS[3]}.</p>
     </div>

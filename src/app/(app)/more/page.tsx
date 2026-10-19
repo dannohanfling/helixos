@@ -69,6 +69,10 @@ export default async function MorePage() {
         ))}
         <div className="card p-2">
           {coachFirst ? <ReportButton coachFirst={coachFirst} variant="row" /> : null}
+          {/* H-745: a person to reach, on every account (App Store guideline 1.2). */}
+          <Link href="/support" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2" data-testid="more-support">
+            <span className="w-6 text-center text-lg">💬</span> Help and support
+          </Link>
           <Link href="/settings" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
             <span className="w-6 text-center text-lg">⚙️</span> Settings
           </Link>
