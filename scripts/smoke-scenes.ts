@@ -3,8 +3,9 @@
  * once, after the welcome when both are due, the struck medal while the rank has no clip and the clip window when one exists
  * (a broken file still strikes), See my seat, Share saves a picture, Skip, Escape, reduced motion, a hidden tab; the evening
  * close once per close with the ledger row's own credit and the line about tomorrow, a reload shows nothing; sounds only after
- * a gesture and never with the Settings switch off; 390 and 1440. Runs against the dev server; fixtures go straight to the
- * database, the way the welcome walk's do.
+ * a gesture and never with the Settings switch off; 390 and 1440. The catch-up (H-934): a rank reached before the relic clips
+ * plays its clip once, first thing, before the welcome; a rank reached after is stamped silently; a coach switched in never
+ * uses it up. Runs against the dev server; fixtures go straight to the database, the way the welcome walk's do.
  */
 import { chromium, type Page } from "@playwright/test";
 import { mkdirSync, rmSync, writeFileSync, existsSync, readdirSync, rmdirSync, renameSync } from "node:fs";
@@ -23,7 +24,7 @@ async function main() {
   const { activityDate } = await import("@/lib/engine/streak");
   const { streakFor } = await import("@/lib/queries/daily");
   const { TIERS, tierFor } = await import("@/lib/engine/tiers");
-  const { rankCard, tomorrowLine } = await import("@/lib/engine/scenes");
+  const { CLIPS_LIVE_AT, catchUpCard, rankCard, tomorrowLine } = await import("@/lib/engine/scenes");
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
   const ws = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mm.workspaceId) }))!;
@@ -57,6 +58,12 @@ async function main() {
   };
   putBack();
   setAside();
+  // The catch-up section moves Maya's ledger before the clips went live; the rows' own times are put back whatever happens.
+  let ledgerTimes: { id: string; createdAt: string }[] = [];
+  const restoreLedger = async () => {
+    for (const r of ledgerTimes) await db.update(schema.pointsLedger).set({ createdAt: r.createdAt }).where(eq(schema.pointsLedger.id, r.id));
+    ledgerTimes = [];
+  };
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
     const page = await ctx.newPage();
@@ -323,7 +330,106 @@ async function main() {
     }
     await page.setViewportSize({ width: 1280, height: 900 });
     console.log(`✓ evening close: once per close, keyed on the ledger row, +${closeRow!.points} from the row itself, tomorrow's line from the engine, the murmur after the tap, Skip and 390; at 1280x650 and 1440x700 the card fits the window and Good night fits the card`);
+
+    // ── The catch-up (H-934): Maya's rank reached before the clips went live plays its clip once, first thing, then the welcome. ──
+    if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
+    putBack();
+    ledgerTimes = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id), columns: { id: true, createdAt: true } })).map((r) => ({ id: r.id, createdAt: r.createdAt }));
+    const beforeClips = "2026-10-10 12:00:00";
+    must(beforeClips < CLIPS_LIVE_AT, "the fixture's time is before the clips");
+    await db.update(schema.pointsLedger).set({ createdAt: beforeClips }).where(eq(schema.pointsLedger.userId, maya.id));
+    const held = tierFor(await total());
+    must(held.level >= 2 && existsSync(path.join(ranksDir, `rank-${held.name.toLowerCase()}.webm`)), `Maya holds a rank with a relic clip (${held.name})`);
+    const late = catchUpCard(held, await total());
+    await db.update(schema.memberships).set({ celebratedTierLevel: held.level, rankClipSeenLevel: null, welcomeShownOn: null }).where(eq(schema.memberships.id, mm.id));
+    {
+      const cx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const cp = await cx.newPage();
+      cp.on("response", (r) => {
+        if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
+      });
+      await login(cp);
+      const crk = cp.locator('[data-testid="rank-up"]');
+      await crk.waitFor({ timeout: 15000 });
+      must((await cp.locator('[data-testid="daily-welcome"]').count()) === 0, "the catch-up comes first: no welcome under it yet");
+      must((await crk.getAttribute("data-rank")) === late.slug && (await crk.getAttribute("data-window")) === "clip", `the ${late.name} clip plays (${await crk.getAttribute("data-rank")}, ${await crk.getAttribute("data-window")})`);
+      await cp.keyboard.press("Escape");
+      await cp.waitForFunction(() => document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") === "done", null, { timeout: 5000 });
+      must((await cp.locator('[data-testid="rank-line"]').textContent())?.trim() === late.line, `the card opens on the relic: ${late.line}`);
+      must((await cp.locator('[data-testid="rank-name"]').textContent())?.trim() === late.name, "the rank's name struck");
+      await cp.screenshot({ path: "screenshots/sc06-catchup.png" });
+      await cp.keyboard.press("Escape");
+      must((await crk.count()) === 0, "Escape closes the catch-up");
+      // The welcome follows straight after, in the same open.
+      await cp.locator('[data-testid="daily-welcome"]').waitFor({ timeout: 5000 });
+      await cp.waitForTimeout(800);
+      must((await member()).rankClipSeenLevel === held.level && (await member()).celebratedTierLevel === held.level, "the clip is recorded as seen; the rank seen is unchanged");
+      await cp.locator('[data-testid="welcome-skip"]').click();
+      await cp.locator('[data-testid="welcome-skip"]').click();
+      await cp.goto(`${base}/today`);
+      await cp.locator('[data-testid="streak-badge"]').waitFor({ timeout: 15000 });
+      await cp.waitForTimeout(500);
+      must((await crk.count()) === 0, "once: not on the next open");
+      await cx.close();
+    }
+    // At 390, with no welcome today: the catch-up alone, nothing sideways.
+    await db.update(schema.memberships).set({ rankClipSeenLevel: null, welcomeShownOn: today }).where(eq(schema.memberships.id, mm.id));
+    {
+      const px = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+      const pp = await px.newPage();
+      await login(pp);
+      const prk = pp.locator('[data-testid="rank-up"]');
+      await prk.waitFor({ timeout: 15000 });
+      await pp.locator('[data-testid="rank-skip"]').tap().catch(async () => pp.keyboard.press("Escape"));
+      await pp.waitForFunction(() => document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") === "done", null, { timeout: 5000 });
+      must((await pp.evaluate(() => document.documentElement.scrollWidth)) <= 390, "390: nothing sideways");
+      await pp.screenshot({ path: "screenshots/sc07-catchup-390.png" });
+      await pp.keyboard.press("Escape");
+      await pp.waitForTimeout(800);
+      must((await member()).rankClipSeenLevel === held.level, "390: recorded once closed");
+      await px.close();
+    }
+    // A coach switched in sees nothing and uses nothing up.
+    await db.update(schema.memberships).set({ rankClipSeenLevel: null }).where(eq(schema.memberships.id, mm.id));
+    {
+      const kx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const kp = await kx.newPage();
+      await kp.goto(`${base}/login`);
+      await kp.click('button:has-text("As the coach")');
+      await kp.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
+      await kp.goto(`${base}/coach/${mm.id}`, { waitUntil: "networkidle" });
+      await kp.check('[data-testid="switch-work"]');
+      await kp.click('[data-testid="switch-open"]');
+      const back = kp.locator('[data-testid="switch-back"]').first();
+      try {
+        await back.waitFor({ timeout: 30000 });
+      } catch {
+        if (await kp.locator('[data-testid="switch-open"]:not([disabled])').count()) await kp.click('[data-testid="switch-open"]');
+        await back.waitFor({ timeout: 30000 });
+      }
+      await kp.goto(`${base}/today`, { waitUntil: "networkidle" });
+      await kp.waitForTimeout(800);
+      must((await kp.locator('[data-testid="rank-up"]').count()) === 0, "switched in: no catch-up");
+      must((await member()).rankClipSeenLevel === null, "switched in: nothing used up");
+      await back.click();
+      await kx.close();
+    }
+    // Reached after the clips went live: stamped silently on the open, nothing plays.
+    await restoreLedger();
+    {
+      const sx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const sp = await sx.newPage();
+      await login(sp);
+      await sp.locator('[data-testid="streak-badge"]').waitFor({ timeout: 15000 });
+      await sp.waitForTimeout(1200);
+      must((await sp.locator('[data-testid="rank-up"]').count()) === 0, "reached after the clips: nothing plays");
+      must((await member()).rankClipSeenLevel === held.level, "reached after the clips: the clip stamped as seen");
+      await sx.close();
+    }
+    setAside();
+    console.log(`✓ catch-up: the ${late.name} clip first, before the welcome, once, its card opening on the relic; alone at 390; a coach switched in uses nothing up; reached after the clips, stamped silently`);
   } finally {
+    await restoreLedger();
     if (fakeClip && existsSync(fakeClip)) rmSync(fakeClip);
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
     putBack();

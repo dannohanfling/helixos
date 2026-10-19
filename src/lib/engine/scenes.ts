@@ -77,6 +77,37 @@ export function rankCard(tier: Tier, points: number): RankCard {
   };
 }
 
+/**
+ * The catch-up ceremony (H-934, plan H-942): the eight relic clips went live at this moment (PR #40 on Vercel). A member who
+ * reached their current rank before it saw no clip for it, so their next open plays that rank's clip once, first thing.
+ * In the ledger's own form (`datetime('now')`, UTC) so it compares as text.
+ */
+export const CLIPS_LIVE_AT = "2026-10-18 05:10:00";
+
+export type CatchUp = { kind: "play"; tier: Tier } | { kind: "stamp"; level: number };
+
+/**
+ * Whether this open owes the member a catch-up. Only at Philosopher or above, only for a rank already celebrated (a normal
+ * rank-up due plays its own clip), only while the clip for the current rank hasn't been seen. `reachedAt` is when the running
+ * total first reached the current rank (null when the ledger can't say, read as before the clips). Reached after the clips
+ * went live: they saw it then, so the seen rank is stamped silently and nothing plays.
+ */
+export function catchUpFor(i: { points: number; celebrated: number | null; clipSeen: number | null; reachedAt: string | null }): CatchUp | null {
+  if (i.celebrated === null) return null;
+  const t = tierFor(i.points);
+  if (t.level <= 1 || rankUpFor(i.points, i.celebrated)) return null;
+  if ((i.clipSeen ?? 0) >= t.level) return null;
+  if (i.reachedAt !== null && i.reachedAt >= CLIPS_LIVE_AT) return { kind: "stamp", level: t.level };
+  return { kind: "play", tier: t };
+}
+
+/** The catch-up's card: the rank's own card, its line opening on the relic for a rank reached a while ago. */
+export function catchUpCard(tier: Tier, points: number): RankCard {
+  const card = rankCard(tier, points);
+  const line = `Your relic is here. ${card.line}`;
+  return { ...card, line, summary: card.summary.replace(card.line, line) };
+}
+
 /** How long after the close the scene may still play: a reload later than this shows nothing. */
 export const CLOSE_SCENE_WINDOW_MS = 10 * 60 * 1000;
 
