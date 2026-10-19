@@ -12,6 +12,26 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 281,
+    date: "2026-10-19",
+    title: "Birds that fly like birds, and water that flows, in the scenes",
+    lines: [
+      "Golden hour in the Forum and the Colosseum: the birds are now small dark silhouettes seen from above, each with a soft shadow. They flap a few beats, glide, and turn as they go, each on its own path and speed, and fade in and out at the edges.",
+      "The Aqueduct: the channel is see-through running water with ripples, streaks and a little sparkle, and it fills from the source when you open the scene. A leak falls as a sheet with streaks and lands in mist and spray, and the fountain's waterfall flows the same way.",
+      "Pause, a hidden tab and reduced motion work as before: with reduced motion there are no birds, and the water stays still.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 279,
+    date: "2026-10-19",
+    title: "Your streak flame is real fire now",
+    lines: [
+      "The flame by your streak is filmed fire: an Ember for your first week, a Torch from day 7 and a Gold flame from day 30. Tap it for the big version. Before you close the day it burns low and slow, waiting on you.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 277,
     date: "2026-10-18",
     title: "Calls: this week's calls, in your time",
