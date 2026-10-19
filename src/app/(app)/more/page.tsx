@@ -10,32 +10,25 @@ import { oohAccessFor } from "@/lib/office-hours-access";
 import { NavGroupCard } from "@/components/nav-group-card";
 import { CollapseAllButton } from "@/components/nav-state";
 import { ComingSoonItem } from "@/components/coming-soon-item";
-import { DueBadge } from "@/components/nav";
-import { intentionsDueFor } from "@/lib/queries/intentions";
-import { NewDot } from "@/components/nav";
-import { WHATS_NEW } from "@/content/whats-new";
-import { unseenCount } from "@/lib/engine/whats-new";
+import { DueBadge, NewDot } from "@/components/nav";
+import { navBadges } from "@/lib/nav-badges";
+import { DOT_ONLY } from "@/lib/engine/nav-badges";
 import { APP_VERSION } from "@/lib/version";
 import { PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { hasVisibleRecordings } from "@/lib/recordings";
 import { ReportButton } from "@/components/report-button";
 import { coachFirstName } from "@/lib/queries/reports";
-import { agentsOnFor } from "@/lib/handoff";
 
 export const metadata = { title: "More" };
 
 export default async function MorePage() {
   const v = await requireViewer({ team: "allow" });
-  const due = (await intentionsDueFor(v.workspace.id, v.user.id, v.today)).length;
-  const unseen = unseenCount(WHATS_NEW, v.role, v.membership.whatsNewSeen);
-  const recordingsEnabled = v.role === "client" && (await hasVisibleRecordings(v.workspace.id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role }));
+  // The same counts as the sidebar (H-844), and the same rules for the Recordings and Agent inbox items (H-727).
+  const { badges, recordingsEnabled, agentsOn } = await navBadges(v);
   const coachFirst = v.role === "client" && !v.switchedInto ? await coachFirstName(v.workspace.id) : null;
   const loyaltyOn = await hasLeaderboardFeed(v.membership.id);
   const { shippedKeys } = await horizonShell(v);
   const oohOn = (await oohAccessFor(v)).open;
-  // The Agent inbox (H-727): the same rule as the side menu's, worked out in the layout.
-  const agentsOn = v.role === "client" && !v.switchedInto && !v.team ? await agentsOnFor({ workspaceId: v.workspace.id, userId: v.user.id }) : false;
   const chatOn = (await chatWidgetProps(v)) !== null;
   const groups = NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
@@ -60,15 +53,11 @@ export default async function MorePage() {
               ) : (
                 <Link key={n.href} href={n.href} className={ROW}>
                   <span className="w-6 shrink-0 text-center text-lg">{n.icon}</span>
-                  {n.href === "/intentions" && due ? (
+                  {badges[n.href] ? (
+                    // Every item with a count shows it, as on the sidebar; What's new keeps its dot.
                     <>
                       <RowText label={n.label} />
-                      <DueBadge count={due} />
-                    </>
-                  ) : n.href === "/whats-new" && unseen ? (
-                    <>
-                      <RowText label={n.label} />
-                      <NewDot />
+                      {n.href === DOT_ONLY ? <NewDot /> : <DueBadge count={badges[n.href]} />}
                     </>
                   ) : (
                     <RowText label={n.label} line={n.line ?? n.hint} />

@@ -12,6 +12,7 @@ import { NavStateProvider } from "./nav-state";
 import { Sidebar, SidebarFoot } from "./sidebar";
 import { visibleGroups } from "./nav-groups";
 import { navStateOf } from "@/lib/engine/nav-state";
+import { moreTab } from "@/lib/engine/nav-badges";
 import { LegalFooter } from "./legal-footer";
 import { SubmitButton } from "@/components/submit-button";
 import { APP_VERSION } from "@/lib/version";
@@ -28,6 +29,9 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
   // except a team member, who is shown as themself.
   const who = team ? viewer.actor : viewer.user;
+  const groups = visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys);
+  // The More tab's total (H-844): every count on an item this person's menu shows, the same numbers as the sidebar and More.
+  const more = moreTab(badges, groups.flatMap((g) => g.items.filter((n) => !n.external && !n.comingSoon).map((n) => n.href)));
   return (
     <NavStateProvider initial={navStateOf(viewer.membership.navState)} persist={!viewer.switchedInto && !viewer.team}>
     <div className="min-h-[100dvh] md:flex" data-app-shell>
@@ -48,7 +52,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
           <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} chatOn={chatOn} agentsOn={agentsOn} coachFirst={coachFirst} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
         </div>
         {/* The sidebar's controls (H-499): fold and Collapse all, at the bottom left, open or folded. */}
-        <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
+        <SidebarFoot labels={groups.map((g) => g.label)} />
         {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
         <div className="rail-only mt-1 flex flex-col items-center gap-1">
           {flame ? <StreakPill state={flame} place="rail" afterWelcome={flameAfterWelcome} /> : null}
@@ -168,7 +172,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
           <LegalFooter />
         </main>
       </div>
-      <BottomNav role={viewer.role} badges={badges} />
+      <BottomNav role={viewer.role} more={more} />
     </div>
     </NavStateProvider>
   );
