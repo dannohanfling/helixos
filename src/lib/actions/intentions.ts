@@ -13,6 +13,8 @@ import { SHARE_POINTS, monthShareRef, shareRef } from "@/lib/engine/community";
 import { monthShareFor, shareFor } from "@/lib/community";
 import { award } from "@/lib/queries/points";
 import { saveWeekIntention } from "@/lib/intentions-core";
+import { linkWeek, logWeekActuals } from "@/lib/intention-chain";
+import { ownTask, toggleTask } from "@/lib/tasks-core";
 
 /** Where a form goes back to: the Intentions page or Today, and nothing else. */
 const backTo = (formData: FormData): "/intentions" | "/today" => (str(formData, "back") === "/intentions" ? "/intentions" : "/today");
@@ -62,6 +64,8 @@ export async function reviewIntentionAction(formData: FormData): Promise<void> {
     .update(schema.weeklyIntentions)
     .set({ keyResults, reviewedAt: nowIso(), updatedAt: nowIso() })
     .where(and(eq(schema.weeklyIntentions.id, existing.id), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.workspaceId, workspaceId)));
+  // The intention chain (H-198): a key result tied to one in Business goals logs its Friday number there, dated today.
+  await logWeekActuals({ workspaceId, userId }, { keyResults }, v.today);
   refresh();
   redirect(`${backTo(formData)}?weekReviewed=1#week`);
 }
@@ -132,4 +136,21 @@ export async function recordMonthShareAction(): Promise<{ ok: boolean; points: n
   await db.insert(schema.communityShares).values({ id: newId(), workspaceId, userId, monthOf: m.month }).onConflictDoNothing();
   const scored = await award({ workspaceId, userId }, "community", SHARE_POINTS, "Shared your month in the community", monthShareRef(m.month));
   return { ok: true, points: scored ? SHARE_POINTS : 0 };
+}
+
+/** The intention chain (H-198): tick a week's task from the intention; it is the same task as in Tasks, so both show it. */
+export async function tickIntentionTaskAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ team: "allow" });
+  const task = await ownTask(v, str(formData, "id"));
+  if (task) await toggleTask(v, task);
+  refresh();
+}
+
+/** Link this week to an initiative and its key results to the member's own in Business goals: only what they pick, on confirm. */
+export async function linkWeekAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's {first}'s own plan to link." });
+  const pick = (k: string) => str(formData, k) || null;
+  await linkWeek({ workspaceId, userId }, str(formData, "weekId"), pick("initiativeId"), [pick("kr1"), pick("kr2"), pick("kr3")]);
+  refresh();
+  redirect(`${backTo(formData)}?weekLinked=1#chain`);
 }

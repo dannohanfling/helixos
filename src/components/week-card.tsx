@@ -1,5 +1,5 @@
 import type { WeeklyIntention } from "@/db/schema";
-import { reviewIntentionAction, saveIntentionAction } from "@/lib/actions/intentions";
+import { reviewIntentionAction, saveIntentionAction, tickIntentionTaskAction } from "@/lib/actions/intentions";
 import { intentionPrompt, keyResultTally, krProgress, targetOf } from "@/lib/engine/intentions";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
@@ -89,9 +89,17 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
             <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Tasks</div>
             <ul className="mt-1 space-y-1" data-testid="week-tasks">
               {week.tasks.map((t, i) => (
-                <li key={i} data-testid="week-task" data-done={t.taskId && taskDone[t.taskId] ? "yes" : "no"}>
-                  {t.taskId && taskDone[t.taskId] ? "✓ " : ""}
-                  {t.title}
+                <li key={i} className="flex items-start gap-2" data-testid="week-task" data-done={t.taskId && taskDone[t.taskId] ? "yes" : "no"}>
+                  {/* The intention chain (H-198): the same task as in Tasks, so a tick here ticks it there too. */}
+                  {t.taskId ? (
+                    <form action={tickIntentionTaskAction}>
+                      <input type="hidden" name="id" value={t.taskId} />
+                      <button type="submit" className={`grid h-5 w-5 place-items-center rounded border text-xs ${taskDone[t.taskId] ? "border-good bg-good text-white" : ""}`} aria-label={taskDone[t.taskId] ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`} data-testid="week-task-tick">
+                        {taskDone[t.taskId] ? "✓" : ""}
+                      </button>
+                    </form>
+                  ) : null}
+                  <span>{t.title}</span>
                 </li>
               ))}
             </ul>
