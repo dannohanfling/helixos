@@ -10,7 +10,7 @@ import { allPaused } from "@/lib/points-outbox";
  * The Points desk's settings on the client's /coach row (H-493), the coach's only: who on the client's team may use the desk
  * (the community manager, H-429), the pause, and the one add-and-deduct check on a test pass from the hide list that opens it.
  */
-export async function DeskSettings({ feed }: { feed: schema.LeaderboardFeed }) {
+export async function DeskSettings({ feed, ownPass = false }: { feed: schema.LeaderboardFeed; ownPass?: boolean }) {
   const team = await db.query.teamMembers.findMany({ where: and(eq(schema.teamMembers.ownerMembershipId, feed.membershipId), isNull(schema.teamMembers.removedAt)) });
   const people = team.length ? await db.query.users.findMany({ where: inArray(schema.users.id, team.map((t) => t.teamUserId)) }) : [];
   let rows: BoardRow[] = [];
@@ -60,17 +60,18 @@ export async function DeskSettings({ feed }: { feed: schema.LeaderboardFeed }) {
           <option value="" disabled>
             A test pass from the hide list
           </option>
+          {ownPass ? <option value="own">Your own pass</option> : null}
           {tests.map((r) => (
             <option key={memberRef(feed.id, r.id)} value={memberRef(feed.id, r.id)}>
               {r.name} · {fmt(r.available)} available
             </option>
           ))}
         </select>
-        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…" data-testid="desk-check-run" disabled={!tests.length}>
+        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…" data-testid="desk-check-run" disabled={!tests.length && !ownPass}>
           Check add and deduct (1 off, 1 back)
         </SubmitButton>
       </form>
-      {!tests.length ? <p className="mt-1 text-[11px] text-ink-3">Put a team test pass on the hide list first: the check never runs on a member.</p> : null}
+      {!tests.length && !ownPass ? <p className="mt-1 text-[11px] text-ink-3">Put a team test pass on the hide list first: the check never runs on a member.</p> : null}
       {feed.deskCheckAt ? (
         <p className={`mt-1 text-xs ${feed.deskCheckOk ? "" : "text-danger"}`} data-testid="desk-check-note">
           {feed.deskCheckNote}
