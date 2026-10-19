@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `rank_clip_seen_level` integer;
