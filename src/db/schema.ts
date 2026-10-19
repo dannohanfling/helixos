@@ -196,6 +196,8 @@ export const memberships = sqliteTable(
     eoPassInstalledAt: text("eo_pass_installed_at"),
     /** The points sync (H-867): the Level last written to the pass, and the invitations already sent (each goes once). */
     eoLevelSent: text("eo_level_sent"),
+    /** The Tier last written to the pass (H-1098): the kept rank, so each change is written once. */
+    eoTierSent: text("eo_tier_sent"),
     eoOffersSent: text("eo_offers_sent", { mode: "json" }).$type<string[]>().notNull().default([]),
     eoPassLastPushAt: text("eo_pass_last_push_at"),
     /** The coach's Community Loyalty inbound webhook for the Rung Dripper: the URL is the credential (no auth on it), sealed at rest, never rendered, never logged. */
