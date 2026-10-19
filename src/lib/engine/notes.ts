@@ -14,7 +14,7 @@ export type TaskSource = (typeof TASK_SOURCES)[keyof typeof TASK_SOURCES];
 export type AssignedTask = {
   title: string;
   details?: string | null;
-  category?: "sales" | "content" | "community" | "system" | "admin" | "fulfillment";
+  category?: "sales" | "content" | "community" | "system" | "admin" | "fulfillment" | "personal";
   urgency?: "top3" | "high" | "medium" | "low";
   dueDate?: string | null;
   points?: number;

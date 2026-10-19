@@ -103,9 +103,17 @@ async function main() {
     await page.click('[data-testid="helix-phase-0"]');
     const row = page.locator('[data-testid="helix-rung-row"]').first();
     must((await row.getAttribute("data-done")) === "0", "Your superpower starts unticked");
+    // Docket #10 (H-195): a rung ticked by hand carries one line on how.
+    await page.fill('[data-testid="helix-tick-reason"] >> nth=0', "Said it out loud on Monday's call");
     await submit(page, '[data-testid="helix-tick"]');
-    must((await ticksOf()).some((t) => t.rungKey === "p0-superpower" && t.byUserId === maya.id), "Maya's tick is stored as hers");
+    must((await ticksOf()).some((t) => t.rungKey === "p0-superpower" && t.byUserId === maya.id && t.reason === "Said it out loud on Monday's call"), "Maya's tick is stored as hers, with her line");
     await page.goto(`${base}/my-helix`, { waitUntil: "networkidle" });
+    await page.click('[data-testid="helix-phase-0"]');
+    must((await page.locator('[data-testid="helix-reason"]').first().innerText()).includes("Monday's call"), "the line shows under the rung");
+    // The journey rung leads to the Pathway and says what it means.
+    await page.click('[data-testid="helix-phase-2"]');
+    must((await page.locator('[data-testid="helix-rungs-2"] a[href="/pathway"]').count()) >= 1 && (await page.locator('[data-testid="helix-rungs-2"] [data-testid="helix-note"]').count()) >= 1, "Customer journey mapped links to the Pathway with its line");
+    await page.click('[data-testid="helix-phase-0"]');
     must((await page.locator('[data-testid="helix-rung"][data-key="p0-superpower"]').getAttribute("data-done")) === "1", "the ticked rung is done on the helix");
     must((await page.locator('[data-testid="helix-rung"][data-key="p0-superpower"] .hx-fresh').count()) === 2, "a rung done since the last look glows once");
     await page.waitForTimeout(2200);

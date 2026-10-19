@@ -35,6 +35,7 @@ export function NewTaskForm({ today, defaultUrgency = "medium" }: { today: strin
             <option value="system">⚙️ System</option>
             <option value="fulfillment">🤝 Fulfillment</option>
             <option value="admin">🗂️ Admin</option>
+            <option value="personal">🌿 Personal (no points, kept out of your business numbers)</option>
           </select>
         </Field>
         <Field label="Repeat every (days)" hint="Leave blank for a one-off. 1 = daily habit.">

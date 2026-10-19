@@ -8,7 +8,7 @@ import { addDays, formatDate, relativeDay } from "@/lib/dates";
 import { originLabel } from "@/lib/engine/notes";
 import type { TaskOrigin } from "@/lib/queries/tasks";
 
-const CATEGORY_ICON: Record<string, string> = { sales: "💬", content: "✍️", community: "👥", system: "⚙️", admin: "🗂️", fulfillment: "🤝" };
+const CATEGORY_ICON: Record<string, string> = { sales: "💬", content: "✍️", community: "👥", system: "⚙️", admin: "🗂️", fulfillment: "🤝", personal: "🌿" };
 
 /**
  * One task. Ticking it, starring it, moving it and deleting it all answer on the tap: the row updates at once, every

@@ -13,7 +13,7 @@ import { markHelixSeenAction, setHelixPausedAction, tickRungAction } from "@/lib
 import { backboneLit, backbonePlace, BALL_PX, FADE_OPACITY, GREY_BALL, GREY_BAR, PERSPECTIVE_PX, phaseOf, RADIUS_PX, rungPlace, STAGE_PX, TURN_SECONDS } from "@/lib/engine/my-helix";
 import { SubmitButton } from "@/components/submit-button";
 
-type Rung = { key: string; phase: number; label: string; done: boolean; tick: boolean; ticked: boolean; href: string; words: string };
+type Rung = { key: string; phase: number; label: string; done: boolean; tick: boolean; ticked: boolean; href: string; words: string; note?: string | null; reason?: string | null };
 type PhaseRow = { n: number; name: string; main: string; dark: string; done: number; total: number };
 type Next = { key: string; label: string; phase: number; href: string } | null;
 
@@ -164,9 +164,13 @@ export function MyHelix({ rungs, phases, next, built, total, pct, initialPaused,
                             <span className="hx-rungtext">
                               <Link href={r.href}>{r.label}</Link>
                               <span className="hx-fine">Reads: {r.words}</span>
+                              {/* Docket #10 (H-195): what the rung means, and the one line given when it was ticked by hand. */}
+                              {r.note ? <span className="hx-fine" data-testid="helix-note">{r.note}</span> : null}
+                              {r.ticked && r.reason ? <span className="hx-fine" data-testid="helix-reason">Done: {r.reason}</span> : null}
                             </span>
                             {r.tick ? (
-                              <form action={tickRungAction}>
+                              <form action={tickRungAction} className="hx-tickform">
+                                {!r.ticked ? <input className="field py-1 text-xs" name="reason" maxLength={200} placeholder="One line: where, when" aria-label="One line on how you did it" data-testid="helix-tick-reason" /> : null}
                                 <input type="hidden" name="key" value={r.key} />
                                 <input type="hidden" name="on" value={r.ticked ? "0" : "1"} />
                                 <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="helix-tick">
