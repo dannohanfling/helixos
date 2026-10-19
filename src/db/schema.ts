@@ -116,6 +116,8 @@ export const memberships = sqliteTable(
     arenaPhoto: integer("arena_photo", { mode: "boolean" }).notNull().default(false),
     arenaHidden: integer("arena_hidden", { mode: "boolean" }).notNull().default(false),
     arenaPaused: integer("arena_paused", { mode: "boolean" }).notNull().default(false),
+    /** When the member last closed "N people applauded your win" on Today (H-1171); null until the first one. */
+    applauseSeenAt: text("applause_seen_at"),
     /** My Helix (rev 707): "Pause the helix", remembered; and the rungs the member has already seen lit, so the once-glow never repeats. */
     helixPaused: integer("helix_paused", { mode: "boolean" }).notNull().default(false),
     helixSeen: text("helix_seen", { mode: "json" }).$type<string[]>().notNull().default([]),
@@ -2834,6 +2836,23 @@ export const colosseumWins = sqliteTable(
   (t) => [index("colosseum_wins_workspace").on(t.workspaceId, t.createdAt)],
 );
 export type ColosseumWin = typeof colosseumWins.$inferSelect;
+
+/**
+ * Applause on a shared win (H-1171, plan H-1177): one per person per win, never on your own. The points are in the ledger
+ * (src/lib/applause.ts); this row is who applauded, for the count and the list.
+ */
+export const winApplause = sqliteTable(
+  "win_applause",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    winId: text("win_id").notNull(),
+    userId: text("user_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("win_applause_once").on(t.winId, t.userId), index("win_applause_win").on(t.workspaceId, t.winId)],
+);
+export type WinApplause = typeof winApplause.$inferSelect;
 
 /**
  * Block a member (H-745, App Store guideline 1.2): the blocker no longer sees the blocked member's wins, name or photo in the
