@@ -104,6 +104,8 @@ defineTool({
       page: r.page,
       description: r.description,
       ...(r.kind === "ask_danno" ? { question: r.question, answer: r.answer } : {}),
+      // A Content report (H-745): what it is about, by id; Hide this win stays on Coach → Issues and ideas.
+      ...(r.kind === "content" ? { targetKind: r.targetKind, targetId: r.targetId, handledAt: r.handledAt } : {}),
       talkToCoach: r.talkToCoach,
       hasScreenshot: Boolean(r.screenshotUrl),
       screenshot: r.screenshotUrl ? (picture ? "attached below" : "couldn't be read from the store just now") : null,

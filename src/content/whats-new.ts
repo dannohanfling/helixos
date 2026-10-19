@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 305,
+    date: "2026-10-18",
+    title: "Block a member or report a win",
+    lines: [
+      "In the Colosseum, the ⋯ on a win or a member's place lets you block them or report it. Block someone and you won't see their wins or their name; they won't be told. Unblock them any time under Settings → Blocked members.",
+      "A report goes to your coach with the reason you pick, and the win leaves your feed at once. Reports are reviewed within 24 hours, and Settings → Your reports shows when it's handled.",
+      "The leaderboard on Rewards now shows first names and a last initial, like the arena. Help and support is on the More page.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 304,
     date: "2026-10-19",
     title: "Name your own key outcomes in your Essence",
