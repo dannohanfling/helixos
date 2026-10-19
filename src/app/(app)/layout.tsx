@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { ZoneNotice } from "@/components/zone-notice";
+import { zoneNoticeDue } from "@/lib/engine/zones";
 import { AppShell } from "@/components/app-shell";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
 import { requireViewer } from "@/lib/auth";
@@ -87,6 +89,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
+        {/* Times in the member's own zone (H-457): the one-time line at the top of the page, once the welcome is out of the way. */}
+        {zoneNoticeDue(viewer) && !welcome && !arrival ? <ZoneNotice saved={viewer.membership.timezone} workspaceTz={viewer.workspace.timezone} /> : null}
         {children}
       </VoiceProvider>
       <SoundsConfig on={viewer.membership.soundsOn} />

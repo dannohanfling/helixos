@@ -1,4 +1,5 @@
 import { inArray } from "drizzle-orm";
+import { formatDateTime } from "@/lib/dates";
 import { db, schema } from "@/db";
 import { Card } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -8,7 +9,6 @@ import { MAX_MOVE, memberRef } from "@/lib/engine/points-outbox";
 import { newId } from "@/lib/ids";
 import { recentMoves } from "@/lib/points-outbox";
 
-const when = (iso: string) => new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }) + " UTC";
 const statusWords = (m: schema.LoyaltyPointsMove) => (m.status === "sent" ? "done" : m.status === "failed" ? `not moved: ${m.lastNote ?? ""}` : `waiting: ${m.lastNote ?? "queued"}`);
 
 /**
@@ -16,7 +16,8 @@ const statusWords = (m: schema.LoyaltyPointsMove) => (m.status === "sent" ? "don
  * Shown only to the two people it is for (the coach working here, and the team member the coach named); the page decides
  * that before rendering this. Members are picked from the live board by their customer id, never from a fixed list.
  */
-export async function PointsDesk({ feed, unit, result, error }: { feed: schema.LeaderboardFeed; unit: string; result?: string; error?: string }) {
+export async function PointsDesk({ feed, unit, result, error, tz }: { feed: schema.LeaderboardFeed; unit: string; result?: string; error?: string; tz: string }) {
+  const when = (iso: string) => formatDateTime(iso, tz, { zone: true });
   let rows: BoardRow[] = [];
   try {
     rows = feed.cacheJson ? (JSON.parse(feed.cacheJson) as BoardRow[]) : [];

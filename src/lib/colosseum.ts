@@ -8,7 +8,7 @@ import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { champions, initials, readWin, seatRings, standings, weekByDay, type RingSeat, type Standing, type WinKind } from "@/lib/engine/colosseum";
 import { tierFor, tierProgress } from "@/lib/engine/tiers";
-import { nowIso } from "@/lib/dates";
+import { nowIso, dayOf } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { leaderboard } from "@/lib/queries/points";
 
@@ -41,7 +41,7 @@ export type Arena = {
 };
 
 /** Everything the page shows for one viewer: the workspace's standings, the arena's seats, the feed, and the viewer's own week. */
-export async function arenaFor(v: { workspace: { id: string; colosseumOn: boolean }; user: { id: string }; membership: { id: string; arenaHidden: boolean; arenaPhoto: boolean; arenaPaused: boolean } }, today: string): Promise<Arena> {
+export async function arenaFor(v: { tz: string; workspace: { id: string; colosseumOn: boolean }; user: { id: string }; membership: { id: string; arenaHidden: boolean; arenaPhoto: boolean; arenaPaused: boolean } }, today: string): Promise<Arena> {
   const monday = mondayOf(today);
   const [members, all, week, winRows] = await Promise.all([
     db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), isNull(schema.memberships.removedAt)), columns: { id: true, userId: true, role: true, arenaHidden: true, arenaPhoto: true, headshotUrl: true, headshotSource: true } }),
@@ -70,7 +70,7 @@ export async function arenaFor(v: { workspace: { id: string; colosseumOn: boolea
     db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, v.workspace.id), eq(schema.pointsLedger.userId, v.user.id), gte(schema.pointsLedger.createdAt, `${monday} 00:00:00`)), columns: { points: true, createdAt: true } }),
     db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.workspaceId, v.workspace.id), eq(schema.dailyLogs.userId, v.user.id), gte(schema.dailyLogs.date, monday)), columns: { date: true, win: true }, orderBy: desc(schema.dailyLogs.date) }),
   ]);
-  const days = weekByDay(ledger.map((r) => ({ points: r.points, day: r.createdAt.slice(0, 10) })), monday);
+  const days = weekByDay(ledger.map((r) => ({ points: r.points, day: dayOf(r.createdAt, v.tz) })), monday);
   return {
     on: v.workspace.colosseumOn,
     rows,
@@ -79,7 +79,7 @@ export async function arenaFor(v: { workspace: { id: string; colosseumOn: boolea
     more,
     you: { standing: mine, tier: progress.current.name, points: myPoints, week: mine?.week ?? wk.get(v.user.id) ?? 0, toNext: progress.toNext, nextTier: progress.next?.name ?? null, hidden: v.membership.arenaHidden, photo: v.membership.arenaPhoto, paused: v.membership.arenaPaused },
     wins,
-    week: { days, total: days.reduce((n, d) => n + d.points, 0), wins: wins.filter((w) => w.mine && w.at.slice(0, 10) >= monday), biggest: closes.map((c) => c.win?.trim()).find(Boolean) ?? null, monday },
+    week: { days, total: days.reduce((n, d) => n + d.points, 0), wins: wins.filter((w) => w.mine && dayOf(w.at, v.tz) >= monday), biggest: closes.map((c) => c.win?.trim()).find(Boolean) ?? null, monday },
   };
 }
 

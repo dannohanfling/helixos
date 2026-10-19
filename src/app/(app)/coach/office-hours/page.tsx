@@ -5,7 +5,7 @@ import { requireCoach } from "@/lib/auth";
 import { setOohListsAction, updateOohRequestAction } from "@/lib/actions/office-hours";
 import { OOH_OUTCOMES, OOH_OUTCOME_LABEL, attendeeWords, byStamp, oohAttendees, submittedByWords } from "@/lib/engine/office-hours";
 import { OohStamps as Stamps } from "@/components/ooh-stamps";
-import { formatDate } from "@/lib/dates";
+import { formatDate, stampDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { sharedDecisionsFor } from "@/lib/board-steps";
@@ -70,7 +70,7 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
               <li key={d.id} className="py-3 text-sm" data-testid="ooh-shared-decision">
                 <details>
                   <summary className="cursor-pointer">
-                    <b>{d.member}</b>: {d.answer?.decision ?? d.question} <span className="text-xs text-ink-3">· shared {formatDate(d.sharedAt.slice(0, 10))}{d.example ? " · Example" : ""}{!d.example && !d.remembered ? " · Not remembered" : ""}</span>
+                    <b>{d.member}</b>: {d.answer?.decision ?? d.question} <span className="text-xs text-ink-3">· shared {stampDate(d.sharedAt, v.tz)}{d.example ? " · Example" : ""}{!d.example && !d.remembered ? " · Not remembered" : ""}</span>
                   </summary>
                   <div className="mt-2 space-y-1">
                     <p><span className="text-ink-3">They asked:</span> {d.question}</p>

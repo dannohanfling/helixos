@@ -207,6 +207,8 @@ export async function seedDemo(): Promise<void> {
   await seedDemoWave2(wsId, clientId, client2Id, today);
   // Everyone the seed makes arrived before the first arrival ceremony (H-472): the walks' logins never get it; a fresh sign-up does.
   await db.update(schema.memberships).set({ firstArrivalSeenAt: ARRIVED }).where(isNull(schema.memberships.firstArrivalSeenAt));
+  // And saw the one-time time zone line (H-457): the walks keep the workspace's zone; the zones walk clears it to show the line.
+  await db.update(schema.memberships).set({ tzPromptSeenAt: ARRIVED }).where(isNull(schema.memberships.tzPromptSeenAt));
   console.log("Demo workspace ready. Coach: coach@demo.helixos.app / demo1234 · Client: client@demo.helixos.app / demo1234 · Client invite code: ACADEMY1");
 }
 

@@ -25,7 +25,7 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
   const own = m.id === v.membership.id;
   const u = own ? v.user : await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
   if (!u) return <ItemGone what="This client" href="/coach" list="the Coach page" />;
-  const [preview, changed, line] = await Promise.all([stage1Preview(m), changedSinceLastPush(m), lastPushedLine(m, v.user.id, v.workspace.timezone)]);
+  const [preview, changed, line] = await Promise.all([stage1Preview(m), changedSinceLastPush(m), lastPushedLine(m, v.user.id, v.tz)]);
   const whose = own ? "your bot" : `${u.name}'s bot`;
   return (
     <>

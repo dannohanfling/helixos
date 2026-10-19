@@ -29,7 +29,7 @@ export default async function LoyaltyPage({ searchParams }: { searchParams: Prom
       <PageHeader title="Loyalty leaderboard" subtitle="Your members' points and tiers on a page you can share or embed. First names and initials only." />
       {feed ? (
         <>
-          {desk?.ok ? <PointsDesk feed={feed} unit={readPageConfig(feed.pageJson).unit} result={move} error={deskError} /> : null}
+          {desk?.ok ? <PointsDesk feed={feed} unit={readPageConfig(feed.pageJson).unit} result={move} error={deskError} tz={v.tz} /> : null}
           <LeaderboardEditor feed={feed} base={appUrl()} canHide={!v.team} exportRows={exportRows} aliases={aliases} slugError={slugError?.slice(0, 200) ?? null} slugChanged={slugNote === "changed"} />
         </>
       ) : (

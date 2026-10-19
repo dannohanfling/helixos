@@ -22,7 +22,7 @@ import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
 import { setClientHumanosAction } from "@/lib/actions/body";
 import { sendConnectLinkAction } from "@/lib/actions/connect";
-import { daysBetween, formatDate, formatDateTime, todayInTz, hourInTz } from "@/lib/dates";
+import { daysBetween, formatDate, formatDateTime, todayInTz, hourInTz, stampDate } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
 import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
 import { MonthAnswers } from "@/components/month-card";
@@ -178,7 +178,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
           .map((c) => [c.userId, c.connectedAt as string] as const)
       : [],
   );
-  const chipDate = (iso: string | null | undefined) => (iso ? ` ${formatDate(iso.slice(0, 10))}` : "");
+  const chipDate = (iso: string | null | undefined) => (iso ? ` ${stampDate(iso, v.tz)}` : "");
   // Body (rev 237 phase 12): a cell only for clients who share it with the coach; blank for the rest, private or off alike.
   const bodyOf = await coachBodyColumn(v, rows.map((r) => ({ userId: r.m.userId, today: theirToday(r.m) })));
   // B9: a ✉️ for a client who sent this week's check-in, shared or not.
@@ -201,7 +201,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
           </label>
           <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
         </form>
-        {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} changed={changedOf.get(myBot.id) ?? null} tz={v.workspace.timezone} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
+        {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} changed={changedOf.get(myBot.id) ?? null} tz={v.tz} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
       </Card>
       <Card title="Clients" className="mb-4">
           {rows.length ? (
@@ -385,13 +385,13 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                           </>
                         ) : null}
                         <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/lb/{feedOf.get(r.m.id)!.slug} · /api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
-                        {feedOf.get(r.m.id)!.keyEncrypted ? <PointsCheck feed={feedOf.get(r.m.id)!} error={sp.pointsCheckError} /> : null}
+                        {feedOf.get(r.m.id)!.keyEncrypted ? <PointsCheck feed={feedOf.get(r.m.id)!} error={sp.pointsCheckError} tz={v.tz} /> : null}
                         {feedOf.get(r.m.id)!.keyEncrypted ? <DeskSettings feed={feedOf.get(r.m.id)!} /> : null}
                         <a href={`/lb/${feedOf.get(r.m.id)!.slug}`} target="_blank" rel="noreferrer" className="text-[11px] underline" data-testid="leaderboard-open-page">Open their leaderboard page →</a>
                       </div>
                     ) : null}
                   </details>
-                  {r.m.clApiToken ? <BotPushLine m={r.m} clientName={r.u?.name ?? null} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
+                  {r.m.clApiToken ? <BotPushLine m={r.m} clientName={r.u?.name ?? null} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.tz} /> : null}
                   </div>
                   </details>
                 </li>
@@ -429,7 +429,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                         <span className="text-xs text-ink-3">+{lib?.points}</span>
                       </div>
                       <div className="text-xs text-ink-2">
-                        {u?.avatarEmoji} {u?.name} · {s.submittedAt ? formatDateTime(s.submittedAt, v.workspace.timezone) : ""}
+                        {u?.avatarEmoji} {u?.name} · {s.submittedAt ? formatDateTime(s.submittedAt, v.tz) : ""}
                       </div>
                       {s.submissionText ? <p className="mt-2 whitespace-pre-line rounded bg-surface-2 p-2">{s.submissionText}</p> : null}
                       {s.submissionUrl ? (
@@ -495,7 +495,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                   Today: <span className="font-semibold">{evidenceQuota.globalToday.toLocaleString()}</span> real searches{evidenceQuota.degraded ? <Badge tone="warn">degraded</Badge> : evidenceQuota.exhausted ? <Badge tone="danger">used up</Badge> : null}
                 </span>
                 <span data-testid="evidence-credits">
-                  {evidenceReported ? `OpenAlex reports ${evidenceReported.creditsRemaining?.toLocaleString()} of ${evidenceReported.creditsLimit?.toLocaleString()} credits left, as of ${formatDateTime(evidenceReported.createdAt.includes("T") ? evidenceReported.createdAt : `${evidenceReported.createdAt.replace(" ", "T")}Z`, v.workspace.timezone)}` : "OpenAlex has not reported a balance today (no real call yet)."}
+                  {evidenceReported ? `OpenAlex reports ${evidenceReported.creditsRemaining?.toLocaleString()} of ${evidenceReported.creditsLimit?.toLocaleString()} credits left, as of ${formatDateTime(evidenceReported.createdAt.includes("T") ? evidenceReported.createdAt : `${evidenceReported.createdAt.replace(" ", "T")}Z`, v.tz)}` : "OpenAlex has not reported a balance today (no real call yet)."}
                 </span>
               </div>
               <table className="w-full">

@@ -1,11 +1,13 @@
 import { siteUrl } from "@/lib/app-url";
+import { ZonePicker } from "@/components/zone-picker";
+import { allZones } from "@/lib/engine/zones";
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { after } from "next/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { formatDate, formatDateTime } from "@/lib/dates";
+import { formatDateTime, stampDate } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
 import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { kitFor, kitStatus } from "@/lib/queries/brand-kit";
@@ -65,7 +67,6 @@ import { SetupList } from "@/components/setup-card";
 
 export const metadata = { title: "Settings" };
 
-const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string }> }) {
   const v = await requireViewer({ team: "allow" });
@@ -347,12 +348,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Field label="Audience">
               <input className="field" name="audience" defaultValue={v.membership.audience ?? ""} data-testid="audience-field" />
             </Field>
-            <Field label="Your timezone" hint="Sets what 'today' means for your lock-in, close, streak and reminders.">
-              <select className="field" name="timezone" defaultValue={v.membership.timezone ?? v.workspace.timezone}>
-                {Array.from(new Set([v.workspace.timezone, ...(v.membership.timezone ? [v.membership.timezone] : []), ...TIMEZONES])).map((tz) => (
-                  <option key={tz}>{tz}</option>
-                ))}
-              </select>
+            <Field label="Your time zone" hint="Every date and time in HelixOS shows in it, and it sets what 'today' means for your lock-in, close, streak and reminders. Type a city or region.">
+              <ZonePicker saved={v.membership.timezone} workspaceTz={v.workspace.timezone} zones={allZones(v.membership.timezone)} />
             </Field>
             <Field label="My work days" hint="Every day: a day with nothing done breaks the streak, weekends too, and an active Saturday or Sunday pays +40. Monday to Friday: weekends never count, either way.">
               <select className="field" name="workDays" defaultValue={v.membership.workDays} data-testid="work-days">
@@ -671,7 +668,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <span>
                     <span className="font-medium">{t.name}</span> <span className="text-ink-3">· {t.email}</span>
                     <span className="block text-xs text-ink-3">
-                      added by {t.addedByName} on {formatDate(t.member.createdAt.slice(0, 10))} · last active {lastActiveWords(t.member.lastActiveAt)}
+                      added by {t.addedByName} on {stampDate(t.member.createdAt, v.tz)} · last active {lastActiveWords(t.member.lastActiveAt)}
                     </span>
                   </span>
                   <form action={removeTeamMemberAction}>
@@ -860,9 +857,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="Name">
                   <input className="field" name="name" defaultValue={v.workspace.name} />
                 </Field>
-                <Field label="Timezone" hint="Controls what 'today' means for streaks and reminders.">
+                <Field label="Timezone" hint="The workspace's zone: a member's times use it only until they have their own.">
                   <select className="field" name="timezone" defaultValue={v.workspace.timezone}>
-                    {TIMEZONES.map((tz) => (
+                    {allZones(v.workspace.timezone).map((tz) => (
                       <option key={tz}>{tz}</option>
                     ))}
                   </select>

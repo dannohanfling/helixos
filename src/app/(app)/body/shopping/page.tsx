@@ -5,7 +5,7 @@ import { Card } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { boughtAction, pushInstacartAction, setPlanAction } from "@/lib/actions/body";
-import { formatDate } from "@/lib/dates";
+import { formatDate, stampDate } from "@/lib/dates";
 import { listSummary } from "@/lib/engine/body-shopping";
 import { INSTACART_OPEN, INSTACART_SOON, INSTACART_SOON_LINE } from "@/lib/instacart";
 import { requireBodyEnabled, shoppingView } from "@/lib/queries/body";
@@ -190,7 +190,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
             {s.orders.map((o) => (
               <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5" data-testid="shopping-order" data-status={o.status}>
                 <span>
-                  {formatDate(o.createdAt.slice(0, 10), { month: "short", day: "numeric" })} · {o.lines.length} line{o.lines.length === 1 ? "" : "s"}
+                  {stampDate(o.createdAt, v.tz, { month: "short", day: "numeric" })} · {o.lines.length} line{o.lines.length === 1 ? "" : "s"}
                   {o.status === "failed" ? <span className="text-warn"> · didn&apos;t send</span> : null}
                 </span>
                 {o.link ? (

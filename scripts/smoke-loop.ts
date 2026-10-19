@@ -227,12 +227,12 @@ async function main() {
 
     // Member timezone
     await page.goto(`${base}/settings`);
-    await page.selectOption('select[name="timezone"]', "America/New_York");
-    await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
+    await page.fill('[data-testid="zone-picker"]', "America/New_York");
+    await submit(page, 'form:has([data-testid="zone-picker"]) button:has-text("Save")');
     const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
     if (m?.timezone !== "America/New_York") throw new Error(`member timezone not saved: ${m?.timezone}`);
-    await page.selectOption('select[name="timezone"]', "America/Los_Angeles");
-    await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
+    await page.fill('[data-testid="zone-picker"]', "America/Los_Angeles");
+    await submit(page, 'form:has([data-testid="zone-picker"]) button:has-text("Save")');
     console.log("✓ member timezone saved and restored");
 
     // Late close-outs (rev 731, Danno's answers at rev 746). Maya goes to a timezone where it is 01:00 now, with yesterday open:
