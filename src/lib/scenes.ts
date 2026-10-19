@@ -58,13 +58,16 @@ async function reachedAt(workspaceId: string, userId: string, min: number): Prom
  * once, for a member who reached it before the clips went live; a silent stamp for one who reached it after. Never for a
  * coach, while switched in, or for a team member; never when the rank has no clip.
  */
-export async function catchUpShell(v: Viewer, points: number): Promise<CatchUpShell | null> {
+export async function catchUpShell(v: Viewer, points: number, stamping = false): Promise<CatchUpShell | null> {
   if (v.role !== "client" || v.switchedInto || v.team) return null;
   const m = v.membership;
   const t = tierFor(points);
+  // A rank never recorded is stamped silently on this same open: the catch-up reads it as already celebrated, so a member who
+  // reached it before the clips gets their clip on this first open, not the next one.
+  const celebrated = stamping ? t.level : m.celebratedTierLevel;
   // Cheap first: nothing to read for an Artisan or once the current rank's clip is seen.
-  if (m.celebratedTierLevel === null || t.level <= 1 || (m.rankClipSeenLevel ?? 0) >= t.level) return null;
-  const due = catchUpFor({ points, celebrated: m.celebratedTierLevel, clipSeen: m.rankClipSeenLevel, reachedAt: await reachedAt(v.workspace.id, v.user.id, t.minPoints) });
+  if (celebrated === null || t.level <= 1 || (m.rankClipSeenLevel ?? 0) >= t.level) return null;
+  const due = catchUpFor({ points, celebrated, clipSeen: m.rankClipSeenLevel, reachedAt: await reachedAt(v.workspace.id, v.user.id, t.minPoints) });
   if (!due) return null;
   if (due.kind === "stamp") return due;
   const clip = rankClip(due.tier.name.toLowerCase());

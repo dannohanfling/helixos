@@ -77,7 +77,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const arrival = await firstArrivalFor(viewer, pathNow);
   const welcome = arrival ? null : await welcomeFor(viewer, pathNow);
   // The catch-up ceremony (H-934): a rank reached before the relic clips gets its clip once, first thing, when no rank-up is due.
-  const catchUp = rank || arrival ? null : await catchUpShell(viewer, points);
+  const catchUp = (rank && !rank.stampOnly) || arrival ? null : await catchUpShell(viewer, points, rank?.stampOnly === true);
   const catchUpPlays = catchUp?.kind === "play";
   // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
   const horizon = await horizonShell(viewer);
