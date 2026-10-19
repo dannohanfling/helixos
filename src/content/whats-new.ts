@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 285,
+    date: "2026-10-19",
+    title: "Name your own key outcomes in your Essence",
+    lines: [
+      "Essence → Key outcomes for users: instead of three fixed boxes, add as many outcomes as you have, each with your own name and line, in the order you want the AI to read them.",
+      "Each can say who it's for, so clients and practitioners can have their own. What you'd already written under Clarity, Impact and Connection is carried over as rows with those names.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 272,
     date: "2026-10-19",
     title: "Your HelixOS points can go to the Evolve Omega pass",
