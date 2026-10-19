@@ -464,7 +464,14 @@ async function main() {
       await op.click('button:has-text("As the coach")');
       await op.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
       const ork = op.locator('[data-testid="rank-up"]');
-      await ork.waitFor({ timeout: 15000 });
+      try {
+        await ork.waitFor({ timeout: 20000 });
+      } catch (e) {
+        const seen = await op.evaluate(() => Array.from(document.querySelectorAll("[data-testid]")).map((x) => x.getAttribute("data-testid")).filter((t) => /welcome|rank|arrival|horizon|flame/.test(t ?? "")).join(","));
+        const m = await coachMember();
+        await op.screenshot({ path: "screenshots/sc08-coach-catchup-missing.png" });
+        throw new Error(`the coach's catch-up never showed on ${op.url()} (overlays: ${seen || "none"}; seen ${m.rankClipSeenLevel}, welcome ${m.welcomeShownOn}, today ${today}): ${String(e).split("\n")[0]}`);
+      }
       must((await ork.getAttribute("data-rank")) === held.name.toLowerCase(), `the coach's ${held.name} clip plays (${await ork.getAttribute("data-rank")})`);
       await op.keyboard.press("Escape");
       await op.waitForFunction(() => document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") === "done", null, { timeout: 5000 });
