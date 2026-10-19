@@ -62,12 +62,14 @@ import { ForumWebhookCard } from "@/components/forum-webhook";
 import { setArenaHiddenAction, setArenaPhotoAction, setColosseumOnAction } from "@/lib/actions/colosseum";
 import { setupFor } from "@/lib/setup-card";
 import { SetupList } from "@/components/setup-card";
+import { CallsSettingsCard } from "@/components/calls-settings";
+import { callsWithSkips } from "@/lib/calls";
 
 export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
   const ownMedia = v.switchedInto ? [] : await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), columns: { id: true, caption: true, kind: true }, orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 96 });
@@ -81,7 +83,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -103,6 +105,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
   const [goal, conn, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), linkedChats(v.workspace.id, v.user.id)]);
   const forumHook = await forumSettingsFor({ workspaceId: v.workspace.id, userId: v.user.id });
+  // Settings → Calls (H-828): the coach's weekly calls with their skips from today on.
+  const callRows = v.role === "coach" ? await callsWithSkips(v.workspace.id, v.today) : [];
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const appUrl = siteUrl();
   // The owner's team (Danno, 6 Oct): who is on it, the open invites, the seats, and what the team changed. Not while switched.
@@ -855,6 +859,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Card>
         {v.role === "coach" ? (
           <>
+            {/* Settings → Calls (H-820, plan H-828): the weekly calls members see on Calls and Today. */}
+            <CallsSettingsCard rows={callRows} workspace={v.workspace} notice={callsNotice} error={callsError} openCall={callsOpen} field={refusedField} />
             <Card title="Workspace">
               <form action={updateWorkspaceAction} className="space-y-3">
                 <Field label="Name">
