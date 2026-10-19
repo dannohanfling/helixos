@@ -6,9 +6,16 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { BrandKit } from "@/db/schema";
+import { parseSpelling, type Spelling } from "@/lib/engine/spelling";
 
 export async function kitFor(workspaceId: string, userId: string): Promise<BrandKit | null> {
   return (await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) })) ?? null;
+}
+
+/** How this member's AI drafts spell (H-811): their kit's setting, American with no kit. One column read. */
+export async function spellingFor(workspaceId: string, userId: string): Promise<Spelling> {
+  const row = await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)), columns: { spelling: true } });
+  return parseSpelling(row?.spelling);
 }
 
 /** Every kit in a workspace, keyed by member: the coach's roster reads this once. */

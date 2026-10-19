@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 269,
+    date: "2026-10-18",
+    title: "Brand has its own budget, British spelling, and a legal name for your decks",
+    lines: [
+      "Essence: Brand now has its own 20,000 characters, counted apart from the rest. A long Brand no longer pushes your Essence out of the AI. If Brand runs over, only Brand is left out until you trim it.",
+      "Settings → Brand kit → Spelling: pick British and New Zealand, and every AI draft spells that way (colour, organise, programme).",
+      "Settings → Brand kit also takes your legal name, shown on your decks' footer bar, and a short descriptor line under the logo on your deck covers. Tick \"Hold the descriptor blank for now\" to keep it saved but off the covers.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 267,
     date: "2026-10-18",
     title: "Your Essence keeps what you typed, and E-book lead magnets",

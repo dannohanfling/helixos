@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { saveEssenceSectionAction } from "@/lib/actions/essence";
-import { ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, placeholderFor, completion, essenceChars, roughTokens, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
+import { BRAND_CAP, BRAND_SECTION, ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, placeholderFor, completion, brandChars, coreChars, essenceForAi, roughTokens, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { houseRuleSeed } from "@/lib/engine/bot-fields";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
@@ -22,7 +22,10 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const data = await essenceFor(v.workspace.id, v.user.id);
   const done = completion(data);
-  const chars = essenceChars(data);
+  // The core against its cap; Brand against its own budget (H-811); the tokens are what every call actually carries.
+  const chars = coreChars(data);
+  const brandSize = brandChars(data);
+  const sent = essenceForAi(data)?.length ?? 0;
   const current = sectionByKey(sp.step ?? "") ?? ESSENCE_SECTIONS.find((s) => !s.optional && !sectionFilled(data, s.key)) ?? ESSENCE_SECTIONS[0];
   const idx = ESSENCE_SECTIONS.findIndex((s) => s.key === current.key);
   const next = ESSENCE_SECTIONS[idx + 1] ?? null;
@@ -55,14 +58,18 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
             </Badge>
           </span>
         }
-        action={<span className="text-xs text-ink-3" data-testid="essence-size">{chars.toLocaleString()} of {ESSENCE_CAP.toLocaleString()} characters · about {roughTokens(chars).toLocaleString()} tokens on every call</span>}
+        action={<span className="text-xs text-ink-3" data-testid="essence-size">{chars.toLocaleString()} of {ESSENCE_CAP.toLocaleString()} characters, Brand apart · about {roughTokens(sent).toLocaleString()} tokens on every call</span>}
       />
       <Progress value={(done.filled / done.total) * 100} tone={done.filled === done.total ? "good" : "accent"} />
       <EssenceOverNote data={data} own />
       {sp.saved ? <p className="mt-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="essence-saved">Saved.</p> : null}
       {sp.error === "over" ? (
-        <p className="mt-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="essence-over" role="alert">
-          Not saved: that would make your Essence {Number(sp.chars).toLocaleString()} characters, over the {ESSENCE_CAP.toLocaleString()} limit it has to stay under. Trim this section or another.
+        <p className="mt-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="essence-over" data-part="core" role="alert">
+          Not saved: that would make your Essence without Brand {Number(sp.chars ?? 0).toLocaleString()} characters, over the {ESSENCE_CAP.toLocaleString()} limit it has to stay under. Trim this section or another.
+        </p>
+      ) : sp.error === "brandover" ? (
+        <p className="mt-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="essence-over" data-part="brand" role="alert">
+          Not saved: that would make Brand {Number(sp.chars ?? 0).toLocaleString()} characters, over its own {BRAND_CAP.toLocaleString()} budget. Trim a Brand field.
         </p>
       ) : null}
       <div className="mt-4 grid gap-4 lg:grid-cols-[260px_1fr]">
@@ -82,7 +89,19 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
             })}
           </ol>
         </Card>
-        <Card title={`${idx + 1}. ${current.title}`} action={<Badge tone={sectionFilled(data, current.key) ? "good" : "neutral"}>{sectionFilled(data, current.key) ? "filled" : "empty"}</Badge>}>
+        <Card
+          title={`${idx + 1}. ${current.title}`}
+          action={
+            <span className="flex items-center gap-2">
+              {current.key === BRAND_SECTION ? (
+                <span className={`text-xs ${brandSize > BRAND_CAP ? "text-danger" : "text-ink-3"}`} data-testid="essence-brand-size">
+                  Brand: {brandSize.toLocaleString()} of {BRAND_CAP.toLocaleString()} characters, its own budget
+                </span>
+              ) : null}
+              <Badge tone={sectionFilled(data, current.key) ? "good" : "neutral"}>{sectionFilled(data, current.key) ? "filled" : "empty"}</Badge>
+            </span>
+          }
+        >
           <form action={saveEssenceSectionAction} className="space-y-4" data-testid="essence-form" data-section={current.key}>
             <input type="hidden" name="section" value={current.key} />
             <DraftKeeper id={`essence.${v.user.id}.${current.key}`} />

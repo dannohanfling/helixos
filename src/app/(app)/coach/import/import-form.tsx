@@ -144,11 +144,17 @@ export function ImportForm({ clients }: { clients: { id: string; label: string }
               </tbody>
             </table>
             <p className={p.overCap ? "text-danger" : "text-ink-3"} data-testid="import-essence-size">
-              Essence after the import: {p.essenceChars.toLocaleString()} of 20,000 characters.
+              Essence after the import, Brand apart: {p.essenceChars.toLocaleString()} of 20,000 characters.
               {p.overCap
                 ? " That's over the limit. It goes in whole, with nothing cut, and is marked over the limit: their AI doesn't use it until it's trimmed under. Their Essence page and their client page show what to trim, section by section."
                 : ""}
             </p>
+            {p.brandChars ? (
+              <p className={p.brandOverCap ? "text-danger" : "text-ink-3"} data-testid="import-brand-size">
+                Brand, on its own budget: {p.brandChars.toLocaleString()} of 20,000 characters.
+                {p.brandOverCap ? " That's over. It goes in whole, with nothing cut: their AI uses the rest of the Essence and leaves out only Brand until it's trimmed under." : ""}
+              </p>
+            ) : null}
             {p.tables.length ? (
               <div data-testid="import-tables">
                 <p className="font-semibold">Her tables</p>

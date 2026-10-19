@@ -38,7 +38,7 @@ describe("src/lib/ai.ts carries images without touching a text-only call", () =>
     const src = readFileSync("src/lib/ai.ts", "utf8");
     expect(src).toMatch(/content: anthropicUserContent\(user, images\)/);
     expect(src).toMatch(/input: openaiInput\(user, images\)/);
-    expect(src).toMatch(/opts\.essence === false \? null : await essenceBlockFor/);
+    expect(src).toMatch(/opts\.essence === false \? null : essenceBlockFor\(/);
     expect(src).toMatch(/if \(opts\.images\?\.length && imageRefusal\(err\.status, err\.message \?\? ""\)\) throw new AiImageError\("This model can't read images\."\)/);
     // The usage row and the failure log name the provider, the model, the feature and the counts: never the images.
     const usage = src.slice(src.indexOf("db.insert(schema.aiUsage)"), src.indexOf(";", src.indexOf("db.insert(schema.aiUsage)")));

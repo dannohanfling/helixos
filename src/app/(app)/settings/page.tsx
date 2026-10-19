@@ -13,7 +13,8 @@ import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { BrandKitEditor } from "@/components/brand-kit-editor";
 import { ConfirmButton } from "@/components/confirm-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { STARTER_KIT } from "@/lib/engine/deck";
+import { DESCRIPTOR_MAX, STARTER_KIT } from "@/lib/engine/deck";
+import { SPELLINGS, SPELLING_LABELS } from "@/lib/engine/spelling";
 import { CopyButton } from "@/components/copy-button";
 import { ADD_PERMISSION } from "@/lib/engine/post-picture";
 import { saveMfDomainsAction } from "@/lib/actions/magic-funnel";
@@ -773,6 +774,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Field label="Notes" hint="shown to you, never rendered">
               <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />
             </Field>
+            <Field label="Legal name" hint="your registered business name: on your decks' footer bar and as the file's company; empty means the kit's name">
+              <input className="field" name="legalName" defaultValue={brandKit?.legalName ?? ""} maxLength={120} data-testid="brand-legal-name" />
+            </Field>
+            <Field label="Spelling" hint="how every ✨ AI draft is spelled">
+              <select className="field" name="spelling" defaultValue={brandKit?.spelling ?? "us"} data-testid="brand-spelling">
+                {SPELLINGS.map((sp) => (
+                  <option key={sp} value={sp}>{SPELLING_LABELS[sp]}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Descriptor under the logo" hint={`one line under the logo on your deck covers, up to ${DESCRIPTOR_MAX} characters, like "Leadership coaching for founders"`}>
+              <input className="field" name="descriptor" defaultValue={brandKit?.descriptor ?? ""} maxLength={DESCRIPTOR_MAX} data-testid="brand-descriptor" />
+            </Field>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="descriptorHidden" value="1" defaultChecked={brandKit?.descriptorHidden ?? false} className="mt-1" data-testid="brand-descriptor-hidden" />
+              <span>
+                Hold the descriptor blank for now
+                <span className="block text-xs text-ink-3">The line stays saved here, and your covers show the logo alone until you untick this.</span>
+              </span>
+            </label>
             <div className="sm:col-span-2 border-t pt-3">
               <div className="text-sm font-semibold">The graphic&apos;s badge</div>
               <p className="text-xs text-ink-3">On every graphic Make the graphic draws (Ladders): your avatar, name, verified tick and @handle under the headline, and the gold of the one phrase.</p>

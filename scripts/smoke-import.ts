@@ -236,10 +236,11 @@ async function main() {
     // ── A re-run for the same client: all update, nothing doubled. Their Essence is near the cap by now (28 Sep: the first live
     // run came to 23,633), so this import takes it over: it still goes in whole, marked, and their AI stops using it until trimmed. ──
     const { essenceBlockFor } = await import("@/lib/queries/essence");
-    const { ESSENCE_CAP, essenceChars } = await import("@/lib/engine/essence");
-    // Their Essence 20 characters under the cap without mission and vision; the re-run puts those back and takes it over.
+    const { ESSENCE_CAP, coreChars, essenceChars } = await import("@/lib/engine/essence");
+    // Their Essence 20 characters under the cap without mission and vision; the re-run puts those back and takes it over. The
+    // cap counts the core, Brand apart (H-811).
     const rest = Object.fromEntries(Object.entries(essence!.data as Record<string, unknown>).filter(([k]) => k !== "mission_and_vision"));
-    const base0 = essenceChars({ ...rest, identity: { name, role: "x" } } as never);
+    const base0 = coreChars({ ...rest, identity: { name, role: "x" } } as never);
     const withLong = { ...rest, identity: { name, role: "x".repeat(ESSENCE_CAP - 20 - base0 + 1) } };
     await db.update(schema.essences).set({ data: withLong }).where(eq(schema.essences.id, essence!.id));
     // One task the client has kept and renamed is theirs now: the re-run leaves it as they have it.

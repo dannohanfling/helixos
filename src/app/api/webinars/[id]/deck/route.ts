@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { apiViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { boxAt, COVER_LOGO_BOX, COVER_LOGO_PLACEHOLDER, FOOTER_BAND, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, coverLogoFrame, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan, type TextBox } from "@/lib/engine/deck";
+import { boxAt, COVER_LOGO_PLACEHOLDER, DESCRIPTOR_SIZE, FOOTER_BAND, coverDescriptor, coverLogoBoxFor, deckCompany, descriptorFrame, footerBrandLine, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, coverLogoFrame, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan, type TextBox } from "@/lib/engine/deck";
 import { slideChoicesFor } from "@/lib/queries/deck-choices";
 import { applyKitTheme } from "@/lib/deck-theme";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
@@ -72,18 +72,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const logoBytes = logos.logo ? await readOnce(logos.logo.blobUrl) : null;
   const coverBytes = logos.cover ? await readOnce(logos.cover.blobUrl) : null;
   const logo = logoBytes && deck.footerBar ? await prepareDeckImage(logoBytes, "logo", LOGO_BOX) : null;
-  const coverLogo = coverBytes ? await prepareDeckImage(coverBytes, "logo", COVER_LOGO_BOX) : null;
-  // The footer's brand line (§4): this webinar's own, else the kit's name, else the workspace's when no kit is applied.
-  const brand = w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : await ownerBrandName(w, v.workspace.name));
+  // The descriptor under the cover logo (H-811), when the kit has one and it isn't held blank: the logo's box is then shorter.
+  const descriptor = coverDescriptor(kit);
+  const coverLogo = coverBytes ? await prepareDeckImage(coverBytes, "logo", coverLogoBoxFor(descriptor)) : null;
+  // The footer's brand line (§4): this webinar's own, else the kit's legal name (H-811), else the kit's name, else the
+  // owner's business name when no kit is applied.
+  const brand = footerBrandLine({ webinar: w.footerBrand, legalName: kit?.legalName, kitName: deck.kitApplied ? deck.kit.name : null }) ?? (await ownerBrandName(w, v.workspace.name));
+  const coverPresenter = coverPlan?.boxes.find((b) => b.role === "cover-presenter");
 
   const { default: PptxGenJS } = await import("pptxgenjs");
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_16x9";
-  // The file says whose it is: the presenter as author, the workspace as company, the webinar as subject. Never the generator.
+  // The file says whose it is: the presenter as author, the legal name (else the workspace) as company, the webinar as subject. Never the generator.
   pptx.title = w.title;
   pptx.subject = w.title;
   pptx.author = context.presenter;
-  pptx.company = v.workspace.name;
+  pptx.company = deckCompany(kit?.legalName, v.workspace.name);
   // The theme fonts are the kit's own faces (§6.6; §4 had the fallback here): headings in the display face, body in the body
   // face, so a box a reader adds takes the brand face, and a reader without it falls to their app's substitute (the fallback
   // the kit names has no slot in the format; §4.3 says so to the client). The runs are rewritten to the theme faces after the
@@ -101,7 +105,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       objects: [...ph("title", "title", g.boxes["cover-title"] ?? g.boxes.headline), ...ph("presenter", "body", g.boxes["cover-presenter"]), ...ph("body", "body", g.body ?? undefined)],
     });
   }
-  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo, coverBadge: logos.badge, noLogo: !logos.logo && !logos.dark };
+  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo, coverBadge: logos.badge, noLogo: !logos.logo && !logos.dark, descriptor: descriptor ? { text: descriptor, color: coverPresenter?.color ?? normalise(deck.kit.muted) } : null };
   for (const plan of plans) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
   // The same picture on several slides (and the logo on every content slide) is one media file in the finished zip.
   const written = (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
@@ -114,7 +118,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 const normalise = (v: string): string => (v ?? "").replace(/^#/, "").toUpperCase();
 
-type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logo: PreparedImage | null; coverLogo: PreparedImage | null; /** The kit's ground behind a cover logo that would not read on the dark cover (§3). */ coverBadge: string | null; noLogo: boolean };
+type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logo: PreparedImage | null; coverLogo: PreparedImage | null; /** The kit's ground behind a cover logo that would not read on the dark cover (§3). */ coverBadge: string | null; noLogo: boolean; /** The line under the cover logo (H-811), in the cover presenter's colour. */ descriptor: { text: string; color: string } | null };
 
 /**
  * One slide from its plan: a mapping, nothing decided here. Every colour and face is the plan's. A filled slot's picture is
@@ -143,8 +147,13 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
       const b = logoBadgeFrame(coverLogoFrame(chrome.coverLogo.placement.box));
       slide.addShape(pptx.ShapeType.roundRect, { x: b.x, y: b.y, w: b.w, h: b.h, rectRadius: 0.08, fill: { color: chrome.coverBadge }, line: { color: chrome.coverBadge, width: 0 } });
     }
-    if (!chrome.coverLogo && chrome.noLogo) drawPlaceholder(pptx, slide, { frame: COVER_LOGO_BOX, text: COVER_LOGO_PLACEHOLDER, color: PLACEHOLDER_RED }, chrome.body);
+    if (!chrome.coverLogo && chrome.noLogo) drawPlaceholder(pptx, slide, { frame: coverLogoBoxFor(chrome.descriptor?.text ?? null), text: COVER_LOGO_PLACEHOLDER, color: PLACEHOLDER_RED }, chrome.body);
     if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: coverLogoFrame(chrome.coverLogo.placement.box).x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h, altText: `${chrome.company} logo` });
+    // The descriptor (H-811): one line under the drawn logo (or its placeholder), clear of its badge and of the title.
+    if (chrome.descriptor) {
+      const d = descriptorFrame(chrome.coverLogo ? chrome.coverLogo.placement.box : null, Boolean(chrome.coverLogo && chrome.coverBadge));
+      slide.addText(chrome.descriptor.text, { x: d.x, y: d.y, w: d.w, h: d.h, fontSize: DESCRIPTOR_SIZE, color: chrome.descriptor.color, fontFace: chrome.body, align: "left", valign: "top", margin: 0 });
+    }
     const title = plan.boxes.find((b) => b.role === "cover-title");
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
     if (title && g.boxes["cover-title"]) slide.addText(title.text, { placeholder: "title", ...at(g.boxes["cover-title"]), fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face });

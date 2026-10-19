@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { googleFontHref } from "@/lib/engine/fonts";
-import { boxAt, COVER_LOGO_PLACEHOLDER, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan, type TextBox, FOOTER_BAND } from "@/lib/engine/deck";
+import { boxAt, COVER_LOGO_PLACEHOLDER, DESCRIPTOR_SIZE, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan, type TextBox, FOOTER_BAND } from "@/lib/engine/deck";
 
 /** What one thumbnail needs, computed on the server from the same plan the export draws. */
 export type ThumbSlide = {
@@ -29,6 +29,8 @@ export type ThumbChrome = {
   coverBadge: string | null;
   logoBox: BoxGeometry | { x: number; y: number; w: number; h: number };
   coverLogoBox: { x: number; y: number; w: number; h: number };
+  /** The line under the cover logo (H-811), where the export draws it; null when the kit has none or holds it blank. */
+  coverDescriptor?: { text: string; box: { x: number; y: number; w: number; h: number }; color: string } | null;
 };
 
 const SLIDE_W = 10;
@@ -170,6 +172,11 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
         ) : cover && missingLogo ? (
           <div className="absolute flex items-center justify-center border border-dashed text-center" style={{ ...place(chrome.coverLogoBox), borderColor: `#${PLACEHOLDER_RED}`, color: `#${PLACEHOLDER_RED}`, fontSize: `${PLACEHOLDER_TEXT_SIZE * PT}cqw`, fontFamily: face(chrome.faces.body, chrome.faces.fallback) }} data-testid="deck-thumb-logo-placeholder">
             {COVER_LOGO_PLACEHOLDER}
+          </div>
+        ) : null}
+        {cover && chrome.coverDescriptor ? (
+          <div className="absolute overflow-hidden whitespace-nowrap leading-none" style={{ ...place(chrome.coverDescriptor.box), color: `#${chrome.coverDescriptor.color}`, fontSize: `${DESCRIPTOR_SIZE * PT}cqw`, fontFamily: face(chrome.faces.body, chrome.faces.fallback) }} data-testid="deck-thumb-descriptor">
+            {chrome.coverDescriptor.text}
           </div>
         ) : null}
         {(plan.panels ?? []).map((p, i) => (

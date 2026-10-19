@@ -3,7 +3,7 @@ import { db, schema } from "@/db";
 import type { ImportPlan } from "@/lib/engine/airtable-import";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { essenceChars, normalizeEssence, type EssenceData } from "@/lib/engine/essence";
+import { brandChars, coreChars, normalizeEssence, type EssenceData } from "@/lib/engine/essence";
 
 /** What the client already holds from an earlier run, as "area:sourceRef", so the dry run can say update, not create. */
 export async function existingRefs(workspaceId: string, userId: string): Promise<Set<string>> {
@@ -31,12 +31,12 @@ export async function existingRefs(workspaceId: string, userId: string): Promise
   return out;
 }
 
-/** The client's Essence with the plan's keys set, as Approve writes it; the dry run measures it against the cap. */
+/** The client's Essence with the plan's keys set, as Approve writes it; the dry run measures the core against its cap and Brand against its own (H-811). */
 export async function mergedEssence(plan: ImportPlan, workspaceId: string, userId: string) {
   const row = await db.query.essences.findFirst({ where: and(eq(schema.essences.workspaceId, workspaceId), eq(schema.essences.userId, userId)) });
   const data = normalizeEssence(row?.data ?? {}) as Record<string, Record<string, unknown>>;
   for (const [section, fields] of Object.entries(plan.essence)) data[section] = { ...(data[section] ?? {}), ...fields };
-  return { row, data, chars: essenceChars(data as EssenceData) };
+  return { row, data, chars: coreChars(data as EssenceData), brandChars: brandChars(data as EssenceData) };
 }
 
 /** Rows written in groups: one round trip per group, so a base of a thousand rows stays inside a request. */
