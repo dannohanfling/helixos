@@ -62,7 +62,7 @@ export function Fire({ look, place, width, height, surgeAt = null, className = "
   const quiet = useSyncExternalStore(subscribeMotion, readMotion, () => false);
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  // Which file has fired `playing`; a new file (another look, the phone copy after hydration) starts hidden again.
+  // Which file is playing now (`playing` until `pause`); a new file (another look, the phone copy after hydration) starts hidden.
   const [playingSrc, setPlayingSrc] = useState<string | null>(null);
   const playing = playingSrc === clip.mp4;
   const box = useRef<HTMLSpanElement>(null);
@@ -88,6 +88,8 @@ export function Fire({ look, place, width, height, surgeAt = null, className = "
       }
     };
     const onPlaying = () => setPlayingSrc(src);
+    // Paused (off screen, the tab hidden): the poster shows again and the mode says so, so only a running loop counts as one.
+    const onPause = () => setPlayingSrc((cur) => (cur === src ? null : cur));
     const io = new IntersectionObserver((entries) => {
       const e = entries[entries.length - 1];
       visible.current = e.isIntersecting && laidOut(el);
@@ -98,11 +100,13 @@ export function Fire({ look, place, width, height, surgeAt = null, className = "
     document.addEventListener("visibilitychange", sync);
     v?.addEventListener("loadeddata", sync);
     v?.addEventListener("playing", onPlaying);
+    v?.addEventListener("pause", onPause);
     return () => {
       io.disconnect();
       document.removeEventListener("visibilitychange", sync);
       v?.removeEventListener("loadeddata", sync);
       v?.removeEventListener("playing", onPlaying);
+      v?.removeEventListener("pause", onPause);
     };
   }, [still, loaded, clip.mp4, clip.rate]);
 
