@@ -391,7 +391,7 @@ async function main() {
     await page.locator('[data-testid="eo-pass-made"]').waitFor({ timeout: 20000 });
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaPass.id) }))!.eoCustomerId === "cus_eo_2", "the client's pass is made once passes are on");
     must(!(await page.content()).includes("cus_eo_") && !(await page.content()).includes("SER-eo-"), "no customer id or serial on the member's page");
-    must((await mockCalls()).writes.length === writes3 + 2, "two creates in all, one per pass");
+    must((await mockCalls()).writes.length === writes3 + 2 + msgWrites.length, "two creates in all, one per pass, besides the one message");
     // The points sync and the invitations (H-867 parts 3 and 4): off until the coach turns them on; "own" reaches only the
     // coach's pass; each member's first sync is one opening move of their HelixOS total, then one move per new ledger row; the
     // Level goes to the pass; an invitation is written once, only with a booking link; never Tier, never Points.
