@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e3266d7b-4083-4070-97c6-b15dc7ba5060",
-  "prevId": "cdfdeb5d-7da8-4112-b736-c53465f51bf1",
+  "id": "5b091f08-363e-4142-8040-e9a0ac2e37de",
+  "prevId": "2db255f5-3156-4782-b8eb-027fddfcaee1",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -14722,6 +14722,13 @@
         },
         "celebrated_tier_level": {
           "name": "celebrated_tier_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rank_clip_seen_level": {
+          "name": "rank_clip_seen_level",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,

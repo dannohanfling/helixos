@@ -6,7 +6,7 @@ import { FIRE_STAGES, FLAME_GLOW, FLAME_SCALE, SPARKS_FROM_STAGE, arenaProgress,
 import { lbSerif } from "@/components/leaderboard/fonts";
 import { armSounds, playSound, startFireLoop, stopFireLoop } from "@/lib/sounds";
 import { playCoinStrike, playTick } from "@/lib/synth-sounds";
-import { WELCOME_CLOSED } from "@/components/rank-up";
+import { RANK_CLOSED, WELCOME_CLOSED } from "@/components/rank-up";
 import "./daily-welcome.css";
 
 /** When this week's coins land (their pop's delay), so a coin's sound falls on its own pop: today's last, the earlier days in a row. */
@@ -123,7 +123,20 @@ const Roll = ({ from, to, delay, className = "" }: { from: number | string; to: 
  * tap on the scrim jump to the finished state, a second tap closes it; reduced motion shows it finished. The button goes to
  * Today's lock-in. Nothing here writes: the server marked the open and paid the day before it rendered.
  */
-export function DailyWelcome({ card }: { card: WelcomeCard }) {
+export function DailyWelcome({ card, afterRank = false }: { card: WelcomeCard; afterRank?: boolean }) {
+  // The catch-up ceremony (H-934) plays first on the open it's due: the welcome waits for it to close, then starts from the top.
+  const [held, setHeld] = useState(afterRank);
+  useEffect(() => {
+    if (!held) return;
+    const on = () => setHeld(false);
+    window.addEventListener(RANK_CLOSED, on);
+    return () => window.removeEventListener(RANK_CLOSED, on);
+  }, [held]);
+  if (held) return null;
+  return <Welcome card={card} />;
+}
+
+function Welcome({ card }: { card: WelcomeCard }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
   const [done, setDone] = useState(false);
