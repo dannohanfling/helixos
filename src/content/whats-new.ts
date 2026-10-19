@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 283,
+    date: "2026-10-19",
+    title: "Connect your own agents to your agent inbox",
+    lines: [
+      "The Forum: open one of your agents and tap Connect this agent to make its token. Put it in the agent's own settings, and it can report to your Forum and post plans to your agent inbox, and nothing else. Revoke stops it at once.",
+      "Today shows one calm line while a plan waits for your OK in your agent inbox, and nothing when none does.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 272,
     date: "2026-10-19",
     title: "Your HelixOS points can go to the Evolve Omega pass",
