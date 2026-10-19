@@ -33,7 +33,9 @@ async function main() {
     await page.goto(`${base}/login`);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
-    // Read wherever Next put it (metadata can stream after the head).
+    // Read on a full page load: the sign-in lands on Today by a client-side navigation, which leaves the head as React
+    // rebuilt it; a phone opening HelixOS gets the server's HTML.
+    await page.goto(`${base}/today`, { waitUntil: "domcontentloaded" });
     const vp = await page.evaluate(() => Array.from(document.querySelectorAll('meta[name="viewport"]')).map((m) => m.getAttribute("content") ?? "").join(" | "));
     must(/viewport-fit=cover/.test(vp), `the viewport meta carries viewport-fit=cover, so the safe-area insets are real (${vp || "no viewport meta"})`);
 
