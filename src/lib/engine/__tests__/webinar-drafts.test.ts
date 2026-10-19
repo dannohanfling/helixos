@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { beliefRows, cleanFields, cleanText, deckRows, deckWrite, foundationRows, historyLine, readDeckSlides, readDraftFields, scriptRows, SLIDE_TITLE_MAX, undoOpen } from "@/lib/engine/webinar-drafts";
+import { beliefRows, cleanFields, cleanText, deckRows, deckWrite, figuresIn, foundationRows, givenText, historyLine, readDeckSlides, readDraftFields, scriptRows, SLIDE_TITLE_MAX, undoOpen } from "@/lib/engine/webinar-drafts";
 
 // H-181: the connector's webinar drafts. The database is never reached in these.
 vi.mock("@/db", async (orig) => {
@@ -168,5 +168,20 @@ describe("deck drafts (H-181 PR 2)", () => {
   });
   it("names the section in the history line", () => {
     expect(historyLine({ action: "approved", step: "deck", sectionKey: "hook", byLabel: "Maya", byConnector: false, changed: ["slide1", "slide2"] })).toBe("Deck (hook): draft approved (2 slides) by Maya");
+  });
+});
+
+describe("givenText: the figures a member gave (H-991)", () => {
+  it("reads a row's own fields, never its ids or timestamps", () => {
+    const offer = { id: "o-40", userId: "u-1", name: "Academy", price: 997, promise: "3 booked calls a week", createdAt: "2026-10-19 08:40:12", updatedAt: "2026-10-19T08:40:12Z", pathSteps: ["Step 1"], neverQuotePrice: false };
+    const text = givenText(offer, [{ id: "c-1", offerId: "o-40", name: "Bonus call", value: 250 }]);
+    expect(figuresIn(text).sort()).toEqual(["1", "250", "3", "997"].sort());
+    expect(text).not.toContain("08:40");
+  });
+
+  it("so an invented 40 is taken out even when the offer was saved at minute 40", () => {
+    const known = givenText({ id: "o", name: "Academy", price: 997, createdAt: "2026-10-19 08:40:40" });
+    const out = cleanFields("foundation", { promise: "Leave with a plan to fill your calendar. Our clients add 40 leads a week." }, known);
+    expect(out.fields.promise).toBe("Leave with a plan to fill your calendar.");
   });
 });

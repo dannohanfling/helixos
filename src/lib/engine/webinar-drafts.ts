@@ -223,6 +223,23 @@ export function readDeckSlides(raw: unknown): { sections: { sectionKey: string; 
   return { sections, refused, problems };
 }
 
+/**
+ * What a member gave, for the figure check: the values of a row's own fields, never its ids or its timestamps. An offer saved
+ * at 8:40 put "40" in its createdAt, so an invented "40 leads a week" passed as one the member gave (H-991).
+ */
+export function givenText(...rows: unknown[]): string {
+  const out: string[] = [];
+  const skip = (k: string) => k === "id" || /Id$|At$|_id$|_at$/.test(k);
+  const walk = (v: unknown) => {
+    if (v == null || typeof v === "boolean") return;
+    if (typeof v === "string" || typeof v === "number") out.push(String(v));
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (typeof v === "object") for (const [k, x] of Object.entries(v)) if (!skip(k)) walk(x);
+  };
+  rows.forEach(walk);
+  return out.join("\n");
+}
+
 /** Every figure a text names, digits only: "$1,997" is "1997", "47%" is "47". The same reading the slide check uses. */
 export const figuresIn = (s: string): string[] => (s.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((f) => f.replace(/,/g, ""));
 const sentences = (s: string): string[] => s.split(/(?<=[.!?])\s+/);

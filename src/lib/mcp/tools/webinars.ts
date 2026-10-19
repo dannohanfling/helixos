@@ -15,7 +15,7 @@ import { createWebinar } from "@/lib/webinars-core";
 import { buildFor } from "@/lib/queries/webinar";
 import { subjectFor } from "@/lib/queries/subject";
 import { STATUS_WORDS } from "@/lib/engine/teaching-kinds";
-import { BELIEF_COLUMN, BELIEF_FIELDS, BELIEF_TYPES, DRAFTABLE_STEPS, FOUNDATION_FIELDS, cleanFields, readDeckSlides, readDraftFields, type DraftableStep, type SlideDraft } from "@/lib/engine/webinar-drafts";
+import { BELIEF_COLUMN, BELIEF_FIELDS, BELIEF_TYPES, DRAFTABLE_STEPS, FOUNDATION_FIELDS, cleanFields, givenText, readDeckSlides, readDraftFields, type DraftableStep, type SlideDraft } from "@/lib/engine/webinar-drafts";
 import { slotForLine } from "@/lib/engine/deck-slot-rules";
 import { checkCitations, noteCreated, ownWebinar, pendingDrafts, saveDraft, sectionOf, type Actor } from "@/lib/webinar-drafts";
 
@@ -151,7 +151,7 @@ defineTool({
     const offerId = (step === "offer" ? (read.fields.offerId as string | undefined) : null) ?? w.offerId;
     const offer = offerId ? await db.query.offers.findFirst({ where: and(eq(schema.offers.id, offerId), eq(schema.offers.userId, o.userId)) }) : null;
     const components = offer ? await db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, offer.id) }) : [];
-    const known = [JSON.stringify(offer ?? {}), JSON.stringify(components), String(input.source_words ?? ""), sec?.script ?? "", sec?.keyPoints ?? "", ...FOUNDATION_FIELDS.map((k) => JSON.stringify((w as Record<string, unknown>)[k] ?? ""))].join("\n");
+    const known = [givenText(offer, components), String(input.source_words ?? ""), sec?.script ?? "", sec?.keyPoints ?? "", ...FOUNDATION_FIELDS.map((k) => JSON.stringify((w as Record<string, unknown>)[k] ?? ""))].join("\n");
     const cleaned = cleanFields(step, read.fields, known);
     const cited = await checkCitations(o, step, cleaned.fields);
     const notes = [...cleaned.removed.map((s) => `Taken out (a claim or a figure you didn't give): "${s}"`), ...cited.refused.map((r) => `${r.field} ${r.why}`)];
@@ -197,7 +197,7 @@ defineTool({
     for (const g of read.sections) {
       const sec = sections.find((s) => s.sectionKey === g.sectionKey)!;
       // What the member already wrote in the section counts as their words too: a figure in their own script may go on a slide.
-      const known = [JSON.stringify(offer ?? {}), JSON.stringify(components), String(input.source_words ?? ""), sec.script ?? "", sec.keyPoints ?? "", ...FOUNDATION_FIELDS.map((k) => JSON.stringify((w as Record<string, unknown>)[k] ?? ""))].join("\n");
+      const known = [givenText(offer, components), String(input.source_words ?? ""), sec.script ?? "", sec.keyPoints ?? "", ...FOUNDATION_FIELDS.map((k) => JSON.stringify((w as Record<string, unknown>)[k] ?? ""))].join("\n");
       const cleaned = cleanFields("deck", { slides: g.slides }, known);
       const cited = await checkCitations(o, "deck", cleaned.fields);
       const slides = ((cited.fields as { slides?: SlideDraft[] }).slides ?? []);
