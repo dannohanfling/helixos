@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 276,
+    date: "2026-10-19",
+    title: "Your rank's relic, if you reached it before the clips",
+    lines: [
+      "Reached Philosopher or above before the rank videos arrived? Your next open plays your rank's relic clip once, first thing, with your card. Then your day starts as usual.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 273,
     date: "2026-10-18",
     title: "Counts in the phone menu",
