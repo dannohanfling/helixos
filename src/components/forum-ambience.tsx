@@ -9,46 +9,12 @@
  */
 import { FORUM_FIREFLIES, FORUM_FLIGHTS, FORUM_FLAME, FORUM_FLICKER } from "@/lib/engine/ambience";
 import { useHidden, useQuiet } from "@/components/scene-life";
+import { AmbienceFlame } from "@/components/ambience-flame";
 import { Flock } from "@/components/flock";
 import "@/components/ambience.css";
 
 type Look = "day" | "night";
 const s = (n: number) => `${n}s`;
-
-/** The welcome's flame (docs/welcome/daily-welcome-flame-v1.dc.html, as the Forum mockup draws it): three layers. */
-function Flame() {
-  return (
-    <svg viewBox="0 0 80 96">
-      <defs>
-        <linearGradient id="amb-fo-outer" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#8E2F0C" />
-          <stop offset=".25" stopColor="#D2531A" />
-          <stop offset=".6" stopColor="#F28C2E" />
-          <stop offset="1" stopColor="#FFB040" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="amb-fo-mid" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#F59A34" />
-          <stop offset=".5" stopColor="#FFC45C" />
-          <stop offset="1" stopColor="#FFD98A" stopOpacity="0" />
-        </linearGradient>
-        <radialGradient id="amb-fo-core" cx=".5" cy=".7" r=".5">
-          <stop offset="0" stopColor="#FFFBEF" />
-          <stop offset=".5" stopColor="#FFE7A8" />
-          <stop offset="1" stopColor="#FFD27A" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <g className="amb-lv amb-l1">
-        <path d="M40 4C43 17 58 26 63 42C68 60 63 76 53 85C47 91 33 91 27 85C17 76 12 60 17 44C20 34 29 28 32 18C35 26 36 31 38 34C39 24 37 13 40 4Z" fill="url(#amb-fo-outer)" />
-      </g>
-      <g className="amb-lv amb-l2">
-        <path d="M40 28C43 38 53 45 55 58C57 71 51 81 40 86C29 81 23 71 25 58C27 49 33 45 35 39C37 43 38 45 39 47C39 41 39 34 40 28Z" fill="url(#amb-fo-mid)" />
-      </g>
-      <g className="amb-lv amb-l3">
-        <ellipse cx="40" cy="72" rx="13" ry="14" fill="url(#amb-fo-core)" />
-      </g>
-    </svg>
-  );
-}
 
 export function ForumAmbience({ look }: { look: Look }) {
   const quiet = useQuiet();
@@ -67,7 +33,7 @@ export function ForumAmbience({ look }: { look: Look }) {
           ))}
           <div className="amb-pool" data-testid="amb-pool" />
           <div className="amb-flame" style={{ left: `${FORUM_FLAME.x}%`, top: `${FORUM_FLAME.y}%`, width: `${FORUM_FLAME.w}%`, height: `${FORUM_FLAME.h}%` }} data-testid="amb-flame">
-            <Flame />
+            <AmbienceFlame />
           </div>
           {FORUM_FIREFLIES.map((f, i) => (
             <span key={i} className="amb-ff" style={{ left: `${f.x}%`, top: `${f.y}%`, "--dx": `${f.dx}px`, "--dy": `${f.dy}px`, animationDuration: s(f.d), animationDelay: s(f.dl) } as React.CSSProperties} data-testid="amb-firefly" />
