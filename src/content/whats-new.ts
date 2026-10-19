@@ -12,12 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-<<<<<<< HEAD
-    n: 299,
+    n: 302,
     date: "2026-10-19",
     title: "The tab bar stays at the bottom",
     lines: ["On a phone, the tab bar stays at the bottom while you scroll."],
-=======
+    audience: "everyone",
+  },
+  {
     n: 301,
     date: "2026-10-19",
     title: "The Council Chamber comes alive",
@@ -67,7 +68,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "The Aqueduct: the channel is see-through running water with ripples, streaks and a little sparkle, and it fills from the source when you open the scene. A leak falls as a sheet with streaks and lands in mist and spray, and the fountain's waterfall flows the same way.",
       "Pause, a hidden tab and reduced motion work as before: with reduced motion there are no birds, and the water stays still.",
     ],
->>>>>>> origin/main
     audience: "everyone",
   },
   {
