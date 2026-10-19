@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 275,
+    date: "2026-10-19",
+    title: "Waiting on you takes you to Close the day",
+    lines: [
+      "When your streak says Waiting on you, tap the flame: its button now reads Close the day (Close yesterday just after midnight) and takes you straight to the evening close on Today. Not now shuts the panel.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 272,
     date: "2026-10-19",
     title: "Your HelixOS points can go to the Evolve Omega pass",

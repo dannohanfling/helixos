@@ -60,6 +60,8 @@ export type FlameState = {
   tier: FlameTier;
   /** "Waiting on you": the dim, still ember and the amber chip. */
   waiting: boolean;
+  /** The day waiting is yesterday (the late close-out window), not today. */
+  late: boolean;
   /** The daily surge is due on this open. */
   surge: boolean;
   /** The streak day the surge is for, stored once it has played. */
@@ -82,7 +84,15 @@ export function flameStateOf(i: FlameInput): FlameState {
   const days = Math.max(1, i.running);
   // Late close-out window: yesterday is still the day and isn't closed. Otherwise today, from 4 pm until it's closed.
   const waiting = i.asOf !== i.today ? !i.closed.has(i.asOf) : i.hour >= WAITING_FROM_HOUR && !i.closed.has(i.today);
-  return { days, tier: flameTier(days), waiting, surge: surgeDue(i), day: i.asOf };
+  return { days, tier: flameTier(days), waiting, late: waiting && i.asOf !== i.today, surge: surgeDue(i), day: i.asOf };
+}
+
+/** Where the sheet's own button goes while the day waits (H-927): straight to the close on Today, named for the day it closes. */
+export const CLOSE_HREF = "/today#close";
+
+export function sheetAction(s: Pick<FlameState, "waiting" | "late">): { label: string; href: string } | null {
+  if (!s.waiting) return null;
+  return { label: s.late ? "Close yesterday" : "Close the day", href: CLOSE_HREF };
 }
 
 /** Once per streak day: the day has counted (shown up) and the surge hasn't played for it yet. */
