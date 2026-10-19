@@ -1,13 +1,13 @@
 /**
  * Roma Vivit (H-327 PR B, plan H-637): the ambience under the big picture scenes. PR 1, the Colosseum: at 390, 1024 and 1440 in
  * both looks the layer draws the look's own parts (night: three flicker copies, twelve lights, the haze; golden hour: the cloud,
- * sixteen motes, three birds), nothing scrolls sideways, the avatars still take a tap through it, and it is running; Pause and a
+ * sixteen motes, three birds that flap and glide on their own paths, H-966), nothing scrolls sideways, the avatars still take a tap through it, and it is running; Pause and a
  * hidden tab hold every animation; reduced motion draws none of it. The top-3 cheer plays once a week after the first tap, never
  * on a reload, never with Sounds off. PR 2, the Aqueduct: a first visit plays nothing and stamps what it showed; a repaired arch
  * plays once (the card's words from the engine, the green tag, the fountain), never on the reload; in a hidden tab it waits and
  * stamps nothing until the member looks; reduced motion shows the end state with nothing moving; the fountain at 390, 1024 and
  * 1440 in both looks with nothing sideways; a hidden tab holds the water. PR 3, the Forum: at 390, 1024 and 1440 in both looks
- * the look's own parts (night: three flicker copies, the pool, the flame, ten fireflies; golden hour: the cloud, five doves),
+ * the look's own parts (night: three flicker copies, the pool, the flame, ten fireflies; golden hour: the cloud, a flock of five birds),
  * running, nothing sideways, the map still on top of it; a hidden tab holds it; reduced motion draws none of it. Runs against the
  * dev server; fixtures go straight to the database.
  */
@@ -28,6 +28,49 @@ const layerAnims = (page: Page, sel = '[data-testid="arena-ambience"]') =>
     if (!el) return null;
     return el.getAnimations({ subtree: true }).map((a) => a.playState);
   }, sel);
+/**
+ * The birds (H-966), read from the page's own animations: how many birds and shadows; that no two share a path (their places
+ * at this moment differ, and each path is its own keyframes); that every bird uses all three wing poses and glides on level
+ * wings for at least a second; and that a nearer bird (larger k) is drawn at least as large.
+ */
+// A string, not a function, for the same reason as setHidden.
+const flockOf = (page: Page, sel: string) =>
+  page.evaluate(`(() => {
+    const layer = document.querySelector(${JSON.stringify(sel)});
+    if (!layer) return null;
+    const birds = [...layer.querySelectorAll('[data-testid="amb-bird"]')];
+    const shadows = layer.querySelectorAll('[data-testid="amb-bird-shadow"]').length;
+    const flights = [...layer.querySelectorAll('[data-testid="amb-flight"]')];
+    const paths = new Set(flights.map((f) => getComputedStyle(f).animationName));
+    const spots = new Set(flights.map((f) => getComputedStyle(f).transform));
+    let glide = Infinity;
+    let poses = true;
+    for (const b of birds) {
+      const byPose = {};
+      for (const p of b.querySelectorAll(".amb-pose")) {
+        const a = p.getAnimations()[0];
+        if (!a) { poses = false; continue; }
+        const frames = a.effect.getKeyframes();
+        const dur = a.effect.getTiming().duration;
+        let longest = 0, shown = false;
+        for (let i = 0; i < frames.length - 1; i++) if (Number(frames[i].opacity) === 1) { shown = true; longest = Math.max(longest, (frames[i + 1].offset - frames[i].offset) * dur); }
+        byPose[p.getAttribute("data-pose")] = { shown, longest };
+      }
+      poses = poses && ["up", "level", "down"].every((k) => byPose[k] && byPose[k].shown);
+      glide = Math.min(glide, byPose.level ? byPose.level.longest : 0);
+    }
+    const sized = flights.map((f) => ({ k: Number(f.getAttribute("data-flight-k")), w: f.querySelector('[data-testid="amb-bird"]').getBoundingClientRect().width }));
+    sized.sort((a, b) => a.k - b.k);
+    const nearerLarger = sized.every((s, i) => i === 0 || s.w + 0.5 >= sized[i - 1].w);
+    return { birds: birds.length, shadows, paths: paths.size, spots: spots.size, poses, glide, nearerLarger };
+  })()`) as Promise<{ birds: number; shadows: number; paths: number; spots: number; poses: boolean; glide: number; nearerLarger: boolean } | null>;
+const flockMust = async (page: Page, sel: string, n: number, where: string) => {
+  const f = (await flockOf(page, sel))!;
+  must(f.birds === n && f.shadows === n, `${where}: ${n} birds, each with its shadow (${f.birds}, ${f.shadows})`);
+  must(f.paths === n && f.spots === n, `${where}: no two birds share a path (${f.paths} paths, ${f.spots} places)`);
+  must(f.poses && f.glide >= 1000, `${where}: every bird flaps through up, level and down, and glides on level wings for a second or more (${Math.round(f.glide)} ms)`);
+  must(f.nearerLarger, `${where}: nearer birds are drawn larger`);
+};
 /** Hides or shows the tab, the way the browser would. */
 // A string, not a function: tsx names inner arrow functions with a helper the page doesn't have.
 const setHidden = (page: Page, hidden: boolean) =>
@@ -84,7 +127,10 @@ async function main() {
         must((await layer.getAttribute("data-look")) === look, `${w}/${look}: the layer follows the scene's look`);
         const n = async (id: string) => page.locator(`[data-testid="arena-ambience"] [data-testid="${id}"]`).count();
         if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-twinkle")) === 12 && (await n("amb-cloud")) === 0, `${w}/night: three flicker copies, twelve lights, no cloud`);
-        else must((await n("amb-cloud")) === 1 && (await n("amb-mote")) === 16 && (await n("amb-bird")) === 3 && (await n("amb-flicker")) === 0, `${w}/day: the cloud, sixteen motes, three birds, no flicker`);
+        else {
+          must((await n("amb-cloud")) === 1 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: the cloud, sixteen motes, no flicker`);
+          await flockMust(page, '[data-testid="arena-ambience"]', 3, `${w}/day`);
+        }
         const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         must(sideways <= 0, `${w}/${look}: nothing scrolls sideways (${sideways}px)`);
         const anims = (await layerAnims(page))!;
@@ -264,8 +310,11 @@ async function main() {
         await fo.locator(foLayer).waitFor();
         must((await fo.locator(foLayer).getAttribute("data-look")) === look, `Forum ${w}/${look}: the layer follows the look`);
         const n = async (id: string) => fo.locator(`${foLayer} [data-testid="${id}"]`).count();
-        if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-pool")) === 1 && (await n("amb-flame")) === 1 && (await n("amb-firefly")) === 10 && (await n("amb-dove")) === 0, `Forum ${w}/night: three flicker copies, the pool, the flame, ten fireflies`);
-        else must((await n("amb-cloud")) === 1 && (await n("amb-dove")) === 5 && (await n("amb-flicker")) === 0, `Forum ${w}/day: the cloud and five doves`);
+        if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-pool")) === 1 && (await n("amb-flame")) === 1 && (await n("amb-firefly")) === 10 && (await n("amb-bird")) === 0, `Forum ${w}/night: three flicker copies, the pool, the flame, ten fireflies, no birds`);
+        else {
+          must((await n("amb-cloud")) === 1 && (await n("amb-flicker")) === 0, `Forum ${w}/day: the cloud`);
+          await flockMust(fo, foLayer, 5, `Forum ${w}/day`);
+        }
         const sideways = await fo.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         must(sideways <= 0, `Forum ${w}/${look}: nothing scrolls sideways (${sideways}px)`);
         const anims = (await layerAnims(fo, foLayer))!;
