@@ -56,6 +56,8 @@ import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 import { logTiming, tick } from "@/lib/timing";
+import { waitingCount } from "@/lib/handoff";
+import { plansWaitingLine } from "@/lib/engine/handoff";
 
 export const metadata = { title: "Today" };
 
@@ -124,6 +126,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const tData = tick();
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
+  // A member's agent inbox (H-727 PR 2): one calm line while a plan waits for their OK, nothing otherwise. The coach's own
+  // inbox has its place on Coach → Inbox.
+  const plansWaiting = v.role === "client" && !v.switchedInto && !v.team ? await waitingCount({ workspaceId: v.workspace.id, userId: v.user.id }) : 0;
   const [share, goals, workout] = await Promise.all([
     week ? shareFor(v.workspace.id, v.user.id, week) : Promise.resolve(null),
     // Goals (rev 508 §5): the two that need it most, under the HumanOS line.
@@ -213,6 +218,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
+      ) : null}
+      {plansWaiting ? (
+        <Link href="/forum/inbox" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-agent-inbox">
+          {plansWaitingLine(plansWaiting)} →
+        </Link>
       ) : null}
       {oohNotice ? (
         <Link href="/office-hours#mine" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-ooh-notice">
