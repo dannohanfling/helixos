@@ -74,7 +74,13 @@ async function main() {
     await page.goto(`${base}/settings#connected-apps`, { waitUntil: "networkidle" });
     await page.check('[data-testid="colosseum-on-toggle"]');
     await submit(page, '[data-testid="colosseum-on-save"]');
-    must((await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mm.workspaceId) }))!.colosseumOn, "the coach turned the Colosseum on");
+    // The save's POST can land after another request on the page answers, so wait for the write rather than the first POST.
+    let on = false;
+    for (let i = 0; i < 40 && !on; i++) {
+      on = Boolean((await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mm.workspaceId) }))!.colosseumOn);
+      if (!on) await page.waitForTimeout(250);
+    }
+    must(on, "the coach turned the Colosseum on");
     await page.goto(`${base}/rewards`, { waitUntil: "networkidle" });
     must((await page.locator('[data-testid="rewards-colosseum"]').count()) === 1, "Rewards has the Colosseum tab once it's on");
     await page.goto(`${base}/colosseum?tab=wins&kind=business`, { waitUntil: "networkidle" });

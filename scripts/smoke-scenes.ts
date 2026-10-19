@@ -72,6 +72,10 @@ async function main() {
     }
   };
   let ledgerMoved = false;
+  // The coach's own catch-up (H-1047) borrows one ledger row and the coach's clip seen; both go back whatever happens.
+  let coachRow: string | null = null;
+  let coachOffset: string | null = null;
+  let coachWas: { id: string; seen: number | null; welcome: string | null } | null = null;
   const moveLedger = async (to: string) => {
     await retry(() => db.run(sql`DROP TABLE IF EXISTS smoke_ledger_times`));
     await retry(() => db.run(sql`CREATE TABLE smoke_ledger_times AS SELECT id, created_at FROM points_ledger WHERE user_id = ${maya.id}`));
@@ -439,6 +443,58 @@ async function main() {
       await back.click();
       await kx.close();
     }
+    // The coach's own login (H-1047): a rank reached before the clips plays its clip once, on its own, with the welcome done.
+    {
+      const coach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+      const cm = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coach.id), eq(schema.memberships.workspaceId, mm.workspaceId)) }))!;
+      coachWas = { id: cm.id, seen: cm.rankClipSeenLevel, welcome: cm.welcomeShownOn };
+      const coachTotal = async () => (await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, coach.id), eq(schema.pointsLedger.workspaceId, mm.workspaceId)) })).reduce((s, r) => s + r.points, 0);
+      const had = await coachTotal();
+      // The rank must be reached before the clips: the whole of it lands in one row dated then, and a second row today takes
+      // away what the coach already had, so the total is exactly the rank's floor. (The seed's own rows are recent, so topping
+      // them up would reach the rank after the clips, which has no catch-up.)
+      coachRow = crypto.randomUUID();
+      coachOffset = crypto.randomUUID();
+      await retry(() => db.insert(schema.pointsLedger).values({ id: coachRow!, workspaceId: mm.workspaceId, userId: coach.id, type: "bonus", points: held.minPoints, reason: "Smoke: coach catch-up", adjustedBy: "smoke", createdAt: beforeClips }));
+      await retry(() => db.insert(schema.pointsLedger).values({ id: coachOffset!, workspaceId: mm.workspaceId, userId: coach.id, type: "bonus", points: -had, reason: "Smoke: coach catch-up offset", adjustedBy: "smoke" }));
+      const coachHeld = tierFor(await coachTotal());
+      must(coachHeld.level === held.level, `the coach holds ${held.name} (${coachHeld.name})`);
+      await db.update(schema.memberships).set({ rankClipSeenLevel: null, welcomeShownOn: today }).where(eq(schema.memberships.id, cm.id));
+      const coachMember = async () => (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, cm.id) }))!;
+      const ox = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      const op = await ox.newPage();
+      op.on("response", (r) => {
+        if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
+      });
+      await op.goto(`${base}/login`);
+      await op.click('button:has-text("As the coach")');
+      await op.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
+      const ork = op.locator('[data-testid="rank-up"]');
+      try {
+        await ork.waitFor({ timeout: 20000 });
+      } catch (e) {
+        const seen = await op.evaluate(() => Array.from(document.querySelectorAll("[data-testid]")).map((x) => x.getAttribute("data-testid")).filter((t) => /welcome|rank|arrival|horizon|flame/.test(t ?? "")).join(","));
+        const m = await coachMember();
+        await op.screenshot({ path: "screenshots/sc08-coach-catchup-missing.png" });
+        throw new Error(`the coach's catch-up never showed on ${op.url()} (overlays: ${seen || "none"}; seen ${m.rankClipSeenLevel}, welcome ${m.welcomeShownOn}, today ${today}): ${String(e).split("\n")[0]}`);
+      }
+      must((await ork.getAttribute("data-rank")) === held.name.toLowerCase(), `the coach's ${held.name} clip plays (${await ork.getAttribute("data-rank")})`);
+      await op.keyboard.press("Escape");
+      await op.waitForFunction(() => document.querySelector('[data-testid="rank-up"]')?.getAttribute("data-state") === "done", null, { timeout: 5000 });
+      await op.keyboard.press("Escape");
+      await op.waitForTimeout(800);
+      must((await coachMember()).rankClipSeenLevel === held.level, "the coach's clip is recorded as seen");
+      await op.reload({ waitUntil: "networkidle" });
+      await op.waitForTimeout(800);
+      must((await ork.count()) === 0, "the coach: once, not on the next open");
+      await ox.close();
+      await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachRow!)));
+      coachRow = null;
+      await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachOffset!)));
+      coachOffset = null;
+      await db.update(schema.memberships).set({ rankClipSeenLevel: coachWas.seen, welcomeShownOn: coachWas.welcome }).where(eq(schema.memberships.id, cm.id));
+      coachWas = null;
+    }
     // Reached after the clips went live: stamped silently on the open, nothing plays.
     await restoreLedger();
     {
@@ -452,10 +508,13 @@ async function main() {
       await sx.close();
     }
     setAside();
-    console.log(`✓ catch-up: the ${late.name} clip first, before the welcome, once, its card opening on the relic; alone at 390; a coach switched in uses nothing up; reached after the clips, stamped silently`);
+    console.log(`✓ catch-up: the ${late.name} clip first, before the welcome, once, its card opening on the relic; alone at 390; a coach switched in uses nothing up; the coach's own login gets theirs once; reached after the clips, stamped silently`);
   } finally {
     // Put the ledger back without hiding whatever failed above.
     await restoreLedger().catch((e) => console.error(`the ledger's times were not put back: ${String(e)}`));
+    if (coachRow) await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachRow!))).catch((e) => console.error(`the coach's smoke row was not removed: ${String(e)}`));
+    if (coachOffset) await retry(() => db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, coachOffset!))).catch((e) => console.error(`the coach's smoke offset was not removed: ${String(e)}`));
+    if (coachWas) await db.update(schema.memberships).set({ rankClipSeenLevel: coachWas.seen, welcomeShownOn: coachWas.welcome }).where(eq(schema.memberships.id, coachWas.id)).catch(() => undefined);
     if (fakeClip && existsSync(fakeClip)) rmSync(fakeClip);
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
     putBack();

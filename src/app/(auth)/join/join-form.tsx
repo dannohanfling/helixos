@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { joinAction, type AuthState } from "@/lib/actions/auth";
 import { SubmitButton } from "@/components/submit-button";
@@ -91,6 +92,18 @@ export function JoinForm({ code }: { code?: string }) {
           {state.error}
         </p>
       ) : null}
+      {/* H-745 (App Store guideline 1.2): the terms are agreed to here, both linked. */}
+      <p className="text-center text-xs text-ink-2" data-testid="join-terms">
+        By joining you agree to the{" "}
+        <Link href="/terms" className="underline" target="_blank">
+          Terms
+        </Link>{" "}
+        and the{" "}
+        <Link href="/community-guidelines" className="underline" target="_blank">
+          Community Guidelines
+        </Link>
+        .
+      </p>
       <SubmitButton className="btn btn-brand w-full" pendingText="Creating your space…">
         Join and start Day 1
       </SubmitButton>
