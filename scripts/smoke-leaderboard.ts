@@ -509,7 +509,7 @@ async function main() {
     const lhNames = await page.locator('[data-testid="lh-name"]').allTextContents(); // as written: card titles show in capitals
     must(lhNames[0]?.includes("(your own program)"), `the coach's own program comes first: saw ${lhNames.length} cards, own first ${String(lhNames[0]?.includes("(your own program)"))}, own anywhere ${String(lhNames.some((n) => n.includes("(your own program)")))}`);
     const lhText = await page.locator("main").innerText();
-    must(/Busy answers \(429\) in 24 hours: 1\b/.test(lhText), "the earlier busy refresh is counted on the client's program");
+    must(/Busy answers \(429\) in 24 hours: 1\b/.test(lhText), `the earlier busy refresh is counted on the client's program: ${(lhText.match(/Busy answers[^\n]*/g) ?? []).join(" | ")}`);
     must(!lhText.includes(ELOYALTY_KEY) && !(await page.content()).includes(ELOYALTY_KEY), "no key on Loyalty health");
     const soon = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
     const ownCard = page.locator('[data-testid="lh-row"]').first();
