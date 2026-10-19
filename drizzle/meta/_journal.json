@@ -1293,7 +1293,14 @@
     {
       "idx": 184,
       "version": "6",
-      "when": 1792446668525,
+      "when": 1792438838724,
+      "tag": "0223_tier_sent",
+      "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "6",
+      "when": 1792450963869,
       "tag": "0225_applause",
       "breakpoints": true
     }

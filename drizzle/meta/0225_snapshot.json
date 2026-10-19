@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "bb291e28-da2f-4aed-9302-5689a054d856",
-  "prevId": "87a46cca-0552-4abe-a9bf-f84790d0cb6e",
+  "id": "3f27c5c7-80a0-45bb-a322-716129c70e09",
+  "prevId": "04a20933-bd58-4a07-a253-a97156a40ff4",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -14471,6 +14471,13 @@
         },
         "eo_level_sent": {
           "name": "eo_level_sent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "eo_tier_sent": {
+          "name": "eo_tier_sent",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

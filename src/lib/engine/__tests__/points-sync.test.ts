@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { inviteDue, levelFor, modeReaches, readInviteLink } from "@/lib/engine/points-sync";
+import { inviteDue, levelFor, modeReaches, readInviteLink, tierWords } from "@/lib/engine/points-sync";
+import { TIERS } from "@/lib/engine/tiers";
 
 describe("the sync's modes (H-867 steps G and H)", () => {
   it("off reaches nobody, own only the coach, all everyone", () => {
@@ -35,6 +36,21 @@ describe("the invitations (H-865, H-867 part 4)", () => {
     expect(due("Accelerator", 5000, ["academy"])).toBeNull();
     expect(due("Elite", 7500)).toBeNull();
     expect(due("Accelerator", 5000, [], "team")).toBeNull();
+  });
+  it("follows the kept rank, never a raw points number (H-1088, H-1098)", () => {
+    const sentinel = TIERS.find((t) => t.name === "Sentinel")!.level;
+    // Reached Sentinel at 3,181 under the old table: still Sentinel, so the Academy call stands.
+    expect(inviteDue({ role: "client", programTier: "Accelerator", points: 3181, rankKeptLevel: sentinel, sent: [] })).toBe("academy");
+    expect(inviteDue({ role: "client", programTier: "Accelerator", points: 3181, rankKeptLevel: null, sent: [] })).toBeNull();
+    // A kept rank is a floor: points above it still count.
+    expect(inviteDue({ role: "client", programTier: "Academy", points: 12000, rankKeptLevel: sentinel, sent: [] })).toBe("elite");
+  });
+  it("names the kept rank for the pass's Tier", () => {
+    const sentinel = TIERS.find((t) => t.name === "Sentinel")!.level;
+    expect(tierWords(3181, sentinel)).toBe("Sentinel");
+    expect(tierWords(1999, null)).toBe("Sage");
+    expect(tierWords(2000, null)).toBe("Alchemist");
+    expect(tierWords(600, null)).toBe("Sage");
   });
   it("keeps https links only", () => {
     expect(readInviteLink("")).toEqual({ ok: true, value: null });

@@ -26,11 +26,12 @@ describe("migration 0225: applause", () => {
     await db.execute("INSERT INTO win_applause (id, workspace_id, win_id, user_id) VALUES ('c', 'w', 'win', 'v')");
   });
 
-  it("follows main's 0222 in the journal, with a later time", () => {
+  it("comes last in the journal, after main's latest, with a later time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0225_applause");
     expect(at).toBeGreaterThan(0);
-    expect(journal.entries[at - 1]?.tag).toBe("0222_rank_kept");
+    expect(at).toBe(journal.entries.length - 1);
+    expect(journal.entries[at - 1].tag < "0225").toBe(true);
     expect(journal.entries[at].when).toBeGreaterThan(journal.entries[at - 1].when);
   });
 });

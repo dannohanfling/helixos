@@ -6,9 +6,11 @@
  *   keyed to that row, so nothing is ever sent twice. The moves go out through the points outbox (same queue, pause and
  *   events check). The opening move and the rows it covers are written in one transaction.
  * - Level: the member's program goes to the pass's Level field when it changes.
+ * - Tier: the member's kept rank (H-1088, H-1098) goes to the pass's Tier field when it changes, so the pass shows the same
+ *   rank as HelixOS and never a lower one. eLoyalty's "Points Earned Check Tier" automation is paused for this program.
  * - Invitations: when a member earns one (inviteDue) and the rung has a booking link, Current_Offer and Offer_Link are
  *   written once. With no link, nothing is written.
- * - The rank is eLoyalty's (H-890): this never writes Tier, and never the Points field.
+ * - Never the Points field: points move only as adds and deducts.
  *
  * Logs carry counts and causes only: never a name, an email, a key or an id.
  */
@@ -19,7 +21,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { address } from "@/lib/engine/eloyalty";
 import { tagFor, taggedReason } from "@/lib/engine/points-outbox";
-import { INVITES, type InviteKey, inviteDue, levelFor, modeReaches, syncReason } from "@/lib/engine/points-sync";
+import { INVITES, type InviteKey, inviteDue, levelFor, modeReaches, syncReason, tierWords } from "@/lib/engine/points-sync";
 import { allPaused } from "@/lib/points-outbox";
 import { recordRateLimit } from "@/lib/loyalty-rate";
 
@@ -39,7 +41,7 @@ export async function putField(host: string, key: string, path: string, body: un
 
 export type SyncResult = { feed: string; members: number; queued: number; fields: number; failed: number; busy: boolean; skipped?: string };
 
-type Member = Pick<schema.Membership, "id" | "userId" | "role" | "programTier" | "eoCustomerId" | "eoPassSerial" | "eoPassTypeId" | "eoLevelSent" | "eoOffersSent">;
+type Member = Pick<schema.Membership, "id" | "userId" | "role" | "programTier" | "eoCustomerId" | "eoPassSerial" | "eoPassTypeId" | "eoLevelSent" | "eoTierSent" | "rankKeptLevel" | "eoOffersSent">;
 
 /** Queue this member's moves: the opening move on their first sync, then one per new ledger row. Returns how many were queued. */
 export async function queueMemberMoves(feed: schema.LeaderboardFeed, m: Member): Promise<number> {
@@ -91,7 +93,7 @@ export async function syncFeed(feed: schema.LeaderboardFeed, now = new Date()): 
   if (!key) return { ...out, skipped: "no key" };
   const members = (await db.query.memberships.findMany({
     where: and(eq(schema.memberships.workspaceId, feed.workspaceId), isNotNull(schema.memberships.eoCustomerId), inArray(schema.memberships.role, ["coach", "client"])),
-    columns: { id: true, userId: true, role: true, programTier: true, eoCustomerId: true, eoPassSerial: true, eoPassTypeId: true, eoLevelSent: true, eoOffersSent: true },
+    columns: { id: true, userId: true, role: true, programTier: true, eoCustomerId: true, eoPassSerial: true, eoPassTypeId: true, eoLevelSent: true, eoTierSent: true, rankKeptLevel: true, eoOffersSent: true },
   })) as Member[];
   for (const m of members) {
     const isCoach = m.role === "coach";
@@ -117,10 +119,25 @@ export async function syncFeed(feed: schema.LeaderboardFeed, now = new Date()): 
       } else out.failed++;
       await sleep(PACE_MS);
     }
+    const points = (await db.select({ total: schema.pointsLedger.points }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, feed.workspaceId), eq(schema.pointsLedger.userId, m.userId)))).reduce((n, r) => n + r.total, 0);
+    // Tier: the kept rank by name, when it changed (H-1098). Never lower than the highest reached.
+    const tier = tierWords(points, m.rankKeptLevel);
+    if (syncs && m.eoTierSent !== tier) {
+      const a = address("passField", pass, { field: "Tier", value: tier });
+      const status = a.ok ? await putField(feed.host, key, a.path, a.body) : -1;
+      if (status === 429) {
+        out.busy = true;
+        break;
+      }
+      if (status >= 200 && status < 300) {
+        await db.update(schema.memberships).set({ eoTierSent: tier }).where(eq(schema.memberships.id, m.id));
+        out.fields++;
+      } else out.failed++;
+      await sleep(PACE_MS);
+    }
     // The invitation, once, with its link.
     if (invites) {
-      const points = (await db.select({ total: schema.pointsLedger.points }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, feed.workspaceId), eq(schema.pointsLedger.userId, m.userId)))).reduce((n, r) => n + r.total, 0);
-      const due = inviteDue({ role: m.role, programTier: m.programTier, points, sent: m.eoOffersSent });
+      const due = inviteDue({ role: m.role, programTier: m.programTier, points, rankKeptLevel: m.rankKeptLevel, sent: m.eoOffersSent });
       const link = due ? feed.inviteLinks[due] : undefined;
       if (due && link) {
         const sent = await writeInvite(feed, key, pass, due, link);
