@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 302,
+    n: 303,
     date: "2026-10-18",
     title: "Calls: this week's calls, in your time",
     lines: [
@@ -21,6 +21,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "For the coach: Settings → Calls lists every call with who it is for. Add, edit, switch off or reorder a call, mark a day with no call, and set the shared link and passcode.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 302,
+    date: "2026-10-19",
+    title: "Check points on your own Evolve Omega pass",
+    lines: [
+      "Coach → Your own program → Points desk: the add-and-deduct check now offers \"Your own pass\", so you can test 1 off and 1 back on your own pass without hiding yourself from your board. If your pass has 0 points, it says so and sends nothing: turn on the sync for your own pass first.",
+    ],
+    audience: "coach",
   },
   {
     n: 301,
