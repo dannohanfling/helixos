@@ -129,6 +129,19 @@ async function main() {
     await page.selectOption('[data-testid="brand-spelling"]', "us");
     await submit(page, '[data-testid="brand-form"] button[type="submit"]');
     await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
+    // The first save's note is still showing, and the submit helper returns on any POST, so wait for the save to land and the
+    // form to read back the cleared values.
+    for (let i = 0; i < 40; i++) {
+      if (!(await db.query.brandKits.findFirst({ where: eq(schema.brandKits.legalName, "Turas True North Ltd"), columns: { id: true } }))) break;
+      await page.waitForTimeout(250);
+    }
+    await page
+      .waitForFunction(
+        () => (document.querySelector('[data-testid="brand-legal-name"]') as HTMLInputElement | null)?.value === "" && (document.querySelector('[data-testid="brand-spelling"]') as HTMLSelectElement | null)?.value === "us",
+        null,
+        { timeout: 10000 },
+      )
+      .catch(() => undefined);
     if ((await page.locator('[data-testid="brand-legal-name"]').inputValue()) !== "" || (await page.locator('[data-testid="brand-spelling"]').inputValue()) !== "us") throw new Error("the legal name clears and the spelling goes back to American");
     console.log("✓ brand kit (H-811): Legal name, Descriptor under the logo, Hold the descriptor blank and Spelling (American / British and New Zealand) save, read back and clear");
     console.log("✓ brand kit (§6.1): faces from the list or typed under Other with the who-will-not-see line; the preview draws the kit as typed and marks the slide that cannot read; the check proposes an ink with Apply; ash grey on cream still refused on the server with the ratio; the Turas kit saved and read back; the accent pair warns with its ratio");

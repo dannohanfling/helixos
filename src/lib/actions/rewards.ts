@@ -8,7 +8,7 @@ import { totalPoints } from "@/lib/queries/points";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { requireCoach } from "@/lib/auth";
 import { catalogue, claimability } from "@/lib/engine/rewards";
-import { tierFor } from "@/lib/engine/tiers";
+import { rankOf } from "@/lib/engine/tiers";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import { claimDatesByName } from "@/lib/queries/rewards";
 import prizes from "@/data/seed/prizes.json";
@@ -32,7 +32,7 @@ export async function claimRewardAction(_prev: ClaimState, formData: FormData): 
     db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, workspaceId), eq(schema.rewardClaims.userId, userId)) }),
     claimDatesByName(workspaceId, v.tz),
   ]);
-  const verdict = claimability(item, { points, tierLevel: tierFor(points).level, claimed: new Set(mine.map((c) => c.rewardName)), claimDates: dates.get(item.name) ?? [], today: v.today, mode: config.perMonth });
+  const verdict = claimability(item, { points, tierLevel: rankOf(v.membership, points).level, claimed: new Set(mine.map((c) => c.rewardName)), claimDates: dates.get(item.name) ?? [], today: v.today, mode: config.perMonth });
   if (!verdict.ok) return { error: verdict.message };
   await db.insert(schema.rewardClaims).values({ id: newId(), workspaceId, userId, rewardName: item.name, pointsSpent: item.cost });
   if (item.cost > 0) {

@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 308,
+    date: "2026-10-19",
+    title: "The higher ranks mean more now",
+    lines: ["The higher ranks now take longer to earn, so they mean more. Any rank you've already reached is yours to keep."],
+    audience: "everyone",
+  },
+  {
     n: 307,
     date: "2026-10-19",
     title: "The tab bar stays at the bottom",
