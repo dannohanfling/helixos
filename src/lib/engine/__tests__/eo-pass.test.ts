@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { passNames, passOffer, safePassUrl } from "../eo-pass";
+import { createFailureWords, passNames, passOffer, refusalReason, safePassUrl } from "../eo-pass";
+import { address } from "../eloyalty";
 
 /** The Evolve Omega pass (H-622): who may get one, the names it carries, and the only links kept. */
 describe("the Evolve Omega pass", () => {
@@ -23,5 +24,33 @@ describe("the Evolve Omega pass", () => {
   it("keeps only a real https wallet link", () => {
     expect(safePassUrl("https://pass.example/eo-1")).toBe("https://pass.example/eo-1");
     for (const bad of ["http://pass.example/x", "javascript:alert(1)", "https://x y/z", "", null, undefined]) expect(safePassUrl(bad)).toBeNull();
+  });
+});
+
+describe("a refused pass says why (H-923)", () => {
+  it("reads eLoyalty's reason from the usual answer shapes", () => {
+    expect(refusalReason({ error: "MEMBER_ID is required" })).toBe("MEMBER_ID is required");
+    expect(refusalReason({ message: "Validation failed", errors: [{ field: "Points", message: "must be a number" }] })).toBe("Points: must be a number");
+    expect(refusalReason({ errors: ["First_Name too long", "Tier unknown"] })).toBe("First_Name too long; Tier unknown");
+    expect(refusalReason(null)).toBeNull();
+    expect(refusalReason({})).toBeNull();
+  });
+  it("never carries a member's detail: no email, link, quoted value or long number, at most 160 characters", () => {
+    const r = refusalReason({ error: "Email 'maya@example.com' already used by customer 123456789, see https://x.example/c/1 or \"Maya Torres\"" })!;
+    expect(r).not.toMatch(/maya|example\.com|123456789|https|Torres/i);
+    expect(refusalReason({ error: "x".repeat(400) })!.length).toBe(160);
+  });
+  it("says to wait only when eLoyalty is busy or failing", () => {
+    expect(createFailureWords(400, "MEMBER_ID is required")).toBe("eLoyalty refused the pass (400): MEMBER_ID is required.");
+    expect(createFailureWords(400, null)).toBe("eLoyalty refused the pass (400).");
+    expect(createFailureWords(403, null)).toMatch(/refused the program's key \(403\).*allowed templates/);
+    expect(createFailureWords(404, null)).toMatch(/could not find the pass template/);
+    expect(createFailureWords(429, null)).toMatch(/Try again in a minute/);
+    expect(createFailureWords(503, null)).toMatch(/Try again in a minute/);
+    expect(createFailureWords(400, null)).not.toMatch(/Try again in a minute/);
+  });
+  it("sends the template's own MEMBER_ID with the pass, the same as Id", () => {
+    const a = address("createPass", {}, { templateId: "t1", email: "e@x.test", firstName: "A", lastName: "B", externalId: "m1" });
+    expect(a.ok && a.body).toEqual({ Email: "e@x.test", First_Name: "A", Last_Name: "B", Id: "m1", MEMBER_ID: "m1" });
   });
 });

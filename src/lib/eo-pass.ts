@@ -8,8 +8,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { address, parseCreatedPass } from "@/lib/engine/eloyalty";
-import { type PassProgram, passNames, safePassUrl } from "@/lib/engine/eo-pass";
-import { statusWords } from "@/lib/leaderboard";
+import { type PassProgram, createFailureWords, passNames, refusalReason, safePassUrl } from "@/lib/engine/eo-pass";
 import { postJson } from "@/lib/points-outbox";
 
 /** The coach's own program in this workspace: the feed on a coach's membership that has a key and a template. */
@@ -40,8 +39,9 @@ export async function createMemberPass(m: schema.Membership, user: { name: strin
   if (!a.ok) return { ok: false, why: "The Evolve Omega program is not ready yet." };
   const r = await postJson(feed.host, key, a.path, a.body);
   if (r.status < 200 || r.status >= 300) {
-    console.log(`[eo-pass] create answered ${r.status}`);
-    return { ok: false, why: `Your pass could not be made just now (${statusWords(r.status)}). Try again in a minute.` };
+    const reason = refusalReason(r.json);
+    console.log(`[eo-pass] create answered ${r.status}${reason ? `: ${reason}` : " with no reason"}`);
+    return { ok: false, why: createFailureWords(r.status, reason) };
   }
   const parsed = parseCreatedPass(r.json);
   if (!parsed.ok) {
