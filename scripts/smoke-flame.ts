@@ -257,7 +257,7 @@ async function main() {
     const flat = await browser.newContext({ viewport: { width: 1280, height: 860 } });
     const f = await flat.newPage();
     watch(f);
-    await f.route(/\/streak\/.*\.(webm|mp4)$/, (r) => r.abort());
+    await f.route(/\/streak\/.*\.(webm|mp4)(\?.*)?$/, (r) => r.abort());
     await login(f);
     const fp = f.locator('[data-testid="streak-pill-side"]');
     await fp.waitFor({ timeout: 15000 });
