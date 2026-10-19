@@ -5,9 +5,15 @@
  * waits for the daily welcome to close, plays once (the count ticks up by one) and is stored, so a reload doesn't play it again.
  * The filmed loops (H-952): the pill plays its tier's pill loop and the page fetches no other tier's file; the sheet's stage loop
  * loads when it opens; never more than two playing. Reduced motion: the still, no surge, the day still stored. A loop that won't
+<<<<<<< HEAD
  * load: the still. On a phone (H-1063): the light copies, the poster at once and the video only once it plays, the stage loop
  * started on the press, the files cached as immutable; playback refused leaves the poster. Nothing wider than
  * 390 px. Runs against the dev server; fixtures go straight to the database.
+=======
+ * load: the still. Nothing wider than
+ * 390 px. Waiting on you (H-927): the sheet's button reads Close the day and opens the close on Today; Not now only shuts it.
+ * Runs against the dev server; fixtures go straight to the database.
+>>>>>>> origin/main
  */
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -28,9 +34,9 @@ async function login(page: Page) {
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
-  const { addDays, todayInTz } = await import("@/lib/dates");
+  const { addDays, hourInTz, todayInTz } = await import("@/lib/dates");
   const { streakFor } = await import("@/lib/queries/daily");
-  const { flameLabel, flameTier, nextTierLine, tierName } = await import("@/lib/engine/streak-flame");
+  const { flameLabel, flameTier, nextTierLine, sheetAction, tierName, WAITING_FROM_HOUR } = await import("@/lib/engine/streak-flame");
 
   const maya = await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") });
   must(maya, "the seed's client");
@@ -265,6 +271,66 @@ async function main() {
     await fp.screenshot({ path: "screenshots/fl04-still.png" });
     console.log("✓ a loop that won't load: the tier's still");
     await flat.close();
+
+    // ── 5. Waiting on you (H-927), at any hour of the run: Maya's own zone is set to one where it's evening now. ──
+    const evening = Array.from({ length: 27 }, (_, i) => `Etc/GMT${i - 12 < 0 ? "+" : "-"}${Math.abs(i - 12)}`.replace("Etc/GMT+0", "Etc/GMT"))
+      .find((z) => hourInTz(z) >= WAITING_FROM_HOUR + 1 && hourInTz(z) <= 22);
+    must(evening, "a zone where it is evening now");
+    const ownZone = mm!.timezone;
+    let reopened: { id: string; at: string } | null = null;
+    await db.update(schema.memberships).set({ timezone: evening!, welcomeShownOn: todayInTz(evening!), navState: {} }).where(eq(schema.memberships.id, mm!.id));
+    try {
+      const eveningDay = todayInTz(evening!);
+      // The seed may have closed that day already: open it again for the run, and put the close back after.
+      const closedThere = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.workspaceId, mm!.workspaceId), eq(schema.dailyLogs.userId, maya!.id), eq(schema.dailyLogs.date, eveningDay)) });
+      if (closedThere?.eveningDoneAt) {
+        reopened = { id: closedThere.id, at: closedThere.eveningDoneAt };
+        await db.update(schema.dailyLogs).set({ eveningDoneAt: null }).where(eq(schema.dailyLogs.id, closedThere.id));
+      }
+      const w = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+      const wp = await w.newPage();
+      watch(wp);
+      await login(wp);
+      const wbar = wp.locator('[data-testid="streak-pill-bar"]');
+      await wbar.waitFor({ state: "visible", timeout: 15000 });
+      {
+        must((await wbar.getAttribute("data-waiting")) === "true", `the evening zone's day waits (${evening})`);
+        const late = (await wbar.getAttribute("data-late")) === "true";
+        const want = sheetAction({ waiting: true, late })!;
+        await wbar.tap();
+        const act = wp.locator('[data-testid="streak-sheet-act"]');
+        await act.waitFor({ timeout: 5000 });
+        must((await act.innerText()).trim() === want.label, `the sheet's button reads ${want.label} (${await act.innerText()})`);
+        must(await act.evaluate((el) => el === document.activeElement), "the button to the close has the focus");
+        must((await act.boundingBox())!.height >= 44 && (await wp.locator('[data-testid="streak-sheet-close"]').boundingBox())!.height >= 44, "both buttons are 44 px");
+        must((await wp.locator('[data-testid="streak-sheet-close"]').innerText()).trim() === "Not now", "the other button says Not now");
+        await noSideways(wp, "the waiting sheet");
+        await wp.screenshot({ path: "screenshots/fl05-waiting-sheet.png" });
+        // Not now only shuts the sheet: still on the same page, nothing closed.
+        const where = wp.url();
+        await wp.locator('[data-testid="streak-sheet-close"]').tap();
+        must((await wp.locator('[data-testid="streak-sheet"]').count()) === 0 && wp.url() === where, "Not now shuts the sheet and goes nowhere");
+        // From another page, the button lands on Today's close card.
+        await wp.goto(`${base}/settings`, { waitUntil: "networkidle" });
+        await wbar.tap();
+        await act.waitFor({ timeout: 5000 });
+        await act.tap();
+        await wp.waitForURL(/\/today#close$/, { timeout: 15000 });
+        const card = wp.locator("#close");
+        await card.waitFor({ timeout: 10000 });
+        must((await wp.locator('[data-testid="streak-sheet"]').count()) === 0, "the sheet is gone once the close opens");
+        await wp.waitForFunction(() => {
+          const r = document.getElementById("close")?.getBoundingClientRect();
+          return Boolean(r && r.top < window.innerHeight && r.bottom > 0);
+        }, null, { timeout: 5000 });
+        await wp.screenshot({ path: "screenshots/fl06-close-card.png" });
+        console.log(`✓ waiting on you at 390: ${want.label} opens the close on Today, Not now only shuts the sheet (${evening})`);
+      }
+      await w.close();
+    } finally {
+      await db.update(schema.memberships).set({ timezone: ownZone }).where(eq(schema.memberships.id, mm!.id));
+      if (reopened) await db.update(schema.dailyLogs).set({ eveningDoneAt: reopened.at }).where(eq(schema.dailyLogs.id, reopened.id));
+    }
 
     must(failures.length === 0, `no server errors or page errors:\n${failures.join("\n")}`);
     console.log("\nsmoke-flame: all good");

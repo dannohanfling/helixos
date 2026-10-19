@@ -12,6 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+<<<<<<< HEAD
     n: 300,
     date: "2026-10-19",
     title: "Your streak flame starts sooner on a phone",
@@ -19,6 +20,28 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+=======
+    n: 301,
+    date: "2026-10-19",
+    title: "The Council Chamber comes alive",
+    lines: [
+      "My Board at night: the braziers and candles flicker, warm light breathes beneath them, and a faint moonbeam shimmers in the far doorway while dust drifts in the candlelight.",
+      "At golden hour, shafts of sun slant in from the arches, dust drifts through them, and a soft cloud shadow passes now and then.",
+      "While an advisor speaks, the moving light fades for their turn and comes back after. A hidden tab holds it all still, and your device's Reduce motion setting turns it off.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 286,
+    date: "2026-10-19",
+    title: "Send a message to your own Evolve Omega pass",
+    lines: [
+      "Coach → Your own program: once your pass is made, \"Send to my pass\" puts one message in the Latest Message on the back of your pass, and your phone shows it on the lock screen. It starts as \"Welcome to Evolve Omega\". It writes to your pass only, once per press.",
+    ],
+    audience: "coach",
+  },
+  {
+>>>>>>> origin/main
     n: 283,
     date: "2026-10-19",
     title: "Connect your own agents to your agent inbox",
@@ -65,6 +88,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     title: "Your rank's relic, if you reached it before the clips",
     lines: [
       "Reached Philosopher or above before the rank videos arrived? Your next open plays your rank's relic clip once, first thing, with your card. Then your day starts as usual.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 275,
+    date: "2026-10-19",
+    title: "Waiting on you takes you to Close the day",
+    lines: [
+      "When your streak says Waiting on you, tap the flame: its button now reads Close the day (Close yesterday just after midnight) and takes you straight to the evening close on Today. Not now shuts the panel.",
     ],
     audience: "everyone",
   },
