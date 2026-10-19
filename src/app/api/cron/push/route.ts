@@ -3,6 +3,7 @@ import { safeEqual } from "@/lib/crypto";
 import { reportError } from "@/lib/report-error";
 import { runDailyPushes } from "@/lib/push/daily";
 import { runCallPushes } from "@/lib/push/calls";
+import { runEventPushes } from "@/lib/push/events";
 import { pruneSends } from "@/lib/push/send";
 
 /**
@@ -22,9 +23,13 @@ export async function GET(request: Request) {
     reportError(e, { job: "cron:push-calls" });
     return [];
   });
+  const events = await runEventPushes(now).catch((e: unknown) => {
+    reportError(e, { job: "cron:push-events" });
+    return [];
+  });
   await pruneSends(now).catch((e: unknown) => reportError(e, { job: "cron:push-prune" }));
   const counts: Record<string, { sent: number; held: number }> = {};
-  for (const r of daily) {
+  for (const r of [...daily, ...events]) {
     const c = (counts[r.type] ??= { sent: 0, held: 0 });
     if (r.outcome.sent) c.sent++;
     else c.held++;
