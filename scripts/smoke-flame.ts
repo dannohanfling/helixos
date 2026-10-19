@@ -5,7 +5,8 @@
  * waits for the daily welcome to close, plays once (the count ticks up by one) and is stored, so a reload doesn't play it again.
  * The filmed loops (H-952): the pill plays its tier's pill loop and the page fetches no other tier's file; the sheet's stage loop
  * loads when it opens; never more than two playing. Reduced motion: the still, no surge, the day still stored. A loop that won't
- * load: the still. Nothing wider than
+ * load: the still. On a phone (H-1063): the light copies, the poster at once and the video only once it plays, the stage loop
+ * started on the press, the files cached as immutable; playback refused leaves the poster. Nothing wider than
  * 390 px. Waiting on you (H-927): the sheet's button reads Close the day and opens the close on Today; Not now only shuts it.
  * Runs against the dev server; fixtures go straight to the database.
  */
@@ -59,7 +60,7 @@ async function main() {
   const flameFiles = (page: Page) => {
     const got: string[] = [];
     page.on("request", (r) => {
-      const m = /\/streak\/(streak-[a-z]+-[a-z]+\.[a-z0-9]+)/.exec(r.url());
+      const m = /\/streak\/(streak-[a-z]+-[a-z]+(?:-m)?(?:-poster)?\.[a-z0-9]+)/.exec(r.url());
       if (m) got.push(m[1]);
     });
     return got;
@@ -119,7 +120,7 @@ async function main() {
     const mode = await pill.locator('[data-flame="fire"]').getAttribute("data-flame-mode");
     const fileTier = (await pill.getAttribute("data-waiting")) === "true" ? "ember" : flameTier(days);
     const src = await pill.locator("video").evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, paused: v.paused, rate: v.playbackRate }));
-    must(src.src.endsWith(`/streak/streak-${fileTier}-pill.webm`) && !src.paused, `the pill plays its tier's pill loop: ${JSON.stringify(src)}`);
+    must(src.src.includes(`/streak/streak-${fileTier}-pill.webm`) && !src.paused, `the pill plays its tier's pill loop: ${JSON.stringify(src)}`);
     must(src.rate === ((await pill.getAttribute("data-waiting")) === "true" ? 0.7 : 1), `the loop's speed (${src.rate})`);
     must(fetched.every((f) => f.startsWith(`streak-${fileTier}-pill.`) || f === `streak-${fileTier}-still.jpg`), `only the current tier's pill was fetched: ${JSON.stringify(fetched)}`);
     must((await playing(page)) <= 1, "one loop playing with the sheet closed");
@@ -172,9 +173,31 @@ async function main() {
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const p = await phone.newPage();
     watch(p);
+    const phoneFetched = flameFiles(p);
     await login(p);
     const bar = p.locator('[data-testid="streak-pill-bar"]');
     await bar.waitFor({ state: "visible", timeout: 15000 });
+    // Never a frozen look (H-1063): the phone copy's first frame is there at once as a plain image; the video stays invisible
+    // until it plays. Chromium here can't decode H.264, so the phone's MP4 never plays: the poster has to carry it.
+    const phoneTier = (await bar.getAttribute("data-waiting")) === "true" ? "ember" : flameTier(days);
+    await p.waitForFunction(() => document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-phone") === "true", null, { timeout: 5000 });
+    const poster = bar.locator('[data-flame-poster="true"]');
+    await p.waitForFunction(() => ((document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.naturalWidth ?? 0) > 0, null, { timeout: 5000 });
+    const posterSrc = (await poster.getAttribute("src")) ?? "";
+    const phoneMode = await bar.locator('[data-flame="fire"]').getAttribute("data-flame-mode");
+    must(
+      phoneMode === "still" ? posterSrc.includes(`streak-${phoneTier}-still.jpg`) : posterSrc.includes(`streak-${phoneTier}-pill-m-poster.jpg`),
+      `the phone shows the tier's picture at once (${phoneMode}, ${posterSrc})`,
+    );
+    const vis = await bar.locator("video").evaluateAll((vs) => vs.map((v) => getComputedStyle(v).opacity));
+    must(phoneMode === "video" || vis.every((o) => o === "0"), `a video that isn't playing stays invisible over the poster (${phoneMode}, ${JSON.stringify(vis)})`);
+    await sleep(800);
+    must(
+      phoneFetched.every((f) => f.startsWith(`streak-${phoneTier}-pill-m`) || f === `streak-${phoneTier}-still.jpg`),
+      `the phone fetches only the light pill copy: ${JSON.stringify(phoneFetched)}`,
+    );
+    const cache = await p.request.get(`${base}/streak/streak-${phoneTier}-pill-m.mp4?v=2`);
+    must(/immutable/.test(cache.headers()["cache-control"] ?? ""), `the flame files are cached as immutable (${cache.headers()["cache-control"]})`);
     must((await bar.getAttribute("aria-label")) === flameLabel(days), "the phone pill's name");
     const bb = await bar.boundingBox();
     must(bb && bb.height >= 44 && bb.x + bb.width <= 390, `the phone pill fits the bar (${JSON.stringify(bb)})`);
@@ -183,10 +206,14 @@ async function main() {
     await p.screenshot({ path: "screenshots/fl02-phone.png" });
     await bar.tap();
     await p.locator('[data-testid="streak-sheet"]').waitFor({ timeout: 5000 });
+    // The press started the stage file; the sheet opens on its poster.
+    must(phoneFetched.some((f) => f === `streak-${phoneTier}-stage-m.mp4`), `the press starts the phone's stage loop: ${JSON.stringify(phoneFetched)}`);
+    await p.waitForFunction(() => ((document.querySelector('[data-testid="streak-sheet"] [data-flame-poster="true"]') as HTMLImageElement | null)?.naturalWidth ?? 0) > 0, null, { timeout: 5000 });
+    must((await p.locator('[data-testid="streak-pill-bar"] [data-flame="fire"]').count()) === 1, "the pill stays under the sheet");
     await noSideways(p, "the sheet");
     await p.screenshot({ path: "screenshots/fl03-phone-sheet.png" });
     await p.locator('[data-testid="streak-sheet-close"]').tap();
-    console.log("✓ a phone at 390: the pill in the top bar, 44 px, the sheet, nothing sideways");
+    console.log("✓ a phone at 390: the pill in the top bar, 44 px; the light copy's poster at once, the video hidden until it plays; only the light files, cached as immutable; the press starts the stage loop and the sheet opens on its poster; nothing sideways");
     await phone.close();
 
     // ── 3. Reduced motion: no surge, the day still stored. ──
@@ -204,16 +231,46 @@ async function main() {
     console.log("✓ reduced motion: the still, no surge, the day stored");
     await still.close();
 
+    // ── 3b. Playback refused (Low Power Mode): the poster stays, nothing frozen, nothing errors. ──
+    await unfold();
+    const lowPower = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    await lowPower.addInitScript(() => {
+      HTMLMediaElement.prototype.play = function () {
+        return Promise.reject(new DOMException("The request is not allowed by the user agent", "NotAllowedError"));
+      };
+    });
+    const lp = await lowPower.newPage();
+    watch(lp);
+    await login(lp);
+    const lpPill = lp.locator('[data-testid="streak-pill-side"]');
+    await lpPill.waitFor({ timeout: 15000 });
+    await sleep(2500);
+    const lpMode = await lpPill.locator('[data-flame="fire"]').getAttribute("data-flame-mode");
+    must(lpMode === "loading" || lpMode === "idle", `playback refused: it never claims to play (${lpMode})`);
+    must(((await lpPill.locator('[data-flame-poster="true"]').evaluate((i: HTMLImageElement) => i.naturalWidth)) ?? 0) > 0, "playback refused: the poster shows");
+    must((await lpPill.locator("video").evaluate((v) => getComputedStyle(v).opacity)) === "0", "playback refused: the video stays invisible");
+    console.log("✓ playback refused (Low Power Mode): the poster stays, the video never shows a frozen frame");
+    await lowPower.close();
+
     // ── 4. A loop that won't load: the still. ──
     await unfold();
     const flat = await browser.newContext({ viewport: { width: 1280, height: 860 } });
     const f = await flat.newPage();
     watch(f);
-    await f.route(/\/streak\/.*\.(webm|mp4)$/, (r) => r.abort());
+    await f.route(/\/streak\/.*\.(webm|mp4)(\?.*)?$/, (r) => r.abort());
     await login(f);
     const fp = f.locator('[data-testid="streak-pill-side"]');
     await fp.waitFor({ timeout: 15000 });
-    await f.waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "still", null, { timeout: 10000 });
+    await f
+      .waitForFunction(() => document.querySelector('[data-testid="streak-pill-side"] [data-flame="fire"]')?.getAttribute("data-flame-mode") === "still", null, { timeout: 10000 })
+      .catch(async (e) => {
+        const at = await fp.evaluate((el) => {
+          const fire = el.querySelector('[data-flame="fire"]');
+          const v = el.querySelector("video");
+          return { mode: fire?.getAttribute("data-flame-mode"), networkState: v?.networkState, readyState: v?.readyState, error: v?.error?.code ?? null, preload: v?.getAttribute("preload"), sources: Array.from(v?.querySelectorAll("source") ?? []).map((s) => s.getAttribute("src")) };
+        });
+        throw new Error(`a loop that won't load never fell back to the still: ${JSON.stringify(at)} (${String(e).split("\n")[0]})`);
+      });
     must((await playing(f)) === 0 && (await stills(f)) >= 1, "no loop: the still, nothing playing");
     await fp.screenshot({ path: "screenshots/fl04-still.png" });
     console.log("✓ a loop that won't load: the tier's still");

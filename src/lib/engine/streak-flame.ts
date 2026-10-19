@@ -103,19 +103,42 @@ export function surgeEnvelope(since: number): number {
  * a still for reduced motion and a video that won't play. Photoreal fire on true black, so a screen blend lets the dark UI
  * show through. The waiting ember is the Ember loop, dimmed and slowed.
  */
-export type FlameClip = { webm: string; mp4: string; still: string; rate: number; brightness: number };
+export type FlameClip = {
+  /** H.264, listed first: the phone's hardware decoder starts it sooner than VP9 (H-1063). */
+  mp4: string;
+  /** VP9, a computer's second choice; none on a phone. */
+  webm: string | null;
+  /** Shown at once, before and under the video: the loop's first frame on a phone, the tier's still on a computer. */
+  poster: string;
+  /** The tier's last frame: reduced motion's picture. */
+  still: string;
+  rate: number;
+  /** Waiting on you: how dark the overlay laid over the flame is (0 = none). A layer, never a filter on the video. */
+  dim: number;
+};
 
 const FLAME_FILE: Record<FlameLook, FlameTier> = { ember: "ember", torch: "torch", gold: "gold", risk: "ember" };
 
-export function flameClip(look: FlameLook, place: "bar" | "stage"): FlameClip {
+/** Bumped when a flame file is swapped under the same name: the files are cached for a year as immutable. */
+export const FLAME_FILES_VERSION = 2;
+
+/**
+ * The files for a look and a place. A phone (`mobile`) gets the light copies (pill 160x240, stage 854x480, MP4 only) and
+ * their first-frame posters; a computer keeps the full loops with the still as the poster.
+ */
+export function flameClip(look: FlameLook, place: "bar" | "stage", mobile = false): FlameClip {
   const base = `/streak/streak-${FLAME_FILE[look]}`;
   const size = place === "bar" ? "pill" : "stage";
   const waiting = look === "risk";
-  return { webm: `${base}-${size}.webm`, mp4: `${base}-${size}.mp4`, still: `${base}-still.jpg`, rate: waiting ? 0.7 : 1, brightness: waiting ? 0.6 : 1 };
+  const v = `?v=${FLAME_FILES_VERSION}`;
+  const still = `${base}-still.jpg${v}`;
+  const common = { still, rate: waiting ? 0.7 : 1, dim: waiting ? 0.4 : 0 };
+  if (mobile) return { mp4: `${base}-${size}-m.mp4${v}`, webm: null, poster: `${base}-${size}-m-poster.jpg${v}`, ...common };
+  return { mp4: `${base}-${size}.mp4${v}`, webm: `${base}-${size}.webm${v}`, poster: still, ...common };
 }
 
-/** The surge drawn over the loop: up to about 30% larger and brighter at its peak; the waiting ember never swells. */
-export function surgeLook(look: FlameLook, boost: number): { scale: number; brightness: number; glow: number } {
+/** The surge drawn over the loop: up to about 30% larger with a glow layer behind it at its peak; the waiting ember never swells. */
+export function surgeLook(look: FlameLook, boost: number): { scale: number; glow: number } {
   const b = look === "risk" ? 0 : Math.max(0, Math.min(boost, 1));
-  return { scale: 1 + 0.3 * b, brightness: 1 + 0.45 * b, glow: b };
+  return { scale: 1 + 0.3 * b, glow: b };
 }
