@@ -366,6 +366,20 @@ async function main() {
     must((await page.locator('[data-testid="eo-pass-add"]').getAttribute("href")) === "https://pass.example/eo-1" && (await page.locator('[data-testid="eo-pass-qr"] svg').count()) === 1, "the card offers Add to wallet and its QR code");
     must((await page.locator('[data-testid="eo-pass-get"]').count()) === 0, "no second Get my pass");
     must(JSON.stringify((await mockCalls()).writes.slice(writes3)) === JSON.stringify([`POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`]), "one create, by the program's template");
+    // Step D (H-734): one Latest Message on the coach's own pass, only when Send is pressed, into Push_Notification once.
+    const writes4 = (await mockCalls()).writes.length;
+    await page.goto(`${base}/coach`);
+    must((await mockCalls()).writes.length === writes4, "opening Coach sends no message");
+    must((await page.locator('[data-testid="own-message-text"]').inputValue()) === "Welcome to Evolve Omega", "the message starts as the welcome");
+    await submit(page, '[data-testid="own-message-send"]');
+    await page.locator('[data-testid="own-message-result"]').waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="own-message-result"]').innerText()).startsWith("Sent."), "the card says the message was sent");
+    const msgWrites = (await mockCalls()).writes.slice(writes4);
+    must(JSON.stringify(msgWrites) === JSON.stringify(["PUT /api/external/v1/passes/pass.com.evolveomega/SER-eo-1/values/Push_Notification"]), `one write, to the coach's own pass's Push_Notification: ${msgWrites.join(", ")}`);
+    const msgFields = ((await (await fetch(`${HOST}/__calls`)).json()) as { fields: Record<string, string> }).fields;
+    must(msgFields["SER-eo-1/Push_Notification"] === "Welcome to Evolve Omega", "the message is on the pass");
+    must(Boolean((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.eoPassLastPushAt), "the time of the last message is kept");
+    console.log("✓ step D: one Latest Message on the coach's own pass, only on Send, one write");
     await page.goto(`${base}/coach`);
     await page.locator('[data-testid="own-issue"]').check();
     await submit(page, '[data-testid="own-issue-save"]');
@@ -534,7 +548,7 @@ async function main() {
     const writes = (await mockCalls()).writes;
     // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
     const create = `POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`;
-    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, create, ...syncWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, and the sync's moves and fields: ${writes.join(", ")}`);
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...syncWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, and the sync's moves and fields: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {

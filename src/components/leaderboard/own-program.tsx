@@ -3,7 +3,8 @@ import { Card } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { DeskSettings } from "@/components/leaderboard/desk-settings";
 import { checkLeaderboardAction, saveLeaderboardAction, setIssuePassesAction } from "@/lib/actions/leaderboard";
-import { setInvitesAction, setSyncModeAction } from "@/lib/actions/points-sync";
+import { sendPassMessageAction, setInvitesAction, setSyncModeAction } from "@/lib/actions/points-sync";
+import { PASS_MESSAGE_DEFAULT, PASS_MESSAGE_MAX, passMessageWords } from "@/lib/engine/pass-message";
 import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
 
 /**
@@ -11,7 +12,7 @@ import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
  * sealed eLoyalty key, shown by its last four, the host and the pass template), the "Issue passes" switch that opens
  * "Get my pass" to clients, the coach's own pass, and the Points desk's settings for the add-and-deduct check.
  */
-export function OwnProgramCard({ membershipId, feed, ownPass }: { membershipId: string; feed: schema.LeaderboardFeed | null; ownPass: { made: boolean; installed: boolean } }) {
+export function OwnProgramCard({ membershipId, feed, ownPass, passMessage }: { membershipId: string; feed: schema.LeaderboardFeed | null; ownPass: { made: boolean; installed: boolean; addressed?: boolean; lastMessageAt?: string | null }; passMessage?: string }) {
   const ready = Boolean(feed?.keyEncrypted && feed.templateId && feed.lastCheckOk);
   return (
     <Card className="mb-4" title="🎫 Your own program: the Evolve Omega pass" id="own-program">
@@ -45,6 +46,7 @@ export function OwnProgramCard({ membershipId, feed, ownPass }: { membershipId: 
             Open Rewards →
           </a>
         </p>
+        {feed && ready && ownPass.addressed ? <PassMessage lastMessageAt={ownPass.lastMessageAt ?? null} outcome={passMessage} /> : null}
         {feed ? (
           <form action={setIssuePassesAction} className="mt-2 flex flex-wrap items-center gap-2">
             <input type="hidden" name="id" value={feed.id} />
@@ -118,5 +120,28 @@ function SyncSettings({ feed, ready }: { feed: schema.LeaderboardFeed; ready: bo
         <p className="text-ink-3">Each invitation goes once per member, never to someone already on that program or above.</p>
       </form>
     </div>
+  );
+}
+
+/**
+ * Step D (H-734): one Latest Message on the coach's own pass, sent only when the coach presses Send. Shown once the pass
+ * exists (it is addressed by its serial), never for a client's pass.
+ */
+function PassMessage({ lastMessageAt, outcome }: { lastMessageAt: string | null; outcome?: string }) {
+  const said = passMessageWords(outcome);
+  return (
+    <form action={sendPassMessageAction} className="mt-2 flex flex-wrap items-center gap-1" data-testid="own-message">
+      <span>Message on your own pass:</span>
+      <input className="field min-w-40 flex-1 py-1 text-xs" name="message" defaultValue={PASS_MESSAGE_DEFAULT} maxLength={PASS_MESSAGE_MAX} required aria-label="Message on your own pass" data-testid="own-message-text" />
+      <SubmitButton className="btn btn-ghost btn-xs" pendingText="Sending…" data-testid="own-message-send">
+        Send to my pass
+      </SubmitButton>
+      <span className="w-full text-ink-3">Writes the Latest Message on your pass only, once per press. Your phone shows it on the lock screen.{lastMessageAt ? ` Last sent ${lastMessageAt.slice(0, 16).replace("T", " ")} UTC.` : ""}</span>
+      {said ? (
+        <span className={`w-full ${said.good ? "text-good" : "text-danger"}`} role="status" data-testid="own-message-result">
+          {said.text}
+        </span>
+      ) : null}
+    </form>
   );
 }
