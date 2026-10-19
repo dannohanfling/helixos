@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { boardQuestion, FALLS, leakOf, missingLine, pictureFor, SEGMENTS, slipped, STAGE_TAG_AT, STAGES, STEP_LABELS, STEP_TAG_AT, STEP_TOOLS, stepRate, waterWidth, windows } from "@/lib/engine/aqueduct";
+import { BODY, boardQuestion, CHANNEL, CHANNEL_LENGTH, dashPeriod, DROP_PERIOD, FALL_STREAKS, fallSheet, FILL_SECONDS, FLOW, flowWidth, frontReaches, pathLength, RUN_PERIOD, FALLS, leakOf, missingLine, pictureFor, SEGMENTS, slipped, STAGE_TAG_AT, STAGES, STEP_LABELS, STEP_TAG_AT, STEP_TOOLS, stepRate, waterWidth, windows } from "@/lib/engine/aqueduct";
 
 describe("the Aqueduct (rev 711)", () => {
   it("eight stages, six steps, each step with a label and a tool; the geometry as the brief lists it", () => {
@@ -54,5 +55,54 @@ describe("the Aqueduct (rev 711)", () => {
     expect(waterWidth(10, null)).toBe(3);
     expect(missingLine([1, 2, 3, 4, 5, 6, 7, 8])).toBeNull();
     expect(missingLine([1, null, 3, 4, 5, 6, 7, null])).toBe("No count yet for Comments, Clients: the steps either side are left out until there is one.");
+  });
+});
+
+describe("the water (H-966)", () => {
+  it("runs three flow layers over the body: ripple bands, streaks in two lanes, a sparse sparkle", () => {
+    expect(FLOW.map((l) => l.key)).toEqual(["band", "streak-a", "streak-b", "spark"]);
+    expect(new Set(FLOW.map((l) => l.seconds)).size).toBe(FLOW.length);
+    expect(FLOW.find((l) => l.key === "band")!.seconds).toBe(Math.max(...FLOW.map((l) => l.seconds)));
+    expect(BODY.core).toBeLessThan(1);
+  });
+
+  it("loops every pattern without a jump: each period divides the shared run, which the stylesheet uses", () => {
+    for (const l of FLOW) expect(RUN_PERIOD % dashPeriod(l.array)).toBeCloseTo(0, 6);
+    for (const s of FALL_STREAKS) expect(DROP_PERIOD % dashPeriod(s.array)).toBe(0);
+    const css = readFileSync("src/components/aqueduct.css", "utf8");
+    expect(css).toContain(`@keyframes aq-run { to { stroke-dashoffset: -${RUN_PERIOD}; } }`);
+    expect(css).toContain(`@keyframes aq-drop { to { stroke-dashoffset: -${DROP_PERIOD}; } }`);
+    // The fountain's streaks run aq-drop too.
+    expect(DROP_PERIOD % dashPeriod(readFileSync("src/components/aqueduct-repair.css", "utf8").match(/\.aq-wf \{[^}]*stroke-dasharray: ([\d ]+);/)![1])).toBe(0);
+  });
+
+  it("keeps the thinnest water showing every layer", () => {
+    for (const l of FLOW) expect(flowWidth(l, 3)).toBeGreaterThanOrEqual(l.min);
+    expect(flowWidth(FLOW[1], 3)).toBe(FLOW[1].min);
+    expect(flowWidth(FLOW[0], 14)).toBeCloseTo(14 * FLOW[0].width, 5);
+  });
+
+  it("joins the segments into one channel for the front, from the source to the fountain", () => {
+    expect(CHANNEL.startsWith("M185,266")).toBe(true);
+    expect(CHANNEL.endsWith("1528,598")).toBe(true);
+    expect(CHANNEL.match(/M/g)).toHaveLength(1);
+    expect(CHANNEL_LENGTH).toBeCloseTo(SEGMENTS.reduce((sum, s) => sum + pathLength(s.d), 0), 0);
+    expect(pathLength("M0,0 L3,4")).toBe(5);
+  });
+
+  it("lets what waits for the water arrive with the front", () => {
+    expect(frontReaches(185)).toBe(0);
+    expect(frontReaches(1528)).toBe(FILL_SECONDS);
+    expect(frontReaches(735)).toBeGreaterThan(0);
+    expect(frontReaches(735)).toBeLessThan(frontReaches(1165));
+  });
+
+  it("draws a fall as a sheet that widens as it falls, with five streaks of their own widths and speeds", () => {
+    const d = fallSheet(735, 505, 750);
+    expect(d.startsWith("M731,505 L739,505")).toBe(true);
+    expect(d).toContain("748,750 L722,750");
+    expect(FALL_STREAKS).toHaveLength(5);
+    expect(new Set(FALL_STREAKS.map((s) => s.seconds)).size).toBe(5);
+    expect(new Set(FALL_STREAKS.map((s) => s.w)).size).toBeGreaterThanOrEqual(4);
   });
 });

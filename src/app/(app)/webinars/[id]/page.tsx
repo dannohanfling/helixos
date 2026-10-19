@@ -87,8 +87,8 @@ import { DraftKeeper } from "@/components/draft-keeper";
 import { MoneyInput } from "@/components/money-input";
 import { ItemGone } from "@/components/item-gone";
 import { WebinarDraftPanel, WebinarHistory } from "@/components/webinar-draft-panel";
-import { foundationDefaults, historyFor, pendingDrafts } from "@/lib/webinar-drafts";
-import { BELIEF_COLUMN, beliefRows, foundationRows, type BeliefDraft, type BeliefField, type FoundationDraft, type OfferDraft } from "@/lib/engine/webinar-drafts";
+import { foundationDefaults, historyFor, pendingDrafts, sectionDefaults } from "@/lib/webinar-drafts";
+import { BELIEF_COLUMN, beliefRows, deckRows, foundationRows, scriptRows, type BeliefDraft, type BeliefField, type DeckDraft, type FoundationDraft, type OfferDraft, type ScriptDraft } from "@/lib/engine/webinar-drafts";
 
 const ACT_ICON: Record<string, string> = {
   opening: "🎬",
@@ -320,8 +320,17 @@ export default async function WebinarWizardPage({
 
   // Claude's drafts (H-181): the one waiting for this step, the one being edited in its form, and the webinar's history.
   const [drafts, history] = await Promise.all([pendingDrafts(w.id), historyFor(w.id)]);
-  const stepDraft = drafts.find((d) => d.step === step) ?? null;
-  const editing = stepDraft && sp.draft === stepDraft.id ? stepDraft : null;
+  // Script and deck drafts are one per section: the script step shows the open section's, the deck step the one named (or the first).
+  const sectionDrafts = drafts.filter((d) => d.step === step && d.sectionKey);
+  const stepDraft =
+    step === "script"
+      ? (drafts.find((d) => d.step === "script" && d.sectionKey === section?.sectionKey) ?? null)
+      : step === "deck"
+        ? (sectionDrafts.find((d) => d.sectionKey === sp.section) ?? sectionDrafts[0] ?? null)
+        : (drafts.find((d) => d.step === step) ?? null);
+  // Edit on a deck draft opens its section's form on the script step, filled with the draft's lines.
+  const editing = sp.draft ? (drafts.find((d) => d.id === sp.draft && (d.step === step || (step === "script" && d.step === "deck" && d.sectionKey === section?.sectionKey))) ?? null) : null;
+  const sectionForm = section ? sectionDefaults(section, editing) : section;
   const wf = editing?.step === "foundation" ? foundationDefaults(w, editing.fields as FoundationDraft) : w;
   const offerEdit = editing?.step === "offer" ? (editing.fields as OfferDraft) : null;
   const wo = offerEdit ? { ...w, offerId: offerEdit.offerId ?? w.offerId, ctaType: offerEdit.ctaType ?? w.ctaType } : w;
@@ -345,7 +354,14 @@ export default async function WebinarWizardPage({
               ...((stepDraft.fields as OfferDraft).offerId ? [{ key: "offerId", label: "The offer it sells", now: offers.find((o) => o.id === w.offerId)?.name ?? "", draft: offers.find((o) => o.id === (stepDraft.fields as OfferDraft).offerId)?.name ?? "(an offer no longer there)" }] : []),
               ...((stepDraft.fields as OfferDraft).ctaType ? [{ key: "ctaType", label: "Call to action", now: w.ctaType, draft: (stepDraft.fields as OfferDraft).ctaType! }] : []),
             ]
-          : [];
+          : stepDraft.step === "script"
+            ? scriptRows((sections.find((x) => x.sectionKey === stepDraft.sectionKey) ?? {}) as Record<string, unknown>, stepDraft.fields as ScriptDraft)
+            : stepDraft.step === "deck"
+              ? deckRows(sections.find((x) => x.sectionKey === stepDraft.sectionKey)?.keyPoints ?? null, stepDraft.fields as DeckDraft, (id) => deckLibrary.find((i) => i.id === id)?.caption || "one of your Images")
+              : [];
+  const draftSection = stepDraft?.sectionKey ? sections.find((x) => x.sectionKey === stepDraft.sectionKey) : undefined;
+  // The other sections with a draft waiting on this step, so none is missed while one is open.
+  const otherSectionDrafts = (step === "script" ? drafts.filter((d) => d.step === "script") : step === "deck" ? sectionDrafts : []).filter((d) => d.id !== stepDraft?.id);
   const DRAFT_NOTES: Record<string, string> = { approved: "Claude's draft is in. Undo is under History for seven days.", discarded: "Claude's draft was discarded. Undo is under History for seven days.", undone: "Undone." };
 
   return (
@@ -436,8 +452,32 @@ export default async function WebinarWizardPage({
         </p>
       ) : stepDraft && draftRows.length ? (
         <div className="mb-4">
-          <WebinarDraftPanel webinarId={w.id} step={step} draftId={stepDraft.id} rows={draftRows} notes={stepDraft.notes} written={stepDraft.createdAt} tz={v.tz} editHref={`/webinars/${w.id}?step=${step}&draft=${stepDraft.id}`} />
+          <WebinarDraftPanel
+            webinarId={w.id}
+            step={step}
+            sectionKey={stepDraft.sectionKey}
+            sectionName={draftSection?.name}
+            draftId={stepDraft.id}
+            rows={draftRows}
+            notes={stepDraft.notes}
+            written={stepDraft.createdAt}
+            tz={v.tz}
+            editHref={stepDraft.sectionKey ? `/webinars/${w.id}?step=script&section=${stepDraft.sectionKey}&draft=${stepDraft.id}` : `/webinars/${w.id}?step=${step}&draft=${stepDraft.id}`}
+          />
         </div>
+      ) : null}
+      {!editing && otherSectionDrafts.length ? (
+        <p className="mb-4 rounded-lg bg-accent/5 p-3 text-sm" data-testid="draft-other-sections">
+          Claude&apos;s {step === "deck" ? "slides" : "drafts"} also wait for:{" "}
+          {otherSectionDrafts.map((d, i) => (
+            <span key={d.id}>
+              {i ? ", " : ""}
+              <Link href={`/webinars/${w.id}?step=${step}&section=${d.sectionKey}#claude-draft`} className="underline" data-testid="draft-other-link">
+                {sections.find((x) => x.sectionKey === d.sectionKey)?.name ?? d.sectionKey}
+              </Link>
+            </span>
+          ))}
+        </p>
       ) : null}
       {step === "foundation" ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
@@ -987,9 +1027,10 @@ export default async function WebinarWizardPage({
               ) : null;
             })()}
             {isUnreviewed(section.origin) ? <UnreviewedMark action={acceptSectionAction} fields={{ id: w.id, sectionKey: section.sectionKey }} className="mt-3" /> : null}
-            <form action={updateSectionAction} className="mt-4 space-y-3">
+            <form key={editing ? `draft-${editing.id}` : "saved"} action={updateSectionAction} className="mt-4 space-y-3">
               <input type="hidden" name="id" value={w.id} />
-              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.section-${section.sectionKey}`} confirms={sp.savedSection && /^[a-z0-9_-]+$/.test(sp.savedSection) ? `webinar.${v.user.id}.${w.id}.section-${sp.savedSection}` : undefined} />
+              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.section-${section.sectionKey}${editing ? `.draft.${editing.id}` : ""}`} confirms={sp.savedSection && /^[a-z0-9_-]+$/.test(sp.savedSection) ? `webinar.${v.user.id}.${w.id}.section-${sp.savedSection}` : undefined} />
+              {editing ? <input type="hidden" name="fromDraft" value={editing.id} /> : null}
               <input
                 type="hidden"
                 name="sectionKey"
@@ -1038,7 +1079,7 @@ export default async function WebinarWizardPage({
                 <textarea
                   className="field min-h-20"
                   name="keyPoints"
-                  defaultValue={section.keyPoints ?? ""}
+                  defaultValue={sectionForm?.keyPoints ?? ""}
                   placeholder={"One idea per line. Each line is one slide."}
                   data-testid="section-key-points"
                 />
@@ -1066,7 +1107,7 @@ export default async function WebinarWizardPage({
                 <textarea
                   className="field min-h-56"
                   name="script"
-                  defaultValue={section.script ?? ""}
+                  defaultValue={sectionForm?.script ?? ""}
                   placeholder="Talk it out loud first. Then type what you said."
                 />
               </Field>
@@ -1079,7 +1120,7 @@ export default async function WebinarWizardPage({
                   <input
                     className="field"
                     name="transitionIn"
-                    defaultValue={section.transitionIn ?? ""}
+                    defaultValue={sectionForm?.transitionIn ?? ""}
                     placeholder={tpl.exampleTransition
                       ?.split("|")[0]
                       ?.replace("In:", "")
@@ -1090,7 +1131,7 @@ export default async function WebinarWizardPage({
                   <input
                     className="field"
                     name="transitionOut"
-                    defaultValue={section.transitionOut ?? ""}
+                    defaultValue={sectionForm?.transitionOut ?? ""}
                     placeholder={tpl.exampleTransition
                       ?.split("|")[1]
                       ?.replace("Out:", "")
@@ -1104,12 +1145,12 @@ export default async function WebinarWizardPage({
                   <textarea
                     className="field min-h-16"
                     name="deliveryNote"
-                    defaultValue={section.deliveryNote ?? ""}
+                    defaultValue={sectionForm?.deliveryNote ?? ""}
                     data-testid="delivery-note"
                   />
                 </Field>
                 <label className="flex items-center gap-2 text-sm" title="The first key point stays as the line; each further point is added beneath it on the next slide, the way a live presenter paces a reveal.">
-                  <input type="checkbox" name="buildStyle" value="reveal" defaultChecked={section.buildStyle === "reveal"} data-testid="build-reveal" /> Build it up, one point per slide
+                  <input type="checkbox" name="buildStyle" value="reveal" defaultChecked={sectionForm?.buildStyle === "reveal"} data-testid="build-reveal" /> Build it up, one point per slide
                 </label>
                 <Field label="Minutes">
                   <input
@@ -1118,7 +1159,7 @@ export default async function WebinarWizardPage({
                     type="number"
                     min={1}
                     max={30}
-                    defaultValue={section.durationMin}
+                    defaultValue={sectionForm?.durationMin ?? section.durationMin}
                   />
                   {(() => {
                     const pace = sectionPace(section);

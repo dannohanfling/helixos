@@ -32,7 +32,7 @@ describe("migration 0212: block a member, report a win", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0212_block_report");
     expect(at).toBeGreaterThan(0);
-    expect(journal.entries[at - 1]?.tag).toBe("0209_points_sync");
+    expect(journal.entries[at - 1]?.tag).toBe("0211_calls");
     expect(journal.entries[at].when).toBeGreaterThan(journal.entries[at - 1].when);
   });
 });

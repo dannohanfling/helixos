@@ -511,6 +511,12 @@ export async function markOwnerRead(o: Owner): Promise<void> {
   if (ids.length) await db.update(schema.handoffDeliveries).set({ deliveredAt: nowIso() }).where(and(inArray(schema.handoffDeliveries.messageId, ids), eq(schema.handoffDeliveries.recipient, DANNO), isNull(schema.handoffDeliveries.deliveredAt)));
 }
 
+/** How many plans and requests wait for the owner's decision: the Today line (H-727 PR 2). */
+export async function waitingCount(o: Owner): Promise<number> {
+  const [waiting] = await db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)));
+  return Number(waiting?.n ?? 0);
+}
+
 export async function inboxCount(o: Owner): Promise<number> {
   const [waiting] = await db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)));
   const [unread] = await db

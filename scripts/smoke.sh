@@ -31,7 +31,7 @@ set -euo pipefail
 main() {
   cd "$(dirname "$0")/.."
 
-  ALL=(base firstday loop rewards goals coach wave3 composer library wizards ladders teaching features voice voicepack leaderboard socrates ghl ai essence fathom recordings email headers auth evidence magnets avatars interview board proofs botfields provenance tenancy coach-support deck deck-images firstdeck brain botsales rituals reports community move import deletes erase body whats-new switch chat mcp botmcp connect mf hermes glossary forum handoff stall team ooh arrival horizon scenes colosseum my-helix settings aqueduct flame webinardrafts inboxlinks memberinbox blocks)
+  ALL=(base firstday loop rewards goals coach wave3 composer library wizards ladders teaching features voice voicepack leaderboard socrates ghl ai essence fathom recordings email headers auth evidence magnets avatars interview board proofs botfields provenance tenancy coach-support deck deck-images firstdeck brain botsales rituals reports community move import deletes erase body whats-new switch chat mcp botmcp connect mf hermes funnel1 glossary forum handoff stall team ooh arrival horizon scenes colosseum my-helix settings aqueduct flame webinardrafts inboxlinks memberinbox calls blocks)
   BASE_URL="${BASE_URL:-http://localhost:3000}"
 
   if [[ $# -eq 0 ]]; then

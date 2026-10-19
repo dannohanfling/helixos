@@ -239,6 +239,8 @@ export const WORKSPACE_TABLES = {
   glossary_entries: schema.glossaryEntries,
   // On the horizon (H-385): the coach's list of what is shipped, being built, next and explored; no member's own.
   horizon_items: schema.horizonItems,
+  // The weekly calls (H-828): the coach's schedule, read by every member at their level; no member's own.
+  program_calls: schema.programCalls,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */
@@ -256,6 +258,7 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
   cert_modules: "the shared certification modules",
   cert_deliverables: "the shared certification deliverables; a member's own work is in certification_submissions",
   lessons: "a workspace course's lessons, which go with the course",
+  program_call_skips: "a weekly call's dates with no call, which go with the call (and the call with the workspace)",
   evidence_shared: "the shared evidence library, published for every member, with no owner",
   rate_limits: "throttle counters keyed by address and window, holding no content",
   deletion_audits: "the record that a deletion happened: kept by design, with no content",
