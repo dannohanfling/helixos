@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { markTierCelebratedAction } from "@/lib/actions/tiers";
+import { markRankClipSeenAction, markTierCelebratedAction } from "@/lib/actions/tiers";
 import type { RankCard, RankClip } from "@/lib/engine/scenes";
 import { armSounds, playSound } from "@/lib/sounds";
 import { lbSerif } from "@/components/leaderboard/fonts";
@@ -11,12 +11,20 @@ import "./rank-up.css";
 
 /** The welcome says so when it closes; a rank-up due on the same open waits for it. */
 export const WELCOME_CLOSED = "helixos:welcome-closed";
+/** The catch-up ceremony says so when it closes; the daily welcome held back for it starts then. */
+export const RANK_CLOSED = "helixos:rank-closed";
 /** The medal's strike (the design's --t for the second phone), the clip's ceiling, and the card's run from the strike to the last button. */
 const MEDAL_MS = 1300;
 const CLIP_MAX_MS = 15000;
 const CARD_MS = 2000;
 
-export type RankUpProps = { stampOnly: true; level: number } | { stampOnly: false; card: RankCard; clip: RankClip | null; afterWelcome: boolean };
+/**
+ * `catchUp` (H-934): the ceremony for a rank reached before the relic clips, first thing on the open: "first" when the daily
+ * welcome waits for it, "alone" when there's none today (its close then tells the streak flame the opening is over).
+ */
+export type RankUpProps =
+  | { stampOnly: true; level: number; clipOnly?: boolean }
+  | { stampOnly: false; card: RankCard; clip: RankClip | null; afterWelcome: boolean; catchUp?: "first" | "alone" };
 
 /**
  * The rank-up ceremony (H-327 §1): once per rank, ever, the highest of several at once, after the welcome when both are due.
@@ -27,14 +35,15 @@ export type RankUpProps = { stampOnly: true; level: number } | { stampOnly: fals
  * stamped silently at their current rank instead, as before.
  */
 export function RankUp(props: RankUpProps) {
-  if (props.stampOnly) return <RankStamp level={props.level} />;
-  return <Ceremony card={props.card} clip={props.clip} afterWelcome={props.afterWelcome} />;
+  if (props.stampOnly) return <RankStamp level={props.level} clipOnly={props.clipOnly ?? false} />;
+  return <Ceremony card={props.card} clip={props.clip} afterWelcome={props.catchUp ? false : props.afterWelcome} catchUp={props.catchUp} />;
 }
 
-function RankStamp({ level }: { level: number }) {
+/** A silent stamp: the rank seen (never recorded before), or only its clip seen (reached after the clips went live, H-934). */
+function RankStamp({ level, clipOnly }: { level: number; clipOnly: boolean }) {
   useEffect(() => {
-    void markTierCelebratedAction(level);
-  }, [level]);
+    void (clipOnly ? markRankClipSeenAction(level) : markTierCelebratedAction(level));
+  }, [level, clipOnly]);
   return null;
 }
 
@@ -66,7 +75,7 @@ const Medal = ({ numeral }: { numeral: string }) => (
   </>
 );
 
-function Ceremony({ card, clip, afterWelcome }: { card: RankCard; clip: RankClip | null; afterWelcome: boolean }) {
+function Ceremony({ card, clip, afterWelcome, catchUp }: { card: RankCard; clip: RankClip | null; afterWelcome: boolean; catchUp?: "first" | "alone" }) {
   const router = useRouter();
   const quiet = useQuiet();
   const hidden = useHidden();
@@ -130,7 +139,13 @@ function Ceremony({ card, clip, afterWelcome }: { card: RankCard; clip: RankClip
   };
   const close = () => {
     setClosed(true);
-    void markTierCelebratedAction(card.level);
+    if (!catchUp) void markTierCelebratedAction(card.level);
+    // A clip played: the rank's relic is seen, so no catch-up ever plays it again (H-934).
+    if (clip) void markRankClipSeenAction(card.level);
+    if (catchUp) {
+      window.dispatchEvent(new Event(RANK_CLOSED));
+      if (catchUp === "alone") window.dispatchEvent(new Event(WELCOME_CLOSED));
+    }
   };
   useEffect(() => {
     if (!showing) return;
