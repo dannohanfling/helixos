@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "243e5fe6-869b-4704-84c3-584005fd2ce3",
-  "prevId": "ebf51a63-0488-4baa-a005-34b858586d26",
+  "id": "8070ee4b-3fa7-4868-83c5-56c8c27501d0",
+  "prevId": "c533620d-ce7b-45b5-bd57-6d6a012cd18b",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -4861,6 +4861,36 @@
           "notNull": true,
           "autoincrement": false,
           "default": true
+        },
+        "spelling": {
+          "name": "spelling",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'us'"
+        },
+        "legal_name": {
+          "name": "legal_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "descriptor": {
+          "name": "descriptor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "descriptor_hidden": {
+          "name": "descriptor_hidden",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         },
         "created_at": {
           "name": "created_at",
