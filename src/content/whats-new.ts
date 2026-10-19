@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 279,
+    date: "2026-10-19",
+    title: "Your streak flame is real fire now",
+    lines: [
+      "The flame by your streak is filmed fire: an Ember for your first week, a Torch from day 7 and a Gold flame from day 30. Tap it for the big version. Before you close the day it burns low and slow, waiting on you.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 276,
     date: "2026-10-19",
     title: "Your rank's relic, if you reached it before the clips",
