@@ -255,7 +255,9 @@ async function main() {
       for (const w of [390, 1024, 1440]) {
         await page2.setViewportSize({ width: w, height: 900 });
         await page2.goto(aq, { waitUntil: "networkidle" });
-        must((await page2.locator('[data-testid="aqueduct-fountain"]').count()) === 1, `${w}/${look}: the fountain`);
+        // Once the repair has been seen, Golden hour with no leak plays the filmed loop in place of the drawn fountain (H-1180).
+        const loopHere = (await page2.locator('[data-testid="aqueduct-scene"]').getAttribute("data-loop")) === "1";
+        must(loopHere ? look === "day" && (await page2.locator('[data-testid="aqueduct-loop"]').count()) === 1 && (await page2.locator('[data-testid="aqueduct-fountain"]').count()) === 0 : (await page2.locator('[data-testid="aqueduct-fountain"]').count()) === 1, `${w}/${look}: the fountain, or by day the filmed loop`);
         const sideways = await page2.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         must(sideways <= 0, `${w}/${look}: nothing scrolls sideways (${sideways}px)`);
         if (w === 390 && look === "day") {
@@ -268,7 +270,7 @@ async function main() {
       }
     }
     await page2.close();
-    console.log("✓ Aqueduct: the fountain at 390, 1024 and 1440 in both looks, nothing sideways; the card under the picture on a phone");
+    console.log("✓ Aqueduct: the fountain (by day once the repair is seen, the filmed loop) at 390, 1024 and 1440 in both looks, nothing sideways; the card under the picture on a phone");
 
     // ── The Forum (PR 3). ──
     const fo = await ctx.newPage();
