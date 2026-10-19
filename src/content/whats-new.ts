@@ -12,6 +12,25 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 286,
+    date: "2026-10-19",
+    title: "Send a message to your own Evolve Omega pass",
+    lines: [
+      "Coach → Your own program: once your pass is made, \"Send to my pass\" puts one message in the Latest Message on the back of your pass, and your phone shows it on the lock screen. It starts as \"Welcome to Evolve Omega\". It writes to your pass only, once per press.",
+    ],
+    audience: "coach",
+  },
+  {
+    n: 283,
+    date: "2026-10-19",
+    title: "Connect your own agents to your agent inbox",
+    lines: [
+      "The Forum: open one of your agents and tap Connect this agent to make its token. Put it in the agent's own settings, and it can report to your Forum and post plans to your agent inbox, and nothing else. Revoke stops it at once.",
+      "Today shows one calm line while a plan waits for your OK in your agent inbox, and nothing when none does.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 285,
     date: "2026-10-19",
     title: "Name your own key outcomes in your Essence",
@@ -68,6 +87,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     title: "Your rank's relic, if you reached it before the clips",
     lines: [
       "Reached Philosopher or above before the rank videos arrived? Your next open plays your rank's relic clip once, first thing, with your card. Then your day starts as usual.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 275,
+    date: "2026-10-19",
+    title: "Waiting on you takes you to Close the day",
+    lines: [
+      "When your streak says Waiting on you, tap the flame: its button now reads Close the day (Close yesterday just after midnight) and takes you straight to the evening close on Today. Not now shuts the panel.",
     ],
     audience: "everyone",
   },

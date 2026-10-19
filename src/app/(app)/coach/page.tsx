@@ -48,7 +48,7 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string }> }) {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const claimsShown = sp.claims === "done" ? "done" : "open";
@@ -312,7 +312,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
             ) : null}
           </p>
         ) : null}
-        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt) }} /> : null}
+        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt), addressed: Boolean(v.membership.eoPassSerial && v.membership.eoPassTypeId), lastMessageAt: v.membership.eoPassLastPushAt }} passMessage={sp.passMessage} /> : null}
         <Card className="mb-4" title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href={allOpen ? "/coach" : "/coach?connections=open"} className="underline" data-testid="connections-all">{allOpen ? "Close all" : "Open all"}</Link><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
         {rows.length ? (
             <ul className="divide-y">

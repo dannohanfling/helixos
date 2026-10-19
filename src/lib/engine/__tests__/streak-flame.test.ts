@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flameClip, flameLabel, flameStateOf, flameTier, nextTierLine, surgeDue, surgeEnvelope, surgeLook, SURGE_SECONDS, tierName } from "@/lib/engine/streak-flame";
+import { CLOSE_HREF, flameClip, flameLabel, flameStateOf, flameTier, nextTierLine, sheetAction, surgeDue, surgeEnvelope, surgeLook, SURGE_SECONDS, tierName } from "@/lib/engine/streak-flame";
 
 const base = { running: 12, asOf: "2026-10-17", today: "2026-10-17", hour: 10, active: new Set(["2026-10-16", "2026-10-17"]), closed: new Set(["2026-10-16"]), seenOn: "2026-10-17" };
 
@@ -34,6 +34,18 @@ describe("streak flame (H-558)", () => {
   it("inside the late close-out window, yesterday not closed is waiting", () => {
     expect(flameStateOf({ ...base, hour: 1, asOf: "2026-10-16", closed: new Set() }).waiting).toBe(true);
     expect(flameStateOf({ ...base, hour: 1, asOf: "2026-10-16", closed: new Set(["2026-10-16"]) }).waiting).toBe(false);
+  });
+
+  it("the sheet's button goes to the close while the day waits, named for the day (H-927)", () => {
+    const evening = flameStateOf({ ...base, hour: 20 });
+    expect(evening).toMatchObject({ waiting: true, late: false });
+    expect(sheetAction(evening)).toEqual({ label: "Close the day", href: "/today#close" });
+    const lateNight = flameStateOf({ ...base, hour: 1, asOf: "2026-10-16", closed: new Set() });
+    expect(lateNight).toMatchObject({ waiting: true, late: true });
+    expect(sheetAction(lateNight)).toEqual({ label: "Close yesterday", href: CLOSE_HREF });
+    // Nothing waiting: no button to the close, and yesterday closed isn't late.
+    expect(sheetAction(flameStateOf({ ...base, hour: 10 }))).toBeNull();
+    expect(flameStateOf({ ...base, hour: 1, asOf: "2026-10-16", closed: new Set(["2026-10-16"]) })).toMatchObject({ waiting: false, late: false });
   });
 
   it("after a missed day: a fresh Ember at Day 1", () => {
