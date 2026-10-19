@@ -19,8 +19,8 @@ describe("the rank-up ceremony (H-327 §1)", () => {
     expect(sage.line).toBe("You've passed 500 points. Your seat moves up to the upper stands of the Colosseum.");
     expect(sage.pips).toEqual(["done", "done", "now", "next", "next", "next", "next", "next", "next"]);
     expect(sage.ends).toEqual(["Artisan", "Olympian"]);
-    expect(sage.next).toEqual({ name: "Alchemist", points: 1500, toGo: 960, pct: 4 });
-    expect(sage.nextLine).toBe("Next: Alchemist at 1,500");
+    expect(sage.next).toEqual({ name: "Alchemist", points: 2000, toGo: 1460, pct: 3 });
+    expect(sage.nextLine).toBe("Next: Alchemist at 2,000");
     expect(sage.slug).toBe("sage");
     // Philosopher sits on the same ring as Artisan: the seat keeps its place.
     expect(rankCard(tierFor(100), 100).line).toBe("You've passed 100 points. Your seat keeps its place in the top tier of the Colosseum.");

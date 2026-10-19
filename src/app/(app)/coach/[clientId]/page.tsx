@@ -136,7 +136,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const clientKit = await kitFor(ws, m.userId);
   const avatarTop = avatarTree(avatars.rows);
   const adjustments = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, ws), eq(schema.pointsLedger.userId, m.userId), isNotNull(schema.pointsLedger.adjustedBy)), orderBy: desc(schema.pointsLedger.createdAt), limit: 10 });
-  const tier = tierProgress(points);
+  const tier = tierProgress(points, m.rankKeptLevel);
   // The streak over their active days and work days (H-289), read as of yesterday before 04:00 their time while yesterday is still open (rev 731).
   const streak = streakRead.running;
   const closed = streakRead.closed;
