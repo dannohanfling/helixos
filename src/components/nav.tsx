@@ -57,8 +57,8 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                 </span>
               </button>
             )}
-            {open ? (
-              <div className="flex flex-col gap-0.5">
+            {/* A shut group keeps its items, hidden (H-1010): out of sight and out of the tab order, still the same links. */}
+            <div className="flex flex-col gap-0.5" hidden={!open} data-testid="nav-group-items">
                 {g.items.map((n) =>
                   n.comingSoon ? (
                     rail ? (
@@ -101,7 +101,6 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                   ),
                 )}
               </div>
-            ) : null}
           </div>
         );
       })}

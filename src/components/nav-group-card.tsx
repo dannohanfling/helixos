@@ -16,7 +16,7 @@ export function NavGroupCard({ label, current = false, children }: { label: stri
           ▾
         </span>
       </button>
-      {open ? children : null}
+      <div hidden={!open}>{children}</div>
     </div>
   );
 }
