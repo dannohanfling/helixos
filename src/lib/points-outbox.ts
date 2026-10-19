@@ -152,22 +152,25 @@ async function closeCheckMove(m: schema.LoyaltyPointsMove): Promise<void> {
 }
 
 /**
- * The one add-and-deduct check (H-493 step 4), on a pass from the client's hide list (a team test): 1 deducted, read back,
+ * The one add-and-deduct check (H-493 step 4), on a pass from the client's hide list (a team test), or on the coach's own
+ * program the coach's own pass (H-734 step E): 1 deducted, read back,
  * 1 added back, read back. Both moves go through the outbox like any other. The result is kept on the feed in words and
  * numbers; the desk opens only once it has passed.
  */
-export async function runDeskCheck(feed: schema.LeaderboardFeed, customerId: string, byUserId: string, now = new Date()): Promise<{ ok: boolean; note: string }> {
+export async function runDeskCheck(feed: schema.LeaderboardFeed, customerId: string, byUserId: string, now = new Date(), opts: { ownCustomerId?: string | null } = {}): Promise<{ ok: boolean; note: string }> {
   const done = async (ok: boolean, note: string) => {
     await db.update(schema.leaderboardFeeds).set({ deskCheckAt: nowIso(), deskCheckOk: ok, deskCheckNote: note, updatedAt: nowIso() }).where(eq(schema.leaderboardFeeds.id, feed.id));
     return { ok, note };
   };
-  if (!feed.hidden.includes(customerId)) return done(false, "The check runs only on a pass from the hide list (a team test), never on a member.");
+  // On the coach's own program (H-734 step E) the coach's own pass may be checked without hiding it from the board.
+  const own = Boolean(opts.ownCustomerId && customerId === opts.ownCustomerId);
+  if (!own && !feed.hidden.includes(customerId)) return done(false, "The check runs only on a pass from the hide list (a team test) or your own pass, never on a member.");
   if (feed.movesPaused || allPaused()) return done(false, "Moves are paused, so the check did not run.");
   const key = open(feed.keyEncrypted);
   if (!key) return done(false, "No eLoyalty key is saved on this row.");
   const stamp = now.toISOString();
   const before = await liveBalance(feed, key, customerId);
-  if (before && before.balance < 1) return done(false, "That test pass has 0 available, so there is nothing to deduct. Pick another, or add 1 to it in eLoyalty first.");
+  if (before && before.balance < 1) return done(false, own ? "Your pass has 0 available, so there is nothing to deduct. Turn on the sync for your own pass first (it sends your HelixOS points), or add 1 to it in eLoyalty." : "That test pass has 0 available, so there is nothing to deduct. Pick another, or add 1 to it in eLoyalty first.");
   const d = await queueMove(feed, { customerId, delta: -1, reason: "HelixOS desk check: deduct 1", source: `check:${feed.id}:${stamp}:deduct`, byUserId });
   const deduct = d.status === "pending" ? await sendMove(feed, key, d, now) : d;
   const afterDeduct = await liveBalance(feed, key, customerId);
