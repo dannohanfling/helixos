@@ -60,7 +60,7 @@ export function OwnProgramCard({ membershipId, feed, ownPass, passMessage }: { m
           </form>
         ) : null}
         {feed ? <SyncSettings feed={feed} ready={ready} /> : null}
-        {feed?.keyEncrypted ? <DeskSettings feed={feed} /> : null}
+        {feed?.keyEncrypted ? <DeskSettings feed={feed} ownPass={ownPass.made} /> : null}
       </div>
     </Card>
   );
