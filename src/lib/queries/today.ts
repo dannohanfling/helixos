@@ -242,7 +242,7 @@ export async function todayData(v: Viewer) {
     /** The weekday ladder the streak engine counts from, for the evening close's line about tomorrow (H-327). */
     streakLadder: streak.activity.ladder,
     points,
-    tier: tierProgress(points),
+    tier: tierProgress(points, v.membership.rankKeptLevel),
     focusTasks,
     dueTasks,
     overdueTasks,

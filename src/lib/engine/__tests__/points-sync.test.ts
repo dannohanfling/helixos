@@ -18,22 +18,23 @@ describe("the sync's modes (H-867 steps G and H)", () => {
 describe("the invitations (H-865, H-867 part 4)", () => {
   const due = (programTier: string, points: number, sent: string[] = [], role = "client") => inviteDue({ role, programTier, points, sent });
   it("Accelerator at Sentinel gets the Academy call", () => {
-    expect(due("Accelerator", 2999)).toBeNull();
-    expect(due("Accelerator", 3000)).toBe("academy");
+    // Sentinel from 5,000 under the 19 Oct table (H-1088).
+    expect(due("Accelerator", 4999)).toBeNull();
+    expect(due("Accelerator", 5000)).toBe("academy");
   });
   it("Academy at Centurion gets Elite; Academy at Sentinel gets nothing", () => {
-    expect(due("Academy", 3000)).toBeNull();
-    expect(due("Academy", 7500)).toBe("elite");
+    expect(due("Academy", 5000)).toBeNull();
+    expect(due("Academy", 12000)).toBe("elite");
   });
   it("anyone below Luxe at Olympian gets the Lux conversation, the highest rung earned wins", () => {
-    expect(due("Accelerator", 60000)).toBe("lux");
-    expect(due("Elite", 60000)).toBe("lux");
-    expect(due("Luxe", 60000)).toBeNull();
+    expect(due("Accelerator", 100000)).toBe("lux");
+    expect(due("Elite", 100000)).toBe("lux");
+    expect(due("Luxe", 100000)).toBeNull();
   });
   it("never goes twice, and never to a member already on that program or above", () => {
-    expect(due("Accelerator", 3000, ["academy"])).toBeNull();
+    expect(due("Accelerator", 5000, ["academy"])).toBeNull();
     expect(due("Elite", 7500)).toBeNull();
-    expect(due("Accelerator", 3000, [], "team")).toBeNull();
+    expect(due("Accelerator", 5000, [], "team")).toBeNull();
   });
   it("keeps https links only", () => {
     expect(readInviteLink("")).toEqual({ ok: true, value: null });
