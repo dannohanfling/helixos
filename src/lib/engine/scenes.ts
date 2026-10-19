@@ -80,9 +80,9 @@ export function rankCard(tier: Tier, points: number): RankCard {
 /**
  * The catch-up ceremony (H-934, plan H-942): the eight relic clips went live at this moment (PR #40 on Vercel). A member who
  * reached their current rank before it saw no clip for it, so their next open plays that rank's clip once, first thing.
- * In the ledger's own form (`datetime('now')`, UTC) so it compares as text.
+ * Compared as an instant: the ledger holds both `datetime('now')` stamps and ISO times.
  */
-export const CLIPS_LIVE_AT = "2026-10-18 05:10:00";
+export const CLIPS_LIVE_AT = "2026-10-18T05:10:00.000Z";
 
 export type CatchUp = { kind: "play"; tier: Tier } | { kind: "stamp"; level: number };
 
@@ -97,7 +97,7 @@ export function catchUpFor(i: { points: number; celebrated: number | null; clipS
   const t = tierFor(i.points);
   if (t.level <= 1 || rankUpFor(i.points, i.celebrated)) return null;
   if ((i.clipSeen ?? 0) >= t.level) return null;
-  if (i.reachedAt !== null && i.reachedAt >= CLIPS_LIVE_AT) return { kind: "stamp", level: t.level };
+  if (i.reachedAt !== null && instantOf(i.reachedAt).getTime() >= instantOf(CLIPS_LIVE_AT).getTime()) return { kind: "stamp", level: t.level };
   return { kind: "play", tier: t };
 }
 

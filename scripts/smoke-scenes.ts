@@ -58,11 +58,31 @@ async function main() {
   };
   putBack();
   setAside();
-  // The catch-up section moves Maya's ledger before the clips went live; the rows' own times are put back whatever happens.
-  let ledgerTimes: { id: string; createdAt: string }[] = [];
+  // The catch-up section moves Maya's ledger before the clips went live; the rows' own times wait in a side table and go back in
+  // one statement whatever happens. The dev server writes too, so a busy database is tried again.
+  const { sql } = await import("drizzle-orm");
+  const retry = async (run: () => Promise<unknown>) => {
+    for (let i = 0; ; i++) {
+      try {
+        return await run();
+      } catch (e) {
+        if (i >= 20 || !String(e).includes("SQLITE_BUSY")) throw e;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+  };
+  let ledgerMoved = false;
+  const moveLedger = async (to: string) => {
+    await retry(() => db.run(sql`DROP TABLE IF EXISTS smoke_ledger_times`));
+    await retry(() => db.run(sql`CREATE TABLE smoke_ledger_times AS SELECT id, created_at FROM points_ledger WHERE user_id = ${maya.id}`));
+    ledgerMoved = true;
+    await retry(() => db.run(sql`UPDATE points_ledger SET created_at = ${to} WHERE user_id = ${maya.id}`));
+  };
   const restoreLedger = async () => {
-    for (const r of ledgerTimes) await db.update(schema.pointsLedger).set({ createdAt: r.createdAt }).where(eq(schema.pointsLedger.id, r.id));
-    ledgerTimes = [];
+    if (!ledgerMoved) return;
+    await retry(() => db.run(sql`UPDATE points_ledger SET created_at = (SELECT t.created_at FROM smoke_ledger_times t WHERE t.id = points_ledger.id) WHERE id IN (SELECT id FROM smoke_ledger_times)`));
+    await retry(() => db.run(sql`DROP TABLE IF EXISTS smoke_ledger_times`));
+    ledgerMoved = false;
   };
   try {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
@@ -334,10 +354,9 @@ async function main() {
     // ── The catch-up (H-934): Maya's rank reached before the clips went live plays its clip once, first thing, then the welcome. ──
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
     putBack();
-    ledgerTimes = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id), columns: { id: true, createdAt: true } })).map((r) => ({ id: r.id, createdAt: r.createdAt }));
     const beforeClips = "2026-10-10 12:00:00";
-    must(beforeClips < CLIPS_LIVE_AT, "the fixture's time is before the clips");
-    await db.update(schema.pointsLedger).set({ createdAt: beforeClips }).where(eq(schema.pointsLedger.userId, maya.id));
+    must(new Date("2026-10-10T12:00:00Z") < new Date(CLIPS_LIVE_AT), "the fixture's time is before the clips");
+    await moveLedger(beforeClips);
     const held = tierFor(await total());
     must(held.level >= 2 && existsSync(path.join(ranksDir, `rank-${held.name.toLowerCase()}.webm`)), `Maya holds a rank with a relic clip (${held.name})`);
     const late = catchUpCard(held, await total());
@@ -429,7 +448,8 @@ async function main() {
     setAside();
     console.log(`✓ catch-up: the ${late.name} clip first, before the welcome, once, its card opening on the relic; alone at 390; a coach switched in uses nothing up; reached after the clips, stamped silently`);
   } finally {
-    await restoreLedger();
+    // Put the ledger back without hiding whatever failed above.
+    await restoreLedger().catch((e) => console.error(`the ledger's times were not put back: ${String(e)}`));
     if (fakeClip && existsSync(fakeClip)) rmSync(fakeClip);
     if (existsSync(ranksDir) && readdirSync(ranksDir).length === 0) rmdirSync(ranksDir);
     putBack();

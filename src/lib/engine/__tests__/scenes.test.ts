@@ -72,6 +72,14 @@ describe("the catch-up ceremony (H-934, plan H-942)", () => {
     expect(catchUpFor({ ...base, reachedAt: CLIPS_LIVE_AT })).toEqual({ kind: "stamp", level: sage.level });
   });
 
+  it("reads both forms of a ledger time on the clips' own day", () => {
+    // ISO and datetime('now') stamps of the same hours: earlier is before whatever the form, later is after.
+    expect(catchUpFor({ ...base, reachedAt: "2026-10-18T03:00:00.000Z" })).toMatchObject({ kind: "play" });
+    expect(catchUpFor({ ...base, reachedAt: "2026-10-18 03:00:00" })).toMatchObject({ kind: "play" });
+    expect(catchUpFor({ ...base, reachedAt: "2026-10-18T06:00:00.000Z" })).toMatchObject({ kind: "stamp" });
+    expect(catchUpFor({ ...base, reachedAt: "2026-10-18 06:00:00" })).toMatchObject({ kind: "stamp" });
+  });
+
   it("nothing once seen, for an Artisan, before any rank is recorded, or while a normal rank-up is due", () => {
     expect(catchUpFor({ ...base, clipSeen: sage.level })).toBeNull();
     expect(catchUpFor({ ...base, points: 0, celebrated: 1 })).toBeNull();

@@ -41,15 +41,16 @@ export function rankUpShell(v: Viewer, points: number): RankUpShell | null {
 
 export type CatchUpShell = { kind: "play"; card: RankCard; clip: RankClip } | { kind: "stamp"; level: number };
 
-/** When the member's running total first reached `min` points: the ledger in order, the first row the sum gets there. */
+/** When the member's running total first reached `min` points: the ledger in time order (its rows hold two text forms of a time, so julianday reads both), the first row the sum gets there. */
 async function reachedAt(workspaceId: string, userId: string, min: number): Promise<string | null> {
   const rows = await db.all<{ at: string }>(sql`
     SELECT at FROM (
       SELECT ${schema.pointsLedger.createdAt} AS at,
-             SUM(${schema.pointsLedger.points}) OVER (ORDER BY ${schema.pointsLedger.createdAt}, ${schema.pointsLedger.id} ROWS UNBOUNDED PRECEDING) AS run
+             julianday(${schema.pointsLedger.createdAt}) AS jd,
+             SUM(${schema.pointsLedger.points}) OVER (ORDER BY julianday(${schema.pointsLedger.createdAt}), ${schema.pointsLedger.id} ROWS UNBOUNDED PRECEDING) AS run
       FROM ${schema.pointsLedger}
       WHERE ${schema.pointsLedger.workspaceId} = ${workspaceId} AND ${schema.pointsLedger.userId} = ${userId}
-    ) WHERE run >= ${min} ORDER BY at LIMIT 1`);
+    ) WHERE run >= ${min} ORDER BY jd LIMIT 1`);
   return rows[0]?.at ?? null;
 }
 
