@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 301,
+    date: "2026-10-19",
+    title: "The Council Chamber comes alive",
+    lines: [
+      "My Board at night: the braziers and candles flicker, warm light breathes beneath them, and a faint moonbeam shimmers in the far doorway while dust drifts in the candlelight.",
+      "At golden hour, shafts of sun slant in from the arches, dust drifts through them, and a soft cloud shadow passes now and then.",
+      "While an advisor speaks, the moving light fades for their turn and comes back after. A hidden tab holds it all still, and your device's Reduce motion setting turns it off.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 286,
     date: "2026-10-19",
     title: "Send a message to your own Evolve Omega pass",
