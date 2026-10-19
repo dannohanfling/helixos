@@ -63,15 +63,18 @@ describe("streak flame (H-558)", () => {
   });
 
   it("each look plays its own filmed loop: the pill in the bar, the stage in the sheet, the still for reduced motion (H-952)", () => {
-    expect(flameClip("torch", "bar")).toEqual({ webm: "/streak/streak-torch-pill.webm", mp4: "/streak/streak-torch-pill.mp4", still: "/streak/streak-torch-still.jpg", rate: 1, brightness: 1 });
-    expect(flameClip("gold", "stage")).toMatchObject({ webm: "/streak/streak-gold-stage.webm", mp4: "/streak/streak-gold-stage.mp4", still: "/streak/streak-gold-still.jpg" });
-    // Waiting on you: the Ember loop at 60% brightness and 0.7x speed.
-    expect(flameClip("risk", "bar")).toEqual({ webm: "/streak/streak-ember-pill.webm", mp4: "/streak/streak-ember-pill.mp4", still: "/streak/streak-ember-still.jpg", rate: 0.7, brightness: 0.6 });
+    expect(flameClip("torch", "bar")).toEqual({ mp4: "/streak/streak-torch-pill.mp4?v=2", webm: "/streak/streak-torch-pill.webm?v=2", poster: "/streak/streak-torch-still.jpg?v=2", still: "/streak/streak-torch-still.jpg?v=2", rate: 1, dim: 0 });
+    expect(flameClip("gold", "stage")).toMatchObject({ mp4: "/streak/streak-gold-stage.mp4?v=2", webm: "/streak/streak-gold-stage.webm?v=2" });
+    // Waiting on you: the Ember loop under a 40% dark layer at 0.7x speed.
+    expect(flameClip("risk", "bar")).toMatchObject({ mp4: "/streak/streak-ember-pill.mp4?v=2", rate: 0.7, dim: 0.4 });
   });
-
-  it("the surge swells the loop by up to 30% and brightens it; the waiting ember never swells", () => {
-    expect(surgeLook("torch", 0)).toEqual({ scale: 1, brightness: 1, glow: 0 });
-    expect(surgeLook("ember", 1)).toEqual({ scale: 1.3, brightness: 1.45, glow: 1 });
+  it("gives a phone the light copies, MP4 only, with first-frame posters (H-1063)", () => {
+    expect(flameClip("gold", "bar", true)).toEqual({ mp4: "/streak/streak-gold-pill-m.mp4?v=2", webm: null, poster: "/streak/streak-gold-pill-m-poster.jpg?v=2", still: "/streak/streak-gold-still.jpg?v=2", rate: 1, dim: 0 });
+    expect(flameClip("risk", "stage", true)).toMatchObject({ mp4: "/streak/streak-ember-stage-m.mp4?v=2", poster: "/streak/streak-ember-stage-m-poster.jpg?v=2", dim: 0.4 });
+  });
+  it("swells the surge with a glow layer, never on the waiting ember", () => {
+    expect(surgeLook("torch", 0)).toEqual({ scale: 1, glow: 0 });
+    expect(surgeLook("ember", 1)).toEqual({ scale: 1.3, glow: 1 });
     expect(surgeLook("gold", 2).scale).toBe(1.3);
     expect(surgeLook("risk", 1)).toEqual(surgeLook("risk", 0));
   });

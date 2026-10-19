@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 300,
+    date: "2026-10-19",
+    title: "Your streak flame starts sooner on a phone",
+    lines: ["On a phone, the streak flame shows at once and starts moving sooner."],
+    audience: "everyone",
+  },
+  {
     n: 283,
     date: "2026-10-19",
     title: "Connect your own agents to your agent inbox",

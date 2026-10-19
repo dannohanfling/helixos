@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Fire } from "./fire";
+import { Fire, warmStage } from "./fire";
 import { playTick } from "@/lib/synth-sounds";
 import { WELCOME_CLOSED } from "@/components/rank-up";
 import { ARRIVAL_CLOSED } from "@/components/first-arrival";
@@ -86,6 +86,8 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
         ref={btn}
         type="button"
         onClick={() => setOpen(true)}
+        // The stage loop starts loading on the press, not the release, so the sheet opens on it (H-1063).
+        onPointerDown={() => warmStage(look)}
         aria-label={flameLabel(state.days)}
         title={state.waiting ? `${flameLabel(state.days)}. Waiting on you` : flameLabel(state.days)}
         aria-haspopup="dialog"
@@ -141,7 +143,7 @@ function StreakSheet({ state, onClose }: { state: FlameState; onClose: () => voi
         onClick={(e) => e.stopPropagation()}
         data-testid="streak-sheet"
       >
-        {/* The stage loop, 16:9 on the dark stage; its file loads now, when the sheet opens (H-952). */}
+        {/* The stage loop, 16:9 on the dark stage: its poster at once, the loop fading in once it plays (H-952, H-1063). */}
         <div className="flex items-end justify-center px-4 pt-6">
           <Fire look={look} place="stage" width={336} height={189} className="max-w-full" />
         </div>
