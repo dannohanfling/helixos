@@ -15,6 +15,7 @@ import { PLAQUE_BOX, headlineOf, headlineSize, plaqueTextOf } from "@/lib/engine
 import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
+import { BoardAmbience } from "@/components/board-ambience";
 
 type Props = {
   seats: Seat[];
@@ -258,6 +259,8 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               <source src={nextClip.mp4} type="video/mp4" />
             </video>
           ) : null}
+          {/* The Council Chamber, alive (Roma Vivit 2, H-1060): over the photo and the clip, under the seats. */}
+          <BoardAmbience look={look} speaking={Boolean(clip)} />
           {seats.map((s, i) => {
             const g = CHAIRS[i];
             const active = speaker === s.key;

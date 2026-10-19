@@ -301,3 +301,70 @@ export const COLOSSEUM_FLIGHTS: FlightPlan[] = (
     { pts: [[-6, 26], [20, 19], [44, 9], [70, 4], [92, -6]], k: 0.9, rest: 9, dl: -13, beat: 0.37, flaps: 5, glide: 1.9 },
   ] as Flight[]
 ).map(planFlight);
+
+/*
+ * The Council Chamber, My Board (Roma Vivit 2, plan H-1060), over the council photos (1680×944) and under the five seats.
+ * Night: ten candle flames placed on the painted ones (the two braziers, the six niche candles, the two tall candles), a warm
+ * glow breathing under each brazier and tall candle, a faint moonbeam in the far doorway, a few motes in the candlelight.
+ * Golden hour: light shafts slanting in from the right-hand arches, motes drifting through them, and a cloud shadow. Points
+ * were measured on the photos; a flame is its base (the wick) and its size, all in percent of the picture.
+ */
+const pctX = (px: number) => round((px / 1680) * 100);
+const pctY = (px: number) => round((px / 944) * 100);
+export type Flame = { x: number; y: number; w: number; h: number; d: number; dl: number };
+const flame = (bx: number, by: number, w: number, h: number, i: number): Flame => ({ x: pctX(bx), y: pctY(by), w: pctX(w), h: pctY(h), d: round(0.8 + (i % 4) * 0.17), dl: round(-(i * 0.23)) });
+
+export const COUNCIL_FLAMES: Flame[] = [
+  // The two braziers on the upper sconces.
+  flame(263, 222, 26, 48, 0),
+  flame(1387, 212, 24, 44, 1),
+  // The back niches: three candles each, the middle one taller.
+  flame(564, 176, 8, 14, 2),
+  flame(577, 166, 10, 18, 3),
+  flame(593, 176, 8, 14, 4),
+  flame(1085, 176, 8, 14, 5),
+  flame(1101, 165, 10, 18, 6),
+  flame(1116, 176, 8, 14, 7),
+  // The two tall candles lower down.
+  flame(48, 442, 20, 38, 8),
+  flame(1633, 432, 20, 38, 9),
+];
+
+/** Warm glow pools under the braziers and the tall candles: centre and radius in percent. */
+export const COUNCIL_GLOWS = [
+  { x: pctX(263), y: pctY(205), r: 9, d: 3.4 },
+  { x: pctX(1387), y: pctY(196), r: 9, d: 3.9 },
+  { x: pctX(48), y: pctY(425), r: 7, d: 3.1 },
+  { x: pctX(1633), y: pctY(415), r: 7, d: 3.6 },
+] as const;
+
+/** The far doorway, where the moon shows at night: a narrow beam, in percent. */
+export const COUNCIL_MOONBEAM = { x: pctX(818), y: 0, w: pctX(44), h: pctY(250) } as const;
+
+export const COUNCIL_MOTES_NIGHT: Mote[] = Array.from({ length: 8 }, (_, i) => ({
+  x: round([16, 22, 34, 66, 78, 84, 12, 90][i]),
+  y: round([28, 34, 22, 22, 30, 26, 50, 48][i]),
+  dx: (i % 2 ? 1 : -1) * (8 + i * 2),
+  dy: -10 - (i % 3) * 6,
+  d: round(8 + (i % 4) * 1.5, 1),
+  dl: round(-(i * 1.1), 1),
+}));
+
+/** Golden hour: shafts of sun from the right-hand arches, each a rotated band (left, top, width, height in percent). */
+export const COUNCIL_SHAFTS = [
+  { x: 70, y: 8, w: 9, h: 95, rot: 38, d: 9, dl: 0 },
+  { x: 80, y: 14, w: 7, h: 90, rot: 38, d: 11, dl: -3 },
+  { x: 88, y: 22, w: 6, h: 80, rot: 38, d: 10, dl: -6 },
+] as const;
+
+export const COUNCIL_MOTES_DAY: Mote[] = Array.from({ length: 14 }, (_, i) => ({
+  x: round(56 + ((i * 29) % 34)),
+  y: round(30 + ((i * 17) % 45)),
+  dx: -14 - (i % 4) * 7,
+  dy: -8 - (i % 3) * 7,
+  d: round(8 + (i % 5) * 1.4, 1),
+  dl: round(-(i * 0.8), 1),
+}));
+
+/** The cloud shadow's crossing over the chamber floor, in seconds. */
+export const COUNCIL_CLOUD_S = 60;
