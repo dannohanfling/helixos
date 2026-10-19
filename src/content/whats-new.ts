@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 302,
+    date: "2026-10-18",
+    title: "Counts in the phone menu",
+    lines: [
+      "On your phone, More now shows how many things are waiting beside each item, the same numbers as the menu on a computer: Intentions, Recordings, your Agent inbox, and for the coach Inbox, Clients, Issues and ideas, and Feedback.",
+      "The More tab at the bottom shows the total as a number. What's new keeps its dot.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 301,
     date: "2026-10-19",
     title: "The Council Chamber comes alive",
@@ -87,16 +97,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     title: "Waiting on you takes you to Close the day",
     lines: [
       "When your streak says Waiting on you, tap the flame: its button now reads Close the day (Close yesterday just after midnight) and takes you straight to the evening close on Today. Not now shuts the panel.",
-    ],
-    audience: "everyone",
-  },
-  {
-    n: 273,
-    date: "2026-10-18",
-    title: "Counts in the phone menu",
-    lines: [
-      "On your phone, More now shows how many things are waiting beside each item, the same numbers as the menu on a computer: Intentions, Recordings, your Agent inbox, and for the coach Inbox, Clients, Issues and ideas, and Feedback.",
-      "The More tab at the bottom shows the total as a number. What's new keeps its dot.",
     ],
     audience: "everyone",
   },
