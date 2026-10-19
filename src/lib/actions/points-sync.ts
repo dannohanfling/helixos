@@ -9,7 +9,7 @@ import { INVITE_KEYS, type SyncMode, readInviteLink } from "@/lib/engine/points-
 import { redirect } from "next/navigation";
 import { open } from "@/lib/crypto";
 import { address } from "@/lib/engine/eloyalty";
-import { passMessageOutcome, readPassMessage } from "@/lib/engine/pass-message";
+import { type PassMessageOutcome, passMessageOutcome, readPassMessage } from "@/lib/engine/pass-message";
 import { putField } from "@/lib/points-sync";
 import { recordRateLimit } from "@/lib/loyalty-rate";
 
@@ -59,7 +59,7 @@ export async function setInvitesAction(formData: FormData): Promise<void> {
  */
 export async function sendPassMessageAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
-  const back = (code: string) => redirect(`/coach?passMessage=${code}#own-program`);
+  const back = (code: PassMessageOutcome) => redirect(`/coach?passMessage=${code}#own-program`);
   if (coach.switchedInto) back("notready");
   const feed = await ownFeed(coach);
   if (!feed || !ready(feed) || (feed.refreshAfter && Date.parse(feed.refreshAfter) > Date.now())) back(feed && ready(feed) ? "busy" : "notready");
