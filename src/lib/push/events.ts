@@ -30,8 +30,8 @@ export async function runEventPushes(now: Date = new Date(), transport?: Transpo
       const today = todayInTz(tz, now);
       const hour = hourInTz(tz, now);
 
-      // Rank up: the same rank the app's ceremony would play next; the member's switch is off by default (H-767).
-      const tier = rankUpFor(await totalPoints(ws.id, m.userId), m.celebratedTierLevel);
+      // Rank up: the same rank the app's ceremony would play next, counting the kept rank (H-1088); the member's switch is off by default (H-767).
+      const tier = rankUpFor(await totalPoints(ws.id, m.userId), m.celebratedTierLevel, m.rankKeptLevel);
       if (tier) out.push({ type: "rank_up", outcome: await sendPush(who, "rank_up", `rank:${tier.level}`, { rank: tier.name }, { now, transport }) });
 
       // Weekly intentions: Monday morning, only while the week is still to set.
