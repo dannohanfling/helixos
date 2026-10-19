@@ -4,8 +4,8 @@ import { LEGAL_SLUGS } from "@/lib/engine/legal";
 /**
  * A logged-in app: search engines are told to stay out, except for the six public pages (H-331: privacy, terms, support,
  * delete account, AI and your Board, community guidelines), which the app stores point at. noindex on the app's pages is the
- * belt; this is the braces.
+ * belt; this is the braces. Hermes (H-721): /start, the public HelixOS sales page, is allowed too.
  */
 export default function robots(): MetadataRoute.Robots {
-  return { rules: [{ userAgent: "*", allow: LEGAL_SLUGS.map((s) => `/${s}`), disallow: "/" }] };
+  return { rules: [{ userAgent: "*", allow: [...LEGAL_SLUGS.map((s) => `/${s}`), "/start"], disallow: "/" }] };
 }
