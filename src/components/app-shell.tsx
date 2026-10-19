@@ -30,7 +30,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
   const who = team ? viewer.actor : viewer.user;
   return (
     <NavStateProvider initial={navStateOf(viewer.membership.navState)} persist={!viewer.switchedInto && !viewer.team}>
-    <div className="min-h-screen md:flex" data-app-shell>
+    <div className="min-h-[100dvh] md:flex" data-app-shell>
       {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold.
           H-333: the whole column folds to a rail of icons (Sidebar); what has no place on the rail carries rail-hide. */}
       <Sidebar>
@@ -125,7 +125,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
         <PinToViewport edge="top">
         {/* Fits a 360px phone (Danno, 12 Oct): the name hides below 400px, points go compact ("12.3K pts"), and nothing in
             the row may push it wider than the screen. */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-bg/90 px-3 py-2.5 backdrop-blur min-[400px]:gap-3 min-[400px]:px-4 md:hidden" data-testid="mobile-header">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-bg/90 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur min-[400px]:gap-3 min-[400px]:px-4 md:hidden" data-testid="mobile-header">
           <Link href="/today" className="flex shrink-0 items-center gap-2 text-sm font-bold" aria-label="HelixOS, Today">
             <AppLogo size={40} />
             <span className="hidden min-[400px]:inline">HelixOS</span>
@@ -152,7 +152,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
         </PinToViewport>
         <NavProgress />
         {/* A page that carries data-page-wide (the Coach view, rev 844) gets the wider content width; every other page keeps its own. */}
-        <main className="mx-auto w-full max-w-5xl px-4 2xl:max-w-6xl has-[[data-page-wide]]:max-w-7xl 2xl:has-[[data-page-wide]]:max-w-[96rem] pb-24 pt-5 sm:px-6 md:pb-10 md:pt-8">
+        <main className="mx-auto w-full max-w-5xl px-4 2xl:max-w-6xl has-[[data-page-wide]]:max-w-7xl 2xl:has-[[data-page-wide]]:max-w-[96rem] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 md:pb-10 md:pt-8">
           {/* After a delete: the one line saying what went, on the list the person was sent back to. */}
           <Suspense fallback={null}>
             <DeletedNotice />

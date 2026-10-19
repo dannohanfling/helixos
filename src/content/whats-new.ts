@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 299,
+    date: "2026-10-19",
+    title: "The tab bar stays at the bottom",
+    lines: ["On a phone, the tab bar stays at the bottom while you scroll."],
+    audience: "everyone",
+  },
+  {
     n: 279,
     date: "2026-10-19",
     title: "Your streak flame is real fire now",
