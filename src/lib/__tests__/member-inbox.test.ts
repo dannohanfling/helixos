@@ -206,3 +206,23 @@ describe("the menu item waits for an agent (H-727)", () => {
     expect(await agentsOnFor(owner("jordan"))).toBe(false);
   });
 });
+
+describe("the Today line (H-727 PR 2)", () => {
+  it("says how many plans wait, in plain words", async () => {
+    const { plansWaitingLine } = await import("@/lib/engine/handoff");
+    expect(plansWaitingLine(1)).toBe("1 plan waits for your OK in your agent inbox");
+    expect(plansWaitingLine(3)).toBe("3 plans wait for your OK in your agent inbox");
+  });
+});
+
+describe("Connect this agent (H-727 PR 2)", () => {
+  it("lets any member make and revoke their own agent's token through the inbox's gate, never requireCoach", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/lib/actions/handoff.ts", "utf8");
+    for (const name of ["makeAgentTokenAction", "revokeAgentTokenAction"]) {
+      const body = src.slice(src.indexOf(`export async function ${name}`), src.indexOf("\n}\n", src.indexOf(`export async function ${name}`)));
+      expect(body).toContain("ctx(OWN_INBOX)");
+      expect(body).not.toContain("requireCoach");
+    }
+  });
+});
