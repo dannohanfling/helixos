@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { BODY, boardQuestion, CHANNEL, CHANNEL_LENGTH, dashPeriod, DROP_PERIOD, FALL_STREAKS, fallSheet, FILL_SECONDS, FLOW, flowWidth, frontReaches, pathLength, RUN_PERIOD, FALLS, leakOf, missingLine, pictureFor, SEGMENTS, slipped, STAGE_TAG_AT, STAGES, STEP_LABELS, STEP_TAG_AT, STEP_TOOLS, stepRate, waterWidth, windows } from "@/lib/engine/aqueduct";
+import { BODY, boardQuestion, CHANNEL, CHANNEL_LENGTH, dashPeriod, DROP_PERIOD, FALL_STREAKS, fallSheet, FILL_SECONDS, FLOW, flowWidth, frontReaches, pathLength, RUN_PERIOD, FALLS, leakOf, loopFor, missingLine, pictureFor, SEGMENTS, slipped, STAGE_TAG_AT, STAGES, STEP_LABELS, STEP_TAG_AT, STEP_TOOLS, stepRate, waterWidth, windows } from "@/lib/engine/aqueduct";
 
 describe("the Aqueduct (rev 711)", () => {
   it("eight stages, six steps, each step with a label and a tool; the geometry as the brief lists it", () => {
@@ -104,5 +104,17 @@ describe("the water (H-966)", () => {
     expect(FALL_STREAKS).toHaveLength(5);
     expect(new Set(FALL_STREAKS.map((s) => s.seconds)).size).toBe(5);
     expect(new Set(FALL_STREAKS.map((s) => s.w)).size).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("the filmed loops (H-1180)", () => {
+  it("lists Golden hour with no leak, with versioned files, and nothing else yet", () => {
+    const day = loopFor(pictureFor("day", null));
+    expect(day).toEqual({ mp4: "/aqueduct/aqueduct-day-none-loop.mp4?v=1", webm: "/aqueduct/aqueduct-day-none-loop.webm?v=1", poster: "/aqueduct/aqueduct-day-none-loop-poster.jpg?v=1" });
+    expect(loopFor(pictureFor("night", null))).toBeNull();
+    expect(loopFor(pictureFor("day", { step: 2, nowRate: 0.1, wasRate: 0.4, drop: 0.3 }))).toBeNull();
+  });
+  it("every listed loop has its three files in public/", () => {
+    for (const p of ["/aqueduct/aqueduct-day-none"]) for (const end of ["-loop.mp4", "-loop.webm", "-loop-poster.jpg"]) expect(readFileSync(`public${p}${end}`).length).toBeGreaterThan(1000);
   });
 });
