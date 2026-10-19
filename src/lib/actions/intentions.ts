@@ -140,7 +140,8 @@ export async function recordMonthShareAction(): Promise<{ ok: boolean; points: n
 
 /** The intention chain (H-198): tick a week's task from the intention; it is the same task as in Tasks, so both show it. */
 export async function tickIntentionTaskAction(formData: FormData): Promise<void> {
-  const { v } = await ctx({ team: "allow" });
+  // Intentions are the member's own: closed to a team member, like the rest of this file.
+  const { v } = await ctx();
   const task = await ownTask(v, str(formData, "id"));
   if (task) await toggleTask(v, task);
   refresh();
