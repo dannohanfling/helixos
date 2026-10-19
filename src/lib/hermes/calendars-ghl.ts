@@ -9,7 +9,7 @@ import type { SocialConnection } from "@/db/schema";
 import { connectionFor, credentials, listUsers } from "@/lib/ghl";
 import { logSync } from "@/lib/integrations";
 import { redactSecrets } from "@/lib/engine/redact";
-import { ACADEMY_COPY_ID, CALENDARS, CAL_LOCATION, CAL_SCOPES, TEMPLATE_ID, calendarBody, firstSlot, maskZoom, zoomLink, type CalKey } from "@/lib/hermes/calendars";
+import { ACADEMY_COPY_ID, CALENDARS, CAL_LOCATION, CAL_SCOPES, TEMPLATE_ID, calendarBody, fieldsNamed, firstSlot, maskZoom, zoomLink, type CalKey } from "@/lib/hermes/calendars";
 
 /** The calendars API's own version header (GoHighLevel's calendars spec), not the contacts one. */
 const CAL_VERSION = "2021-04-15";
@@ -22,7 +22,8 @@ const NEED = `Add ${CAL_SCOPES.join(", ")} to your own Private Integration in Go
 function explain(status: number | undefined, what: string, detail = ""): string {
   if (status === 401 || status === 403) return `GoHighLevel refused ${what}: the saved key has no calendar permission. ${NEED}`;
   if (status === 404) return `GoHighLevel has no ${what.replace(/^reading |^updating |^creating /, "")} in this sub-account.`;
-  if (status === 400 || status === 422) return `GoHighLevel didn't accept ${what} (${status}): ${detail || "no reason given"}.`;
+  const named = fieldsNamed(detail);
+  if (status === 400 || status === 422) return `GoHighLevel didn't accept ${what} (${status}). ${named.length ? `It named these fields: ${named.join(", ")}.` : "It named no field we send."} Tell Hermes; nothing else was changed.`;
   return status ? `GoHighLevel didn't accept ${what} (${status}).` : `Couldn't reach GoHighLevel for ${what}.`;
 }
 

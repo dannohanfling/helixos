@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CALENDARS, CAL_LOCATION, COPY_FIELDS, bookingLinks, calendarBody, cleanContactId, conflictFields, fieldRows, firstSlot, maskZoom, zoomLink } from "@/lib/hermes/calendars";
+import { CALENDARS, CAL_LOCATION, COPY_FIELDS, bookingLinks, calendarBody, cleanContactId, conflictFields, fieldRows, fieldsNamed, firstSlot, maskZoom, zoomLink } from "@/lib/hermes/calendars";
 
 const template = {
   id: "nntnynKtR00uxmgnrivj",
@@ -66,6 +66,10 @@ describe("the booking calendars (H-892)", () => {
   it("lets only an id-shaped contact through", () => {
     expect(cleanContactId(" TestContact0000000001 ")).toBe("TestContact0000000001");
     for (const bad of ["", "short", "has space in it 123", "a/b/c/d/e/f/g", "x".repeat(41), null]) expect(cleanContactId(bad)).toBeNull();
+  });
+  it("names only our own fields from a refusal, never its words", () => {
+    expect(fieldsNamed("property calendarType should not exist; teamMembers.0.locationConfigurations must be an array; Contact Jane Doe")).toEqual(["calendarType", "teamMembers"]);
+    expect(fieldsNamed("Something went wrong for jane@example.com")).toEqual([]);
   });
   it("gives the public links", () => {
     expect(bookingLinks("abc123", "elite-conversation")).toEqual({ byId: "https://api.leadconnectorhq.com/widget/booking/abc123", bySlug: "https://api.leadconnectorhq.com/widget/bookings/elite-conversation" });

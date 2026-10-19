@@ -145,3 +145,9 @@ export function firstSlot(reply: unknown): string | null {
   all.sort((a, b) => Date.parse(a) - Date.parse(b));
   return all[0] ?? null;
 }
+
+/** Which of our own field names a refusal mentions: our words, never GoHighLevel's (its reply stays in the server log). */
+export function fieldsNamed(detail: string): string[] {
+  const ours = new Set<string>([...COPY_FIELDS, ...Object.keys(calendarBody(CALENDARS.elite, {}, "u", true)), "contactId", "startTime", "calendarId", "assignedUserId", "appointmentStatus", "toNotify"]);
+  return [...ours].filter((k) => new RegExp(`\\b${k}\\b`).test(detail));
+}
