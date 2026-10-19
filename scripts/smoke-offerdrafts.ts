@@ -156,6 +156,8 @@ async function main() {
     must((await page.locator('input[name="name"]').first().inputValue()) === "Drafts walk new offer", "Edit made the offer with its name and opened it");
     must((await page.locator('textarea[name="promise"]').inputValue()) === "A calm start, together.", "with the draft filled into the form");
     await page.locator('textarea[name="promise"]').fill("A calm start, together, every weekday.");
+    // The offer's own form asks for a container before it saves, as it always does.
+    await page.locator('[data-testid="offer-container"]').selectOption("Group program");
     await submit(page, 'form:has(input[name="draftId"]) button[type="submit"]');
     const made = (await db.query.offers.findFirst({ where: eq(schema.offers.id, madeId) }))!;
     must(made.promise === "A calm start, together, every weekday." && made.status === "draft", `the offer's own save writes it: ${made.promise}`);
