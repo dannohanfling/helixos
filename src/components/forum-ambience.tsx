@@ -4,11 +4,12 @@
  * The Forum, alive (H-327 §5, plan H-637 PR 3): over the photos, under the messengers and the plates. Night: three
  * high-contrast copies of the night photo, each clipped to a third and screen-blended, flicker so only the lit windows move;
  * a warm pool of light breathes over the plaza; the welcome's small flame burns on the centre column; fireflies drift in the
- * gardens. Golden hour: five doves fly an oval over the plaza and a cloud shadow passes. A hidden tab holds it; reduced motion
+ * gardens. Golden hour: a loose flock of five birds flaps and glides over the plaza (H-966) and a cloud shadow passes. A hidden tab holds it; reduced motion
  * draws none of it. It only draws, and never takes a tap.
  */
-import { FORUM_DOVES, FORUM_FIREFLIES, FORUM_FLAME, FORUM_FLICKER } from "@/lib/engine/ambience";
+import { FORUM_FIREFLIES, FORUM_FLIGHTS, FORUM_FLAME, FORUM_FLICKER } from "@/lib/engine/ambience";
 import { useHidden, useQuiet } from "@/components/scene-life";
+import { Flock } from "@/components/flock";
 import "@/components/ambience.css";
 
 type Look = "day" | "night";
@@ -75,19 +76,7 @@ export function ForumAmbience({ look }: { look: Look }) {
       ) : (
         <>
           <div className="amb-cloud amb-fo-cloud" data-testid="amb-cloud" />
-          {FORUM_DOVES.map((d, i) => (
-            <div key={i} className="amb-ox" style={{ animationDelay: s(d.dx) }}>
-              <div className="amb-oy" style={{ animationDelay: s(d.dy) }}>
-                <span className="amb-dove" data-testid="amb-dove">
-                  <svg viewBox="0 0 24 12">
-                    <g className="amb-dove-wing" style={{ animationDelay: s(d.fl) }}>
-                      <path d="M0 7 Q6 0 12 7 Q18 0 24 7" fill="none" stroke="#FBF6EC" strokeWidth={2} strokeLinecap="round" />
-                    </g>
-                  </svg>
-                </span>
-              </div>
-            </div>
-          ))}
+          <Flock scene="fo" flights={FORUM_FLIGHTS} />
         </>
       )}
     </div>

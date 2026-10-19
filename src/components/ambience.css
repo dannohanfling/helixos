@@ -27,19 +27,21 @@
 /* Dust motes drifting over the floor. */
 .amb-mote { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 242, 215, 0.75); filter: blur(0.4px); opacity: 0; animation: amb-mote 9s ease-in-out infinite; }
 
-/* Birds: a full-width lane slides across; the bird rides at its left edge. */
-.amb-lane { position: absolute; left: 0; width: 100%; height: 0; transform: translateX(-4%); animation: amb-fly 24s linear infinite; }
-.amb-bird { position: absolute; left: 0; top: 0; width: clamp(14px, 1.6vw, 26px); height: clamp(7px, 0.75vw, 12px); transform: translate(-100%, -50%); }
+/*
+ * Birds (H-966): a picture-sized wrapper per bird carries its path, heading and fade (keyframes built by the engine, so
+ * percentages are of the picture); the bird sits at its top-left corner, which is also where it turns. The wing poses switch
+ * in steps.
+ */
+.amb-flight { position: absolute; inset: 0; transform-origin: 0 0; opacity: 0; }
+.amb-bird { position: absolute; left: 0; top: 0; aspect-ratio: 1; transform: translate(-50%, -50%); }
 .amb-bird svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.amb-wing { transform-box: fill-box; transform-origin: 50% 100%; animation: amb-flap 0.45s ease-in-out infinite alternate; }
+.amb-pose { opacity: 0; }
 
 @keyframes amb-flick { 0%, 100% { opacity: 0.16; } 18% { opacity: 0.26; } 40% { opacity: 0.1; } 63% { opacity: 0.22; } 82% { opacity: 0.13; } }
 @keyframes amb-twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
 @keyframes amb-haze { from { transform: translate(-4%, 2%) scale(1); } to { transform: translate(4%, -2%) scale(1.08); } }
 @keyframes amb-cloud { from { transform: translateX(-108%); } to { transform: translateX(158%); } }
 @keyframes amb-mote { 0% { opacity: 0; transform: translate(0, 0); } 25% { opacity: 0.9; } 75% { opacity: 0.6; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)); } }
-@keyframes amb-fly { from { transform: translateX(-4%); } to { transform: translateX(104%); } }
-@keyframes amb-flap { from { transform: scaleY(1); } to { transform: scaleY(-0.5); } }
 
 /* ── The Forum (H-327 §5, docs/scenes/living-scenes-forum.dc.html), under the messengers. ── */
 .amb-fo-fl { filter: contrast(2.4) brightness(0.8); opacity: 0.18; animation-name: amb-fo-flick; }
@@ -55,12 +57,6 @@
 /* Fireflies drifting in the gardens. */
 .amb-ff { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #ffe7a0; box-shadow: 0 0 8px 3px rgba(255, 220, 120, 0.6); opacity: 0; animation: amb-ffly 6s ease-in-out infinite; }
 .amb-fo-cloud { background: radial-gradient(ellipse, rgba(25, 16, 6, 0.28), rgba(25, 16, 6, 0) 62%); animation-duration: 52s; }
-/* Five doves on an oval: x and y each ease back and forth over the plaza, a quarter turn apart, so the path is an oval. */
-.amb-ox { position: absolute; inset: 0; transform: translateX(32.1%); animation: amb-ox 13s ease-in-out infinite alternate; }
-.amb-oy { position: absolute; inset: 0; transform: translateY(32.8%); animation: amb-oy 13s ease-in-out infinite alternate; }
-.amb-dove { position: absolute; left: 0; top: 0; width: clamp(12px, 1.4vw, 24px); height: clamp(6px, 0.7vw, 12px); transform: translate(-50%, -50%); }
-.amb-dove svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.amb-dove-wing { transform-box: fill-box; transform-origin: 50% 100%; animation: amb-flap 0.4s ease-in-out infinite alternate; }
 
 @keyframes amb-fo-flick { 0%, 100% { opacity: 0.18; } 18% { opacity: 0.28; } 40% { opacity: 0.11; } 63% { opacity: 0.24; } 82% { opacity: 0.14; } }
 @keyframes amb-breathe { 0%, 100% { opacity: 0.75; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
@@ -68,5 +64,3 @@
 @keyframes amb-fk2 { 0%, 100% { transform: scale(1, 1) skewX(0); } 35% { transform: scale(1.03, 0.96) skewX(2.5deg); } 70% { transform: scale(0.96, 1.06) skewX(-2deg); } }
 @keyframes amb-fk3 { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.82; transform: scale(0.94, 1.04); } }
 @keyframes amb-ffly { 0%, 100% { opacity: 0; transform: translate(0, 0); } 30% { opacity: 1; } 50% { transform: translate(var(--dx), var(--dy)); } 70% { opacity: 0.8; } }
-@keyframes amb-ox { from { transform: translateX(32.1%); } to { transform: translateX(67.9%); } }
-@keyframes amb-oy { from { transform: translateY(32.8%); } to { transform: translateY(64.6%); } }
