@@ -33,8 +33,9 @@ async function main() {
     await page.goto(`${base}/login`);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
-    const head = await page.locator("head").innerHTML();
-    must(/viewport-fit=cover/.test(head), "the viewport meta carries viewport-fit=cover, so the safe-area insets are real");
+    // Read wherever Next put it (metadata can stream after the head).
+    const vp = await page.evaluate(() => Array.from(document.querySelectorAll('meta[name="viewport"]')).map((m) => m.getAttribute("content") ?? "").join(" | "));
+    must(/viewport-fit=cover/.test(vp), `the viewport meta carries viewport-fit=cover, so the safe-area insets are real (${vp || "no viewport meta"})`);
 
     // Where the bar sits and where the page ends, as the window sees them now.
     const read = (p: Page) =>
