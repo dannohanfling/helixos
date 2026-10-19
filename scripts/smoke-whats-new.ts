@@ -80,7 +80,8 @@ async function main() {
     await login(pp, "As a client");
     await pp.goto(`${base}/more`);
     await pp.locator('main [data-testid="whats-new-dot"]').waitFor({ timeout: 15000 });
-    if (!(await pp.locator('[data-testid="more-due-dot"]').count())) throw new Error("the phone's More tab shows a dot while What's new has something unseen");
+    // The dot, or the number when counts wait as well (H-844: the tab shows the total; What's new alone is the dot).
+    if (!(await pp.locator('[data-testid="more-due-dot"], [data-testid="more-due-count"]').count())) throw new Error("the phone's More tab shows a dot while What's new has something unseen");
     if (await pp.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error("the More page scrolls sideways on a phone");
     await pp.goto(`${base}/whats-new`);
     await pp.locator('[data-testid="whats-new-entry"]').first().waitFor({ timeout: 15000 });
