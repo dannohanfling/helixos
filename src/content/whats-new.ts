@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 302,
+    n: 305,
     date: "2026-10-18",
     title: "Counts in the phone menu",
     lines: [
@@ -20,6 +20,36 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "The More tab at the bottom shows the total as a number. What's new keeps its dot.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 304,
+    date: "2026-10-19",
+    title: "Name your own key outcomes in your Essence",
+    lines: [
+      "Essence → Key outcomes for users: instead of three fixed boxes, add as many outcomes as you have, each with your own name and line, in the order you want the AI to read them.",
+      "Each can say who it's for, so clients and practitioners can have their own. What you'd already written under Clarity, Impact and Connection is carried over as rows with those names.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 303,
+    date: "2026-10-18",
+    title: "Calls: this week's calls, in your time",
+    lines: [
+      "Calls is in your menu, under Daily: the next seven days of calls, each in your own time zone, with the passcode and a Copy button. A call for another level shows greyed, with nothing to press.",
+      "Join opens 10 minutes before each call and stays open while it runs, up to two hours or until your next call starts; a live call shows Live now at the top, and Today shows the next call when one starts within a day. Add to calendar puts a call in your calendar every week, without the days it is off.",
+      "For the coach: Settings → Calls lists every call with who it is for. Add, edit, switch off or reorder a call, mark a day with no call, and set the shared link and passcode.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 302,
+    date: "2026-10-19",
+    title: "Check points on your own Evolve Omega pass",
+    lines: [
+      "Coach → Your own program → Points desk: the add-and-deduct check now offers \"Your own pass\", so you can test 1 off and 1 back on your own pass without hiding yourself from your board. If your pass has 0 points, it says so and sends nothing: turn on the sync for your own pass first.",
+    ],
+    audience: "coach",
   },
   {
     n: 301,
