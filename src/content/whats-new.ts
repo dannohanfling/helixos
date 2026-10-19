@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 302,
+    date: "2026-10-18",
+    title: "Calls: this week's calls, in your time",
+    lines: [
+      "Calls is in your menu, under Daily: the next seven days of calls, each in your own time zone, with the passcode and a Copy button. A call for another level shows greyed, with nothing to press.",
+      "Join opens 10 minutes before each call and stays open while it runs, up to two hours or until your next call starts; a live call shows Live now at the top, and Today shows the next call when one starts within a day. Add to calendar puts a call in your calendar every week, without the days it is off.",
+      "For the coach: Settings → Calls lists every call with who it is for. Add, edit, switch off or reorder a call, mark a day with no call, and set the shared link and passcode.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 301,
     date: "2026-10-19",
     title: "The Council Chamber comes alive",
@@ -69,17 +80,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     title: "Your streak flame is real fire now",
     lines: [
       "The flame by your streak is filmed fire: an Ember for your first week, a Torch from day 7 and a Gold flame from day 30. Tap it for the big version. Before you close the day it burns low and slow, waiting on you.",
-    ],
-    audience: "everyone",
-  },
-  {
-    n: 277,
-    date: "2026-10-18",
-    title: "Calls: this week's calls, in your time",
-    lines: [
-      "Calls is in your menu, under Daily: the next seven days of calls, each in your own time zone, with the passcode and a Copy button. A call for another level shows greyed, with nothing to press.",
-      "Join opens 10 minutes before each call and stays open while it runs, up to two hours or until your next call starts; a live call shows Live now at the top, and Today shows the next call when one starts within a day. Add to calendar puts a call in your calendar every week, without the days it is off.",
-      "For the coach: Settings → Calls lists every call with who it is for. Add, edit, switch off or reorder a call, mark a day with no call, and set the shared link and passcode.",
     ],
     audience: "everyone",
   },
