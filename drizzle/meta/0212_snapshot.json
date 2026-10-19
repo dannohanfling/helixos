@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "bd2f2cea-9f35-45a9-a645-652114dea785",
-  "prevId": "c533620d-ce7b-45b5-bd57-6d6a012cd18b",
+  "id": "31db4d5f-472b-4695-99a3-ef4f50685af7",
+  "prevId": "cdfdeb5d-7da8-4112-b736-c53465f51bf1",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -12652,6 +12652,30 @@
           "notNull": false,
           "autoincrement": false
         },
+        "sync_mode": {
+          "name": "sync_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'off'"
+        },
+        "invite_mode": {
+          "name": "invite_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'off'"
+        },
+        "invite_links": {
+          "name": "invite_links",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{}'"
+        },
         "desk_check_at": {
           "name": "desk_check_at",
           "type": "text",
@@ -14437,6 +14461,21 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "eo_level_sent": {
+          "name": "eo_level_sent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "eo_offers_sent": {
+          "name": "eo_offers_sent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
         },
         "eo_pass_last_push_at": {
           "name": "eo_pass_last_push_at",
@@ -17158,6 +17197,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "eo_mirrored": {
+          "name": "eo_mirrored",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         },
         "created_at": {
           "name": "created_at",
