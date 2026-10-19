@@ -85,6 +85,8 @@ async function main() {
     must((await db.query.programCalls.findFirst({ where: eq(schema.programCalls.id, firstId) }))!.start === "10:30", "the call's start is saved");
     const moved = card.locator(`[data-testid="calls-row"][data-call="${firstId}"] [data-testid="calls-row-when"]`);
     await moved.waitFor({ timeout: 20000 });
+    // The save lands first, the page's refresh a moment after it: wait for the row to show it.
+    for (let i = 0; i < 40 && !(await moved.innerText()).includes("10:30"); i++) await coach.waitForTimeout(500);
     must((await moved.innerText()).includes("10:30"), `the row says the new time: ${await moved.innerText()}`);
     // A bad time is refused with the reason, and nothing changes.
     const again = card.locator(`[data-testid="calls-row"][data-call="${firstId}"]`);
