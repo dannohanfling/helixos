@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cappedDpr, flameLabel, flameStateOf, flameTier, flameUniforms, nextTierLine, surgeDue, surgeEnvelope, SURGE_SECONDS, tierName } from "@/lib/engine/streak-flame";
+import { flameClip, flameLabel, flameStateOf, flameTier, nextTierLine, surgeDue, surgeEnvelope, surgeLook, SURGE_SECONDS, tierName } from "@/lib/engine/streak-flame";
 
 const base = { running: 12, asOf: "2026-10-17", today: "2026-10-17", hour: 10, active: new Set(["2026-10-16", "2026-10-17"]), closed: new Set(["2026-10-16"]), seenOn: "2026-10-17" };
 
@@ -62,18 +62,17 @@ describe("streak flame (H-558)", () => {
     expect(surgeEnvelope(0.5)).toBeGreaterThan(surgeEnvelope(2));
   });
 
-  it("uniforms: about 30% taller and hotter at the peak, bar width 1.7 with no sparks, the waiting ember never swells", () => {
-    const calm = flameUniforms("torch", 0, "stage");
-    expect(calm).toEqual({ uH: 0.84, uHeat: 1, uGold: 0, uSparks: 1, uW: 1 });
-    const swell = flameUniforms("ember", 1, "stage");
-    expect(swell.uH).toBeCloseTo(0.52 * 1.32);
-    expect(swell.uHeat).toBeCloseTo(0.85 * 1.35);
-    expect(flameUniforms("gold", 1, "stage").uH).toBe(1);
-    expect(flameUniforms("gold", 0, "bar")).toMatchObject({ uSparks: 0, uW: 1.7, uGold: 1 });
-    expect(flameUniforms("risk", 1, "bar")).toEqual(flameUniforms("risk", 0, "bar"));
+  it("each look plays its own filmed loop: the pill in the bar, the stage in the sheet, the still for reduced motion (H-952)", () => {
+    expect(flameClip("torch", "bar")).toEqual({ webm: "/streak/streak-torch-pill.webm", mp4: "/streak/streak-torch-pill.mp4", still: "/streak/streak-torch-still.jpg", rate: 1, brightness: 1 });
+    expect(flameClip("gold", "stage")).toMatchObject({ webm: "/streak/streak-gold-stage.webm", mp4: "/streak/streak-gold-stage.mp4", still: "/streak/streak-gold-still.jpg" });
+    // Waiting on you: the Ember loop at 60% brightness and 0.7x speed.
+    expect(flameClip("risk", "bar")).toEqual({ webm: "/streak/streak-ember-pill.webm", mp4: "/streak/streak-ember-pill.mp4", still: "/streak/streak-ember-still.jpg", rate: 0.7, brightness: 0.6 });
   });
 
-  it("caps the device pixel ratio at 2", () => {
-    expect([undefined, 1, 1.5, 2, 3].map(cappedDpr)).toEqual([1, 1, 1.5, 2, 2]);
+  it("the surge swells the loop by up to 30% and brightens it; the waiting ember never swells", () => {
+    expect(surgeLook("torch", 0)).toEqual({ scale: 1, brightness: 1, glow: 0 });
+    expect(surgeLook("ember", 1)).toEqual({ scale: 1.3, brightness: 1.45, glow: 1 });
+    expect(surgeLook("gold", 2).scale).toBe(1.3);
+    expect(surgeLook("risk", 1)).toEqual(surgeLook("risk", 0));
   });
 });
