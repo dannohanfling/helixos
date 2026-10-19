@@ -12,7 +12,8 @@
  * - Nothing is drawn on the video itself: no blend mode, no filter. The waiting ember is a dark layer over the flame at 0.7x
  *   speed; the surge scales the wrapper and brightens a soft glow layer behind it.
  * - A video loads once its box is laid out and on screen (a pill hidden by the layout loads nothing), and pauses while the tab
- *   is hidden or the box is off screen. Reduced motion: the tier's still, and no video at all.
+ *   is hidden or the box is off screen. Only play() starts it (no autoplay attribute), so a refused play() leaves the poster.
+ *   Reduced motion: the tier's still, and no video at all.
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -169,7 +170,6 @@ export function Fire({ look, place, width, height, surgeAt = null, className = "
             muted
             loop
             playsInline
-            autoPlay
             preload={loaded ? "auto" : "none"}
             style={{ ...fill, opacity: playing ? 1 : 0, transition: "opacity 180ms ease-out" }}
             data-flame-video="true"
