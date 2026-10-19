@@ -46,5 +46,8 @@ describe("telling the chat who the member is (H-1199, plan H-1203)", () => {
     expect(r).toMatch(/userId: null/);
     expect(r).toMatch(/payload: \{ cause: body\.cause, \.\.\.\(host \? \{ host \} : \{\}\) \}/);
     expect(r).not.toMatch(/email|v\.user\.name/);
+    // Never counted as a post to the bot: inbound, and not a "chat.*" event (the card's daily count reads outbound chat.*).
+    expect(r).toMatch(/direction: "in", event: "widget\.identity"/);
+    expect(read("lib/chat-progress.ts")).toMatch(/eq\(schema\.syncEvents\.direction, "out"\), like\(schema\.syncEvents\.event, "chat\.%"\)/);
   });
 });

@@ -24,6 +24,7 @@ export async function POST(request: Request) {
   if (!isChatCause(body.cause)) return NextResponse.json({ error: "Send the cause." }, { status: 400 });
   const host = body.cause === "csp-blocked" ? cleanHost(body.host) : null;
   console.info(`[chat] identity ${body.cause}${host ? ` ${host}` : ""}`);
-  await logSync({ workspaceId: v.workspace.id, userId: null, provider: "community_loyalty", direction: "out", event: "chat.identity", payload: { cause: body.cause, ...(host ? { host } : {}) }, status: body.cause.startsWith("identified") ? "sent" : "failed" });
+  // Inbound and not "chat.*": it is a report from the page, never a post to the bot, so the card's daily count never sees it.
+  await logSync({ workspaceId: v.workspace.id, userId: null, provider: "community_loyalty", direction: "in", event: "widget.identity", payload: { cause: body.cause, ...(host ? { host } : {}) }, status: body.cause.startsWith("identified") ? "received" : "failed" });
   return done();
 }

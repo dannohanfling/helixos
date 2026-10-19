@@ -127,7 +127,7 @@ async function main() {
     // The identity call (rev 270): the SDK's host is unreachable here, so a stand-in $chatbot records what setUser gets.
     // Loaded before the page's script mounts: called at once. Not loaded: nothing until the SDK's own ready event.
     for (const loaded of [true, false]) {
-      await db.delete(schema.syncEvents).where(and(eq(schema.syncEvents.workspaceId, ws), eq(schema.syncEvents.event, "chat.identity")));
+      await db.delete(schema.syncEvents).where(and(eq(schema.syncEvents.workspaceId, ws), eq(schema.syncEvents.event, "widget.identity")));
       const ctxt = await browser.newContext();
       const p2 = await ctxt.newPage();
       // As a string: a function here would be transpiled with a helper (__name) the page doesn't have.
@@ -167,7 +167,7 @@ async function main() {
       const cause = loaded ? "identified-loaded" : "identified-ready";
       let seen: { userId: string | null; payload: unknown }[] = [];
       for (let i = 0; i < 40 && !seen.length; i++) {
-        seen = (await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, ws), eq(schema.syncEvents.event, "chat.identity")) })).filter((r) => (r.payload as { cause?: string }).cause === cause);
+        seen = (await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, ws), eq(schema.syncEvents.event, "widget.identity")) })).filter((r) => (r.payload as { cause?: string }).cause === cause);
         if (!seen.length) await p2.waitForTimeout(250);
       }
       if (seen.length !== 1 || seen[0].userId !== null || JSON.stringify(seen[0].payload) !== JSON.stringify({ cause })) throw new Error(`the page reports ${cause} once, with no member: ${JSON.stringify(seen)}`);
