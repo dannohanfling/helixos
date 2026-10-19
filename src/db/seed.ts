@@ -1,8 +1,11 @@
 import { isNull, and, eq, inArray, ne, notInArray } from "drizzle-orm";
+import { TIERS } from "@/lib/engine/tiers";
 /** The Daily welcome (H-312) is "seen" for the demo's members whatever the day, so no walk meets it by surprise; the welcome walk clears the mark for its own run. */
 const WELCOME_SEEN = "9999-12-31";
 /** The seed's members arrived before the first arrival ceremony (H-472): stamped seen, so the walks' logins never get it. */
 const ARRIVED = "2026-10-01T00:00:00.000Z";
+/** Every rank there is: a clip seen at this level covers them all. */
+const RANK_LEVELS = TIERS.length;
 import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
@@ -207,6 +210,9 @@ export async function seedDemo(): Promise<void> {
   await seedDemoWave2(wsId, clientId, client2Id, today);
   // Everyone the seed makes arrived before the first arrival ceremony (H-472): the walks' logins never get it; a fresh sign-up does.
   await db.update(schema.memberships).set({ firstArrivalSeenAt: ARRIVED }).where(isNull(schema.memberships.firstArrivalSeenAt));
+  // And their ranks' relic clips count as seen (H-934): the demo's points go back weeks, before the clips went live, so the walks'
+  // logins would otherwise open on the catch-up ceremony. The scenes walk clears it where it checks the catch-up.
+  await db.update(schema.memberships).set({ rankClipSeenLevel: RANK_LEVELS }).where(isNull(schema.memberships.rankClipSeenLevel));
   console.log("Demo workspace ready. Coach: coach@demo.helixos.app / demo1234 · Client: client@demo.helixos.app / demo1234 · Client invite code: ACADEMY1");
 }
 
