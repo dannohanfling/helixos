@@ -146,7 +146,12 @@ async function main() {
     await page.goto(`${base}/coach/helix`, { waitUntil: "networkidle" });
     must((await page.locator('[data-testid="coach-helix-rung"]').count()) === 67, "the coach sees all 67 rungs");
     const first = page.locator('[data-testid="coach-helix-rung"][data-key="p0-superpower"]');
-    await first.locator('[data-testid="rung-label"]').fill("Your superpower, named");
+    // The page can remount its fields as it hydrates: type, then make sure the box still holds it before saving.
+    for (let i = 0; i < 5; i++) {
+      await first.locator('[data-testid="rung-label"]').fill("Your superpower, named");
+      await page.waitForTimeout(300);
+      if ((await first.locator('[data-testid="rung-label"]').inputValue()) === "Your superpower, named") break;
+    }
     await submit(page, '[data-testid="coach-helix-rung"][data-key="p0-superpower"] [data-testid="rung-save"]');
     must((await db.query.helixRungs.findFirst({ where: eq(schema.helixRungs.key, "p0-superpower") }))!.label === "Your superpower, named", "the coach's edit is saved");
     await db.update(schema.helixRungs).set({ label: "Your superpower" }).where(eq(schema.helixRungs.key, "p0-superpower"));
