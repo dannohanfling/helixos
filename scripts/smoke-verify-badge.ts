@@ -101,9 +101,10 @@ async function main() {
     await page.locator('[data-testid="switch-back"]').waitFor({ timeout: 15000 });
     must((await page.locator(`[data-testid="side-nav"] ${ITEM}`).count()) === 0, "switched into Maya, the item is gone");
     await page.locator('[data-testid="switch-back"]').click();
-    await page.waitForLoadState("networkidle");
+    // The switch back is a POST and a redirect: wait for the banner to go before judging the menu.
+    await page.locator('[data-testid="switch-back"]').waitFor({ state: "hidden", timeout: 15000 });
     await page.goto(`${base}/today`, { waitUntil: "networkidle" });
-    must((await page.locator(`[data-testid="side-nav"] ${ITEM}`).count()) === 1, "back as the coach, the item is there");
+    await until(page, async () => (await page.locator(`[data-testid="side-nav"] ${ITEM}`).count()) === 1, "back as the coach, the item is there");
     console.log("✓ switched into a member the item is gone; back as the coach it returns");
 
     // ── At 390: the More page shows it with its count, the More tab totals it, nothing scrolls sideways. ──
