@@ -196,7 +196,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-3">
                   <Field label="Headline" hint='8–14 words, two lines split with " / ", one (gold: PHRASE).'>
-                    <input className="field" name="headline" defaultValue={l.headline} />
+                    <input id="headline" className="field scroll-mt-20" name="headline" defaultValue={l.headline} />
                   </Field>
                   <Field label="Alternatives" hint="One per line.">
                     <textarea className="field" name="altHeadlines" rows={2} defaultValue={l.altHeadlines.join("\n")} />

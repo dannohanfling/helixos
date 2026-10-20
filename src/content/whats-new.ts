@@ -12,11 +12,21 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 317,
+    n: 318,
     date: "2026-10-21",
     title: "The Partner Program has its own place",
     lines: ["Coaches: the Partner Program sits under People: restaurants, touches, payments and the monthly statement, with tools for your agents."],
     audience: "coach",
+  },
+  {
+    n: 317,
+    date: "2026-10-21",
+    title: "Ladders: prompts aren't testimonials, and your own headline",
+    lines: [
+      'A writing prompt like Try: "…" no longer trips the testimonial check; when a real one is quoted, the note says which part holds it.',
+      "Make the graphic now takes a headline you write yourself, and Edit headlines takes you to the field.",
+    ],
+    audience: "everyone",
   },
   {
     n: 316,
