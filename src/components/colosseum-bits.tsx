@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { removeWinAction, shareWinAction, type WinFormState } from "@/lib/actions/colosseum";
+import { applaudAction, removeWinAction, shareWinAction, type ApplaudState, type WinFormState } from "@/lib/actions/colosseum";
 import { WIN_MAX } from "@/lib/engine/colosseum";
 import { REPORTED } from "@/lib/engine/blocks";
 import type { ArenaWin } from "@/lib/colosseum";
@@ -44,7 +44,7 @@ export function ShareWin() {
  * The feed, newest first; a member's own win can come down again. With `moderate` (a member in their own account), every
  * other member's win has a ⋯ for Block and Report; a reported win leaves the list at once.
  */
-export function WinList({ wins, tz, removable = false, moderate = false }: { wins: ArenaWin[]; tz: string; removable?: boolean; moderate?: boolean }) {
+export function WinList({ wins, tz, removable = false, moderate = false, applaud = false }: { wins: ArenaWin[]; tz: string; removable?: boolean; moderate?: boolean; applaud?: boolean }) {
   // The thanks for a report lives here, not on the win's row: the refresh that follows drops the reported win from the list,
   // and the thanks has to outlast it.
   const [reported, setReported] = useState<string[]>([]);
@@ -59,7 +59,7 @@ export function WinList({ wins, tz, removable = false, moderate = false }: { win
       {shown.length ? (
         <ul className="co-wins" data-testid="wins">
           {shown.map((w) => (
-            <WinItem key={w.id} w={w} tz={tz} removable={removable} moderate={moderate && !w.mine} onReported={() => setReported((r) => [...r, w.id])} />
+            <WinItem key={w.id} w={w} tz={tz} removable={removable} moderate={moderate && !w.mine} applaud={applaud} onReported={() => setReported((r) => [...r, w.id])} />
           ))}
         </ul>
       ) : reported.length ? null : (
@@ -71,7 +71,7 @@ export function WinList({ wins, tz, removable = false, moderate = false }: { win
   );
 }
 
-function WinItem({ w, tz, removable, moderate, onReported }: { w: ArenaWin; tz: string; removable: boolean; moderate: boolean; onReported: () => void }) {
+function WinItem({ w, tz, removable, moderate, applaud, onReported }: { w: ArenaWin; tz: string; removable: boolean; moderate: boolean; applaud: boolean; onReported: () => void }) {
   return (
     <li className={`co-win${moderate ? " co-win-mod" : ""}`} data-testid="win" data-kind={w.kind} data-win={w.id}>
       <span className="co-kindtag">{w.kind === "business" ? "Business" : "Community"}</span>
@@ -79,6 +79,7 @@ function WinItem({ w, tz, removable, moderate, onReported }: { w: ArenaWin; tz: 
         <b>{w.who}</b> {w.text}
       </span>
       <span className="co-when">{formatDateTime(w.at, tz)}</span>
+      <Applause w={w} can={applaud && !w.mine} />
       {moderate ? <ModerateMenu target={{ kind: "win", id: w.id, membershipId: w.authorId, name: w.who, coach: w.coach }} onReported={onReported} /> : null}
       {removable && w.mine ? (
         <form action={removeWinAction}>
@@ -89,5 +90,42 @@ function WinItem({ w, tz, removable, moderate, onReported }: { w: ArenaWin; tz: 
         </form>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * 👏 on a win (H-1171): a toggle for anyone but the win's author, and the count; tapping the count shows who applauded, first
+ * names by each member's Colosseum setting. The count follows the tap at once and the server's own count after.
+ */
+export function Applause({ w, can }: { w: ArenaWin; can: boolean }) {
+  const [state, action] = useActionState<ApplaudState, FormData>(applaudAction, null);
+  const on = state?.on ?? w.applause.mine;
+  const count = Math.max(0, w.applause.count + (on ? 1 : 0) - (w.applause.mine ? 1 : 0));
+  if (!can && !count) return null;
+  return (
+    <span className="co-applause" data-testid="win-applause" data-count={count} data-on={on ? "1" : "0"}>
+      {can ? (
+        <form action={action}>
+          <input type="hidden" name="winId" value={w.id} />
+          <input type="hidden" name="on" value={on ? "0" : "1"} />
+          <SubmitButton className={`co-clap${on ? " co-clap-on" : ""}`} pendingText="👏 …" aria-pressed={on} aria-label={on ? "Take back your applause" : "Applaud this win"} data-testid="win-applaud">
+            👏 {on ? "Applauded" : "Applaud"}
+          </SubmitButton>
+        </form>
+      ) : null}
+      {count ? (
+        <details className="co-clappers">
+          <summary data-testid="win-applause-count">
+            {count} applause
+          </summary>
+          <span data-testid="win-applause-who">{(state?.on === undefined ? w.applause.who : on ? (w.applause.mine ? w.applause.who : ["You", ...w.applause.who]) : w.applause.who.filter((n) => n !== "You")).join(", ")}</span>
+        </details>
+      ) : null}
+      {state?.error ? (
+        <span className="co-err" role="alert">
+          {state.error}
+        </span>
+      ) : null}
+    </span>
   );
 }

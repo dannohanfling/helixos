@@ -82,6 +82,14 @@
 .co-dots { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--co-muted); font: inherit; font-size: 20px; line-height: 1; cursor: pointer; border-radius: 999px; }
 .co-dots:hover, .co-dots[aria-expanded="true"] { color: var(--co-ink); background: var(--co-line); }
 .co-win-mod { grid-template-columns: auto minmax(0, 1fr) auto 44px; }
+.co-card-win { display: grid; gap: 4px; font-size: 14px; }
+.co-card-win .co-applause { grid-column: auto; }
+/* Applause on a win (H-1171): the toggle and the count under the words; 44px to tap. */
+.co-applause { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.co-clap { min-height: 44px; padding: 0 14px; border: 1px solid var(--co-line); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer; }
+.co-clap-on { border-color: var(--co-gold-text); color: var(--co-gold-text); font-weight: 700; }
+.co-clappers summary { min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; font-size: 13px; color: var(--co-muted); }
+.co-clappers > span { display: block; font-size: 13px; color: var(--co-muted); }
 .co-mod { grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px 0 4px; min-width: 0; }
 .co-mod-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .co-mod-form { display: grid; gap: 8px; min-width: 0; }

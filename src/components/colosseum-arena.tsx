@@ -11,7 +11,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { setArenaPausedAction } from "@/lib/actions/colosseum";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import { CHAMPION_SPOTS, LAP_SECONDS, RING_WORDS, seatAngle, seatPlace } from "@/lib/engine/colosseum";
-import type { ArenaSeat } from "@/lib/colosseum";
+import type { ArenaSeat, ArenaWin } from "@/lib/colosseum";
+import { Applause } from "@/components/colosseum-bits";
 import { ColosseumAmbience } from "@/components/colosseum-ambience";
 import { LoopOverPhoto } from "@/components/loop-over-photo";
 import { loopFor } from "@/lib/engine/scene-loops";
@@ -22,7 +23,7 @@ import { armSounds, playSound } from "@/lib/sounds";
 type Look = "day" | "night";
 type RingSeat = ArenaSeat & { ring: number; index: number; of: number };
 
-export function ColosseumArena({ rings, champs, more, initialLook, initialPaused, ownLook, cheerWeek, moderate = false }: { rings: RingSeat[][]; champs: ArenaSeat[]; more: number[]; initialLook: Look; initialPaused: boolean; ownLook: boolean; cheerWeek: string | null; moderate?: boolean }) {
+export function ColosseumArena({ rings, champs, more, initialLook, initialPaused, ownLook, cheerWeek, moderate = false, latestWins = {}, canApplaud = false }: { rings: RingSeat[][]; champs: ArenaSeat[]; more: number[]; initialLook: Look; initialPaused: boolean; ownLook: boolean; cheerWeek: string | null; moderate?: boolean; latestWins?: Record<string, ArenaWin>; canApplaud?: boolean }) {
   const [look, setLook] = useState<Look>(initialLook);
   const [modFor, setModFor] = useState<string | null>(null);
   const [paused, setPaused] = useState(initialPaused);
@@ -221,6 +222,13 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
           <span>
             {pick.points.toLocaleString()} points · +{pick.week.toLocaleString()} this week{pick.champ ? ` · Champion #${pick.champ} of the week` : ""}
           </span>
+          {/* Their latest win, with its applause (H-1171). */}
+          {!pick.veiled && latestWins[pick.membershipId] ? (
+            <span className="co-card-win" data-testid="arena-card-win">
+              <span>Latest win: {latestWins[pick.membershipId].text}</span>
+              <Applause w={latestWins[pick.membershipId]} can={canApplaud && !latestWins[pick.membershipId].mine} />
+            </span>
+          ) : null}
           {moderate && !pick.isYou && !pick.veiled ? (
             <button
               type="button"

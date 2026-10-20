@@ -30,7 +30,7 @@ export function CalendarWrite({ users }: { users: { id: string; name: string }[]
         <input type="checkbox" name="sure" checked={sure} onChange={(e) => setSure(e.target.checked)} data-testid="cal-sure" /> I&apos;ve read the fields above. Write them to GoHighLevel.
       </label>
       <SubmitButton pendingText="Writing…" data-testid="cal-write">
-        Update Academy Conversation, create Elite Conversation
+        Write Academy Conversation and Elite Conversation
       </SubmitButton>
       {state && !state.ok ? (
         <p className="text-sm text-danger" role="alert" data-testid="cal-write-error">

@@ -7,6 +7,7 @@
  *     copied from the template; the template and every other calendar untouched. Pressed again: both updated, still one Elite.
  *  5. Step 3: a bad contact id is refused; then one booking on each for the test contact, a Zoom link on each, both cancelled,
  *     no email sent.
+ *  5b. H-1236: the stray copy gone (400): Step 1 says so and lists the calendars; Step 2 creates both fresh, then updates by slug.
  *  6. A member is turned away from the page and the coach's link is there. At 390: nothing wider than the screen.
  *  7. The server log holds no key.
  *
@@ -96,6 +97,9 @@ async function main() {
     await page.locator('[data-testid="cal-read"]').waitFor();
     must((await page.locator('[data-testid="cal-academy-now"]').innerText()).includes("live under its old name"), "the copy is shown live under its old name");
     must((await page.locator('[data-testid="cal-elite-now"]').innerText()).includes("not made yet"), "Elite not made yet");
+    await page.locator('[data-testid="cal-list"] summary').click();
+    const listed = await page.locator('[data-testid="cal-list"]').innerText();
+    must(listed.includes(`Evolve Omega Booking · ${TEMPLATE}`) && listed.includes(COPY) && listed.includes("Evolve Omega Appointments") && listed.includes("All 3 calendars"), `Step 1 lists the sub-account's calendars: ${listed}`);
     await page.locator('[data-testid="cal-fields-elite"] summary').click();
     const fields = await page.locator('[data-testid="cal-fields-elite"] table').innerText();
     for (const s of ["slotDuration", "openHours", "preBuffer", "lookBusyConfig", "zoom_conf", "elite-conversation"]) must(fields.includes(s), `the Elite fields show ${s}`);
@@ -128,7 +132,7 @@ async function main() {
     const written = await page.locator('[data-testid="cal-written"]').innerText();
     must(written.includes(`widget/booking/${COPY}`) && written.includes(`widget/booking/${eliteId}`) && written.includes("created"), `both ids and booking links shown: ${written}`);
     await page.reload();
-    must((await page.locator('[data-testid="cal-academy-now"]').innerText()).includes("updated"), "the copy reads updated");
+    must((await page.locator('[data-testid="cal-academy-now"]').innerText()).includes(COPY), "Academy reads made, on the copy's id");
     must((await page.locator('[data-testid="cal-elite-now"]').innerText()).includes(eliteId), "Elite reads made");
     await page.selectOption('[data-testid="cal-user"]', "usrDanno00001");
     await page.check('[data-testid="cal-sure"]');
@@ -154,6 +158,42 @@ async function main() {
       must(/Zoom link: yes/.test(t) && /Cancelled: yes/.test(t) && !t.includes("pwd="), `${k}: Zoom yes, cancelled, no passcode shown: ${t}`);
     }
     console.log("✓ Step 3: one test booking on each, a Zoom link on each, both cancelled, no email sent");
+
+    // 5b. H-1236: the stray copy is gone (GoHighLevel answers 400 for it). Step 1 says so and lists what's there; Step 2 creates
+    // Academy fresh from the template, then Elite; a second press finds both by slug and updates them.
+    await fetch(`http://localhost:${PORT}/__reset`);
+    await fetch(`http://localhost:${PORT}/__drop-copy`, { method: "POST" });
+    await page.reload();
+    await page.locator('[data-testid="cal-read"]').waitFor();
+    const note = await page.locator('[data-testid="cal-copy-note"]').innerText();
+    must(note.includes("isn't in this sub-account") && note.includes("fresh"), `the missing copy is said plainly: ${note}`);
+    must(!(await page.locator('[data-testid="cal-read-error"]').count()), "a missing copy is not an error");
+    await page.locator('[data-testid="cal-list"] summary').click();
+    must((await page.locator('[data-testid="cal-list"]').innerText()).includes("All 2 calendars"), "the list shows the two that are left");
+    await page.locator('[data-testid="cal-fields-academy"] summary').click();
+    must((await page.locator('[data-testid="cal-fields-academy"] table').innerText()).includes("academy-conversation"), "Academy's fields to write are shown");
+    await page.selectOption('[data-testid="cal-user"]', "usrDanno00001");
+    await page.check('[data-testid="cal-sure"]');
+    await page.locator('[data-testid="cal-write"]').click();
+    await page.locator('[data-testid="cal-written-elite"]').waitFor({ timeout: 60000 });
+    s = await state();
+    must(s.writes.length === 2 && s.writes.every((w) => w.method === "POST") && s.writes[0].body.slug === "academy-conversation" && s.writes[1].body.slug === "elite-conversation", `both created, Academy first: ${JSON.stringify(s.writes.map((w) => [w.method, w.body.slug]))}`);
+    must(s.writes.every((w) => w.body.locationId === LOC && w.body.calendarType === "personal" && w.body.slotDuration === 30), "both made with the brief's settings in the brief's sub-account");
+    must(s.calendars.find((c) => c.id === TEMPLATE)!.name === "Evolve Omega Booking" && !s.writes.some((w) => w.id === TEMPLATE || w.id === COPY), "the template untouched, nothing written to the old copy's id");
+    must((await page.locator('[data-testid="cal-written"]').innerText()).match(/created/g)?.length === 2, "both read created");
+    await page.reload();
+    await page.selectOption('[data-testid="cal-user"]', "usrDanno00001");
+    await page.check('[data-testid="cal-sure"]');
+    await page.locator('[data-testid="cal-write"]').click();
+    await page.locator('[data-testid="cal-written-elite"]').waitFor({ timeout: 60000 });
+    s = await state();
+    must(s.writes.length === 4 && s.writes[2].method === "PUT" && s.writes[3].method === "PUT" && s.calendars.filter((c) => c.slug === "academy-conversation").length === 1 && s.calendars.filter((c) => c.slug === "elite-conversation").length === 1, "pressed again: both updated by slug, one of each");
+    await page.fill('[data-testid="cal-contact"]', "TestContact0000000001");
+    await page.locator('[data-testid="cal-test"]').click();
+    await page.locator('[data-testid="cal-tested"]').waitFor({ timeout: 90000 });
+    s = await state();
+    must(s.appointments.length === 2 && s.appointments.every((a) => a.status === "cancelled"), "Step 3 books and cancels on both new calendars");
+    console.log("✓ the copy gone: Step 1 says so and lists the calendars; Step 2 creates both fresh, then updates them by slug; Step 3 works");
 
     // 6. A member; the phone width.
     const member = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
