@@ -41,7 +41,10 @@ async function main() {
   // Everything else waiting is cleared out of the way so the counts are exactly this walk's: the seed's own hand-ins go to verified.
   await db.update(schema.pathwayProgress).set({ status: "verified" }).where(and(eq(schema.pathwayProgress.workspaceId, W), eq(schema.pathwayProgress.status, "submitted")));
   await db.update(schema.certSubmissions).set({ status: "passed", score: 90 }).where(and(eq(schema.certSubmissions.workspaceId, W), eq(schema.certSubmissions.status, "submitted")));
-  const task = (await db.query.libraryTasks.findFirst())!;
+  // One row per member and task: pick a Pathway task Maya has no row for yet.
+  const taken = new Set((await db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, W), eq(schema.pathwayProgress.userId, maya.id)), columns: { libraryTaskKey: true } })).map((r) => r.libraryTaskKey));
+  const task = (await db.query.libraryTasks.findMany()).find((t) => !taken.has(t.key))!;
+  must(Boolean(task), "a Pathway task Maya has not started");
   let deliverable = await db.query.certDeliverables.findFirst();
   if (!deliverable) {
     const mod = (await db.query.certModules.findFirst()) ?? (await db.insert(schema.certModules).values({ id: "smoke-verify-module", name: "Smoke module", order: 99 }).returning())[0];
