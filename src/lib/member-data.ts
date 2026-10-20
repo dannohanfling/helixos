@@ -241,6 +241,8 @@ export const WORKSPACE_TABLES = {
   horizon_items: schema.horizonItems,
   // The weekly calls (H-828): the coach's schedule, read by every member at their level; no member's own.
   program_calls: schema.programCalls,
+  // Danno's frameworks (H-1262): the coach's reviewed library, published to every member; no member's own.
+  frameworks: schema.frameworks,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */

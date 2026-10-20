@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-hours";
-import { MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
+import { FRAMEWORK_STATUSES, MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
 import { BOT_FEATURE_KEYS, REQUEST_STATES, UNLOCK_TYPES, type Behavior } from "@/lib/engine/bot-features";
 import type { HorizonArea, HorizonStatus } from "@/lib/engine/horizon";
 import { EMPTY_DEFAULTS, type MfAgendaItem, type MfDefaults, type MfObjection, type MfPillar, type MfPitch, type MfProfile, type MfUrgency } from "@/lib/engine/magic-funnel";
@@ -3224,6 +3224,44 @@ export const storyItems = sqliteTable(
   (t) => [uniqueIndex("story_items_user_key").on(t.userId, t.key), index("story_items_user_status").on(t.userId, t.status)],
 );
 export type StoryItemRow = typeof storyItems.$inferSelect;
+
+/**
+ * Danno's frameworks (H-1262, plan H-1270): the how beside Doctrine's why, imported by the coach from the reviewed Framework
+ * Library and published one by one. The coach's workspace's own: members see published ones, the ladder writer too (the
+ * coach's own ladders only). One row a slug; a re-import updates in place. A price anywhere holds it as a draft.
+ */
+export const frameworks = sqliteTable(
+  "frameworks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    pillar: text("pillar"),
+    rank: text("rank"),
+    idea: text("idea").notNull(),
+    steps: text("steps", { mode: "json" }).$type<string[]>().notNull().default([]),
+    whenToUse: text("when_to_use"),
+    mistakes: text("mistakes"),
+    story: text("story"),
+    exactWords: text("exact_words"),
+    sourceCall: text("source_call"),
+    sourceDate: text("source_date"),
+    fathomUrl: text("fathom_url"),
+    contentAngles: text("content_angles"),
+    borrowedFrom: text("borrowed_from"),
+    evolution: text("evolution"),
+    rawStatus: text("raw_status"),
+    status: text("status", { enum: FRAMEWORK_STATUSES }).notNull().default("draft"),
+    hasPrice: integer("has_price", { mode: "boolean" }).notNull().default(false),
+    digest: text("digest").notNull(),
+    publishedAt: text("published_at"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("frameworks_workspace_slug").on(t.workspaceId, t.slug), index("frameworks_workspace_status").on(t.workspaceId, t.status)],
+);
+export type FrameworkRow = typeof frameworks.$inferSelect;
 
 /** What a ladder was given from the library and story bank, and which the writer said it used: the Material used panel and the "not in the last 10 ladders" rule. */
 export const ladderMaterial = sqliteTable(

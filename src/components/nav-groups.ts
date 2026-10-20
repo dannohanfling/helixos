@@ -133,6 +133,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/board", label: "Danno's principles", icon: "🧭", coachOnly: true, hint: "Board principles" },
       { href: "/coach/board-seats", label: "Board seats", icon: "🏛️", coachOnly: true, hint: "the council library" },
       { href: "/coach/glossary", label: "Glossary", icon: "📖", coachOnly: true, hint: "Building with AI" },
+      { href: "/coach/frameworks", label: "Frameworks", icon: "🧩", coachOnly: true, hint: "import, then publish" },
       { href: "/coach/horizon", label: "On the horizon", icon: "🔭", coachOnly: true, hint: "what members see coming" },
       { href: "/coach/helix", label: "My Helix rungs", icon: "🌀", coachOnly: true, hint: "the 67 rungs and what each reads" },
       { href: "/coach/setup", label: "Setup steps", icon: "🧭", coachOnly: true, hint: "the 26 setup steps, the Start Here video" },
