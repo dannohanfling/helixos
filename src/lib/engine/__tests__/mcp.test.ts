@@ -35,7 +35,7 @@ describe("MCP server (rev 224): the pure parts", () => {
   });
 
   it("scopes: one per area, Body among them, unknown ones named, and words for each", () => {
-    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body"]);
+    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "clients"]);
     expect(parseScopes("content content:write content:publish")).toEqual({ scopes: ["content", "content:write", "content:publish"], unknown: [] });
     expect(parseScopes("today tasks body")).toEqual({ scopes: ["today", "tasks", "body"], unknown: [] });
     expect(parseScopes("today admin")).toEqual({ scopes: ["today"], unknown: ["admin"] });
@@ -45,7 +45,7 @@ describe("MCP server (rev 224): the pure parts", () => {
     // Voice to Ship (rev 638): publishing is its own tick, never pre-ticked, and says it reads back first.
     expect(SCOPE_WORDS["content:publish"].line).toMatch(/never pre-ticked/i);
     expect(SCOPE_WORDS["content:publish"].line).toMatch(/reading back exactly what will post/);
-    expect([...OPT_IN_SCOPES].sort()).toEqual(["body", "content:publish", "inbox"]);
+    expect([...OPT_IN_SCOPES].sort()).toEqual(["body", "clients", "content:publish", "inbox"]);
   });
 
   it("the lifetimes: a code ten minutes, access an hour, refresh thirty days", () => {
@@ -85,7 +85,8 @@ describe("MCP server: the auth holds where it must", () => {
     expect(server).toMatch(/const gate = def\.scope \? gateFor\(def\.scope\) : undefined;/);
     expect(server).toMatch(/toolsFor\(grant\.scopes, grant\)/);
     // The audit row never carries the arguments.
-    expect(server).toMatch(/values\(\{ id: newId\(\), workspaceId: grant\.viewer\.workspace\.id, userId: grant\.viewer\.user\.id, appId: grant\.app\.id, tool: def\.name, ok, error, ms \}\)/);
+    // The row is the token owner's (H-1385: the coach's own, even while an agent is switched into a client).
+    expect(server).toMatch(/values\(\{ id: newId\(\), workspaceId: owner\.workspace\.id, userId: owner\.user\.id, appId: grant\.app\.id, tool: def\.name, ok, error, ms \}\)/);
     expect(server).not.toMatch(/args/.source + /.*insert/.source);
   });
 

@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 317,
+    date: "2026-10-21",
+    title: "Let one of your agents work in a client's HelixOS",
+    lines: ["Coaches: let one of your agents work in a client's HelixOS, client by client, from the client's page. Every change shows in their Changes by your coach under the agent's name; it works only while the client lets their coach work, and never touches HumanOS, their connections, their account or anything that sends."],
+    audience: "coach",
+  },
+  {
     n: 316,
     date: "2026-10-21",
     title: "Doves and an eagle over the Colosseum",

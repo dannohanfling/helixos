@@ -35,11 +35,15 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   // The Handoff inbox (rev 769; every member's own since H-727): never pre-ticked. Agents post and read; only you approve, by hand in HelixOS.
   inbox: { label: "Handoff inbox", line: "Your agents pass briefs, plans, status and files to each other through your inbox. Only you approve anything, by hand in HelixOS." },
   body: { label: "HumanOS", line: "Your HumanOS numbers and meal log. Only with HumanOS's own AI switch on, and never pre-ticked." },
+  // An agent in a client's HelixOS (H-1385): only on an agent token the coach granted for a client; never on the consent screen.
+  clients: { label: "Clients' HelixOS", line: "Switch this agent into a client's HelixOS the coach granted it, and back out. While in, its client tools act as that client and every change is logged for them." },
 };
 
 export const SCOPE_NAMES: readonly Scope[] = MCP_SCOPES;
 /** Never pre-ticked on the consent screen: HumanOS (rev 247, B3), publishing (rev 638) and the Handoff inbox (rev 769). */
-export const OPT_IN_SCOPES: readonly Scope[] = ["body", "content:publish", "inbox"];
+export const OPT_IN_SCOPES: readonly Scope[] = ["body", "content:publish", "inbox", "clients"];
+/** Never on the consent screen at all (H-1385): the coach grants it per agent and client, and the agent token carries it. */
+export const AGENT_ONLY_SCOPES: readonly Scope[] = ["clients"];
 export const isScope = (s: string): s is Scope => (MCP_SCOPES as readonly string[]).includes(s);
 
 /** A space-separated scope string, as OAuth sends it, into known scopes and the rest. */
