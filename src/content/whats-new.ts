@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 316,
+    date: "2026-10-20",
+    title: "Trimming a long Essence saves again",
+    lines: ["If your Essence or its Brand was over the limit, saving a long section could be refused even after you cut words: each line break was being counted twice. It is counted once now, so any save that keeps a section the same size or smaller goes through."],
+    audience: "everyone",
+  },
+  {
     n: 315,
     date: "2026-10-20",
     title: "Submissions to verify, in the menu",

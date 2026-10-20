@@ -155,8 +155,26 @@ async function main() {
     await submit(page, 'button:has-text("Save")');
     await page.waitForURL(/saved=1/);
     if (await page.locator('[data-testid="essence-over-cap"]').count()) throw new Error("a save that trims an Essence over the limit goes through, and the flag goes with it");
+    // A multi-line Brand over its own budget, as an import leaves it ("\n" breaks): the browser posts the box back with "\r\n",
+    // and deleting a few lines must save (20 Oct: each break used to count twice, so a real trim was refused as growing).
+    const spine = Array.from({ length: 700 }, (_, i) => `Step ${i}: hold the line under pressure.`);
+    await db.update(schema.essences).set({ data: { ...(before as Record<string, unknown>), brand: { operating_spine: spine.join("\n") } } }).where(eq(schema.essences.id, eRow.id));
+    await page.goto(`${base}/essence?step=brand`);
+    await page.locator('[data-testid="field-operating_spine"]').waitFor({ timeout: 15000 });
+    // Delete the last three lines with the keyboard, as she would: real input events, so the page's draft keeps them too.
+    const box = page.locator('[data-testid="field-operating_spine"]');
+    await box.click();
+    await page.keyboard.press("Control+End");
+    for (let i = 0; i < 3; i++) await page.keyboard.press("Shift+ArrowUp");
+    await page.keyboard.press("Shift+End");
+    await page.keyboard.press("Backspace");
+    await submit(page, 'button:has-text("Save")');
+    await page.waitForURL(/saved=1/, { timeout: 15000 }).catch(() => undefined);
+    if (!page.url().includes("saved=1")) throw new Error(`a trimmed multi-line Brand over its budget saves, got ${page.url()}`);
+    const kept = ((await db.query.essences.findFirst({ where: eq(schema.essences.id, eRow.id) }))!.data as { brand?: { operating_spine?: string } }).brand?.operating_spine ?? "";
+    if (kept.includes("\r") || kept.split("\n").length !== 697) throw new Error(`the trimmed text is stored with plain line breaks, ${kept.split("\n").length} lines`);
     await db.update(schema.essences).set({ data: before }).where(eq(schema.essences.id, eRow.id));
-    console.log("✓ wizard: sections save one at a time and count; a story from the bank; the cap refuses a save that grows it; one already over is flagged with its trim-to-fit and can be trimmed");
+    console.log("✓ wizard: sections save one at a time and count; a story from the bank; the cap refuses a save that grows it; one already over is flagged with its trim-to-fit and can be trimmed, a multi-line Brand too");
 
     // Key outcomes as named rows (H-811 A2): an Essence saved with the three old boxes opens as rows of those names, and the
     // member renames, adds one for another audience, and saves them in her order.
