@@ -32,8 +32,11 @@ async function main() {
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
   const W = mm.workspaceId;
+  const TASK_KEY = "smoke-verify-task-key";
   const clear = async () => {
     await db.delete(schema.pathwayProgress).where(and(eq(schema.pathwayProgress.workspaceId, W), like(schema.pathwayProgress.id, "smoke-verify-%")));
+    await db.delete(schema.pathwayProgress).where(eq(schema.pathwayProgress.libraryTaskKey, TASK_KEY));
+    await db.delete(schema.libraryTasks).where(eq(schema.libraryTasks.key, TASK_KEY));
     await db.delete(schema.certSubmissions).where(and(eq(schema.certSubmissions.workspaceId, W), like(schema.certSubmissions.id, "smoke-verify-%")));
     await db.delete(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, W), like(schema.pointsLedger.refId, "%smoke-verify-%")));
   };
@@ -41,10 +44,9 @@ async function main() {
   // Everything else waiting is cleared out of the way so the counts are exactly this walk's: the seed's own hand-ins go to verified.
   await db.update(schema.pathwayProgress).set({ status: "verified" }).where(and(eq(schema.pathwayProgress.workspaceId, W), eq(schema.pathwayProgress.status, "submitted")));
   await db.update(schema.certSubmissions).set({ status: "passed", score: 90 }).where(and(eq(schema.certSubmissions.workspaceId, W), eq(schema.certSubmissions.status, "submitted")));
-  // One row per member and task: pick a Pathway task Maya has no row for yet.
-  const taken = new Set((await db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, W), eq(schema.pathwayProgress.userId, maya.id)), columns: { libraryTaskKey: true } })).map((r) => r.libraryTaskKey));
-  const task = (await db.query.libraryTasks.findMany()).find((t) => !taken.has(t.key))!;
-  must(Boolean(task), "a Pathway task Maya has not started");
+  // One row per member and task, and the seed gives Maya every task: the walk hands in a Pathway task of its own.
+  const stage = (await db.query.pathwayStages.findFirst())!;
+  const task = (await db.query.libraryTasks.findFirst({ where: eq(schema.libraryTasks.key, TASK_KEY) })) ?? (await db.insert(schema.libraryTasks).values({ key: TASK_KEY, stageKey: stage.key, order: 999, name: "Smoke: the verify walk's task", points: 10 }).returning())[0];
   let deliverable = await db.query.certDeliverables.findFirst();
   if (!deliverable) {
     const mod = (await db.query.certModules.findFirst()) ?? (await db.insert(schema.certModules).values({ id: "smoke-verify-module", name: "Smoke module", order: 99 }).returning())[0];
