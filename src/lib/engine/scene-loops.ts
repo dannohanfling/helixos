@@ -7,8 +7,7 @@
 export const SCENE_LOOPS: Readonly<Record<string, number>> = {
   "/aqueduct/aqueduct-day-none": 1,
   "/forum/forum-day": 1,
-  // A stand-in until Scriba's redo (smaller, distant birds) lands under the same names with the version bumped.
-  "/colosseum/colosseum-day": 1,
+  // The Colosseum has no loop since H-1367: filmed birds fly over its still photo (src/lib/engine/scene-birds.ts).
 };
 
 export type SceneLoop = { mp4: string; webm: string; poster: string };
