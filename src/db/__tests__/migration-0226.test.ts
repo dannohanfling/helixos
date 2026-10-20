@@ -27,10 +27,13 @@ describe("migration 0226: frameworks", () => {
     expect(row.steps).toBe("[]");
     expect(row.has_price).toBe(0);
   });
-  it("comes last in the journal, with a later time than the one before", () => {
+  it("follows 0225 in the journal, with a later time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0226_frameworks");
-    expect(at).toBe(journal.entries.length - 1);
+    expect(at).toBeGreaterThan(0);
+    expect(journal.entries[at - 1].tag).toBe("0225_applause");
     expect(journal.entries[at].when).toBeGreaterThan(journal.entries[at - 1].when);
+    // Later migrations may follow it once they merge; every one keeps a later time than the one before.
+    for (let i = at + 1; i < journal.entries.length; i++) expect(journal.entries[i].when).toBeGreaterThan(journal.entries[i - 1].when);
   });
 });
