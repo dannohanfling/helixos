@@ -29,7 +29,7 @@ export default async function CoachFrameworksPage({ searchParams }: { searchPara
         </p>
         <FrameworksImport />
       </Card>
-      <Card title="Your frameworks" action={<Badge tone="neutral" data-testid="frameworks-count">{published} of {all.length} published</Badge>}>
+      <Card title="Your frameworks" action={<span data-testid="frameworks-count"><Badge tone="neutral">{published} of {all.length} published</Badge></span>}>
         {sp.saved ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="framework-saved">Saved.</p> : null}
         {sp.error ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="framework-error">{sp.error}</p> : null}
         <form method="get" className="mb-3 flex flex-wrap items-end gap-2" data-testid="framework-filters">
