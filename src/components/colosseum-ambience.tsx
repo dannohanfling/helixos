@@ -6,15 +6,15 @@
  * lights twinkle round the rim; a warm haze drifts over the sand. Golden hour: a cloud shadow crosses about every 48 s, dust
  * drifts over the floor, three birds flap and glide across (H-966). Pause and a hidden tab hold it; reduced motion draws none of it. It only draws.
  */
-import { COLOSSEUM_FLICKER, COLOSSEUM_FLIGHTS, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES } from "@/lib/engine/ambience";
+import { COLOSSEUM_FLICKER, COLOSSEUM_MOTES, COLOSSEUM_TWINKLES } from "@/lib/engine/ambience";
 import { useHidden, useQuiet } from "@/components/scene-life";
-import { Flock } from "@/components/flock";
 import "@/components/ambience.css";
 
 type Look = "day" | "night";
 const s = (n: number) => `${n}s`;
 
-export function ColosseumAmbience({ look, paused }: { look: Look; paused: boolean }) {
+/** `loop`: the golden-hour photo plays its filmed loop (H-1253), so the drawn cloud shadow stays off; the dust stays. */
+export function ColosseumAmbience({ look, paused, loop = false }: { look: Look; paused: boolean; loop?: boolean }) {
   const quiet = useQuiet();
   const hidden = useHidden();
   if (quiet) return null;
@@ -37,11 +37,11 @@ export function ColosseumAmbience({ look, paused }: { look: Look; paused: boolea
         </>
       ) : (
         <>
-          <div className="amb-cloud" data-testid="amb-cloud" />
+          {loop ? null : <div className="amb-cloud" data-testid="amb-cloud" />}
           {COLOSSEUM_MOTES.map((m, i) => (
             <span key={i} className="amb-mote" style={{ left: `${m.x}%`, top: `${m.y}%`, "--dx": `${m.dx}px`, "--dy": `${m.dy}px`, animationDuration: s(m.d), animationDelay: s(m.dl) } as React.CSSProperties} data-testid="amb-mote" />
           ))}
-          <Flock scene="co" flights={COLOSSEUM_FLIGHTS} />
+          {/* The drawn birds are off (H-1180): the filmed golden-hour loop of the arena carries its own (H-1253). */}
         </>
       )}
     </div>

@@ -7,16 +7,16 @@
  * gardens. Golden hour: a loose flock of five birds flaps and glides over the plaza (H-966) and a cloud shadow passes. A hidden tab holds it; reduced motion
  * draws none of it. It only draws, and never takes a tap.
  */
-import { FORUM_FIREFLIES, FORUM_FLIGHTS, FORUM_FLAME, FORUM_FLICKER } from "@/lib/engine/ambience";
+import { FORUM_FIREFLIES, FORUM_FLAME, FORUM_FLICKER } from "@/lib/engine/ambience";
 import { useHidden, useQuiet } from "@/components/scene-life";
 import { AmbienceFlame } from "@/components/ambience-flame";
-import { Flock } from "@/components/flock";
 import "@/components/ambience.css";
 
 type Look = "day" | "night";
 const s = (n: number) => `${n}s`;
 
-export function ForumAmbience({ look }: { look: Look }) {
+/** `loop`: the golden-hour photo plays its filmed loop (H-1253), so the drawn cloud shadow stays off; the night parts are untouched. */
+export function ForumAmbience({ look, loop = false }: { look: Look; loop?: boolean }) {
   const quiet = useQuiet();
   const hidden = useHidden();
   if (quiet) return null;
@@ -41,8 +41,8 @@ export function ForumAmbience({ look }: { look: Look }) {
         </>
       ) : (
         <>
-          <div className="amb-cloud amb-fo-cloud" data-testid="amb-cloud" />
-          <Flock scene="fo" flights={FORUM_FLIGHTS} />
+          {loop ? null : <div className="amb-cloud amb-fo-cloud" data-testid="amb-cloud" />}
+          {/* The drawn birds are off (H-1180): the filmed golden-hour loop of the plaza carries its own (H-1253). */}
         </>
       )}
     </div>
