@@ -83,3 +83,4 @@ tabbar
 ranks
 applause
 frameworks
+verify-badge
