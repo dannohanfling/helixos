@@ -18,9 +18,17 @@ async function login(page: Page) {
   await page.click('button:has-text("As the coach")');
   await page.waitForURL(/\/today/);
 }
-async function submit(page: Page, selector: string) {
-  await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(selector).first().click()]);
+async function submit(page: Page, selector: string): Promise<number> {
+  const [res] = await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(selector).first().click()]);
   await page.waitForLoadState("networkidle");
+  return res.status();
+}
+async function until(check: () => Promise<boolean>, msg: () => Promise<string>) {
+  for (let i = 0; i < 40; i++) {
+    if (await check()) return;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(await msg());
 }
 let rpcId = 0;
 const rpc = (token: string, method: string, params: Record<string, unknown> = {}) =>
@@ -89,12 +97,19 @@ async function main() {
     await page.selectOption('[data-testid="partner-walletpush"]', "in setup");
     await page.fill('[data-testid="partner-ownerContact"]', "Smoke Owner, 555-0100");
     await page.fill('[data-testid="partner-pass-holders"]', "12");
-    await submit(page, '[data-testid="partner-save"]');
-    await page.locator('[data-testid="partner-saved"]').waitFor({ timeout: 20000 });
+    const saveStatus = await submit(page, '[data-testid="partner-save"]');
+    const savedRow = async () => (await db.query.partnerRestaurants.findFirst({ where: eq(schema.partnerRestaurants.id, id) }))!;
+    const rowWords = async () => {
+      const r = await savedRow();
+      return JSON.stringify({ post: saveStatus, stage: r.stage, handed: r.handedToWalletpushAt, walletpush: r.walletpushStatus, passHolders: r.passHolders, updatedAt: r.updatedAt, url: page.url() });
+    };
+    await until(async () => (await savedRow()).handedToWalletpushAt === daysAgo(9), async () => `the edit form saves the handover date: ${await rowWords()}`);
+    const edited = await savedRow();
+    must(edited.stage === "handed to WalletPush" && edited.passHolders === 12 && edited.walletpushStatus === "in setup" && edited.ownerContact === "Smoke Owner, 555-0100", `the edit form saves the stage, numbers, lists and the contact: ${await rowWords()}`);
+    await page.goto(`${base}/coach/partners/${id}`);
+    await page.locator('[data-testid="partner-standing"]').waitFor({ timeout: 20000 });
     const standing = await page.locator('[data-testid="partner-standing"]').innerText();
-    must(standing.includes("OVERDUE"), `the setup promise is OVERDUE after nine days: ${standing}`);
-    const edited = (await db.query.partnerRestaurants.findFirst({ where: eq(schema.partnerRestaurants.id, id) }))!;
-    must(edited.passHolders === 12 && edited.walletpushStatus === "in setup" && edited.ownerContact === "Smoke Owner, 555-0100", "the edit form saves numbers, lists and the contact");
+    must(standing.includes("OVERDUE"), `the setup promise is OVERDUE after nine days: ${standing.replace(/\s+/g, " ")}`);
 
     // ── A touch sets the next step; a payment is recorded, nothing charged. ──
     await page.selectOption('[data-testid="touch-channel"]', "call");
