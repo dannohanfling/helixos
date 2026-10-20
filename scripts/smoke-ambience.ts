@@ -99,8 +99,9 @@ async function main() {
         const n = async (id: string) => page.locator(`[data-testid="arena-ambience"] [data-testid="${id}"]`).count();
         if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-twinkle")) === 12 && (await n("amb-cloud")) === 0, `${w}/night: three flicker copies, twelve lights, no cloud`);
         else {
-          must((await n("amb-cloud")) === 1 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: the cloud, sixteen motes, no flicker`);
-          // The drawn birds are off (H-1180) until the filmed loop of the arena replaces them.
+          // The filmed loop carries the day's life (H-1253): no drawn cloud over it, the dust stays, no drawn birds (H-1180).
+          must((await n("amb-cloud")) === 0 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: no cloud over the loop, sixteen motes, no flicker`);
+          must((await page.locator('[data-testid="arena-loop"]').count()) === 1, `${w}/day: the arena's filmed loop is there`);
           must((await n("amb-bird")) === 0 && (await n("amb-flight")) === 0, `${w}/day: no drawn birds`);
         }
         const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -288,13 +289,19 @@ async function main() {
         const n = async (id: string) => fo.locator(`${foLayer} [data-testid="${id}"]`).count();
         if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-pool")) === 1 && (await n("amb-flame")) === 1 && (await n("amb-firefly")) === 10 && (await n("amb-bird")) === 0, `Forum ${w}/night: three flicker copies, the pool, the flame, ten fireflies, no birds`);
         else {
-          must((await n("amb-cloud")) === 1 && (await n("amb-flicker")) === 0, `Forum ${w}/day: the cloud`);
+          // The filmed loop carries the day's life (H-1253): no drawn cloud over it, no drawn birds (H-1180).
+          must((await n("amb-cloud")) === 0 && (await n("amb-flicker")) === 0, `Forum ${w}/day: no cloud over the loop`);
+          must((await fo.locator('[data-testid="forum-loop"]').count()) === 1, `Forum ${w}/day: the plaza's filmed loop is there`);
           must((await n("amb-bird")) === 0 && (await n("amb-flight")) === 0, `Forum ${w}/day: no drawn birds (H-1180)`);
         }
         const sideways = await fo.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         must(sideways <= 0, `Forum ${w}/${look}: nothing scrolls sideways (${sideways}px)`);
         const anims = (await layerAnims(fo, foLayer))!;
-        must(anims.length > 0 && anims.every((st) => st === "running"), `Forum ${w}/${look}: the ambience is running (${anims.length})`);
+        if (look === "day" && (await fo.locator('[data-testid="forum-map"]').getAttribute("data-loop")) === "1") {
+          // By day the film is the plaza's life (H-1253): the layer draws nothing that moves, and the loop itself must be playing.
+          await fo.waitForFunction(() => document.querySelector('[data-testid="forum-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
+          must(anims.every((st) => st === "running"), `Forum ${w}/day: the loop plays and nothing in the layer is held (${anims.length})`);
+        } else must(anims.length > 0 && anims.every((st) => st === "running"), `Forum ${w}/${look}: the ambience is running (${anims.length})`);
         // The map stays on top: what's under the scene's centre belongs to the map's SVG, never to the ambience.
         const onTop = await fo.evaluate((sel) => {
           const box = document.querySelector('[data-testid="forum-map"] .fo-scene')!.getBoundingClientRect();
@@ -309,7 +316,11 @@ async function main() {
     await setHidden(fo, true);
     await fo.waitForFunction((sel) => document.querySelector(sel)?.classList.contains("amb-still"), foLayer);
     const foHeld = (await layerAnims(fo, foLayer))!;
-    must(foHeld.length > 0 && foHeld.every((st) => st === "paused"), "Forum: a hidden tab holds every animation");
+    if ((await fo.locator('[data-testid="forum-map"]').getAttribute("data-loop")) === "1") {
+      // The film holds too (H-1253): the loop pauses when the tab hides, and the photo shows.
+      await fo.waitForFunction(() => document.querySelector('[data-testid="forum-loop"]')?.getAttribute("data-loop-mode") !== "video", null, { timeout: 5000 });
+      must(await fo.locator('[data-testid="forum-loop"]').evaluate((v: HTMLVideoElement) => v.paused) && foHeld.every((st) => st === "paused"), "Forum: a hidden tab holds the loop and every animation");
+    } else must(foHeld.length > 0 && foHeld.every((st) => st === "paused"), "Forum: a hidden tab holds every animation");
     await setHidden(fo, false);
     await fo.close();
     const still3 = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });

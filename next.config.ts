@@ -76,6 +76,8 @@ const nextConfig: NextConfig = {
       { source: "/((?!body/foods/find$).*)", headers: securityHeaders },
       // The filmed scene loops (H-1180) carry a version tag, so a same-name swap is fetched fresh.
       { source: "/aqueduct/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/forum/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/colosseum/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
     ];
   },
 };
