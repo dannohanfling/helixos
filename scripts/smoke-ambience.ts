@@ -99,8 +99,9 @@ async function main() {
         const n = async (id: string) => page.locator(`[data-testid="arena-ambience"] [data-testid="${id}"]`).count();
         if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-twinkle")) === 12 && (await n("amb-cloud")) === 0, `${w}/night: three flicker copies, twelve lights, no cloud`);
         else {
-          must((await n("amb-cloud")) === 1 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: the cloud, sixteen motes, no flicker`);
-          // The drawn birds are off (H-1180) until the filmed loop of the arena replaces them.
+          // The filmed loop carries the day's life (H-1253): no drawn cloud over it, the dust stays, no drawn birds (H-1180).
+          must((await n("amb-cloud")) === 0 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: no cloud over the loop, sixteen motes, no flicker`);
+          must((await page.locator('[data-testid="arena-loop"]').count()) === 1, `${w}/day: the arena's filmed loop is there`);
           must((await n("amb-bird")) === 0 && (await n("amb-flight")) === 0, `${w}/day: no drawn birds`);
         }
         const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -288,7 +289,9 @@ async function main() {
         const n = async (id: string) => fo.locator(`${foLayer} [data-testid="${id}"]`).count();
         if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-pool")) === 1 && (await n("amb-flame")) === 1 && (await n("amb-firefly")) === 10 && (await n("amb-bird")) === 0, `Forum ${w}/night: three flicker copies, the pool, the flame, ten fireflies, no birds`);
         else {
-          must((await n("amb-cloud")) === 1 && (await n("amb-flicker")) === 0, `Forum ${w}/day: the cloud`);
+          // The filmed loop carries the day's life (H-1253): no drawn cloud over it, no drawn birds (H-1180).
+          must((await n("amb-cloud")) === 0 && (await n("amb-flicker")) === 0, `Forum ${w}/day: no cloud over the loop`);
+          must((await fo.locator('[data-testid="forum-loop"]').count()) === 1, `Forum ${w}/day: the plaza's filmed loop is there`);
           must((await n("amb-bird")) === 0 && (await n("amb-flight")) === 0, `Forum ${w}/day: no drawn birds (H-1180)`);
         }
         const sideways = await fo.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

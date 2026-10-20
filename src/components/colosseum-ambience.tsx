@@ -13,7 +13,8 @@ import "@/components/ambience.css";
 type Look = "day" | "night";
 const s = (n: number) => `${n}s`;
 
-export function ColosseumAmbience({ look, paused }: { look: Look; paused: boolean }) {
+/** `loop`: the golden-hour photo plays its filmed loop (H-1253), so the drawn cloud shadow stays off; the dust stays. */
+export function ColosseumAmbience({ look, paused, loop = false }: { look: Look; paused: boolean; loop?: boolean }) {
   const quiet = useQuiet();
   const hidden = useHidden();
   if (quiet) return null;
@@ -36,11 +37,11 @@ export function ColosseumAmbience({ look, paused }: { look: Look; paused: boolea
         </>
       ) : (
         <>
-          <div className="amb-cloud" data-testid="amb-cloud" />
+          {loop ? null : <div className="amb-cloud" data-testid="amb-cloud" />}
           {COLOSSEUM_MOTES.map((m, i) => (
             <span key={i} className="amb-mote" style={{ left: `${m.x}%`, top: `${m.y}%`, "--dx": `${m.dx}px`, "--dy": `${m.dy}px`, animationDuration: s(m.d), animationDelay: s(m.dl) } as React.CSSProperties} data-testid="amb-mote" />
           ))}
-          {/* The drawn birds are off (H-1180) until the filmed golden-hour loop of the arena replaces them. */}
+          {/* The drawn birds are off (H-1180): the filmed golden-hour loop of the arena carries its own (H-1253). */}
         </>
       )}
     </div>

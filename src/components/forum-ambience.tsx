@@ -15,7 +15,8 @@ import "@/components/ambience.css";
 type Look = "day" | "night";
 const s = (n: number) => `${n}s`;
 
-export function ForumAmbience({ look }: { look: Look }) {
+/** `loop`: the golden-hour photo plays its filmed loop (H-1253), so the drawn cloud shadow stays off; the night parts are untouched. */
+export function ForumAmbience({ look, loop = false }: { look: Look; loop?: boolean }) {
   const quiet = useQuiet();
   const hidden = useHidden();
   if (quiet) return null;
@@ -40,8 +41,8 @@ export function ForumAmbience({ look }: { look: Look }) {
         </>
       ) : (
         <>
-          <div className="amb-cloud amb-fo-cloud" data-testid="amb-cloud" />
-          {/* The drawn birds are off (H-1180) until the filmed golden-hour loop of the plaza replaces them. */}
+          {loop ? null : <div className="amb-cloud amb-fo-cloud" data-testid="amb-cloud" />}
+          {/* The drawn birds are off (H-1180): the filmed golden-hour loop of the plaza carries its own (H-1253). */}
         </>
       )}
     </div>
