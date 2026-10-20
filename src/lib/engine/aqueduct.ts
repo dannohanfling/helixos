@@ -64,6 +64,17 @@ export const aqueductLook = (setting: "auto" | "day" | "night", hour: number): S
 /** The picture, without its extension: the leak's step, or the intact aqueduct with a full fountain. */
 export const pictureFor = (look: SceneLook, leak: Leak | null): string => `/aqueduct/aqueduct-${look}-${leak ? leak.step : "none"}`;
 
+/**
+ * The filmed loops (H-1180): the photo itself with its water moving, camera locked, first frame = last. A picture plays one only
+ * when it is listed here, with the version its files carry (bump it on a same-name swap: the files are cached as immutable).
+ * Files: `{picture}-loop.mp4`, `-loop.webm` and `-loop-poster.jpg`, 1280x720, the photo's 16:9.
+ */
+export const AQUEDUCT_LOOPS: Readonly<Record<string, number>> = { "/aqueduct/aqueduct-day-none": 1 };
+export function loopFor(picture: string): { mp4: string; webm: string; poster: string } | null {
+  const v = AQUEDUCT_LOOPS[picture];
+  return v ? { mp4: `${picture}-loop.mp4?v=${v}`, webm: `${picture}-loop.webm?v=${v}`, poster: `${picture}-loop-poster.jpg?v=${v}` } : null;
+}
+
 /** "About N people slipped through this arch": what the previous rate would have carried, less what did; at least one. And E, the usual. */
 export function slipped(now: Counts, leak: Leak): { n: number; expected: number } {
   const from = now[leak.step + 1] ?? 0;

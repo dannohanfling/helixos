@@ -11,11 +11,12 @@
 import { useEffect, useRef, useState } from "react";
 import { setAqueductPausedAction } from "@/lib/actions/aqueduct";
 import { setSceneLookAction } from "@/lib/actions/scene";
-import { BODY, CHANNEL, CHANNEL_LENGTH, FALLS, FILL_SECONDS, FLOW, flowWidth, frontReaches, LEAK_TAG, PICTURE, pct, pictureFor, SEGMENTS, STAGE_TAG_AT, STAGES, STEP_TAG_AT, WATER, waterWidth, type Counts, type Leak } from "@/lib/engine/aqueduct";
+import { BODY, CHANNEL, CHANNEL_LENGTH, FALLS, FILL_SECONDS, FLOW, flowWidth, frontReaches, LEAK_TAG, loopFor, PICTURE, pct, pictureFor, SEGMENTS, STAGE_TAG_AT, STAGES, STEP_TAG_AT, WATER, waterWidth, type Counts, type Leak } from "@/lib/engine/aqueduct";
 import type { SceneLook } from "@/lib/engine/board-view";
 import type { Repair } from "@/lib/engine/aqueduct-repair";
 import { AqueductFountain, AqueductRepairCard, AqueductRepairLayer, FallingSheet, Splash, WaterDefs } from "@/components/aqueduct-repair";
 import { useQuiet } from "@/components/scene-life";
+import { LoopOverPhoto } from "@/components/loop-over-photo";
 
 type StepRate = { step: number; label: string; rate: number | null; leak: boolean };
 
@@ -34,7 +35,10 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
   // The channel fills when the scene opens (H-966): not under a repair (it has its own moment), not when the water was left
   // paused, never under reduced motion. Once the front is through, the mask goes.
   const [filling, setFilling] = useState(!initialPaused && !repair);
-  const fill = filling && !quiet;
+  // A picture with a filmed loop (H-1180) plays it over the photo instead of the drawn water and fountain, which sat beside the
+  // painted water rather than on it. A repair keeps the drawing: its moment is drawn on that water.
+  const loop = repair ? null : loopFor(picture);
+  const fill = filling && !quiet && !loop;
   const [card, setCard] = useState(Boolean(repair));
   const oldPicture = repair ? pictureFor(look, { step: repair.step, nowRate: 0, wasRate: 0, drop: 0 }) : null;
   const stamped = useRef(false);
@@ -77,7 +81,7 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
   return (
     <div className="aq-wrap">
       <div className="aq-stage">
-        <div className={`aq-scene aq-${look}${still ? " aq-still" : ""}${repair && !quiet ? ` aq-rep${hidden ? " aq-rep-wait" : ""}` : ""}`} data-testid="aqueduct-scene" data-look={look} data-paused={still ? "1" : "0"} data-picture={picture}>
+        <div className={`aq-scene aq-${look}${still ? " aq-still" : ""}${repair && !quiet ? ` aq-rep${hidden ? " aq-rep-wait" : ""}` : ""}`} data-testid="aqueduct-scene" data-look={look} data-paused={still ? "1" : "0"} data-picture={picture} data-loop={loop ? "1" : "0"}>
           {oldPicture && !quiet && !broken.has(oldPicture) ? (
             <picture>
               <source srcSet={`${oldPicture}.avif`} type="image/avif" />
@@ -92,6 +96,7 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
               <img ref={photo} className="aq-bg aq-bg-now" src={`${picture}.jpg`} alt="" width={PICTURE.width} height={PICTURE.height} decoding="async" onError={() => setBroken((b) => new Set(b).add(picture))} data-testid="aqueduct-photo" />
             </picture>
           )}
+          {loop && !broken.has(picture) ? <LoopOverPhoto mp4={loop.mp4} webm={loop.webm} held={still} className="aq-bg aq-loop" testId="aqueduct-loop" /> : null}
           {/* The other look, fetched quietly so the toggle swaps without a wait. */}
           <link rel="prefetch" as="image" href={`${pictureFor(look === "day" ? "night" : "day", leak)}.webp`} />
           <svg className="aq-svg" viewBox={`0 0 ${PICTURE.width} ${PICTURE.height}`} preserveAspectRatio="none" aria-hidden="true" focusable="false">
@@ -103,6 +108,7 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
                 </mask>
               ) : null}
             </defs>
+            {loop ? null : (
             <g className="aq-water" style={{ mixBlendMode: water.blend }} mask={fill ? "url(#aq-front)" : undefined} data-testid="aqueduct-water" data-filling={fill ? "1" : "0"}>
               {SEGMENTS.map((seg) => {
                 const w = waterWidth(now[seg.stage], now[1]);
@@ -137,13 +143,14 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
                 );
               })}
             </g>
+            )}
             {fall ? (
               <g className={`aq-fall${repair ? " aq-rep-new" : ""}${fill ? " aq-after" : ""}`} style={fill ? ({ "--at": `${frontReaches(fall[0])}s` } as React.CSSProperties) : undefined} data-testid="aqueduct-fall" data-step={leak!.step} data-x={fall[0]}>
                 <FallingSheet f={fall} color={water.dash} />
                 <Splash f={fall} color={water.dash} />
               </g>
             ) : null}
-            {leak ? null : <AqueductFountain look={look} className={repair ? "aq-rep-new" : fill ? "aq-after" : ""} style={fill ? ({ "--at": `${frontReaches(1528)}s` } as React.CSSProperties) : undefined} />}
+            {leak || loop ? null : <AqueductFountain look={look} className={repair ? "aq-rep-new" : fill ? "aq-after" : ""} style={fill ? ({ "--at": `${frontReaches(1528)}s` } as React.CSSProperties) : undefined} />}
             <g className="aq-tags">
               {STAGE_TAG_AT.map(([x, y], i) => pill(x, y, `${now[i] === null || now[i] === undefined ? "—" : now[i]!.toLocaleString()} · ${STAGES[i]}`, "stage", `aqueduct-stage-${i}`, true))}
               {STEP_TAG_AT.map(([x, y], b) => {
