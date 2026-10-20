@@ -7,6 +7,8 @@ import { DeckImageUpload } from "@/components/deck-image-upload";
 import { SubmitButton } from "@/components/submit-button";
 import { PhotoPicker } from "@/components/photo-picker";
 
+/** The select's value for "Write my own…" (H-1358): the text comes from the field under it. */
+export const OWN_HEADLINE = "__own__";
 export type PhotoChoice = { id: string; caption: string | null; kind: string; source: string; width: number; height: number };
 /**
  * Make the graphic, the step (rev 513, 524): the photo (the suggestion first, any of the member's own, or one uploaded here),
@@ -43,7 +45,13 @@ export function GraphicMaker({ ladderId, choices, suggestedId, preselectId, head
             {headlines.map((h, i) => (
               <option key={h} value={h}>{i === 0 ? "" : "Alternate · "}{h}</option>
             ))}
+            <option value={OWN_HEADLINE}>Write my own…</option>
           </select>
+          {headline === OWN_HEADLINE ? (
+            // H-1358: a headline written here is saved as an alternate, so the checklist reads it like the others.
+            <input className="field mt-2 text-sm" name="ownHeadline" placeholder='8–14 words, two lines split with " / ", one (gold: PHRASE)' required data-testid="graphic-own-headline" />
+          ) : null}
+          <a href="#headline" className="mt-1 inline-block text-xs underline" data-testid="graphic-edit-headlines">Edit headlines</a>
         </label>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" name="strongFade" value="1" checked={strongFade} onChange={(e) => setStrongFade(e.target.checked)} className="mt-1" data-testid="graphic-strong-fade" />
