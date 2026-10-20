@@ -29,6 +29,8 @@ export const MEMBER_TABLES = {
   daily_logs: schema.dailyLogs,
   weekly_intentions: schema.weeklyIntentions,
   colosseum_wins: schema.colosseumWins,
+  /** Applause the member gave on others' wins (H-1171). Applause on their own wins goes with the win (src/lib/erase.ts). */
+  win_applause: schema.winApplause,
   helix_ticks: schema.helixTicks,
   setup_ticks: schema.setupTicks,
   monthly_intentions: schema.monthlyIntentions,

@@ -17,6 +17,8 @@ let forced = 200;
 let calls = 0;
 const writes: string[] = [];
 let created = 0;
+/** The live Evolve Omega template's placeholders (H-798, H-817): a create-pass field outside these is refused, as eLoyalty does. */
+const TEMPLATE_PLACEHOLDERS = ["First_Name", "Last_Name", "Email", "MEMBER_ID", "Push_Notification", "Points", "Tier", "Current_Offer"];
 const fields = new Map<string, string>();
 const balances = new Map(CUSTOMERS.map((c) => [c.id, { balance: c.points_balance, earned: c.points_earned }]));
 const moved: { id: string; type: string; points: number; reason: string; created_at: string }[] = [];
@@ -73,7 +75,9 @@ createServer((req, res) => {
     if (req.headers.authorization !== `Bearer ${ELOYALTY_KEY}`) return json(401, { error: "invalid key" });
     if (forced !== 200) return json(forced, { error: "forced" });
     void body(req).then((b) => {
-      if (!b.Email || !b.Id) return json(400, { error: "Email and Id are required" });
+      // Like the live Evolve Omega template (H-798, H-1235): every field must be one of its placeholders.
+      if (Object.keys(b).some((k) => !TEMPLATE_PLACEHOLDERS.includes(k))) return json(400, { error: "Form field (a value) does not match any template placeholder" });
+      if (!b.Email || !b.MEMBER_ID) return json(400, { error: "Email and MEMBER_ID are required" });
       created += 1;
       balances.set(`cus_eo_${created}`, { balance: 0, earned: 0 });
       json(200, { customerId: `cus_eo_${created}`, serialNumber: `SER-eo-${created}`, passTypeIdentifier: "pass.com.evolveomega", apple: { downloadUrl: `https://pass.example/eo-${created}` } });

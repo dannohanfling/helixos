@@ -12,10 +12,27 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 310,
+    n: 312,
     date: "2026-10-19",
     title: "The aqueduct's water now really flows",
     lines: ["On Golden hour, the Aqueduct's waterfall and fountain move in a filmed loop of the picture itself, with no drawn line over the water."],
+    audience: "everyone",
+  },
+  {
+    n: 311,
+    date: "2026-10-20",
+    title: "Booking calendars in the menu",
+    lines: ["Coaches: Booking calendars now has its own item under People, and Clients says it opens the Coach view."],
+    audience: "coach",
+  },
+  {
+    n: 310,
+    date: "2026-10-19",
+    title: "Applaud each other's wins",
+    lines: [
+      "Applaud each other's wins in the Colosseum. You both earn points, and your coach's applause counts double.",
+      "Tap the count under a win to see who applauded. Today tells you when someone applauds yours.",
+    ],
     audience: "everyone",
   },
   {
