@@ -110,7 +110,11 @@ async function main() {
     // ── At 390: the More page shows it with its count, the More tab totals it, nothing scrolls sideways. ──
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/more`, { waitUntil: "networkidle" });
-    const moreItem = page.locator(`main ${ITEM}, ${ITEM}`).first();
+    // The More page's own copy (the sidebar is in the page but hidden on a phone): the People card, opened if it is folded.
+    const people = page.locator('[data-testid="more-group"]', { has: page.locator("button", { hasText: "People" }) }).first();
+    await people.waitFor({ timeout: 15000 });
+    if ((await people.getAttribute("data-open")) !== "true") await people.locator("button").first().click();
+    const moreItem = people.locator(ITEM).first();
     await moreItem.waitFor({ timeout: 15000 });
     must((await moreItem.locator('[data-testid="due-badge"]').innerText()).trim() === "1", "the More page shows the count");
     const label = (await page.locator('[data-testid="bottom-nav"] a[href="/more"]').getAttribute("aria-label")) ?? "";
