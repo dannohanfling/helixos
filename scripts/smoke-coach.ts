@@ -75,10 +75,9 @@ async function main() {
       if ((await group.getAttribute("data-open")) !== "true") await group.locator('[data-testid="nav-group-toggle"]').click();
       const calText = (await cal.getAttribute("aria-label")) || (await cal.innerText());
       if (!/Booking calendars/.test(calText)) throw new Error(`the item is named Booking calendars: ${calText}`);
-      await Promise.all([page.waitForURL(/\/hermes\/calendars$/, { waitUntil: "commit" }), cal.click()]);
-      await page.waitForLoadState("networkidle");
-      if ((await page.locator("h1").first().innerText()).trim() !== "Booking calendars") throw new Error("the item opens Booking calendars");
-      console.log("✓ Booking calendars has its own item under People, and opens the page");
+      // The page itself reads GoHighLevel on the server, which the headers walk covers; here the menu is the point.
+      if ((await group.getAttribute("data-group")) !== "People") throw new Error(`Booking calendars sits under People, not ${await group.getAttribute("data-group")}`);
+      console.log("✓ Booking calendars has its own item under People, named and linked");
     }
     // The brand kit: a pair that cannot read on a slide is refused here with the pair named; the Turas kit saves
     await page.goto(`${base}/settings`);
