@@ -104,7 +104,8 @@ async function main() {
     must(!r.isError, `tasks_add as the client: ${r.text}`);
     const task = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, maya.id), eq(schema.tasks.title, "Smoke agent task for Maya")) });
     must(Boolean(task), "the task is Maya's");
-    const change = await db.query.coachChanges.findFirst({ where: and(eq(schema.coachChanges.clientMembershipId, mm.id), eq(schema.coachChanges.agentId, AGENT), eq(schema.coachChanges.kind, "change")) });
+    // Allow itself is also in her record under the agent; the task's own line is the one with the task's words.
+    const change = await db.query.coachChanges.findFirst({ where: and(eq(schema.coachChanges.clientMembershipId, mm.id), eq(schema.coachChanges.agentId, AGENT), eq(schema.coachChanges.action, "Added a task")) });
     must(change?.action === "Added a task" && change.coachUserId === coach.id && change.userId === maya.id, `the change is in Maya's record under the agent: ${JSON.stringify(change)}`);
     r = await tool(token, "dm_log", { person: "Someone Smoke", note: "hi" });
     must(r.isError && /sends or publishes as/.test(r.text) && /inbox/.test(r.text), `a send is refused inside: ${r.text}`);
