@@ -99,9 +99,10 @@ async function main() {
         const n = async (id: string) => page.locator(`[data-testid="arena-ambience"] [data-testid="${id}"]`).count();
         if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-twinkle")) === 12 && (await n("amb-cloud")) === 0, `${w}/night: three flicker copies, twelve lights, no cloud`);
         else {
-          // The filmed loop carries the day's life (H-1253): no drawn cloud over it, the dust stays, no drawn birds (H-1180).
-          must((await n("amb-cloud")) === 0 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: no cloud over the loop, sixteen motes, no flicker`);
-          must((await page.locator('[data-testid="arena-loop"]').count()) === 1, `${w}/day: the arena's filmed loop is there`);
+          // The filmed birds carry the day's life (H-1367): no drawn cloud, the dust stays, no drawn birds (H-1180), no loop.
+          must((await n("amb-cloud")) === 0 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: no cloud, sixteen motes, no flicker`);
+          must((await page.locator('[data-testid="arena-birds"]').count()) === 1 && (await page.locator('[data-testid="arena-loop"]').count()) === 0, `${w}/day: the birds' canvas is there, the loop is gone`);
+          await page.waitForFunction(() => document.querySelector('[data-testid="arena-birds"]')?.getAttribute("data-birds") === "flying", null, { timeout: 15000 });
           must((await n("amb-bird")) === 0 && (await n("amb-flight")) === 0, `${w}/day: no drawn birds`);
         }
         const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

@@ -78,6 +78,8 @@ const nextConfig: NextConfig = {
       { source: "/aqueduct/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
       { source: "/forum/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
       { source: "/colosseum/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      // The birds' sprite sheets (H-1367) carry a version tag too.
+      { source: "/colosseum/birds/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
     ];
   },
 };
