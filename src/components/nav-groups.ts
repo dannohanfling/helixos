@@ -17,6 +17,9 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
 export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; agentsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
+/** Where "Submissions to verify" opens (H-1280): the Coach view, scrolled to its Verify submissions card. */
+export const VERIFY_HREF = "/coach#verify";
+
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Daily",
@@ -111,6 +114,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "People",
     items: [
       { href: "/coach", label: "Clients", icon: "🧑‍🏫", coachOnly: true, hint: "the Coach view" },
+      // Client work waiting for approval (H-1280, plan H-1296): lands on the Verify submissions card; the count is the menu badge.
+      { href: VERIFY_HREF, label: "Submissions to verify", icon: "✅", coachOnly: true, hint: "clients' work to approve" },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
       // Booking calendars reachable from the menu (H-1236, plan H-1240), not only from a button on the Coach view.
       { href: "/hermes/calendars", label: "Booking calendars", icon: "📆", coachOnly: true, hint: "the pass's two calls" },

@@ -40,6 +40,6 @@ describe("badgeText", () => {
 describe("every counted item is a menu item", () => {
   it("each badge href is in the menu, so the More page can show it", () => {
     const hrefs = new Set(NAV_GROUPS.flatMap((g) => g.items.map((n) => n.href)));
-    for (const h of ["/intentions", "/whats-new", "/coach/reports", "/coach/feedback", "/recordings", "/coach", "/coach/inbox", "/forum/inbox"]) expect(hrefs.has(h), h).toBe(true);
+    for (const h of ["/intentions", "/whats-new", "/coach/reports", "/coach/feedback", "/recordings", "/coach", "/coach#verify", "/coach/inbox", "/forum/inbox"]) expect(hrefs.has(h), h).toBe(true);
   });
 });

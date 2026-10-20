@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 312,
+    date: "2026-10-20",
+    title: "Submissions to verify, in the menu",
+    lines: ["Coaches: client submissions now have their own place in the menu, with a count, so you know when work is waiting for your approval."],
+    audience: "coach",
+  },
+  {
     n: 311,
     date: "2026-10-20",
     title: "Booking calendars in the menu",
