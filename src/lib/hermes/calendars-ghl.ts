@@ -75,60 +75,92 @@ async function getCal(c: Ctx, id: string, what: string): Promise<Res<Cal>> {
   return { ok: true, data: r.json.calendar };
 }
 
-/** Elite Conversation, if it was made already (found by its slug, so a second press updates it instead of making another). */
-async function findElite(c: Ctx): Promise<Res<Cal | null>> {
+/** The sub-account's calendars (read only). Step 1 shows them, names and ids only; Steps 2 and 3 find ours by slug. */
+async function listCals(c: Ctx): Promise<Res<Cal[]>> {
   const r = await call<{ calendars?: Cal[] }>(c.base, c.token, `/calendars/?locationId=${encodeURIComponent(CAL_LOCATION)}`);
   if (!r.ok) return { ok: false, error: explain(r.status, "reading the calendar list", r.detail), status: r.status };
-  const slug = CALENDARS.elite.slug;
-  return { ok: true, data: (r.json?.calendars ?? []).find((x) => x.slug === slug || x.widgetSlug === slug) ?? null };
+  return { ok: true, data: r.json?.calendars ?? [] };
 }
 
-export type Step1 = { template: Cal; academy: Cal; elite: Cal | null; users: { id: string; name: string }[] };
+const bySlug = (list: Cal[], key: CalKey): Cal | null => list.find((x) => x.slug === CALENDARS[key].slug || x.widgetSlug === CALENDARS[key].slug) ?? null;
 
-/** Step 1, read only. */
+export type Listed = { id: string; name: string; mark: "template" | "copy" | "academy" | "elite" | null };
+export type Step1 = {
+  template: Cal;
+  /** The stray copy when it reads, else null: Step 2 then creates Academy fresh (H-1248). */
+  copy: Cal | null;
+  /** Why the copy didn't read, in our words (never GoHighLevel's), or null. */
+  copyNote: string | null;
+  academy: Cal | null;
+  elite: Cal | null;
+  calendars: Listed[];
+  users: { id: string; name: string }[];
+};
+
+/** Step 1, read only. Evolve Omega Booking must read; the stray copy may not (H-1236): it is reported, never fatal. */
 export async function readCalendars(c: Ctx): Promise<Res<Step1>> {
   const template = await getCal(c, TEMPLATE_ID, "Evolve Omega Booking");
   if (!template.ok) return template;
-  const academy = await getCal(c, ACADEMY_COPY_ID, "the stray copy");
-  if (!academy.ok) return academy;
-  const elite = await findElite(c);
-  if (!elite.ok) return elite;
+  const list = await listCals(c);
+  if (!list.ok) return list;
+  const academy = bySlug(list.data, "academy");
+  const elite = bySlug(list.data, "elite");
+  let copy: Cal | null = null;
+  let copyNote: string | null = null;
+  if (!academy) {
+    const r = await getCal(c, ACADEMY_COPY_ID, "the stray copy");
+    if (r.ok) copy = r.data;
+    else {
+      const listed = list.data.some((x) => x.id === ACADEMY_COPY_ID);
+      copyNote = listed
+        ? `The stray copy (${ACADEMY_COPY_ID}) is in the list, but GoHighLevel won't read it on its own (${r.status ?? "no answer"}). Step 2 makes Academy Conversation fresh from Evolve Omega Booking and leaves the copy as it is.`
+        : `The stray copy (${ACADEMY_COPY_ID}) isn't in this sub-account's calendars any more. Step 2 makes Academy Conversation fresh from Evolve Omega Booking.`;
+    }
+  }
+  const mark = (x: Cal): Listed["mark"] => (x.id === TEMPLATE_ID ? "template" : academy && x.id === academy.id ? "academy" : elite && x.id === elite.id ? "elite" : x.id === ACADEMY_COPY_ID ? "copy" : null);
+  const calendars = list.data.filter((x) => x.id).map((x) => ({ id: String(x.id), name: String(x.name ?? ""), mark: mark(x) }));
   const users = await listUsers(c.conn);
-  return { ok: true, data: { template: template.data, academy: academy.data, elite: elite.data, users } };
+  return { ok: true, data: { template: template.data, copy, copyNote, academy, elite, calendars, users } };
 }
 
 export type Written = { key: CalKey; id: string; made: boolean };
 
-/** Step 2: Academy first (the copy stops being live under its old name), then Elite, made or, when it is there, updated. */
+/**
+ * One of the two: the calendar with its slug is updated; failing that, Academy updates the stray copy when it still reads;
+ * failing that, it is created. A second press always finds it by slug, so nothing is ever made twice.
+ */
+async function upsert(c: Ctx, key: CalKey, list: Cal[], template: Cal, userId: string): Promise<Res<Written>> {
+  const spec = CALENDARS[key];
+  let id = bySlug(list, key)?.id ? String(bySlug(list, key)!.id) : "";
+  if (!id && key === "academy") {
+    const copy = await getCal(c, ACADEMY_COPY_ID, "the stray copy");
+    if (copy.ok) id = ACADEMY_COPY_ID;
+  }
+  const r = id
+    ? await call<{ calendar?: Cal }>(c.base, c.token, `/calendars/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(calendarBody(spec, template, userId, false)) })
+    : await call<{ calendar?: Cal }>(c.base, c.token, "/calendars/", { method: "POST", body: JSON.stringify(calendarBody(spec, template, userId, true)) });
+  const done = id || (r.json?.calendar?.id ? String(r.json.calendar.id) : "");
+  if (!r.ok || !done) {
+    await log(c.conn, "failed", `${spec.name} ${id ? "update" : "create"} refused (${r.status})`, id ? { calendarId: id } : {});
+    return { ok: false, error: explain(r.ok ? 0 : r.status, `${id ? "updating" : "creating"} ${spec.name}`, r.detail), status: r.status };
+  }
+  await log(c.conn, "sent", `${spec.name} ${id ? "updated" : "created"}`, { calendarId: done });
+  return { ok: true, data: { key, id: done, made: !id } };
+}
+
+/** Step 2: Academy first (the copy, if it is still live, stops being live under its old name), then Elite. */
 export async function writeCalendars(c: Ctx, userId: string): Promise<Res<Written[]>> {
   const users = await listUsers(c.conn);
   if (users.length && !users.some((u) => u.id === userId)) return { ok: false, error: "That user isn't in this sub-account. Pick yourself from the list again." };
   const template = await getCal(c, TEMPLATE_ID, "Evolve Omega Booking");
   if (!template.ok) return template;
-  const out: Written[] = [];
-
-  const a = await call<{ calendar?: Cal }>(c.base, c.token, `/calendars/${ACADEMY_COPY_ID}`, { method: "PUT", body: JSON.stringify(calendarBody(CALENDARS.academy, template.data, userId, false)) });
-  if (!a.ok) {
-    await log(c.conn, "failed", `Academy Conversation update refused (${a.status})`, { calendarId: ACADEMY_COPY_ID });
-    return { ok: false, error: explain(a.status, "updating Academy Conversation", a.detail), status: a.status };
-  }
-  out.push({ key: "academy", id: ACADEMY_COPY_ID, made: false });
-  await log(c.conn, "sent", "Academy Conversation updated", { calendarId: ACADEMY_COPY_ID });
-
-  const existing = await findElite(c);
-  if (!existing.ok) return { ok: false, error: `Academy Conversation is updated. ${existing.error}` };
-  const id = existing.data?.id;
-  const e = id
-    ? await call<{ calendar?: Cal }>(c.base, c.token, `/calendars/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(calendarBody(CALENDARS.elite, template.data, userId, false)) })
-    : await call<{ calendar?: Cal }>(c.base, c.token, "/calendars/", { method: "POST", body: JSON.stringify(calendarBody(CALENDARS.elite, template.data, userId, true)) });
-  const eliteId = id ?? (e.json?.calendar?.id ? String(e.json.calendar.id) : "");
-  if (!e.ok || !eliteId) {
-    await log(c.conn, "failed", `Elite Conversation ${id ? "update" : "create"} refused (${e.status})`);
-    return { ok: false, error: `Academy Conversation is updated. ${explain(e.ok ? 0 : e.status, `${id ? "updating" : "creating"} Elite Conversation`, e.detail)}` };
-  }
-  out.push({ key: "elite", id: eliteId, made: !id });
-  await log(c.conn, "sent", `Elite Conversation ${id ? "updated" : "created"}`, { calendarId: eliteId });
-  return { ok: true, data: out };
+  const list = await listCals(c);
+  if (!list.ok) return list;
+  const a = await upsert(c, "academy", list.data, template.data, userId);
+  if (!a.ok) return a;
+  const e = await upsert(c, "elite", list.data, template.data, userId);
+  if (!e.ok) return { ok: false, error: `Academy Conversation is ${a.data.made ? "created" : "updated"}. ${e.error}` };
+  return { ok: true, data: [a.data, e.data] };
 }
 
 export type Tested = { key: CalKey; calendarId: string; appointmentId: string | null; slot: string | null; zoom: string | null; cancelled: boolean; error: string | null };
@@ -172,14 +204,13 @@ async function testOne(c: Ctx, key: CalKey, cal: Cal, contactId: string, waitMs:
 
 /** Step 3: one test booking on each calendar for the test contact, both cancelled afterwards. */
 export async function testCalendars(c: Ctx, contactId: string, waitMs = 2000): Promise<Res<Tested[]>> {
-  const academy = await getCal(c, ACADEMY_COPY_ID, "Academy Conversation");
-  if (!academy.ok) return academy;
-  const elite = await findElite(c);
-  if (!elite.ok) return elite;
-  if (!elite.data?.id) return { ok: false, error: "Elite Conversation isn't made yet. Press Step 2 first." };
-  if (academy.data.name !== CALENDARS.academy.name) return { ok: false, error: "Academy Conversation isn't updated yet. Press Step 2 first." };
+  const list = await listCals(c);
+  if (!list.ok) return list;
+  const academy = bySlug(list.data, "academy");
+  const elite = bySlug(list.data, "elite");
+  if (!academy?.id || !elite?.id) return { ok: false, error: `${!academy?.id ? "Academy" : "Elite"} Conversation isn't made yet. Press Step 2 first.` };
   const out: Tested[] = [];
-  for (const [key, cal] of [["academy", academy.data], ["elite", elite.data]] as const) out.push(await testOne(c, key, cal, contactId, waitMs));
+  for (const [key, cal] of [["academy", academy], ["elite", elite]] as const) out.push(await testOne(c, key, cal, contactId, waitMs));
   for (const t of out) await log(c.conn, t.cancelled && t.zoom ? "sent" : "failed", `test booking on ${CALENDARS[t.key].name}: ${t.appointmentId ? "made" : "not made"}, Zoom ${t.zoom ? "yes" : "no"}, ${t.cancelled ? "cancelled" : "not cancelled"}`, { calendarId: t.calendarId, appointmentId: t.appointmentId });
   return { ok: true, data: out };
 }
