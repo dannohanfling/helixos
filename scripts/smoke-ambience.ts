@@ -297,7 +297,11 @@ async function main() {
         const sideways = await fo.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         must(sideways <= 0, `Forum ${w}/${look}: nothing scrolls sideways (${sideways}px)`);
         const anims = (await layerAnims(fo, foLayer))!;
-        must(anims.length > 0 && anims.every((st) => st === "running"), `Forum ${w}/${look}: the ambience is running (${anims.length})`);
+        if (look === "day" && (await fo.locator('[data-testid="forum-map"]').getAttribute("data-loop")) === "1") {
+          // By day the film is the plaza's life (H-1253): the layer draws nothing that moves, and the loop itself must be playing.
+          await fo.waitForFunction(() => document.querySelector('[data-testid="forum-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
+          must(anims.every((st) => st === "running"), `Forum ${w}/day: the loop plays and nothing in the layer is held (${anims.length})`);
+        } else must(anims.length > 0 && anims.every((st) => st === "running"), `Forum ${w}/${look}: the ambience is running (${anims.length})`);
         // The map stays on top: what's under the scene's centre belongs to the map's SVG, never to the ambience.
         const onTop = await fo.evaluate((sel) => {
           const box = document.querySelector('[data-testid="forum-map"] .fo-scene')!.getBoundingClientRect();
@@ -312,7 +316,11 @@ async function main() {
     await setHidden(fo, true);
     await fo.waitForFunction((sel) => document.querySelector(sel)?.classList.contains("amb-still"), foLayer);
     const foHeld = (await layerAnims(fo, foLayer))!;
-    must(foHeld.length > 0 && foHeld.every((st) => st === "paused"), "Forum: a hidden tab holds every animation");
+    if ((await fo.locator('[data-testid="forum-map"]').getAttribute("data-loop")) === "1") {
+      // The film holds too (H-1253): the loop pauses when the tab hides, and the photo shows.
+      await fo.waitForFunction(() => document.querySelector('[data-testid="forum-loop"]')?.getAttribute("data-loop-mode") !== "video", null, { timeout: 5000 });
+      must(await fo.locator('[data-testid="forum-loop"]').evaluate((v: HTMLVideoElement) => v.paused) && foHeld.every((st) => st === "paused"), "Forum: a hidden tab holds the loop and every animation");
+    } else must(foHeld.length > 0 && foHeld.every((st) => st === "paused"), "Forum: a hidden tab holds every animation");
     await setHidden(fo, false);
     await fo.close();
     const still3 = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
