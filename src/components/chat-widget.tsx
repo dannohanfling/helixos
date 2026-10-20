@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { useEffect, useRef } from "react";
 import { PHONE_MAX_WIDTH, isLauncher, liftPx, staysLifted } from "@/lib/engine/chat-lift";
+import { IDENTIFY_SETTLE_MS, type ChatCause } from "@/lib/engine/chat-cause";
 
 /**
  * The coach's Community Loyalty chat (revs 241, 243), on the Ask page only (H-693, plan H-700): every other page is the
@@ -15,8 +16,40 @@ import { PHONE_MAX_WIDTH, isLauncher, liftPx, staysLifted } from "@/lib/engine/c
  * mounts (`window.$chatbot.hasLoaded`), since the event can fire before React attaches the listener. Never before the SDK says
  * it is loaded: a call the SDK isn't ready for is dropped, and would have been the last one. Once called, the shell carries
  * `data-chat-identified="true"`, a signal anyone can read in the browser without a secret.
+ *
+ * Identity first (H-1199, plan H-1203): members reached the bot as "Guest" because the chat could start before `setUser` had
+ * landed, so the start flow's sign-in steps saw no email. The chat is now opened only after `setUser` has settled (its promise
+ * when it returns one, else IDENTIFY_SETTLE_MS), and `setUser` runs again on every `chatbot:ready`, since a reconnect starts
+ * the chat afresh. The page reports once which way it went (no id, name or email), so production shows the cause.
  */
-type Chatbot = { hasLoaded?: boolean; setUser?: (id: string, user: { name: string; email: string; identifier_hash: string }) => void; open?: () => void; close?: () => void };
+type Chatbot = { hasLoaded?: boolean; setUser?: (id: string, user: { name: string; email: string; identifier_hash: string }) => unknown; open?: () => void; close?: () => void };
+
+/** The chat's own hosts, for telling a CSP block of the chat from any other. */
+const CHAT_HOST_RE = /(^|\.)(communityloyalty\.io|dfktv2\.com|ipapi\.co)$/;
+
+/** Held outside the component, so a remount (React runs effects twice in development) never reports twice. */
+let reportedThisLoad = false;
+
+/** One report a page load: how the chat was told who this is, or what stopped it. Fire and forget; a failure changes nothing. */
+function reportCause(cause: ChatCause, host?: string) {
+  if (reportedThisLoad) return;
+  reportedThisLoad = true;
+  try {
+    void fetch("/api/chat-seen", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(host ? { cause, host } : { cause }), keepalive: true }).catch(() => undefined);
+  } catch {
+    /* reporting never gets in the way of the chat */
+  }
+}
+
+/** Waits for what `setUser` returned when it is a promise (at most a few seconds), else a short settle. */
+function settled(result: unknown): Promise<void> {
+  const pause = new Promise<void>((r) => setTimeout(r, IDENTIFY_SETTLE_MS));
+  if (result && typeof (result as { then?: unknown }).then === "function") {
+    const cap = new Promise<void>((r) => setTimeout(r, 4000));
+    return Promise.race([Promise.resolve(result as PromiseLike<unknown>).then(() => undefined, () => undefined), cap]);
+  }
+  return pause;
+}
 
 /**
  * On a phone, the bubble sits on HelixOS's bottom bar (rev 468). Whatever the chat script adds to the page outside HelixOS's own
@@ -133,31 +166,56 @@ export function ChatWidget({ src, userId, name, email, hash, flowNs }: { src: st
   useLiftLauncher();
   useEffect(() => {
     const w = window as Window & { $chatbot?: Chatbot };
-    const identify = (why: string) => {
+    let gone = false;
+    const report = (cause: ChatCause, host?: string) => reportCause(cause, host);
+    const identify = (why: "ready" | "loaded") => {
       const bot = w.$chatbot;
       if (!bot?.setUser) return false;
       if (why !== "ready" && !bot.hasLoaded) return false;
-      bot.setUser(userId, { name, email, identifier_hash: hash });
+      const result = bot.setUser(userId, { name, email, identifier_hash: hash });
       called.current = true;
-      // The page is the chat's (H-693): open it here when the script offers that; otherwise its bubble waits on this page.
-      bot.open?.();
       document.documentElement.setAttribute("data-chat-identified", "true");
       document.documentElement.setAttribute("data-chat-identified-by", why);
+      report(why === "ready" ? "identified-ready" : "identified-loaded");
+      // The page is the chat's (H-693): open it here once the identity has landed, so the start flow sees the member's email.
+      void settled(result).then(() => {
+        if (gone) return;
+        document.documentElement.setAttribute("data-chat-opened", "true");
+        w.$chatbot?.open?.();
+      });
       return true;
     };
+    // Every ready, not only the first: a reconnect starts the chat afresh, as a Guest unless it is told again.
     const onReady = () => identify("ready");
     window.addEventListener("chatbot:ready", onReady);
     document.addEventListener("chatbot:ready", onReady);
+    // The browser blocked one of the chat's own hosts: say which, once.
+    const onBlocked = (e: SecurityPolicyViolationEvent) => {
+      let host = "";
+      try {
+        host = new URL(e.blockedURI).hostname;
+      } catch {
+        return;
+      }
+      if (CHAT_HOST_RE.test(host)) report("csp-blocked", host);
+    };
+    document.addEventListener("securitypolicyviolation", onBlocked);
     // Already loaded before this mounted: say who this is now. Otherwise look once a second for the SDK's loaded flag, for a
     // minute, in case its event fired between the script's load and the listener above.
     let ticks = 0;
     const timer = setInterval(() => {
-      if (called.current || identify("loaded") || ++ticks > 60) clearInterval(timer);
+      if (called.current || identify("loaded")) return clearInterval(timer);
+      if (++ticks > 60) {
+        clearInterval(timer);
+        report("sdk-never-loaded");
+      }
     }, 1000);
     identify("loaded");
     return () => {
+      gone = true;
       window.removeEventListener("chatbot:ready", onReady);
       document.removeEventListener("chatbot:ready", onReady);
+      document.removeEventListener("securitypolicyviolation", onBlocked);
       clearInterval(timer);
     };
   }, [userId, name, email, hash]);
