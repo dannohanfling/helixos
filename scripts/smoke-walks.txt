@@ -84,3 +84,4 @@ ranks
 applause
 frameworks
 verify-badge
+partner

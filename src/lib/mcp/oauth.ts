@@ -147,7 +147,8 @@ async function authenticateAgentToken(token: string): Promise<Grant | null> {
   const viewer = await viewerFor(app.userId, app.workspaceId);
   if (!viewer || viewer.membership.id !== app.membershipId || viewer.team) return null;
   if (viewer.role === "client" && !viewer.workspace.connectedAppsOpen) return null;
-  return { app, scopes: app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox"), viewer, agentId: app.agentId, agentToken: true };
+  // An agent token carries the Forum and the inbox, and the Partner Program when the coach ticked it on that agent (H-1361).
+  return { app, scopes: app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox" || s === "partner"), viewer, agentId: app.agentId, agentToken: true };
 }
 
 /** What the consent form signs, so a POST can only approve the request the page rendered for this member. */
