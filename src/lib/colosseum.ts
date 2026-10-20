@@ -14,6 +14,7 @@ import { newId } from "@/lib/ids";
 import { leaderboard } from "@/lib/queries/points";
 import { shortName, veil, visibleWins, type BlockSet } from "@/lib/engine/blocks";
 import { WIN_REFUSED } from "@/lib/engine/word-filter";
+import { applauseOn, type Applause } from "@/lib/applause";
 
 export { shortName };
 
@@ -28,7 +29,8 @@ export function mondayOf(today: string): string {
 
 export type ArenaSeat = { id: string; name: string; initials: string; tier: string; points: number; week: number; photo: boolean; membershipId: string; isYou: boolean; champ: number; coach: boolean; veiled: boolean };
 /** A win on the feed; `authorId` is the author's membership id (empty once they've left), for Block and Report. */
-export type ArenaWin = { id: string; who: string; kind: WinKind; text: string; at: string; mine: boolean; authorId: string; coach: boolean };
+/** A win as one viewer reads it, with its applause (H-1171): the count, whether they applauded, and who. */
+export type ArenaWin = { id: string; who: string; kind: WinKind; text: string; at: string; mine: boolean; authorId: string; coach: boolean; applause: Applause };
 export type Arena = {
   on: boolean;
   rows: Standing[];
@@ -69,7 +71,9 @@ export async function arenaFor(v: { workspace: { id: string; colosseumOn: boolea
   // My own kept rank (H-1088): the seat and the bar never drop.
   const progress = tierProgress(myPoints, members.find((m) => m.userId === v.user.id)?.rankKeptLevel ?? null);
   const memberOf = new Map(members.map((m) => [m.userId, m]));
-  const wins: ArenaWin[] = visibleWins(winRows, blocks).map((w) => ({ id: w.id, who: shortName(nameOf.get(w.userId) ?? "Member"), kind: w.kind, text: w.text, at: w.createdAt, mine: w.userId === v.user.id, authorId: memberOf.get(w.userId)?.id ?? "", coach: memberOf.get(w.userId)?.role === "coach" }));
+  const shown = visibleWins(winRows, blocks);
+  const applause = await applauseOn(v.workspace.id, shown.map((w) => w.id), v.user.id, blocks);
+  const wins: ArenaWin[] = shown.map((w) => ({ id: w.id, who: shortName(nameOf.get(w.userId) ?? "Member"), kind: w.kind, text: w.text, at: w.createdAt, mine: w.userId === v.user.id, authorId: memberOf.get(w.userId)?.id ?? "", coach: memberOf.get(w.userId)?.role === "coach", applause: applause.get(w.id)! }));
   // My week: the ledger by day since Monday, my shared wins this week, and the biggest win from my own close-outs.
   const [ledger, closes] = await Promise.all([
     db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, v.workspace.id), eq(schema.pointsLedger.userId, v.user.id), gte(schema.pointsLedger.createdAt, `${monday} 00:00:00`)), columns: { points: true, createdAt: true } }),

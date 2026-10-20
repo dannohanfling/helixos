@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 310,
+    date: "2026-10-19",
+    title: "Applaud each other's wins",
+    lines: [
+      "Applaud each other's wins in the Colosseum. You both earn points, and your coach's applause counts double.",
+      "Tap the count under a win to see who applauded. Today tells you when someone applauds yours.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 309,
     date: "2026-10-19",
     title: "Your streak flame starts sooner on a phone",
