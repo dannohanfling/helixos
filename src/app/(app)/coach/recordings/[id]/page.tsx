@@ -41,7 +41,7 @@ export default async function ReviewRecordingPage({ params, searchParams }: { pa
     <>
       <PageHeader title={clearTitle ?? r.title} subtitle={`${clearTitle ? `In Fathom: ${r.title} · ` : ""}${group.label} · ${r.startedAt ? formatDateTime(r.startedAt, v.workspace.timezone) : "Date unknown"}${minutes ? ` · ${minutes} min` : ""} · ${r.source}`} action={<Link href="/coach/recordings" className="btn btn-ghost btn-sm">Back</Link>} />
       {sp.error ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="review-error">{sp.error}</p> : null}
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Card title="What was said">
           <div className="space-y-3 text-sm">
             {r.shareUrl || r.url ? (

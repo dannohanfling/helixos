@@ -2159,6 +2159,24 @@ export const proofs = sqliteTable(
   (t) => [index("proofs_user").on(t.userId, t.status), uniqueIndex("proofs_airtable").on(t.userId, t.airtableId)],
 );
 
+/**
+ * Approve selected (H-1394): one batch per press, the proofs it approved, so "Undo the last batch" can put them back for
+ * 24 hours. A proof approved on its own page is not in a batch. Undone once; the rows stay as the record.
+ */
+export const proofBatches = sqliteTable(
+  "proof_batches",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    proofIds: text("proof_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    approvedAt: text("approved_at").notNull().default(sql`(datetime('now'))`),
+    undoneAt: text("undone_at"),
+  },
+  (t) => [index("proof_batches_user").on(t.userId, t.approvedAt)],
+);
+export type ProofBatch = typeof proofBatches.$inferSelect;
+
 export const GROUP_KINDS = ["own", "member", "prospect"] as const;
 
 export const groups = sqliteTable(

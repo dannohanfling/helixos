@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 318,
+    date: "2026-10-21",
+    title: "Proof Bank: the list fits again, a status filter, Approve selected",
+    lines: [
+      "The Proof Bank list fits the page again (a long one-liner used to push every badge off-screen), with a Draft / Permission given / Approved filter and counts, and Show 250 more so a big bank stays light.",
+      "Approve selected: tick drafts (or select the clean ones from a list file), tick the permission statement once for the batch, and Approve; each proof is recorded as if approved on its own page. Undo the last batch for 24 hours.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 316,
     date: "2026-10-21",
     title: "Doves and an eagle over the Colosseum",

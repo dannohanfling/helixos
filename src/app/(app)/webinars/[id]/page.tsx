@@ -480,7 +480,7 @@ export default async function WebinarWizardPage({
         </p>
       ) : null}
       {step === "foundation" ? (
-        <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <Card title="1 · Foundation">
             <p className="mb-4 text-sm text-ink-2">
               {WIZARD_STAGES[0]?.description}
@@ -1545,7 +1545,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "review" ? (
-        <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <Card
             title="10 · Readiness review"
             action={

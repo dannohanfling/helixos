@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { ProofBulk } from "@/components/proof-bulk";
+import { undoLastBatchAction } from "@/lib/actions/proof-bulk";
+import { PROOF_PAGE, PROOF_VIEWS, VIEW_LABEL, canUndo, inView, isView, pageOf, viewCounts, viewOf, type ProofView } from "@/lib/engine/proof-bank";
 import { desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
@@ -33,7 +36,7 @@ const TYPE_LABEL: Record<string, string> = {
   story: "Story",
 };
 
-export default async function ProofPage({ searchParams }: { searchParams: Promise<{ tag?: string; imported?: string; skipped?: string; dropped?: string; importError?: string }> }) {
+export default async function ProofPage({ searchParams }: { searchParams: Promise<{ tag?: string; status?: string; show?: string; imported?: string; skipped?: string; dropped?: string; importError?: string; approved?: string; held?: string; undone?: string; bulkError?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const [allRows, checkins, clients] = await Promise.all([
@@ -56,7 +59,23 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
   const tagCounts = new Map<string, number>();
   for (const r of allRows) for (const t of r.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
   const tag = sp.tag && tagCounts.has(sp.tag) ? sp.tag : "";
-  const rows = allRows.filter((r) => !tag || r.tags.includes(tag)).sort((a, b) => tagRank(a.tags) - tagRank(b.tags));
+  // The status filter (H-1393) and the page (H-1393 §3): the counts and the filters see the whole bank; the list shows a page.
+  const view: ProofView = isView(sp.status) ? sp.status : "all";
+  const counts = viewCounts(allRows);
+  const inViewRows = allRows.filter((r) => (!tag || r.tags.includes(tag)) && inView(r, view)).sort((a, b) => tagRank(a.tags) - tagRank(b.tags));
+  const page = pageOf(inViewRows, Number(sp.show) || undefined);
+  const rows = page.rows;
+  const pickable = view === "draft" || view === "permission";
+  const lastBatch = pickable ? await db.query.proofBatches.findFirst({ where: eq(schema.proofBatches.userId, v.user.id), orderBy: [desc(schema.proofBatches.approvedAt)] }) : null;
+  const undoable = canUndo(lastBatch, Date.now());
+  // The same statement as a proof's own page, ticked once for the whole batch.
+  const permissionLine = "Each of these people has given me permission to use what they said here in my marketing.";
+  const here = (q: Record<string, string | undefined>) => {
+    const u = new URLSearchParams();
+    for (const [k, val] of Object.entries({ tag: tag || undefined, status: view === "all" ? undefined : view, ...q })) if (val) u.set(k, val);
+    const qs = u.toString();
+    return `/proof${qs ? `?${qs}` : ""}`;
+  };
   const importNote = sp.imported !== undefined ? importSummary(Number(sp.imported) || 0, Number(sp.skipped) || 0, Number(sp.dropped) || 0) : null;
   const thumb = new Map<
     string,
@@ -118,26 +137,44 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
           </Disclosure>
         </Card>
       ) : null}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs" data-testid="proof-status-filter">
+        {PROOF_VIEWS.map((k) => (
+          <Link key={k} href={here({ status: k === "all" ? undefined : k })} className={`badge ${view === k ? "badge-accent" : ""}`} data-testid={`proof-status-${k}`} data-count={counts[k]}>{VIEW_LABEL[k]} · {counts[k]}</Link>
+        ))}
+      </div>
       {tagCounts.size ? (
         <div className="mb-4 flex flex-wrap items-center gap-1.5 text-xs" data-testid="proof-tag-filter">
-          <Link href="/proof" className={`badge ${tag ? "" : "badge-accent"}`}>All · {allRows.length}</Link>
+          <Link href={here({ tag: undefined })} className={`badge ${tag ? "" : "badge-accent"}`}>All · {allRows.length}</Link>
           {[...tagCounts.entries()].sort((a, b) => tagRank([a[0]]) - tagRank([b[0]]) || b[1] - a[1]).map(([t, n]) => (
-            <Link key={t} href={`/proof?tag=${encodeURIComponent(t)}`} className={`badge ${tag === t ? "badge-accent" : ""}`}>{t} · {n}</Link>
+            <Link key={t} href={here({ tag: t })} className={`badge ${tag === t ? "badge-accent" : ""}`}>{t} · {n}</Link>
           ))}
         </div>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      {sp.approved !== undefined ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="proof-bulk-note">{sp.approved} approved{Number(sp.held) ? `; ${sp.held} left as draft${Number(sp.held) === 1 ? "" : "s"}: a picture shows a person and needs its likeness permission on the proof's own page` : ""}.</p> : null}
+      {sp.undone !== undefined ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="proof-bulk-note">The last batch is undone: {sp.undone} back to draft.</p> : null}
+      {sp.bulkError ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="proof-bulk-error">{sp.bulkError}</p> : null}
+      {pickable && !v.switchedInto && !v.team ? <ProofBulk status={view} permissionLine={permissionLine} /> : null}
+      {undoable && !v.switchedInto && !v.team ? (
+        <form action={undoLastBatchAction} className="mb-3 text-xs">
+          <input type="hidden" name="status" value={view} />
+          <SubmitButton className="btn btn-ghost btn-sm" pendingText="Undoing…" data-testid="proof-undo-batch">Undo the last batch ({lastBatch!.proofIds.length})</SubmitButton>
+          <span className="ml-2 text-ink-3">within 24 hours of Approve selected</span>
+        </form>
+      ) : null}
+      {/* minmax(0, …): an fr track has a min-content floor, so one long one-liner used to stretch the column 8,000 px wide (H-1393). */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           {rows.length ? (
-            <Card title="Your proof">
-              <ul className="divide-y">
+            <Card title="Your proof" action={<span className="text-xs text-ink-3" data-testid="proof-shown">{page.shown} of {inViewRows.length}</span>}>
+              <ul className="divide-y" data-testid="proof-list">
                 {rows.map((r) => {
                   const t = thumb.get(r.id);
                   return (
-                    <li key={r.id} className="py-2.5" data-testid="proof-row">
+                    <li key={r.id} className="flex items-start gap-2 py-2.5" data-testid="proof-row" data-status={viewOf(r)}>
+                      {pickable && !v.switchedInto && !v.team ? <input type="checkbox" name="ids" value={r.id} form="proof-bulk" className="mt-1.5 shrink-0" aria-label={`Select ${r.name}`} data-who={r.who ?? r.name} data-testid="proof-pick" /> : null}
                       <Link
                         href={`/proof/${r.id}`}
-                        className="flex items-start gap-3 hover:underline"
+                        className="flex min-w-0 flex-1 items-start gap-3 hover:underline"
                       >
                         {t ? (
                           <>
@@ -179,9 +216,9 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
                         </span>
                         <span className="flex max-w-[45%] shrink-0 flex-col items-end gap-1 text-right">
                           <Badge
-                            tone={r.status === "approved" ? "good" : "neutral"}
+                            tone={r.status === "approved" ? "good" : r.permissionAt ? "accent" : "neutral"}
                           >
-                            {r.status}
+                            <span data-testid="proof-badge">{r.status === "approved" ? "approved" : r.permissionAt ? "permission given" : "draft"}</span>
                           </Badge>
                           <span className="break-words text-[11px] text-ink-3">
                             {TYPE_LABEL[r.type]}
@@ -195,6 +232,11 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
                   );
                 })}
               </ul>
+              {page.more ? (
+                <p className="mt-3">
+                  <Link href={here({ show: String(page.shown + PROOF_PAGE) })} className="btn btn-soft btn-sm" data-testid="proof-show-more">Show {Math.min(PROOF_PAGE, page.more)} more ({page.more} left)</Link>
+                </p>
+              ) : null}
             </Card>
           ) : (
             <Card>

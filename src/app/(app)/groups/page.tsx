@@ -76,7 +76,7 @@ export default async function GroupsPage() {
           No groups yet. Start with your own group, then add the ones you&apos;re already in, using the form on this page. When one starts working, move it into a prospect slot.
         </p>
       )}
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card title="🏠 My group" action={own.length ? <Badge tone="good">{own.length === 1 ? "set" : `${own.length} groups`}</Badge> : <Badge tone="warn">not set</Badge>}>
             {own.length ? <ul className="divide-y">{own.map((g) => <GroupRow key={g.id} g={g} />)}</ul> : <Empty icon="🏠" title="Add your own group" hint="Your Community Pass hashtag posts and CTAs go here first." />}
