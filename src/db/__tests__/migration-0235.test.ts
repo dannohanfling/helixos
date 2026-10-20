@@ -31,10 +31,11 @@ describe("migration 0235: the evening reminder at 7 PM", () => {
     expect(col.default).toBe(19);
     expect(read("0235_evening_7pm.sql").join("\n")).not.toMatch(/CREATE TABLE|__new_memberships/);
   });
-  it("follows the last migration on main in the journal, with a later timestamp", () => {
+  it("follows the migrations already on main in the journal, with a later timestamp", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
     const at = journal.entries.findIndex((e) => e.tag === "0235_evening_7pm");
-    expect(at).toBe(journal.entries.length - 1);
+    // Later migrations may follow it once they merge; every one keeps a later time than the one before.
+    for (let i = at + 1; i < journal.entries.length; i++) expect(journal.entries[i].when).toBeGreaterThan(journal.entries[i - 1].when);
     expect(journal.entries[at].when).toBeGreaterThan(journal.entries[at - 1].when);
   });
 });
