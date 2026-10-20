@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f6e3a520-037c-46cf-b994-013c0e5f6ba5",
-  "prevId": "04a20933-bd58-4a07-a253-a97156a40ff4",
+  "id": "09feca2c-6948-4cca-839c-4eac78f3247f",
+  "prevId": "3f27c5c7-80a0-45bb-a322-716129c70e09",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -14372,6 +14372,13 @@
           "autoincrement": false,
           "default": false
         },
+        "applause_seen_at": {
+          "name": "applause_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "helix_paused": {
           "name": "helix_paused",
           "type": "integer",
@@ -21758,6 +21765,69 @@
             "week_of"
           ],
           "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "win_applause": {
+      "name": "win_applause",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "win_id": {
+          "name": "win_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "win_applause_once": {
+          "name": "win_applause_once",
+          "columns": [
+            "win_id",
+            "user_id"
+          ],
+          "isUnique": true
+        },
+        "win_applause_win": {
+          "name": "win_applause_win",
+          "columns": [
+            "workspace_id",
+            "win_id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},
