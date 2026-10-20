@@ -299,7 +299,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                 {material.map((m) => (
                   <li key={m.tag} data-testid="material-item" data-kind={m.kind}>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="neutral">{m.kind === "teaching" ? "Answer" : m.type.replace("_", " ")}</Badge>
+                      <Badge tone="neutral">{m.kind === "teaching" ? "Answer" : m.kind === "framework" ? "Framework" : m.type.replace("_", " ")}</Badge>
                       <span className="font-medium">{m.title}</span>
                       {m.status ? <span className="text-[11px] text-ink-3">{STATUS_WORDS[m.status as StoryStatus] ?? m.status}</span> : null}
                     </div>

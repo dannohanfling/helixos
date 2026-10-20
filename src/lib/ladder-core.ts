@@ -17,6 +17,7 @@ import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { rungsQueuedLine } from "@/lib/engine/rung-drip";
 import { shipRuns } from "@/lib/engine/ship";
 import { libraryBlock } from "@/lib/engine/teaching";
+import { frameworkBlock } from "@/lib/engine/frameworks";
 import { connectionFor } from "@/lib/ghl";
 import { newId } from "@/lib/ids";
 import { pushSocialPost } from "@/lib/integrations";
@@ -67,9 +68,9 @@ export async function generate(workspaceId: string, userId: string, brief: Brief
   // Who the post is for: the member's Primary avatar in their own words, when they've written one (rev 501 §6).
   const avatar = await draftAvatarBrief({ workspaceId, userId }, null);
   // The teaching library and story bank (rev 618): the coach's own ladders only. A client's ladder never reads any of it.
-  const material = membership?.role === "coach" ? await materialFor(userId, { topic: brief.topic, formatName: formatFor(brief.format).name, target: brief.keyword !== "NONE" ? targetWords(keywordOf(profile ?? null, brief.keyword), brief.leadMagnet?.title) : null, source: brief.sourceMaterial }).catch(() => null) : null;
+  const material = membership?.role === "coach" ? await materialFor(userId, { topic: brief.topic, formatName: formatFor(brief.format).name, target: brief.keyword !== "NONE" ? targetWords(keywordOf(profile ?? null, brief.keyword), brief.leadMagnet?.title) : null, source: brief.sourceMaterial }, workspaceId).catch(() => null) : null;
   const offered = material ? offeredOf(material) : [];
-  const library = material ? libraryBlock(material.teaching, material.stories) : "";
+  const library = material ? libraryBlock(material.teaching, material.stories, frameworkBlock(material.frameworks)) : "";
   const text = await draft(system, [perPostInput(brief), avatar, library].filter(Boolean).join("\n\n"), 8000, { feature: "ladder", viewer });
   if (text) {
     // NONE means none (rev 838): whatever the writer did, no keyword, call to action or price is kept, and the field says NONE.

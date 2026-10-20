@@ -20,7 +20,7 @@ describe("the menu: subtitles and the coach's three groups", () => {
     expect(NAV.find((n) => n.href === "/hermes/calendars")?.coachOnly).toBe(true);
     expect(NAV.find((n) => n.href === "/coach")?.hint).toBe("the Coach view");
     expect(hrefs("Agents")).toEqual(["/coach/inbox", "/coach/agents", "/forum", "/coach/reports", "/coach/feedback"]);
-    expect(hrefs("Your content")).toEqual(["/coach/board", "/coach/board-seats", "/coach/glossary", "/coach/horizon", "/coach/helix", "/coach/setup", "/coach/recordings", "/integrations"]);
+    expect(hrefs("Your content")).toEqual(["/coach/board", "/coach/board-seats", "/coach/glossary", "/coach/frameworks", "/coach/horizon", "/coach/helix", "/coach/setup", "/coach/recordings", "/integrations"]);
     for (const g of ["People", "Agents", "Your content"]) for (const i of NAV_GROUPS.find((x) => x.label === g)!.items) expect(navVisible(i, client), i.href).toBe(false);
     // The Forum once for each role: under Agents for the coach, under Build for a client.
     expect(NAV.filter((n) => n.href === "/forum" && navVisible(n, coach))).toHaveLength(1);
