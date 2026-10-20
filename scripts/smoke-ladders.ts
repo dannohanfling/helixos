@@ -364,6 +364,11 @@ async function main() {
     const ownOptions = await page.locator('[data-testid="graphic-headline"] option').allInnerTexts();
     if (ownOptions.length !== 4 || !ownOptions[2].endsWith(ownHeadline)) throw new Error(`the written headline is offered next time: ${ownOptions.join(" | ")}`);
     if ((await graphicsNow()) !== graphicsAfterFirst + 2) throw new Error("the own-headline graphic is a third file in Images");
+    // Back to the alternate for the composer steps below, which expect it as the post's picture.
+    await page.selectOption('[data-testid="graphic-headline"]', { index: 1 });
+    await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
+    demoRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+    if (demoRow.graphicOptions?.headline !== demoRow.altHeadlines[0] || (await graphicsNow()) !== graphicsAfterFirst + 3) throw new Error("the alternate makes the graphic again, a fourth file");
     console.log("✓ Write my own…: the headline written in the field makes the graphic, joins the alternates and is offered next time; Edit headlines points at the field");
     // A gold marker written in place of its words keeps them, in gold, in the page's preview (9 Oct).
     const savedHeadline = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!.headline;
