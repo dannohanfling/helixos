@@ -364,7 +364,10 @@ async function main() {
     const ownOptions = await page.locator('[data-testid="graphic-headline"] option').allInnerTexts();
     if (ownOptions.length !== 4 || !ownOptions[2].endsWith(ownHeadline)) throw new Error(`the written headline is offered next time: ${ownOptions.join(" | ")}`);
     if ((await graphicsNow()) !== graphicsAfterFirst + 2) throw new Error("the own-headline graphic is a third file in Images");
-    // Back to the alternate for the composer steps below, which expect it as the post's picture.
+    // Back to the alternate for the composer steps below, which expect it as the post's picture. A fresh load first: the
+    // address already says graphic=made, so the wait below would otherwise return before the make.
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="graphic-current"]').waitFor({ timeout: 20000 });
     await page.selectOption('[data-testid="graphic-headline"]', { index: 1 });
     await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
     demoRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
