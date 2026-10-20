@@ -3,7 +3,8 @@
  * location's calendar list, a calendar update and a create, the users, free slots, an appointment made, read and cancelled.
  * `npx tsx scripts/mock-ghl-calendars.ts 4084`. Tokens: `pit-cal` may do everything; `pit-nocal` has no calendar permission
  * (401 on every calendar call, as GoHighLevel answers a key without the scope). Like GoHighLevel, a body field the calendar
- * API doesn't know is refused (400 "property x should not exist"). Walk hooks: POST /__reset, GET /__state (the calendars,
+ * API doesn't know is refused (400 "property x should not exist"), and an id it can't find answers 400, as GoHighLevel did on
+ * 20 Oct (H-1236). Walk hooks: POST /__reset, POST /__drop-copy (the stray copy is gone), GET /__state (the calendars,
  * the writes in order, the appointments). Nothing here is ever real data.
  */
 import { createServer } from "node:http";
@@ -95,6 +96,10 @@ createServer((req, res) => {
       reset();
       return json(200, { ok: true });
     }
+    if (path === "/__drop-copy") {
+      calendars.delete("9lNBnfzLoNpgkcwwiUGj");
+      return json(200, { ok: true });
+    }
     if (path === "/__state") return json(200, { calendars: [...calendars.values()], writes, appointments: [...appts.values()] });
 
     const auth = req.headers.authorization ?? "";
@@ -161,7 +166,7 @@ createServer((req, res) => {
     const one = path.match(/^\/calendars\/([^/]+)$/);
     if (one) {
       const cal = calendars.get(one[1]);
-      if (!cal) return json(404, { message: "Calendar not found" });
+      if (!cal) return json(400, { statusCode: 400, message: "Calendar not found" });
       if (req.method === "GET") return json(200, { calendar: cal });
       if (req.method === "PUT") {
         const bad = unknown(body);

@@ -19,7 +19,7 @@ export default async function BookingCalendarsPage() {
   const read = c.ok ? await readCalendars(c.data) : c;
   const step1 = read.ok ? read.data : null;
   const userId = "<the user you pick>";
-  const preview = step1 ? (["academy", "elite"] as const).map((k) => ({ spec: CALENDARS[k], rows: fieldRows(calendarBody(CALENDARS[k], step1.template, userId, k === "elite" && !step1.elite), step1.template) })) : [];
+  const preview = step1 ? (["academy", "elite"] as const).map((k) => ({ spec: CALENDARS[k], rows: fieldRows(calendarBody(CALENDARS[k], step1.template, userId, k === "elite" ? !step1.elite : !step1.academy && !step1.copy), step1.template) })) : [];
   const conflicts = step1 ? conflictFields(step1.template) : [];
 
   return (
@@ -39,7 +39,7 @@ export default async function BookingCalendarsPage() {
             Your own Private Integration in GoHighLevel (Settings → Private Integrations) needs three permissions: {CAL_SCOPES.join(", ")}. Members&apos; lists don&apos;t change. If GoHighLevel gives you a new key, paste it in Settings → Publishing as before.
           </p>
           <p className="mt-2 text-xs text-ink-3">
-            Sub-account {CAL_LOCATION}. Copies Evolve Omega Booking ({TEMPLATE_ID}); updates the stray copy ({ACADEMY_COPY_ID}) into Academy Conversation; no other calendar is touched.
+            Sub-account {CAL_LOCATION}. Copies Evolve Omega Booking ({TEMPLATE_ID}); updates the stray copy ({ACADEMY_COPY_ID}) into Academy Conversation when it still reads, and makes Academy fresh when it doesn&apos;t; nothing is deleted and no other calendar is touched.
           </p>
         </Card>
 
@@ -55,13 +55,35 @@ export default async function BookingCalendarsPage() {
                   Evolve Omega Booking: <span className="font-semibold">{String(step1!.template.name ?? "")}</span>
                 </li>
                 <li data-testid="cal-academy-now">
-                  The copy now: <span className="font-semibold">{String(step1!.academy.name ?? "")}</span> {step1!.academy.name === CALENDARS.academy.name ? <Badge tone="good">updated</Badge> : <Badge tone="warn">live under its old name</Badge>}
+                  Academy Conversation:{" "}
+                  {step1!.academy ? (
+                    <Badge tone="good">made ({String(step1!.academy.id)})</Badge>
+                  ) : step1!.copy ? (
+                    <>
+                      the copy, <span className="font-semibold">{String(step1!.copy.name ?? "")}</span>, <Badge tone="warn">live under its old name</Badge>; Step 2 updates it
+                    </>
+                  ) : (
+                    <>
+                      <Badge>not made yet</Badge> <span data-testid="cal-copy-note">{step1!.copyNote}</span>
+                    </>
+                  )}
                 </li>
                 <li data-testid="cal-elite-now">Elite Conversation: {step1!.elite ? <Badge tone="good">made ({String(step1!.elite.id)})</Badge> : <Badge>not made yet</Badge>}</li>
                 <li>
                   Conflict checking on Evolve Omega Booking: {conflicts.length ? conflicts.map((f) => `${f.key} ${f.value}`).join("; ") : "not in the API's reply. Linked Google calendars are set per user in GoHighLevel, Settings → Calendars → Connections, and every calendar of yours uses them."}
                 </li>
               </ul>
+              <details className="rounded-lg border border-line" data-testid="cal-list">
+                <summary className="flex min-h-[44px] cursor-pointer items-center px-3 text-sm font-semibold">All {step1!.calendars.length} calendars in this sub-account (names and ids)</summary>
+                <ul className="space-y-1 px-3 pb-3 text-xs">
+                  {step1!.calendars.map((x) => (
+                    <li key={x.id} className="break-all">
+                      {x.name || "(no name)"} · {x.id}
+                      {x.mark ? <span className="ml-1 font-semibold">({x.mark === "template" ? "Evolve Omega Booking, copied" : x.mark === "copy" ? "the stray copy" : x.mark === "academy" ? "Academy Conversation" : "Elite Conversation"})</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </details>
               {preview.map((p) => (
                 <details key={p.spec.key} className="rounded-lg border border-line" data-testid={`cal-fields-${p.spec.key}`}>
                   <summary className="flex min-h-[44px] cursor-pointer items-center px-3 text-sm font-semibold">{p.spec.name}: the fields as they would be written</summary>
