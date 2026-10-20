@@ -160,6 +160,17 @@ async function main() {
     must(tap.width >= 26 && tap.height >= 26, "an avatar draws at least 26px with a 44px tap area around it");
     await seat.click({ force: true }); // it is moving, as a member taps it
     must((await page.locator('[data-testid="arena-card"]').innerText()).includes("points"), "tapping a seat opens its card");
+    // Golden hour, filmed (H-1253): the arena's loop plays over the photo, started by the page; Pause holds it with the seats.
+    const arenaLoop = page.locator('[data-testid="arena-loop"]');
+    if ((await page.locator('[data-testid="arena"]').getAttribute("data-look")) === "day") {
+      must((await page.locator('[data-testid="arena"]').getAttribute("data-loop")) === "1", "the arena lists its golden-hour loop");
+      await page.waitForFunction(() => document.querySelector('[data-testid="arena-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
+      const lp = await arenaLoop.evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, paused: v.paused, opacity: getComputedStyle(v).opacity, auto: v.autoplay }));
+      must(/\/colosseum\/colosseum-day-loop\.(mp4|webm)\?v=\d+$/.test(lp.src) && !lp.paused && lp.opacity === "1" && !lp.auto, `the arena's loop plays over the photo: ${JSON.stringify(lp)}`);
+      const lb = (await arenaLoop.boundingBox())!;
+      const pb = (await page.locator('[data-testid="arena-photo"]').boundingBox())!;
+      must(Math.abs(lb.x - pb.x) < 1 && Math.abs(lb.width - pb.width) < 1 && Math.abs(lb.height - pb.height) < 1, "the loop sits exactly over the arena photo");
+    }
     await page.click('[data-testid="arena-pause"]');
     await page.waitForTimeout(400);
     const p3 = await pos();
@@ -167,6 +178,10 @@ async function main() {
     const p4 = await pos();
     must(p3.x === p4.x && p3.y === p4.y, "Pause holds every seat");
     must((await page.locator('[data-testid="arena-pause"]').innerText()).includes("Set the arena moving"), "the label flips");
+    if ((await page.locator('[data-testid="arena"]').getAttribute("data-loop")) === "1") {
+      await page.waitForFunction(() => document.querySelector('[data-testid="arena-loop"]')?.getAttribute("data-loop-mode") !== "video", null, { timeout: 5000 });
+      must(await arenaLoop.evaluate((v: HTMLVideoElement) => v.paused), "Pause holds the loop too, and the photo shows");
+    }
     await page.waitForTimeout(500);
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.arenaPaused, "Pause is remembered");
     const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });

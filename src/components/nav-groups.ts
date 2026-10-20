@@ -110,8 +110,10 @@ export const NAV_GROUPS: NavGroup[] = [
     // The coach's links in three groups (H-164 §7): People, Agents, Your content. A client sees none of them, so none is drawn.
     label: "People",
     items: [
-      { href: "/coach", label: "Clients", icon: "🧑‍🏫", coachOnly: true, hint: "the roster" },
+      { href: "/coach", label: "Clients", icon: "🧑‍🏫", coachOnly: true, hint: "the Coach view" },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
+      // Booking calendars reachable from the menu (H-1236, plan H-1240), not only from a button on the Coach view.
+      { href: "/hermes/calendars", label: "Booking calendars", icon: "📆", coachOnly: true, hint: "the pass's two calls" },
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },
       { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },
       { href: "/coach/import", label: "Import from Airtable", icon: "📥", coachOnly: true, hint: "a client's base into HelixOS" },

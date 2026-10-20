@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 311,
+    n: 314,
     date: "2026-10-20",
     title: "Doctrine now holds Danno's frameworks",
     lines: [
@@ -20,6 +20,27 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "Coaches: Coach → Frameworks imports your reviewed library, with a dry run first; publish each one when it's ready.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 313,
+    date: "2026-10-20",
+    title: "Birds over the Forum and the Colosseum",
+    lines: ["The Forum and the Colosseum come alive with birds over the scene. In golden hour, the plaza and the arena are filmed, with the photo underneath as before."],
+    audience: "everyone",
+  },
+  {
+    n: 312,
+    date: "2026-10-19",
+    title: "The aqueduct's water now really flows",
+    lines: ["On Golden hour, the Aqueduct's waterfall and fountain move in a filmed loop of the picture itself, with no drawn line over the water."],
+    audience: "everyone",
+  },
+  {
+    n: 311,
+    date: "2026-10-20",
+    title: "Booking calendars in the menu",
+    lines: ["Coaches: Booking calendars now has its own item under People, and Clients says it opens the Coach view."],
+    audience: "coach",
   },
   {
     n: 310,

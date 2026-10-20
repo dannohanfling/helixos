@@ -64,6 +64,9 @@ export const aqueductLook = (setting: "auto" | "day" | "night", hour: number): S
 /** The picture, without its extension: the leak's step, or the intact aqueduct with a full fountain. */
 export const pictureFor = (look: SceneLook, leak: Leak | null): string => `/aqueduct/aqueduct-${look}-${leak ? leak.step : "none"}`;
 
+/** The filmed loops (H-1180) live with every scene's in scene-loops.ts; the Aqueduct's water is the first of them. */
+export { loopFor } from "@/lib/engine/scene-loops";
+
 /** "About N people slipped through this arch": what the previous rate would have carried, less what did; at least one. And E, the usual. */
 export function slipped(now: Counts, leak: Leak): { n: number; expected: number } {
   const from = now[leak.step + 1] ?? 0;

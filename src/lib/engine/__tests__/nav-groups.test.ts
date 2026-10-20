@@ -15,7 +15,10 @@ describe("the menu: subtitles and the coach's three groups", () => {
   });
   it("the coach's links sit in People, Agents and Your content; a client sees none of them", () => {
     const hrefs = (g: string) => NAV_GROUPS.find((x) => x.label === g)!.items.map((i) => i.href);
-    expect(hrefs("People")).toEqual(["/coach", "/coach/office-hours", "/coach/community", "/coach/move", "/coach/import"]);
+    expect(hrefs("People")).toEqual(["/coach", "/coach/office-hours", "/hermes/calendars", "/coach/community", "/coach/move", "/coach/import"]);
+    // Booking calendars in the menu (H-1236, plan H-1240), and Clients says it is the Coach view.
+    expect(NAV.find((n) => n.href === "/hermes/calendars")?.coachOnly).toBe(true);
+    expect(NAV.find((n) => n.href === "/coach")?.hint).toBe("the Coach view");
     expect(hrefs("Agents")).toEqual(["/coach/inbox", "/coach/agents", "/forum", "/coach/reports", "/coach/feedback"]);
     expect(hrefs("Your content")).toEqual(["/coach/board", "/coach/board-seats", "/coach/glossary", "/coach/frameworks", "/coach/horizon", "/coach/helix", "/coach/setup", "/coach/recordings", "/integrations"]);
     for (const g of ["People", "Agents", "Your content"]) for (const i of NAV_GROUPS.find((x) => x.label === g)!.items) expect(navVisible(i, client), i.href).toBe(false);

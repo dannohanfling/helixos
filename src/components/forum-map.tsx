@@ -13,6 +13,8 @@ import { moveForumAgentAction } from "@/lib/actions/forum";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import { FORUM_PLOTS } from "@/db/schema";
 import { ForumAmbience } from "@/components/forum-ambience";
+import { LoopOverPhoto } from "@/components/loop-over-photo";
+import { loopFor } from "@/lib/engine/scene-loops";
 import { FORUM_BUILDINGS, FORUM_FLOW_MS, FORUM_PLOT_XY, ROSTRA_XY, forumAgo, streetPath, type ForumPlot } from "@/lib/engine/forum";
 
 export type MapAgent = { id: string; plot: ForumPlot | null; name: string; status: "working" | "waiting" | "idle" | "done"; now: string | null };
@@ -171,9 +173,10 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
     onPointerDown: down({ agent, plot }),
   });
   const isPicked = (agent: string | null, plot: ForumPlot | null) => !!picked && picked.agent === agent && picked.plot === plot;
+  const dayLoop = loopFor("/forum/forum-day");
 
   return (
-    <section className="fo-map" aria-label="Map of your agents" data-testid="forum-map" data-look={look}>
+    <section className="fo-map" aria-label="Map of your agents" data-testid="forum-map" data-look={look} data-loop={dayLoop && look === "day" ? "1" : "0"}>
       <div className="fo-scene">
         {(["day", "night"] as Look[]).map((k) => (
           <picture key={k}>
@@ -181,8 +184,10 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
             <img src={`/forum/forum-${k}.jpg`} alt="" className="fo-photo" style={{ opacity: look === k ? 1 : 0 }} loading={k === look ? "eager" : "lazy"} decoding="async" data-testid={`forum-photo-${k}`} />
           </picture>
         ))}
+        {/* Golden hour, filmed (H-1253): the plaza's own loop over its photo, held at night; the drawn cloud stays off while it plays. */}
+        {dayLoop ? <LoopOverPhoto mp4={dayLoop.mp4} webm={dayLoop.webm} held={look !== "day"} className="fo-photo fo-loop" testId="forum-loop" /> : null}
         {/* The Forum, alive (H-637 PR 3): over the photos, under the messengers and the plates. */}
-        <ForumAmbience look={look} />
+        <ForumAmbience look={look} loop={Boolean(dayLoop)} />
         <svg viewBox="0 0 1680 944" role="group" aria-label="The forum: each building is an agent, with messengers on the streets between them" onPointerUp={up} onPointerCancel={() => (drag.current = null)}>
           <defs>
             <radialGradient id="fo-gwork"><stop offset="0" stopColor="#FFD98A" stopOpacity=".75" /><stop offset=".55" stopColor="#E8B24F" stopOpacity=".28" /><stop offset="1" stopColor="#E8B24F" stopOpacity="0" /></radialGradient>
