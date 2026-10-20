@@ -132,14 +132,15 @@ async function main() {
     must((await promise.getAttribute("data-promise")) === "OVERDUE", "the program page lists the OVERDUE promise");
     must((await page.locator('[data-testid="partner-risk"]').innerText()).includes(BIZ), "and the restaurant under At risk");
     must((await page.locator('[data-testid="statement-empty"]').count()) === 1, "no statement lines before the build");
-    await submit(page, '[data-testid="statement-build"]');
+    // Each build, approve and adjustment lands on its own address, so the wait is on the address, never on a card that was already there.
+    await Promise.all([page.waitForURL(/built=1&kept=0#/, { timeout: 20000 }), page.locator('[data-testid="statement-build"]').click()]);
     await page.locator('[data-testid="statement-lines"]').waitFor({ timeout: 20000 });
     must((await page.locator('[data-testid="statement-total"]').innerText()) === "$50.00", `half of the 100 (fees left in): ${await page.locator('[data-testid="statement-total"]').innerText()}`);
     await page.check('[data-testid="statement-fees"]');
-    await submit(page, '[data-testid="statement-build"]');
+    await Promise.all([page.waitForURL(/fees=1#/, { timeout: 20000 }), page.locator('[data-testid="statement-build"]').click()]);
     await page.locator('[data-testid="statement-lines"]').waitFor({ timeout: 20000 });
-    must((await page.locator('[data-testid="statement-total"]').innerText()) === "$48.50", "fees off first: half of 97");
-    await submit(page, '[data-testid="statement-approve"]');
+    must((await page.locator('[data-testid="statement-total"]').innerText()) === "$48.50", `fees off first: half of 97: ${await page.locator('[data-testid="statement-total"]').innerText()}`);
+    await Promise.all([page.waitForURL(/approved=1#/, { timeout: 20000 }), page.locator('[data-testid="statement-approve"]').click()]);
     await page.locator('[data-testid="statement-all-approved"]').waitFor({ timeout: 20000 });
     const approved = await db.query.partnerPayoutLines.findMany({ where: and(eq(schema.partnerPayoutLines.workspaceId, W), eq(schema.partnerPayoutLines.month, month)) });
     must(approved.length === 1 && approved[0].approvedByDannoAt && approved[0].amount === 48.5, "the one line is stamped by Danno's Approve");
@@ -147,10 +148,10 @@ async function main() {
     await page.selectOption('[data-testid="adjustment-restaurant"]', id);
     await page.fill('[data-testid="adjustment-amount"]', "-8.5");
     await page.fill('[data-testid="adjustment-note"]', "Refund already sent");
-    await submit(page, '[data-testid="adjustment-add"]');
+    await Promise.all([page.waitForURL((u) => !u.search.includes("approved="), { timeout: 20000 }), page.locator('[data-testid="adjustment-add"]').click()]);
     await page.locator('[data-testid="statement-line"][data-kind="adjustment"]').waitFor({ timeout: 20000 });
     must((await page.locator('[data-testid="statement-total"]').innerText()) === "$40.00", "the adjustment joins the total");
-    await submit(page, '[data-testid="statement-build"]');
+    await Promise.all([page.waitForURL(/built=0&kept=1/, { timeout: 20000 }), page.locator('[data-testid="statement-build"]').click()]);
     await page.locator('[data-testid="statement-lines"]').waitFor({ timeout: 20000 });
     must((await page.locator('[data-testid="statement-line"]').count()) === 2 && (await page.locator('[data-testid="statement-line"][data-approved="1"]').count()) === 1, "a rebuild keeps the approved line and the adjustment");
     console.log("✓ the statement: built at half, fees off first on request, approved by Danno's tap, an adjustment, kept through a rebuild");
