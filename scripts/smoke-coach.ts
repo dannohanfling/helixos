@@ -71,7 +71,7 @@ async function main() {
     {
       const cal = page.locator('[data-testid="side-nav"] a[href="/hermes/calendars"]');
       if ((await cal.count()) !== 1) throw new Error("the coach's menu has Booking calendars under People");
-      const group = page.locator('[data-testid="nav-group"]', { has: cal });
+      const group = page.locator('[data-testid="nav-group"]', { has: page.locator('a[href="/hermes/calendars"]') });
       if ((await group.getAttribute("data-open")) !== "true") await group.locator('[data-testid="nav-group-toggle"]').click();
       const calText = (await cal.getAttribute("aria-label")) || (await cal.innerText());
       if (!/Booking calendars/.test(calText)) throw new Error(`the item is named Booking calendars: ${calText}`);
