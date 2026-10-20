@@ -6,9 +6,8 @@ import { ANTHROPIC_NO_IMAGES, FACEBOOK_NOTE } from "@/lib/engine/graphic";
 import { DeckImageUpload } from "@/components/deck-image-upload";
 import { SubmitButton } from "@/components/submit-button";
 import { PhotoPicker } from "@/components/photo-picker";
+import { OWN_HEADLINE } from "@/lib/engine/graphic";
 
-/** The select's value for "Write my own…" (H-1358): the text comes from the field under it. */
-export const OWN_HEADLINE = "__own__";
 export type PhotoChoice = { id: string; caption: string | null; kind: string; source: string; width: number; height: number };
 /**
  * Make the graphic, the step (rev 513, 524): the photo (the suggestion first, any of the member's own, or one uploaded here),

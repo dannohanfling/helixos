@@ -1,6 +1,5 @@
 "use server";
 
-import { OWN_HEADLINE } from "@/components/graphic-maker";
 import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -17,7 +16,7 @@ import { pushSocialPost } from "@/lib/integrations";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { generateBackground, graphicStep, makeGraphic, ownImage } from "@/lib/graphic";
-import { headlineChoices } from "@/lib/engine/graphic";
+import { headlineChoices, OWN_HEADLINE } from "@/lib/engine/graphic";
 import { blockersFor, createLadder, ensureLadderItem, generate, magnetFor, shipLadder } from "@/lib/ladder-core";
 
 async function assertPublishable(l: schema.Ladder): Promise<void> {
