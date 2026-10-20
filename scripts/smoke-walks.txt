@@ -81,4 +81,5 @@ blocks
 morebadges
 tabbar
 ranks
+applause
 frameworks

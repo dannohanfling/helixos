@@ -12,12 +12,22 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 312,
+    n: 311,
     date: "2026-10-20",
     title: "Doctrine now holds Danno's frameworks",
     lines: [
       "Doctrine now holds Danno's frameworks, step by step: the how beside the principles' why. Open one for the idea, the steps, when to use it, the story, and a post, a reel or a training made from it.",
       "Coaches: Coach → Frameworks imports your reviewed library, with a dry run first; publish each one when it's ready.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 310,
+    date: "2026-10-19",
+    title: "Applaud each other's wins",
+    lines: [
+      "Applaud each other's wins in the Colosseum. You both earn points, and your coach's applause counts double.",
+      "Tap the count under a win to see who applauded. Today tells you when someone applauds yours.",
     ],
     audience: "everyone",
   },

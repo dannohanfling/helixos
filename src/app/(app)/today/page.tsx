@@ -14,6 +14,8 @@ import { cookies } from "next/headers";
 import { closeSceneShell } from "@/lib/scenes";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { stalledAgentsOf } from "@/lib/forum-watch";
+import { applauseNews } from "@/lib/applause";
+import { dismissApplauseAction } from "@/lib/actions/colosseum";
 import { firstArrivalFor } from "@/lib/first-arrival";
 import { FirstArrival } from "@/components/first-arrival";
 import { EveningClose } from "@/components/evening-close";
@@ -132,6 +134,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const tData = tick();
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
+  // Applause on the member's wins (H-1171): one quiet line, grouped, until they close it; only where the Colosseum is on.
+  const applause = v.workspace.colosseumOn && !v.switchedInto && !v.team ? await applauseNews(v) : null;
   // A member's agent inbox (H-727 PR 2): one calm line while a plan waits for their OK, nothing otherwise. The coach's own
   // inbox has its place on Coach → Inbox.
   const plansWaiting = v.role === "client" && !v.switchedInto && !v.team ? await waitingCount({ workspaceId: v.workspace.id, userId: v.user.id }) : 0;
@@ -216,6 +220,18 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               {coachNew[3]} bot feature{coachNew[3] === 1 ? "" : "s"} to switch on →
             </Link>
           ) : null}
+        </div>
+      ) : null}
+      {applause ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm" data-testid="today-applause">
+          <Link href="/rewards?tab=colosseum&section=wins" className="min-w-0 flex-1 font-medium text-accent-ink hover:underline [overflow-wrap:anywhere]" data-testid="today-applause-line">
+            👏 {applause.line}
+          </Link>
+          <form action={dismissApplauseAction}>
+            <SubmitButton className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-3 hover:bg-surface-2" pendingText="…" aria-label="Close" data-testid="today-applause-close">
+              ✕
+            </SubmitButton>
+          </form>
         </div>
       ) : null}
       {stalled.length ? (

@@ -63,6 +63,8 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
   ids.member_blocks = [...new Set([...ids.member_blocks, ...(await childIds(schema.memberBlocks, "blockedMembershipId", [m.id]))])];
   const about = (await db.select({ id: schema.memberReports.id }).from(schema.memberReports).where(and(eq(schema.memberReports.workspaceId, workspaceId), eq(schema.memberReports.targetUserId, m.userId)))) as { id: string }[];
   ids.member_reports = [...new Set([...ids.member_reports, ...about.map((r) => r.id)])];
+  // Applause (H-1171): what others gave on this member's wins goes with the wins.
+  ids.win_applause = [...new Set([...ids.win_applause, ...(await childIds(schema.winApplause, "winId", ids.colosseum_wins ?? []))])];
 
   const elsewhere = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, m.userId), ne(schema.memberships.workspaceId, workspaceId)) });
   const userGoes = !elsewhere;
