@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 316,
+    date: "2026-10-21",
+    title: "Doves and an eagle over the Colosseum",
+    lines: ["Doves and an eagle now fly over the Colosseum: a pair of doves every so often, and the eagle a little rarer, crossing the golden-hour sky. With reduced motion on, the still photo alone."],
+    audience: "everyone",
+  },
+  {
     n: 315,
     date: "2026-10-20",
     title: "Submissions to verify, in the menu",

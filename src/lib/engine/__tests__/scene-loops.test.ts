@@ -4,9 +4,10 @@ import { SCENE_LOOPS, loopFor } from "@/lib/engine/scene-loops";
 
 describe("the filmed scene loops (H-1180, H-1253)", () => {
   it("lists the Aqueduct's water and the Forum's and Colosseum's golden hour, each with a version in its addresses", () => {
-    expect(Object.keys(SCENE_LOOPS).sort()).toEqual(["/aqueduct/aqueduct-day-none", "/colosseum/colosseum-day", "/forum/forum-day"]);
+    expect(Object.keys(SCENE_LOOPS).sort()).toEqual(["/aqueduct/aqueduct-day-none", "/forum/forum-day"]);
     expect(loopFor("/forum/forum-day")).toEqual({ mp4: "/forum/forum-day-loop.mp4?v=1", webm: "/forum/forum-day-loop.webm?v=1", poster: "/forum/forum-day-loop-poster.jpg?v=1" });
-    expect(loopFor("/colosseum/colosseum-day")?.mp4).toBe("/colosseum/colosseum-day-loop.mp4?v=1");
+    // The Colosseum's loop went with H-1367: birds fly over its still photo instead.
+    expect(loopFor("/colosseum/colosseum-day")).toBeNull();
     expect(loopFor("/forum/forum-night")).toBeNull();
     expect(loopFor("/colosseum/colosseum-night")).toBeNull();
   });
