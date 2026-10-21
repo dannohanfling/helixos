@@ -321,6 +321,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           ))}
           <span>{opened.length === 1 ? "is" : "are"} open in your menu, for the stage you&apos;ve reached.</span>
         </div>
+      ) : null}
       {draftsWaiting ? (
         <Link href="/drafts" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-drafts">
           Drafts waiting ({draftsWaiting}): Claude&apos;s drafts for you to approve, edit or discard →
