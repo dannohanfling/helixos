@@ -4,8 +4,10 @@
  * do, the red lines that keep Approve off, the panel's rows, and the history's plain lines. No database, no request. (Not to be
  * confused with engine/drafts.ts, the form drafts that follow a member between devices.)
  */
-import { OFFER_CONTAINERS, type DraftArea } from "@/db/schema";
+import { CONTENT_TYPES, MAGNET_TYPES, OFFER_CONTAINERS, PLATFORMS, type DraftArea, type MagnetContent } from "@/db/schema";
 import { CURRENCIES } from "@/lib/engine/offer-score";
+import { sectionByKey, type Story } from "@/lib/engine/essence";
+import { contentToText, parseContent } from "@/lib/engine/lead-magnet";
 import { cleanText, figuresIn } from "@/lib/engine/webinar-drafts";
 
 export { CONNECTOR_LABEL, UNDO_DAYS, undoOpen } from "@/lib/engine/webinar-drafts";
@@ -14,14 +16,14 @@ export { CONNECTOR_LABEL, UNDO_DAYS, undoOpen } from "@/lib/engine/webinar-draft
 export const AREA_WORDS: Record<DraftArea, { one: string; menu: string }> = {
   offer: { one: "Offer", menu: "/offers" },
   essence: { one: "Essence", menu: "/essence" },
-  magnet: { one: "Lead magnet", menu: "/lead-magnets" },
+  magnet: { one: "Lead magnet", menu: "/magnets" },
   content: { one: "Post", menu: "/content" },
   pathway: { one: "Pathway", menu: "/pathway" },
   course: { one: "Course", menu: "/courses" },
   bot_profile: { one: "Your bot", menu: "/bot" },
 };
 
-export type FieldSpec = { key: string; label: string; kind: "text" | "list" | "choice" | "price"; max?: number; choices?: readonly string[] };
+export type FieldSpec = { key: string; label: string; kind: "text" | "list" | "choice" | "price" | "stories" | "magnetContent" | "date"; max?: number; maxItems?: number; choices?: readonly string[] };
 
 /**
  * What an offer draft may set, named as the offer's own fields. Not here, so refused by name: its status, the bot's fields, links
@@ -54,8 +56,47 @@ export const OFFER_FIELDS: FieldSpec[] = [
   { key: "objDiy", label: "Objection: do it myself", kind: "text", max: 2000 },
 ];
 
-export const FIELDS_FOR: Partial<Record<DraftArea, FieldSpec[]>> = { offer: OFFER_FIELDS };
+/** A lead magnet draft (H-184): its words only. Never its keyword, address, files, hand-overs or publishing. */
+export const MAGNET_FIELDS: FieldSpec[] = [
+  { key: "title", label: "Title", kind: "text", max: 200 },
+  { key: "promise", label: "Promise", kind: "text", max: 1000 },
+  { key: "audience", label: "Who it's for", kind: "text", max: 1000 },
+  { key: "type", label: "Type", kind: "choice", choices: MAGNET_TYPES },
+  { key: "content", label: "Outline and content, with the call to action at the end", kind: "magnetContent" },
+];
+
+/**
+ * A post draft (H-184): the words, its type and platform, its pillar and a suggested date. On Approve it lands on the calendar as
+ * In progress on that date, never scheduled or posted: scheduling stays its own step.
+ */
+export const CONTENT_FIELDS: FieldSpec[] = [
+  { key: "title", label: "Title / working idea", kind: "text", max: 200 },
+  { key: "hook", label: "Hook", kind: "text", max: 600 },
+  { key: "body", label: "Body", kind: "text", max: 6000 },
+  { key: "cta", label: "Call to action", kind: "text", max: 600 },
+  { key: "contentType", label: "Type", kind: "choice", choices: CONTENT_TYPES },
+  { key: "platform", label: "Platform", kind: "choice", choices: PLATFORMS },
+  { key: "pillar", label: "Pillar", kind: "text", max: 100 },
+  { key: "suggestedDate", label: "Suggested date", kind: "date" },
+];
+
+/** An Essence section's own fields, by its key (H-184): a draft is of one section at a time. */
+function essenceFields(section: string | null): FieldSpec[] {
+  const s = section ? sectionByKey(section) : undefined;
+  if (!s) return [];
+  return s.fields.map((f) => ({ key: f.key, label: f.label, kind: f.kind === "stories" ? "stories" : f.kind === "list" ? "list" : "text", max: f.kind === "list" ? 500 : 3000, maxItems: f.kind === "list" ? 30 : undefined }));
+}
+
+/** The fields a draft of this area (and, for Essence, this section) may set. */
+export function specsFor(area: DraftArea, targetId: string | null = null): FieldSpec[] {
+  if (area === "offer") return OFFER_FIELDS;
+  if (area === "magnet") return MAGNET_FIELDS;
+  if (area === "content") return CONTENT_FIELDS;
+  if (area === "essence") return essenceFields(targetId);
+  return [];
+}
 export const PATH_MAX = 5;
+const STORIES_MAX = 12;
 
 export type ReadFields = { fields: Record<string, unknown>; refused: string[]; problems: string[] };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -64,8 +105,8 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object
  * A connector's fields for one area, as the draft will hold them. A name the area doesn't take is refused by name; a value of
  * the wrong kind is a problem; an empty value is dropped (a draft never blanks a field). A price is a plain amount, never words.
  */
-export function readFields(area: DraftArea, raw: unknown): ReadFields {
-  const specs = FIELDS_FOR[area] ?? [];
+export function readFields(area: DraftArea, raw: unknown, targetId: string | null = null): ReadFields {
+  const specs = specsFor(area, targetId);
   const refused: string[] = [];
   const problems: string[] = [];
   const fields: Record<string, unknown> = {};
@@ -82,10 +123,31 @@ export function readFields(area: DraftArea, raw: unknown): ReadFields {
     } else if (spec.kind === "list") {
       if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) problems.push(`${k} must be a list of short lines`);
       else {
+        const most = spec.maxItems ?? PATH_MAX;
         const list = (v as string[]).map((x) => x.trim().slice(0, spec.max ?? 300)).filter(Boolean);
-        if (list.length > PATH_MAX) problems.push(`${k} takes at most ${PATH_MAX} steps`);
+        if (list.length > most) problems.push(`${k} takes at most ${most} lines`);
         else if (list.length) fields[k] = list;
       }
+    } else if (spec.kind === "stories") {
+      if (!Array.isArray(v) || v.some((x) => !isObj(x))) problems.push(`${k} must be a list of stories, each {name, summary, when_to_use}`);
+      else {
+        const list = (v as Record<string, unknown>[])
+          .map((x) => ({ name: String(x.name ?? "").trim().slice(0, 200), summary: String(x.summary ?? "").trim().slice(0, 2000), when_to_use: String(x.when_to_use ?? "").trim().slice(0, 500) }))
+          .filter((x) => x.name || x.summary);
+        if (list.length > STORIES_MAX) problems.push(`${k} takes at most ${STORIES_MAX} stories`);
+        else if (list.length) fields[k] = list;
+      }
+    } else if (spec.kind === "magnetContent") {
+      if (typeof v !== "string") problems.push(`${k} must be text: the intro, then "## Heading" lines with "- item" lines under each, then "---" and the closing with the call to action`);
+      else if (v.trim()) {
+        const c = parseContent(v.slice(0, 20000));
+        if (!c.intro && !c.sections.length && !c.closing) problems.push(`${k} has nothing in it`);
+        else fields[k] = c;
+      }
+    } else if (spec.kind === "date") {
+      const d = typeof v === "string" ? v.trim() : "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`)) || new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) !== d) problems.push(`${k} must be a date, like 2026-11-03`);
+      else fields[k] = d;
     } else if (spec.kind === "choice") {
       const want = typeof v === "string" ? spec.choices!.find((c) => c.toLowerCase() === v.trim().toLowerCase()) : undefined;
       if (!want) problems.push(`${k} must be one of: ${spec.choices!.join(", ")}`);
@@ -103,8 +165,8 @@ export function readFields(area: DraftArea, raw: unknown): ReadFields {
  * Every text in a draft, cleaned: a fabricated statistic, an income claim or guarantee, and any sentence naming a figure that
  * isn't in `known` (the member's own facts) comes out. A text left empty is dropped. What came out is returned.
  */
-export function cleanFields(area: DraftArea, fields: Record<string, unknown>, known: string): { fields: Record<string, unknown>; removed: string[] } {
-  const specs = FIELDS_FOR[area] ?? [];
+export function cleanFields(area: DraftArea, fields: Record<string, unknown>, known: string, targetId: string | null = null): { fields: Record<string, unknown>; removed: string[] } {
+  const specs = specsFor(area, targetId);
   const removed: string[] = [];
   const one = (t: string) => {
     const c = cleanText(t, known);
@@ -120,6 +182,14 @@ export function cleanFields(area: DraftArea, fields: Record<string, unknown>, kn
     } else if (kind === "list") {
       const list = (v as string[]).map(one).filter(Boolean);
       if (list.length) out[k] = list;
+    } else if (kind === "stories") {
+      const list = (v as Story[]).map((st) => ({ name: one(st.name), summary: one(st.summary), when_to_use: one(st.when_to_use) })).filter((st) => st.name || st.summary);
+      if (list.length) out[k] = list;
+    } else if (kind === "magnetContent") {
+      const c = v as MagnetContent;
+      const sections = c.sections.map((sec) => ({ ...sec, heading: one(sec.heading), items: sec.items.map(one).filter(Boolean), ...(sec.why ? { why: one(sec.why) } : {}), ...(sec.how ? { how: one(sec.how) } : {}) })).filter((sec) => sec.heading || sec.items.length);
+      const next = { intro: one(c.intro), sections, closing: one(c.closing) };
+      if (next.intro || next.sections.length || next.closing) out[k] = next;
     } else out[k] = v;
   }
   return { fields: out, removed };
@@ -133,8 +203,8 @@ export const amount = (n: number): string => (Number.isInteger(n) ? String(n) : 
  * (approving would overwrite what the member did since), and a price that isn't in their own facts. Edit still opens the form
  * with the draft in it, so the member can check it and save it themselves.
  */
-export function redLines(area: DraftArea, d: { fields: Record<string, unknown>; base: Record<string, unknown> }, now: Record<string, unknown> | null, known: string): string[] {
-  const specs = FIELDS_FOR[area] ?? [];
+export function redLines(area: DraftArea, d: { targetId?: string | null; fields: Record<string, unknown>; base: Record<string, unknown> }, now: Record<string, unknown> | null, known: string): string[] {
+  const specs = specsFor(area, d.targetId ?? null);
   const label = (k: string) => specs.find((s) => s.key === k)?.label ?? k;
   const out: string[] = [];
   if (now) {
@@ -146,6 +216,8 @@ export function redLines(area: DraftArea, d: { fields: Record<string, unknown>; 
     const was = now && typeof now.price === "number" ? (now.price as number) : null;
     if (p !== was && !figuresIn(known).includes(amount(p))) out.push(`The price ${amount(p)} isn't in your own facts yet. Check it, then use Edit to save it yourself.`);
   }
+  // A post already scheduled or posted is on its way out: a draft never changes it (H-184).
+  if (area === "content" && now && (now.status === "scheduled" || now.status === "posted")) out.push(`This post is already ${now.status}. Claude's draft can't change it: use Edit to change it yourself, or Discard.`);
   return out;
 }
 
@@ -154,11 +226,19 @@ export const pick = (row: Record<string, unknown> | null, keys: string[]): Recor
 
 /** One row of the panel: the field, what it says now, and Claude's draft. */
 export type DraftRow = { key: string; label: string; now: string; draft: string };
-const show = (v: unknown): string => (Array.isArray(v) ? v.filter(Boolean).map((x, i) => `${i + 1}. ${x}`).join("\n") : v == null ? "" : String(v));
+function show(v: unknown, kind?: FieldSpec["kind"]): string {
+  if (v == null) return "";
+  if (kind === "stories") return (v as Story[]).map((st, i) => `${i + 1}. ${[st.name, st.summary].filter(Boolean).join(": ")}${st.when_to_use ? ` (use when: ${st.when_to_use})` : ""}`).join("\n");
+  if (kind === "magnetContent") return contentToText(v as MagnetContent);
+  if (Array.isArray(v)) return v.filter(Boolean).map((x, i) => `${i + 1}. ${x}`).join("\n");
+  return String(v);
+}
 
 /** The panel's rows: only the fields the draft sets, in the form's order. */
-export function rowsFor(area: DraftArea, now: Record<string, unknown> | null, fields: Record<string, unknown>): DraftRow[] {
-  return (FIELDS_FOR[area] ?? []).filter((s) => s.key in fields).map((s) => ({ key: s.key, label: s.label, now: show(now?.[s.key]), draft: show(fields[s.key]) }));
+export function rowsFor(area: DraftArea, now: Record<string, unknown> | null, fields: Record<string, unknown>, targetId: string | null = null): DraftRow[] {
+  return specsFor(area, targetId)
+    .filter((s) => s.key in fields)
+    .map((s) => ({ key: s.key, label: s.label, now: show(now?.[s.key], s.kind), draft: show(fields[s.key], s.kind) }));
 }
 
 /** The plain line a history row reads as. */

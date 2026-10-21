@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 326,
+    date: "2026-10-20",
+    title: "Claude drafts your Essence, lead magnets and posts",
+    lines: [
+      "Through the HelixOS connector, Claude can now draft a section of your Essence, a lead magnet or a post, the same way it drafts offers: in amber, waiting for your Approve, Edit or Discard.",
+      "A lead magnet is never published from a draft, and a post lands on your calendar as In progress on its date. Scheduling it is still your own step, and a post already scheduled can't be drafted over.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 325,
     date: "2026-10-19",
     title: "Claude drafts your offers, you approve them",

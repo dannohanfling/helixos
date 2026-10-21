@@ -8,6 +8,7 @@ import { nowIso } from "@/lib/dates";
 import { essenceOverAddress, essenceSaveRefusal, normalizeEssence, sectionByKey, type EssenceData, type Story } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { ctx, refresh, str } from "@/lib/action-helpers";
+import { markDraftEdited } from "@/lib/claude-drafts";
 
 /**
  * Saves one section of the client's Essence. Every value is the client's own words; a story may be picked from their own
@@ -16,7 +17,7 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
  * smaller or no bigger always goes through, so one already over can be trimmed.
  */
 export async function saveEssenceSectionAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx();
   const section = sectionByKey(str(formData, "section"));
   if (!section) return;
   const current = await essenceFor(workspaceId, userId);
@@ -54,6 +55,9 @@ export async function saveEssenceSectionAction(formData: FormData): Promise<void
   const existing = await db.query.essences.findFirst({ where: and(eq(schema.essences.workspaceId, workspaceId), eq(schema.essences.userId, userId)) });
   if (existing) await db.update(schema.essences).set({ data: next, updatedAt: nowIso() }).where(eq(schema.essences.id, existing.id));
   else await db.insert(schema.essences).values({ id: newId(), workspaceId, userId, data: next });
+  // Saved from the section opened with Claude's draft in it (H-184): that draft is settled as edited.
+  const draftId = str(formData, "draftId");
+  if (draftId) await markDraftEdited({ workspaceId, userId }, draftId, section.key, { name: v.actor.name, connector: false });
   refresh();
   const nextStep = str(formData, "next");
   redirect(`/essence?step=${sectionByKey(nextStep) ? nextStep : section.key}&saved=1`);

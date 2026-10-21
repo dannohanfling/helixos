@@ -9,6 +9,9 @@ import { createMagnetAction, deleteMagnetAction } from "@/lib/actions/magnets";
 import { MAGNET_TYPE_INFO } from "@/lib/engine/lead-magnet";
 import { Badge, Card, Empty, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { ClaudeDraftCard, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 
 export const metadata = { title: "Lead magnets" };
 
@@ -25,6 +28,12 @@ export default async function MagnetsPage({ searchParams }: { searchParams: Prom
     db.select({ magnetId: schema.leadMagnetHits.magnetId, n: sql<number>`count(*)` }).from(schema.leadMagnetHits).innerJoin(schema.leadMagnets, and(eq(schema.leadMagnets.id, schema.leadMagnetHits.magnetId), eq(schema.leadMagnets.userId, v.user.id))).groupBy(schema.leadMagnetHits.magnetId),
   ]);
   const hitsOf = new Map(hits.map((h) => [h.magnetId, Number(h.n)]));
+  // Claude's drafts (H-184): new magnets waiting here, and a mark on each magnet with a draft waiting on its own page.
+  const me = { workspaceId: v.workspace.id, userId: v.user.id };
+  const waiting = await pendingDrafts(me, "magnet");
+  const fresh = waiting.filter((d) => !d.targetId);
+  const reds = await Promise.all(fresh.map((d) => redLinesFor(me, d)));
+  const drafted = new Set(waiting.map((d) => d.targetId).filter(Boolean));
   const base = appUrl();
   return (
     <>
@@ -33,6 +42,14 @@ export default async function MagnetsPage({ searchParams }: { searchParams: Prom
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" data-testid="magnet-error" role="alert">
           {sp.error}
         </p>
+      ) : null}
+      {sp.draftNote ? <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[sp.draftNote] ?? sp.draftNote}</p> : null}
+      {fresh.length ? (
+        <div className="mb-4 space-y-3" data-testid="claude-new-magnets">
+          {fresh.map((d, i) => (
+            <ClaudeDraftCard key={d.id} draft={d} title={`A new lead magnet: ${String(d.fields.title ?? "untitled")}`} rows={rowsFor("magnet", null, d.fields)} red={reds[i] ?? []} tz={v.tz} editHref={null} back="/magnets" open="/magnets" />
+          ))}
+        </div>
       ) : null}
       <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
         <Card title="New lead magnet">
@@ -86,6 +103,7 @@ export default async function MagnetsPage({ searchParams }: { searchParams: Prom
                   </Link>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-2">
                     <Badge tone="accent">{m.keyword}</Badge>
+                    {drafted.has(m.id) ? <span className="rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-ink" data-testid="magnet-has-draft">Claude&apos;s draft</span> : null}
                     <span>{MAGNET_TYPE_INFO[m.type].label}</span>
                     <span>·</span>
                     <span>{hitsOf.get(m.id) ?? 0} clicks on the tracked link</span>

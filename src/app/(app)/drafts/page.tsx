@@ -5,6 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { pendingDrafts } from "@/lib/claude-drafts";
 import { AREA_WORDS } from "@/lib/engine/claude-drafts";
 import { formatDateTime } from "@/lib/dates";
+import { sectionByKey } from "@/lib/engine/essence";
 import { Empty, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Drafts waiting" };
@@ -20,18 +21,34 @@ export default async function DraftsPage() {
     pendingDrafts(me),
     db.query.webinarDrafts.findMany({ where: and(eq(schema.webinarDrafts.workspaceId, me.workspaceId), eq(schema.webinarDrafts.userId, me.userId), eq(schema.webinarDrafts.status, "pending")), orderBy: desc(schema.webinarDrafts.createdAt) }),
   ]);
-  const offerIds = mine.filter((d) => d.area === "offer" && d.targetId).map((d) => d.targetId!);
+  const idsOf = (area: string) => mine.filter((d) => d.area === area && d.targetId).map((d) => d.targetId!);
+  const [offerIds, magnetIds, postIds] = [idsOf("offer"), idsOf("magnet"), idsOf("content")];
   const webinarIds = [...new Set(webinarDrafts.map((d) => d.webinarId))];
-  const [offers, webinars] = await Promise.all([
+  const [offers, magnets, posts, webinars] = await Promise.all([
     offerIds.length ? db.query.offers.findMany({ where: and(eq(schema.offers.workspaceId, me.workspaceId), eq(schema.offers.userId, me.userId), inArray(schema.offers.id, offerIds)), columns: { id: true, name: true } }) : Promise.resolve([]),
+    magnetIds.length ? db.query.leadMagnets.findMany({ where: and(eq(schema.leadMagnets.workspaceId, me.workspaceId), eq(schema.leadMagnets.userId, me.userId), inArray(schema.leadMagnets.id, magnetIds)), columns: { id: true, title: true } }) : Promise.resolve([]),
+    postIds.length ? db.query.contentItems.findMany({ where: and(eq(schema.contentItems.workspaceId, me.workspaceId), eq(schema.contentItems.userId, me.userId), inArray(schema.contentItems.id, postIds)), columns: { id: true, title: true } }) : Promise.resolve([]),
     webinarIds.length ? db.query.webinars.findMany({ where: and(eq(schema.webinars.workspaceId, me.workspaceId), eq(schema.webinars.userId, me.userId), inArray(schema.webinars.id, webinarIds)), columns: { id: true, title: true } }) : Promise.resolve([]),
   ]);
+  // Each draft by what the member knows it as, linking to the page it sits on.
+  const place = (d: (typeof mine)[number]): { name: string; href: string } => {
+    const t = d.targetId;
+    const fresh = (what: string, title: unknown) => `A new ${what}: ${String(title ?? "untitled")}`;
+    switch (d.area) {
+      case "offer":
+        return t ? { name: offers.find((o) => o.id === t)?.name ?? "An offer", href: `/offers/${t}` } : { name: fresh("offer", d.fields.name), href: "/offers" };
+      case "magnet":
+        return t ? { name: magnets.find((m) => m.id === t)?.title ?? "A lead magnet", href: `/magnets/${t}` } : { name: fresh("lead magnet", d.fields.title), href: "/magnets" };
+      case "content":
+        return t ? { name: posts.find((p) => p.id === t)?.title ?? "A post", href: `/content/${t}` } : { name: fresh("post", d.fields.title), href: "/content" };
+      case "essence":
+        return { name: sectionByKey(t ?? "")?.title ?? "Your Essence", href: `/essence?step=${t ?? ""}` };
+      default:
+        return { name: AREA_WORDS[d.area].one, href: AREA_WORDS[d.area].menu };
+    }
+  };
   const rows = [
-    ...mine.map((d) => {
-      const name = d.area === "offer" ? (d.targetId ? offers.find((o) => o.id === d.targetId)?.name : `A new offer: ${String(d.fields.name ?? "untitled")}`) : null;
-      const href = d.area === "offer" ? (d.targetId ? `/offers/${d.targetId}` : "/offers") : AREA_WORDS[d.area].menu;
-      return { id: d.id, area: AREA_WORDS[d.area].one, name: name ?? AREA_WORDS[d.area].one, href, by: d.byLabel, at: d.createdAt };
-    }),
+    ...mine.map((d) => ({ id: d.id, area: AREA_WORDS[d.area].one, ...place(d), by: d.byLabel, at: d.createdAt })),
     ...webinarDrafts.map((d) => ({ id: d.id, area: "Webinar", name: `${webinars.find((w) => w.id === d.webinarId)?.title ?? "A webinar"}: ${d.step}`, href: `/webinars/${d.webinarId}?step=${d.step}`, by: d.byLabel, at: d.createdAt })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   return (
@@ -52,7 +69,7 @@ export default async function DraftsPage() {
           ))}
         </ul>
       ) : (
-        <Empty icon="✨" title="No drafts waiting" hint="When Claude drafts an offer or a webinar step for you through the connector, it waits here until you approve, edit or discard it." action={<Link className="btn btn-soft btn-sm" href="/today">Back to Today</Link>} />
+        <Empty icon="✨" title="No drafts waiting" hint="When Claude drafts something for you through the connector, an offer, a section of your Essence, a lead magnet, a post or a webinar step, it waits here until you approve, edit or discard it." action={<Link className="btn btn-soft btn-sm" href="/today">Back to Today</Link>} />
       )}
     </>
   );

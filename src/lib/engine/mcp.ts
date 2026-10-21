@@ -30,6 +30,8 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   // Webinar drafts (H-181): drafts sit beside the webinar until you approve each step in the wizard.
   "webinars:write": { label: "Webinars: draft", line: "Start a webinar and write Claude's draft of a step beside it. Nothing changes until you approve it in the wizard." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
+  // Claude's drafts (H-184): a lead magnet's words, drafted beside it until you approve. Never published.
+  magnets: { label: "Lead magnets", line: "Read your lead magnets and write Claude's drafts of them, for you to approve. Never published." },
   // The Forum (rev 765): an agent reports what it's doing to the member's own Forum and reads it back. Nothing else.
   forum: { label: "The Forum", line: "Report what your AI agents are doing to your Forum, and read your Forum back." },
   // The Handoff inbox (rev 769; every member's own since H-727): never pre-ticked. Agents post and read; only you approve, by hand in HelixOS.
