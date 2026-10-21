@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 /**
  * Claude's drafts everywhere (H-184), offers first, on a real database of its own: a draft never writes into the offer, Approve
  * swaps it in with history and Undo, Discard is clean, a red line keeps Approve off, a draft of a new offer makes it only on
- * Approve, Edit settles a draft, and another member's or workspace's draft and offer read as not there. Migration 0220.
+ * Approve, Edit settles a draft, and another member's or workspace's draft and offer read as not there. Migration 0237.
  */
 const dir = mkdtempSync(path.join(tmpdir(), "hx-claude-drafts-"));
 process.env.DATABASE_URL = `file:${path.join(dir, "test.db")}`;
@@ -134,13 +134,13 @@ describe("each member's own", () => {
   });
 });
 
-describe("migration 0220", () => {
+describe("migration 0237", () => {
   it("comes after every migration before it in the journal, by number and by time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
-    const at = journal.entries.findIndex((e) => e.tag === "0220_drafts");
+    const at = journal.entries.findIndex((e) => e.tag === "0237_drafts");
     expect(at).toBeGreaterThan(0);
     for (const e of journal.entries.slice(0, at)) {
-      expect(e.tag < "0220").toBe(true);
+      expect(e.tag < "0237").toBe(true);
       expect(e.when).toBeLessThan(journal.entries[at]!.when);
     }
   });
