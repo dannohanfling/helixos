@@ -24,6 +24,8 @@ android {
         release {
             if (uploadKeystore) {
                 storeFile file(uploadKeystore)
+                // The upload key is a PKCS12 file (made with openssl, H-1585); JKS still loads by setting this to jks.
+                storeType System.getenv("HELIXOS_UPLOAD_STORE_TYPE") ?: "pkcs12"
                 storePassword System.getenv("HELIXOS_UPLOAD_STORE_PASSWORD")
                 keyAlias System.getenv("HELIXOS_UPLOAD_KEY_ALIAS") ?: "upload"
                 keyPassword System.getenv("HELIXOS_UPLOAD_KEY_PASSWORD")
