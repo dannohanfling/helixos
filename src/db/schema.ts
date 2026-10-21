@@ -101,7 +101,7 @@ export const memberships = sqliteTable(
      */
     emailsEnabled: integer("emails_enabled", { mode: "boolean" }).notNull().default(true),
     reminderHour: integer("reminder_hour").notNull().default(8),
-    eveningReminderHour: integer("evening_reminder_hour").notNull().default(17),
+    eveningReminderHour: integer("evening_reminder_hour").notNull().default(19),
     leaderboardOptIn: integer("leaderboard_opt_in", { mode: "boolean" }).notNull().default(true),
     /** The Monday scoreboard email (rev 639): on unless the member turns it off; the Emails switch above still overrides it. */
     scoreboardEmail: integer("scoreboard_email", { mode: "boolean" }).notNull().default(true),
