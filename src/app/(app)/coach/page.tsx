@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 import { switchToClientAction } from "@/lib/actions/switch";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
 import { nudgeMemberAction, setClientPassAction, reinstateClientAction } from "@/lib/actions/coach";
-import { clientFacing } from "@/lib/engine/pathway";
+import { clientFacing, simplePath } from "@/lib/engine/pathway";
+import { FLAG_WORDS, byNeed, rosterFlag } from "@/lib/engine/roster-flag";
 import { setCertEnabledAction } from "@/lib/actions/courses";
 import { setMemberPassAction, setMyBotAction } from "@/lib/actions/integrations";
-import { agentChoicesFor, changedSinceLastPush, productFieldFor } from "@/lib/community-loyalty";
+import { agentChoicesFor, changedSinceLastPush, clTokenSet, productFieldFor } from "@/lib/community-loyalty";
 import { PRODUCT_FIELD, PRODUCT_FIELD_OLD } from "@/lib/engine/bot-fields";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
@@ -65,7 +66,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const removedUsers = removedMembers.length ? await db.query.users.findMany({ where: inArray(schema.users.id, removedMembers.map((m) => m.userId)) }) : [];
   const removedNameOf = new Map(removedUsers.map((u) => [u.id, u.name]));
   const userIds = members.map((m) => m.userId);
-  const [users, logs, points, verified, waiting, library] = await Promise.all([
+  const [users, logs, points, verified, waiting, library, progressAll, stages, asks] = await Promise.all([
     userIds.length ? db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [],
     userIds.length ? db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.workspaceId, wsId), inArray(schema.dailyLogs.userId, userIds)) }) : [],
     userIds.length ? db.select({ userId: schema.pointsLedger.userId, points: schema.pointsLedger.points, type: schema.pointsLedger.type, refId: schema.pointsLedger.refId, adjustedBy: schema.pointsLedger.adjustedBy, createdAt: schema.pointsLedger.createdAt }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, wsId), inArray(schema.pointsLedger.userId, userIds))) : [],
@@ -73,8 +74,14 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     // The same read as the menu's "Submissions to verify" count (H-1280): clients still here, Pathway hand-ins and certification deliverables.
     submissionsWaiting(wsId),
     db.query.libraryTasks.findMany(),
+    // Who needs you (H-164 §17): each client's stage on the Pathway and their questions still open.
+    userIds.length ? db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), inArray(schema.pathwayProgress.userId, userIds)) }) : [],
+    db.query.pathwayStages.findMany(),
+    userIds.length ? db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, wsId), inArray(schema.memberReports.userId, userIds), eq(schema.memberReports.kind, "ask_danno"), isNull(schema.memberReports.doneAt)), columns: { userId: true } }) : [],
   ]);
   const submitted = waiting.pathway;
+  const stageCount = stages.length;
+  const stageOrder = new Map(stages.map((st) => [st.key, st.order]));
   const monthStart = `${v.today.slice(0, 7)}-01`;
   // Each client's own brand kit (rev 568): starter, in progress, or set, read once for the roster.
   const kitOf = await kitsByMember(wsId);
@@ -127,7 +134,14 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
       const { active } = activeDaysOf(minePoints, mine, ctz);
       const todayLog = mine.find((l) => l.date === ctoday);
       const daysSilent = lastActive ? daysBetween(lastActive, ctoday) : 999;
+      const lastLockIn = mine.filter((l) => l.morningDoneAt).map((l) => l.date).sort().at(-1) ?? null;
+      const path = simplePath(stages, library, progressAll.filter((p) => p.userId === m.userId));
+      const stage = path.allDone ? stageCount : (stageOrder.get(path.stageKey) ?? 1);
+      const questions = asks.filter((a) => a.userId === m.userId).length;
+      const flag = m.testAccount ? null : rosterFlag({ questionsWaiting: questions, daysSinceLockIn: lastLockIn ? daysBetween(lastLockIn, ctoday) : null, daysSinceJoined: daysBetween(m.createdAt.slice(0, 10), ctoday), botConnected: clTokenSet(m) });
       return {
+        stage,
+        flag,
         m,
         u,
         pts,
@@ -142,8 +156,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
         waiting: submitted.filter((s) => s.userId === m.userId).length,
       };
     })
-    // Test accounts last (H-164 §8), then the quietest first.
-    .sort((a, b) => Number(a.m.testAccount) - Number(b.m.testAccount) || b.daysSilent - a.daysSilent);
+    // Test accounts last (H-164 §8), then who needs you (H-164 §17), then the quietest first.
+    .sort((a, b) => Number(a.m.testAccount) - Number(b.m.testAccount) || byNeed(a, b) || b.daysSilent - a.daysSilent);
   const atRisk = rows.filter((r) => r.daysSilent >= 3 && !r.m.testAccount);
   // The weekly 3-1-3 (rev 124), each member's own week by their own clock: who has set it, and, from Tuesday, who hasn't.
   const weekRows = userIds.length ? await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, wsId), inArray(schema.weeklyIntentions.userId, userIds)) }) : [];
@@ -214,6 +228,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                 <thead className="whitespace-nowrap text-left text-xs uppercase tracking-wide text-ink-2">
                   <tr>
                     <th className="min-w-[220px] py-2 pr-3">Client</th>
+                    <th className="py-2 pr-3" title="The one thing that most needs you: a question waiting, no lock-in in 7 days, or a bot not connected">Needs you</th>
+                    <th className="py-2 pr-3" title="Their stage on the Pathway">Stage</th>
                     <th className="py-2 pr-3">Today</th>
                     <th className="py-2 pr-3">Streak</th>
                     <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing HumanOS with you">HumanOS</th>
@@ -245,6 +261,18 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                             </SubmitButton>
                           </form>
                         </div>
+                      </td>
+                      <td className="whitespace-nowrap py-2 pr-3 text-xs" data-testid="roster-flag" data-member={r.m.id} data-flag={r.flag ?? ""}>
+                        {r.flag ? (
+                          <Link href={r.flag === "question" ? "/coach/reports" : `/coach/${r.m.id}`} className={`font-semibold underline-offset-2 hover:underline ${r.flag === "bot" ? "text-ink-2" : "text-warn"}`}>
+                            {FLAG_WORDS[r.flag]}
+                          </Link>
+                        ) : (
+                          <span className="text-ink-3">·</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap py-2 pr-3 text-xs tabular" data-testid="roster-stage" data-member={r.m.id}>
+                        {r.stage} of {stageCount}
                       </td>
                       <td className="whitespace-nowrap py-2 pr-3">
                         <span title="Locked in">{r.todayLocked ? "☀️" : "○"}</span> <span title="Closed">{r.todayClosed ? "🌙" : "○"}</span>
