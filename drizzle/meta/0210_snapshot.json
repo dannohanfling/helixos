@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "94aa7560-66f8-4a7e-85b2-570b3fb57560",
+  "id": "2db255f5-3156-4782-b8eb-027fddfcaee1",
   "prevId": "cdfdeb5d-7da8-4112-b736-c53465f51bf1",
   "tables": {
     "agent_auth_failures": {
@@ -14077,38 +14077,6 @@
           "autoincrement": false,
           "default": "'[]'"
         },
-        "tools_phase": {
-          "name": "tools_phase",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "tools_announced": {
-          "name": "tools_announced",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "show_all_tools": {
-          "name": "show_all_tools",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "helix_pct": {
-          "name": "helix_pct",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
         "aqueduct_paused": {
           "name": "aqueduct_paused",
           "type": "integer",
@@ -14754,6 +14722,13 @@
         },
         "celebrated_tier_level": {
           "name": "celebrated_tier_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rank_clip_seen_level": {
+          "name": "rank_clip_seen_level",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,

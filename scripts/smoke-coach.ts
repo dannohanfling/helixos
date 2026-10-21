@@ -67,6 +67,18 @@ async function main() {
     const vh = page.viewportSize()?.height ?? 900;
     if (!logoutBox || logoutBox.y < 0 || logoutBox.y + logoutBox.height > vh || scrolledY > 0) throw new Error(`Log out must be reachable without scrolling: box=${JSON.stringify(logoutBox)} scrollY=${scrolledY} vh=${vh}`);
     console.log("✓ the coach finds Log out without scrolling: it is in the sidebar's pinned footer");
+    // Booking calendars in the menu (H-1236, plan H-1240): its own item under People for the coach, and Clients says Coach view.
+    {
+      const cal = page.locator('[data-testid="side-nav"] a[href="/hermes/calendars"]');
+      if ((await cal.count()) !== 1) throw new Error("the coach's menu has Booking calendars under People");
+      const group = page.locator('[data-testid="nav-group"]', { has: page.locator('a[href="/hermes/calendars"]') });
+      if ((await group.getAttribute("data-open")) !== "true") await group.locator('[data-testid="nav-group-toggle"]').click();
+      const calText = (await cal.getAttribute("aria-label")) || (await cal.innerText());
+      if (!/Booking calendars/.test(calText)) throw new Error(`the item is named Booking calendars: ${calText}`);
+      // The page itself reads GoHighLevel on the server, which the headers walk covers; here the menu is the point.
+      if ((await group.getAttribute("data-group")) !== "People") throw new Error(`Booking calendars sits under People, not ${await group.getAttribute("data-group")}`);
+      console.log("✓ Booking calendars has its own item under People, named and linked");
+    }
     // The brand kit: a pair that cannot read on a slide is refused here with the pair named; the Turas kit saves
     await page.goto(`${base}/settings`);
     await page.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
@@ -129,6 +141,19 @@ async function main() {
     await page.selectOption('[data-testid="brand-spelling"]', "us");
     await submit(page, '[data-testid="brand-form"] button[type="submit"]');
     await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
+    // The first save's note is still showing, and the submit helper returns on any POST, so wait for the save to land and the
+    // form to read back the cleared values.
+    for (let i = 0; i < 40; i++) {
+      if (!(await db.query.brandKits.findFirst({ where: eq(schema.brandKits.legalName, "Turas True North Ltd"), columns: { id: true } }))) break;
+      await page.waitForTimeout(250);
+    }
+    await page
+      .waitForFunction(
+        () => (document.querySelector('[data-testid="brand-legal-name"]') as HTMLInputElement | null)?.value === "" && (document.querySelector('[data-testid="brand-spelling"]') as HTMLSelectElement | null)?.value === "us",
+        null,
+        { timeout: 10000 },
+      )
+      .catch(() => undefined);
     if ((await page.locator('[data-testid="brand-legal-name"]').inputValue()) !== "" || (await page.locator('[data-testid="brand-spelling"]').inputValue()) !== "us") throw new Error("the legal name clears and the spelling goes back to American");
     console.log("✓ brand kit (H-811): Legal name, Descriptor under the logo, Hold the descriptor blank and Spelling (American / British and New Zealand) save, read back and clear");
     console.log("✓ brand kit (§6.1): faces from the list or typed under Other with the who-will-not-see line; the preview draws the kit as typed and marks the slide that cannot read; the check proposes an ink with Apply; ash grey on cream still refused on the server with the ratio; the Turas kit saved and read back; the accent pair warns with its ratio");
@@ -265,6 +290,7 @@ async function main() {
     // The client sees the tasks in the daily loop, marked as from the call
     await login(page, "client");
     await page.goto(`${base}/today`);
+    if (await page.locator('[data-testid="side-nav"] a[href="/hermes/calendars"]').count()) throw new Error("a client never sees Booking calendars in the menu");
     await expectText(page, "Write the webinar title", "task on Today");
     const originTag = await page.locator('[data-testid="task-origin"]').first().innerText();
     if (!/From your call on/.test(originTag)) throw new Error(`task should say it came from the call, got "${originTag}"`);

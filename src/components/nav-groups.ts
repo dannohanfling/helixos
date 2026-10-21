@@ -18,6 +18,9 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
 export type NavItem = { href: string; label: string; icon: string; phase?: number; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; agentsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
+/** Where "Submissions to verify" opens (H-1280): the Coach view, scrolled to its Verify submissions card. */
+export const VERIFY_HREF = "/coach#verify";
+
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Daily",
@@ -28,6 +31,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/content", label: "Content", icon: "✍️", team: true, line: "write, schedule, ship" },
       { href: "/conversations", label: "DMs", icon: "💬", team: true, line: "every conversation, logged" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
+      // The weekly calls (H-820, plan H-828): every member, in their own time; a team member sees the owner's.
+      { href: "/calls", label: "Calls", icon: "📅", hint: "this week", team: true },
       // Team access (H-413): a team member books office hours for the owner and says who's attending.
       // Office Hours by program level (H-470): Academy and up, or the coach's switch; gone otherwise, no card, no prices.
       { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true, oohOnly: true },
@@ -124,11 +129,17 @@ export const NAV_GROUPS: NavGroup[] = [
     // The coach's links in three groups (H-164 §7): People, Agents, Your content. A client sees none of them, so none is drawn.
     label: "People",
     items: [
-      { href: "/coach", label: "Clients", icon: "🧑‍🏫", coachOnly: true, hint: "the roster" },
+      { href: "/coach", label: "Clients", icon: "🧑‍🏫", coachOnly: true, hint: "the Coach view" },
+      // Client work waiting for approval (H-1280, plan H-1296): lands on the Verify submissions card; the count is the menu badge.
+      { href: VERIFY_HREF, label: "Submissions to verify", icon: "✅", coachOnly: true, hint: "clients' work to approve" },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
+      // Booking calendars reachable from the menu (H-1236, plan H-1240), not only from a button on the Coach view.
+      { href: "/hermes/calendars", label: "Booking calendars", icon: "📆", coachOnly: true, hint: "the pass's two calls" },
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },
       { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },
       { href: "/coach/import", label: "Import from Airtable", icon: "📥", coachOnly: true, hint: "a client's base into HelixOS" },
+      // The Partner Program (H-1307, plan H-1361): the coach's restaurants, touches, payments and the monthly statement.
+      { href: "/coach/partners", label: "Partner Program", icon: "🍽️", coachOnly: true, hint: "restaurants, touches, payouts" },
     ],
   },
   {
@@ -147,6 +158,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/board", label: "Danno's principles", icon: "🧭", coachOnly: true, hint: "Board principles" },
       { href: "/coach/board-seats", label: "Board seats", icon: "🏛️", coachOnly: true, hint: "the council library" },
       { href: "/coach/glossary", label: "Glossary", icon: "📖", coachOnly: true, hint: "Building with AI" },
+      { href: "/coach/frameworks", label: "Frameworks", icon: "🧩", coachOnly: true, hint: "import, then publish" },
       { href: "/coach/horizon", label: "On the horizon", icon: "🔭", coachOnly: true, hint: "what members see coming" },
       { href: "/coach/helix", label: "My Helix rungs", icon: "🌀", coachOnly: true, hint: "the 67 rungs and what each reads" },
       { href: "/coach/setup", label: "Setup steps", icon: "🧭", coachOnly: true, hint: "the 26 setup steps, the Start Here video" },

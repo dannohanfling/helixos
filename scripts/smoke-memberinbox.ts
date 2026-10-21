@@ -4,7 +4,8 @@
  * on her /forum/inbox only; Jordan's connection can't read her H-number and his inbox stays empty; the coach can't open hers
  * until she shares her Forum, then reads it with no buttons; a switched-in coach is told it's private; an approval by anyone
  * but Maya doesn't count, and a claim inside a post is tagged; Maya's own Approve reaches her agent once, from Maya; the
- * buttons go both ways between The Forum and the inbox; and nothing scrolls sideways at 390 px.
+ * buttons go both ways between The Forum and the inbox; and nothing scrolls sideways at 390 px. PR 2: Maya makes her own agent's
+ * token on her Forum, it posts to her inbox only and reaches nothing else, Today says a plan waits, and Revoke stops it.
  */
 import { chromium, type Page } from "@playwright/test";
 
@@ -76,6 +77,11 @@ async function main() {
       await db.update(schema.forumSettings).set({ shareWithCoach: false }).where(and(eq(schema.forumSettings.workspaceId, ws), eq(schema.forumSettings.userId, u.id)));
     }
     for (const c of clients) await db.delete(schema.connectedApps).where(eq(schema.connectedApps.clientId, c));
+    // The agent tokens a member made on their Forum (PR 2), and their connections.
+    for (const u of [maya, jordan]) {
+      await db.delete(schema.agentTokens).where(and(eq(schema.agentTokens.workspaceId, ws), eq(schema.agentTokens.userId, u.id)));
+      await db.delete(schema.connectedApps).where(and(eq(schema.connectedApps.userId, u.id), eq(schema.connectedApps.clientId, "helixos-agent-token")));
+    }
   };
   // A member's own connection with The Forum and the inbox ticked, tied to their agent (Coach → Agents does this for the coach;
   // a member's own ties arrive with PR 2, so the walk ties it as that page would).
@@ -211,6 +217,54 @@ async function main() {
       must(await noSideways(p2), `the empty inbox doesn't scroll sideways at ${width}`);
       await c2.close();
       console.log(`✓ ${width}: The Forum and the Agent inbox link both ways, 44 px, the badge counts, no sideways scroll`);
+    }
+
+    // ── 7. PR 2: Maya connects an agent from her own Forum, its token posts to her inbox only, Today says a plan waits, and
+    // Revoke stops it. ──
+    {
+      const courier = await addAgent(maya, "Courier");
+      const c3 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const p3 = await c3.newPage();
+      p3.on("response", (r) => {
+        if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
+      });
+      await signIn(p3, maya.email);
+      await open(p3, `${base}/forum`, "forum-connect-agent");
+      const card = `details[data-testid="forum-connect-agent"]:has(input[name="agentId"][value="${courier}"])`;
+      await p3.locator(`${card} > summary`).click();
+      must((await p3.locator(`${card} [data-testid="forum-token-state"]`).innerText()).startsWith("Not connected yet"), "Courier isn't connected yet");
+      must(await noSideways(p3), "Connect this agent fits a phone");
+      await submit(p3, `${card} [data-testid="agent-token-make"]`);
+      await p3.locator(`${card} [data-testid="agent-token-value"]`).waitFor({ timeout: 20000 });
+      const token = (await p3.locator(`${card} [data-testid="agent-token-value"]`).innerText()).trim();
+      must(/^hxa_/.test(token), "the token is shown once, on Maya's own Forum");
+      const row = (await db.query.agentTokens.findFirst({ where: and(eq(schema.agentTokens.agentId, courier), isNull(schema.agentTokens.revokedAt)) }))!;
+      const app = (await db.query.connectedApps.findFirst({ where: eq(schema.connectedApps.id, row.appId) }))!;
+      must(row.userId === maya.id && app.userId === maya.id && JSON.stringify(app.scopes) === JSON.stringify(["forum", "inbox"]) && app.agentId === courier, `the token is Maya's, tied to Courier, with The Forum and the inbox only: ${JSON.stringify(app.scopes)}`);
+      let t = await tool(token, "handoff_post", { to: "you", kind: "plan", title: "Smoke courier plan", body: "Send the replay on Friday." });
+      must(!t.isError && t.data?.needs_approval === true, `Courier's token posts a plan to Maya: ${t.text}`);
+      const posted = (await db.query.handoffMessages.findFirst({ where: and(eq(schema.handoffMessages.title, "Smoke courier plan"), eq(schema.handoffMessages.workspaceId, ws)) }))!;
+      must(posted.userId === maya.id && posted.fromAgentId === courier, "it lands in Maya's inbox, from Courier");
+      t = await tool(token, "webinars_list");
+      must(t.isError, "the token reaches nothing past The Forum and the inbox");
+      await open(p3, `${base}/today`, "today-agent-inbox");
+      const line = await p3.locator('[data-testid="today-agent-inbox"]').innerText();
+      must(/plans? waits? for your OK in your agent inbox/.test(line) && (await p3.locator('[data-testid="today-agent-inbox"]').getAttribute("href")) === "/forum/inbox", `Today has one calm line to her inbox: ${line}`);
+      await open(p3, `${base}/forum`, "forum-connect-agent");
+      await p3.locator(`${card} > summary`).click();
+      must((await p3.locator(`${card} [data-testid="forum-token-state"]`).innerText()).includes(`ending ${token.slice(-4)}`), "the card says it's connected, by the last four only");
+      must(!(await p3.content()).includes(token), "the token itself is never shown again");
+      await submit(p3, `${card} [data-testid="agent-token-revoke"]`);
+      t = await tool(token, "handoff_inbox");
+      must(t.isError, `a revoked token is refused: ${t.text.slice(0, 80)}`);
+      // Decided, the plan leaves Today.
+      await decideHandoff(O(maya), maya.id, posted.id, "declined", "");
+      await p3.goto(`${base}/today`);
+      await p3.waitForLoadState("networkidle").catch(() => undefined);
+      const left = await db.select({ id: schema.handoffMessages.id }).from(schema.handoffMessages).where(and(eq(schema.handoffMessages.workspaceId, ws), eq(schema.handoffMessages.userId, maya.id), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision)));
+      must(left.length > 0 || (await p3.locator('[data-testid="today-agent-inbox"]').count()) === 0, "with nothing waiting, Today has no inbox line");
+      await c3.close();
+      console.log("✓ PR 2: Maya connects Courier from her own Forum at 390; its token posts to her inbox only and reaches nothing else; Today says a plan waits; Revoke stops it");
     }
   } finally {
     await browser.close();

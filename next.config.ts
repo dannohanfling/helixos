@@ -70,8 +70,16 @@ const nextConfig: NextConfig = {
     // Find a food (Body, rev 237 phase 13) scans a barcode with the camera on that one page, and nowhere else.
     const cameraHere = securityHeaders.map((h) => (h.key === "Permissions-Policy" ? { ...h, value: h.value.replace("camera=()", "camera=(self)") } : h));
     return [
+      // The streak flame's files (H-1063): a year, immutable. A swapped file bumps FLAME_FILES_VERSION in its address instead.
+      { source: "/streak/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
       { source: "/body/foods/find", headers: cameraHere },
       { source: "/((?!body/foods/find$).*)", headers: securityHeaders },
+      // The filmed scene loops (H-1180) carry a version tag, so a same-name swap is fetched fresh.
+      { source: "/aqueduct/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/forum/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/colosseum/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      // The birds' sprite sheets (H-1367) carry a version tag too.
+      { source: "/colosseum/birds/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
     ];
   },
 };

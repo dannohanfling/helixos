@@ -213,8 +213,12 @@ export async function runDeskCheckAction(formData: FormData): Promise<void> {
   if (coach.switchedInto) return;
   const feed = await feedOfCoach(coach, formData);
   if (!feed) return;
-  const customerId = customerForRef(feed.id, str(formData, "member"), heldRows(feed).map((r) => r.id));
-  await runDeskCheck(feed, customerId ?? "", coach.actor.id);
+  // "own" is the coach's own pass, offered only on the coach's own program (H-734 step E).
+  const ownFeed = feed.membershipId === coach.membership.id;
+  const me = ownFeed ? await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coach.membership.id), columns: { eoCustomerId: true } }) : null;
+  const ownCustomerId = me?.eoCustomerId ?? null;
+  const customerId = str(formData, "member") === "own" ? ownCustomerId : customerForRef(feed.id, str(formData, "member"), heldRows(feed).map((r) => r.id));
+  await runDeskCheck(feed, customerId ?? "", coach.actor.id, new Date(), { ownCustomerId });
   refresh();
   redirect(`/coach?connections=open#leaderboard-${feed.id}`);
 }

@@ -7,12 +7,14 @@ import helpJson from "@/data/essence-help.json";
 import placeholdersJson from "@/data/essence-placeholders.json";
 import { spellingLine, type Spelling } from "@/lib/engine/spelling";
 
-export type FieldKind = "text" | "list" | "stories";
+export type FieldKind = "text" | "list" | "stories" | "outcomes";
 export type EssenceField = { key: string; label: string; kind: FieldKind };
 /** optional: not counted in completion until it holds something (Brand, 27 Sep), so adding it lowers no one's progress. */
 export type EssenceSection = { key: string; title: string; fields: EssenceField[]; optional?: boolean };
 export type Story = { name: string; summary: string; when_to_use: string };
-export type EssenceData = Record<string, Record<string, string | string[] | Story[]>>;
+/** One key outcome (H-811 A2): the member's own name for it, its line, and optionally who it's for ("clients", "practitioners"). */
+export type Outcome = { name: string; line: string; audience: string };
+export type EssenceData = Record<string, Record<string, string | string[] | Story[] | Outcome[]>>;
 
 const label = (key: string) => key.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 const t = (key: string): EssenceField => ({ key, label: label(key), kind: "text" });
@@ -38,13 +40,23 @@ export const ESSENCE_SECTIONS: EssenceSection[] = [
     optional: true,
     fields: [t("purpose"), t("tagline"), t("slogan"), t("master_positioning"), t("competitive_advantage"), t("brand_promise"), t("three_year_snapshot"), t("culture"), t("standards"), t("operating_spine"), l("values"), l("principles"), l("content_pillars"), l("strategic_partners"), t("tone_and_values"), t("revenue_targets"), t("notes")],
   },
-  { key: "key_outcomes_for_users", title: "Key outcomes for users", fields: [t("clarity"), t("impact"), t("connection")] },
+  // Named rows (H-811 A2): as many as the member has, in their order, each optionally for one audience. An Essence saved with
+  // the three fixed boxes (clarity, impact, connection) is read into rows of those names, so nothing is lost.
+  { key: "key_outcomes_for_users", title: "Key outcomes for users", fields: [{ key: "outcomes", label: "Outcomes", kind: "outcomes" }] },
   { key: "ethical_standards", title: "Ethical standards", fields: [t("transparency"), t("inclusivity"), t("empowerment")] },
   { key: "representative_stories", title: "Representative stories", fields: [{ key: "stories", label: "Stories", kind: "stories" }] },
 ];
 export const sectionByKey = (key: string) => ESSENCE_SECTIONS.find((s) => s.key === key);
 const STORIES_SECTION = "representative_stories";
 const STORIES_FIELD = "stories";
+export const OUTCOMES_SECTION = "key_outcomes_for_users";
+/** The three boxes the section had before (H-811 A2), in their order, read into rows of these names. */
+export const LEGACY_OUTCOMES = [
+  ["clarity", "Clarity"],
+  ["impact", "Impact"],
+  ["connection", "Connection"],
+] as const;
+export const MAX_OUTCOMES = 12;
 
 /**
  * The platform limit the production Essence lives under; matching it keeps the app's Essence portable to the bot. It counts
@@ -76,6 +88,19 @@ const cleanStories = (v: unknown): Story[] =>
         .filter((x): x is Story => Boolean(x && (x.name || x.summary || x.when_to_use)))
     : [];
 
+const cleanOutcomes = (v: unknown): Outcome[] =>
+  Array.isArray(v)
+    ? v
+        .map((x) => (x && typeof x === "object" ? { name: String((x as Outcome).name ?? "").trim().slice(0, 80), line: String((x as Outcome).line ?? "").trim().slice(0, 1000), audience: String((x as Outcome).audience ?? "").trim().slice(0, 80) } : null))
+        .filter((x): x is Outcome => Boolean(x && (x.name || x.line)))
+        .slice(0, MAX_OUTCOMES)
+    : [];
+/** The section's rows: the saved rows, or the three old boxes carried over as rows of their own names. */
+export function outcomeRows(raw: Record<string, unknown>): Outcome[] {
+  if (Array.isArray(raw.outcomes)) return cleanOutcomes(raw.outcomes);
+  return LEGACY_OUTCOMES.map(([key, name]) => ({ name, line: typeof raw[key] === "string" ? (raw[key] as string).trim() : "", audience: "" })).filter((o) => o.line);
+}
+
 /** Only known sections and fields survive, each in its declared shape; nothing is added, nothing is invented. */
 export function normalizeEssence(input: unknown): EssenceData {
   const src = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
@@ -84,7 +109,7 @@ export function normalizeEssence(input: unknown): EssenceData {
     const given = src[section.key];
     // The production schema carries representative_stories as a bare array; stored rows carry it under "stories". Both are read.
     const raw = (Array.isArray(given) && section.key === STORIES_SECTION ? { [STORIES_FIELD]: given } : given && typeof given === "object" ? given : {}) as Record<string, unknown>;
-    const sec: Record<string, string | string[] | Story[]> = {};
+    const sec: Record<string, string | string[] | Story[] | Outcome[]> = {};
     for (const f of section.fields) {
       const v = raw[f.key];
       if (f.kind === "text") {
@@ -93,6 +118,9 @@ export function normalizeEssence(input: unknown): EssenceData {
       } else if (f.kind === "list") {
         const arr = cleanList(v);
         if (arr.length) sec[f.key] = arr;
+      } else if (f.kind === "outcomes") {
+        const rows = outcomeRows(raw);
+        if (rows.length) sec[f.key] = rows;
       } else {
         const st = cleanStories(v);
         if (st.length) sec[f.key] = st;

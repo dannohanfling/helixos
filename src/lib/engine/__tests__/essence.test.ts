@@ -180,3 +180,28 @@ describe("a save refused over the cap (H-802)", () => {
     expect(essenceOverAddress("identity", 20512)).not.toMatch(/[?&]over=/);
   });
 });
+
+describe("key outcomes as named rows (H-811 A2)", () => {
+  it("carries the three old boxes over as rows of their own names, in their order, dropping an empty one", async () => {
+    const { normalizeEssence } = await import("../essence");
+    const d = normalizeEssence({ key_outcomes_for_users: { clarity: "They know what they want", impact: "", connection: "Taken seriously" } });
+    expect(d.key_outcomes_for_users).toEqual({ outcomes: [{ name: "Clarity", line: "They know what they want", audience: "" }, { name: "Connection", line: "Taken seriously", audience: "" }] });
+  });
+  it("keeps the member's own rows, names and order, each optionally for one audience", async () => {
+    const { normalizeEssence } = await import("../essence");
+    const rows = [{ name: "Calm", line: "They sleep again", audience: "clients" }, { name: "Craft", line: "They teach it", audience: "practitioners" }, { name: "", line: "", audience: "x" }];
+    expect(normalizeEssence({ key_outcomes_for_users: { outcomes: rows, clarity: "old" } }).key_outcomes_for_users).toEqual({ outcomes: rows.slice(0, 2) });
+  });
+  it("holds the list to twelve rows, and an emptied list leaves the section empty", async () => {
+    const { normalizeEssence, MAX_OUTCOMES } = await import("../essence");
+    const many = Array.from({ length: 15 }, (_, i) => ({ name: `O${i}`, line: "x", audience: "" }));
+    expect((normalizeEssence({ key_outcomes_for_users: { outcomes: many } }).key_outcomes_for_users!.outcomes as unknown[]).length).toBe(MAX_OUTCOMES);
+    expect(normalizeEssence({ key_outcomes_for_users: { outcomes: [], clarity: "old" } }).key_outcomes_for_users).toBeUndefined();
+  });
+  it("sends the rows to the AI in the member's order", async () => {
+    const { essenceForAi } = await import("../essence");
+    const out = essenceForAi({ key_outcomes_for_users: { outcomes: [{ name: "Calm", line: "They sleep again", audience: "clients" }] } }) ?? "";
+    expect(out).toContain("Calm");
+    expect(out).toContain("They sleep again");
+  });
+});

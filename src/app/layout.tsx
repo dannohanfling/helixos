@@ -18,6 +18,8 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
+  // The safe-area insets are real only under viewport-fit=cover (H-1043): the bottom bar pads by the home indicator's inset.
+  viewportFit: "cover",
   // Pinch-zoom stays on: 200% zoom is a baseline for low-vision members. The top and bottom bars are pinned to the visual
   // viewport by PinToViewport so they hold still while the content scales.
 };

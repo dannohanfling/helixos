@@ -59,15 +59,20 @@ import { removeMyHeadshotAction } from "@/lib/actions/headshots";
 import { SKILL_INSTALL_STEPS } from "@/lib/engine/board-view";
 import { forumSettingsFor } from "@/lib/forum";
 import { ForumWebhookCard } from "@/components/forum-webhook";
-import { setArenaHiddenAction, setArenaPhotoAction, setColosseumOnAction } from "@/lib/actions/colosseum";
+import { setArenaHiddenAction, setArenaPhotoAction, setColosseumOnAction, unblockMemberAction } from "@/lib/actions/colosseum";
+import { blockedList, myReports } from "@/lib/blocks";
+import { REASON_LABEL, reasonOf, reportStatus, shortName } from "@/lib/engine/blocks";
+import { KIND_SHORT } from "@/lib/engine/reports";
 import { setupFor } from "@/lib/setup-card";
 import { SetupList } from "@/components/setup-card";
+import { CallsSettingsCard } from "@/components/calls-settings";
+import { callsWithSkips } from "@/lib/calls";
 
 export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
   const ownMedia = v.switchedInto ? [] : await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), columns: { id: true, caption: true, kind: true }, orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 96 });
@@ -81,7 +86,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -103,6 +108,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
   const [goal, conn, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), linkedChats(v.workspace.id, v.user.id)]);
   const forumHook = await forumSettingsFor({ workspaceId: v.workspace.id, userId: v.user.id });
+  // Settings → Calls (H-828): the coach's weekly calls with their skips from today on.
+  const callRows = v.role === "coach" ? await callsWithSkips(v.workspace.id, v.today) : [];
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const appUrl = siteUrl();
   // The owner's team (Danno, 6 Oct): who is on it, the open invites, the seats, and what the team changed. Not while switched.
@@ -155,12 +162,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // Switch to client (rev 216): what the coach changed while working in this member's HelixOS, for the member to see.
   const coachChangeRows = v.role === "client" ? await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, v.membership.id), eq(schema.coachChanges.kind, "change")), orderBy: [desc(schema.coachChanges.createdAt)], limit: 50 }) : [];
   const coachNames = new Map((coachChangeRows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(coachChangeRows.map((c) => c.coachUserId))]) }) : []).map((u) => [u.id, u.name]));
+  // H-1385: a change an agent made as the client names the agent, as the coach's.
+  const agentIds = [...new Set(coachChangeRows.map((c) => c.agentId).filter((x): x is string => Boolean(x)))];
+  const agentNames = new Map((agentIds.length ? await db.query.forumAgents.findMany({ where: inArray(schema.forumAgents.id, agentIds), columns: { id: true, name: true } }) : []).map((a) => [a.id, a.name]));
   const changesList = coachChangeRows.length ? (
     <ul className="mt-2 space-y-1 text-sm" data-testid="coach-changes">
       {coachChangeRows.map((c) => (
         <li key={c.id} data-testid="coach-change">
           <span className="font-medium">{c.action}</span>
-          {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {coachNames.get(c.coachUserId) ?? "your coach"} (coach) · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
+          {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {c.agentId ? <span data-testid="coach-change-agent">{agentNames.get(c.agentId) ?? "an agent"} ({(coachNames.get(c.coachUserId) ?? "your coach").split(" ")[0]}&apos;s agent)</span> : <>{coachNames.get(c.coachUserId) ?? "your coach"} (coach)</>} · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
         </li>
       ))}
     </ul>
@@ -215,6 +225,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // "Which user are you?" is a pick from the account's users, asked of GoHighLevel only while it is unanswered (rev 850).
   const ghlUsers = conn && conn.accounts.length && !conn.lastError && !conn.ghlUserId?.trim() ? await listUsers(conn) : [];
   const clAgents = clTokenSet(v.membership) ? await agentChoicesFor(v.membership) : [];
+  // Block and report (H-745): the members this member blocked, and what they reported, with Handled once their coach acted.
+  const [blocked, reports] = v.role === "client" ? await Promise.all([blockedList(v), myReports(v)]) : [[], []];
   return (
     <>
       <ScrollToHash />
@@ -328,6 +340,48 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p className="mt-2 text-xs text-ink-3">Nothing plays until you have tapped or typed on the page, and nothing plays when your device asks for reduced motion.</p>
           </Card>
         )}
+        {v.role === "client" ? (
+          <Card id="blocked" className="min-w-0 scroll-mt-20" title="Blocked members">
+            {blocked.length ? (
+              <ul className="space-y-1 text-sm" data-testid="blocked-list">
+                {blocked.map((b) => (
+                  <li key={b.membershipId} className="flex flex-wrap items-center justify-between gap-2" data-testid="blocked-member">
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{shortName(b.name)}</span>
+                    <form action={unblockMemberAction}>
+                      <input type="hidden" name="membershipId" value={b.membershipId} />
+                      <SubmitButton className="btn btn-ghost btn-xs" pendingText="Unblocking…" data-testid="unblock">Unblock</SubmitButton>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2" data-testid="blocked-none">Nobody. Block a member from the ⋯ on their win or their place in the Colosseum.</p>
+            )}
+            <p className="mt-2 text-xs text-ink-3">You don&apos;t see a blocked member&apos;s wins, name or photo. They aren&apos;t told.</p>
+          </Card>
+        ) : null}
+        {v.role === "client" ? (
+          <Card id="your-reports" className="min-w-0 scroll-mt-20" title="Your reports">
+            {reports.length ? (
+              <ul className="space-y-1 text-sm" data-testid="your-reports">
+                {reports.map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2" data-testid="your-report" data-kind={r.kind}>
+                    <span className="min-w-0">
+                      {r.kind === "content" ? `${r.targetKind === "member" ? "A member" : "A win"} · ${REASON_LABEL[reasonOf(r.severity)]}` : KIND_SHORT[r.kind]}
+                      <span className="text-ink-3"> · {formatDateTime(r.createdAt, v.tz)}</span>
+                    </span>
+                    <span className={reportStatus(r) === "Handled" || reportStatus(r) === "Done" ? "text-good" : "text-ink-2"} data-testid="your-report-status">{reportStatus(r)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2" data-testid="your-reports-none">Nothing sent yet.</p>
+            )}
+            <p className="mt-2 text-xs text-ink-3">
+              Reports are reviewed within 24 hours. <Link href="/support" className="underline">Help and support</Link>
+            </p>
+          </Card>
+        ) : null}
         {v.switchedInto ? null : (
           <Card id="welcome" className="min-w-0" title="Your welcome">
             {/* The first arrival (H-472): the ceremony from the first sign-in, played again on request; nothing is stamped. */}
@@ -867,6 +921,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Card>
         {v.role === "coach" ? (
           <>
+            {/* Settings → Calls (H-820, plan H-828): the weekly calls members see on Calls and Today. */}
+            <CallsSettingsCard rows={callRows} workspace={v.workspace} notice={callsNotice} error={callsError} openCall={callsOpen} field={refusedField} />
             <Card title="Workspace">
               <form action={updateWorkspaceAction} className="space-y-3">
                 <Field label="Name">
