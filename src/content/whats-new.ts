@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 319,
+    n: 320,
     date: "2026-10-21",
     title: "Proof Bank: the list fits again, a status filter, Approve selected",
     lines: [
@@ -21,6 +21,13 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "A list can carry a corrected name or wording for a draft (checked against the transcript): the confirm step says how many will be corrected first, and Undo puts the old words back too.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 319,
+    date: "2026-10-21",
+    title: "Let one of your agents work in a client's HelixOS",
+    lines: ["Coaches: let one of your agents work in a client's HelixOS, client by client, from the client's page. Every change shows in their Changes by your coach under the agent's name; it works only while the client lets their coach work, and never touches HumanOS, their connections, their account or anything that sends."],
+    audience: "coach",
   },
   {
     n: 318,

@@ -202,6 +202,8 @@ export const CHILD_TABLES = [
   { label: "ladder_material", table: schema.ladderMaterial, fk: "ladderId", parent: "ladders" },
   { label: "coach_notes", table: schema.coachNotes, fk: "membershipId", parent: "membership" },
   { label: "bot_approvals", table: schema.botApprovals, fk: "membershipId", parent: "membership" },
+  // An agent working in this member's HelixOS (H-1385): the coach's grants for them, theirs to see and gone with them.
+  { label: "agent_client_grants", table: schema.agentClientGrants, fk: "clientMembershipId", parent: "membership" },
   // Block a member (H-745): the blocks this member made hang off their membership. The blocks made against them go with them
   // too (src/lib/erase.ts, by blocked_membership_id), so a block never outlives either side.
   { label: "member_blocks", table: schema.memberBlocks, fk: "blockerMembershipId", parent: "membership" },

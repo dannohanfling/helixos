@@ -1321,6 +1321,13 @@
     {
       "idx": 188,
       "version": "6",
+      "when": 1792541401172,
+      "tag": "0228_agent_client_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "6",
       "when": 1792543758360,
       "tag": "0229_proof_batches",
       "breakpoints": true

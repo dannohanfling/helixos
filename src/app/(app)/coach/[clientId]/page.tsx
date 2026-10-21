@@ -4,6 +4,8 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { setTestAccountAction, switchToClientAction } from "@/lib/actions/switch";
+import { setAgentGrantAction } from "@/lib/actions/agent-clients";
+import { agentSwitchesFor, grantsForClient } from "@/lib/agent-clients";
 import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction, setClientTierAction, setOohOverrideAction } from "@/lib/actions/coach";
 import { PROGRAM_ORDER } from "@/lib/engine/recordings";
 import { oohAccessWords, oohSwitchWords } from "@/lib/engine/office-hours";
@@ -82,6 +84,14 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const emailChange = await lastEmailChange(u.id);
   // The client's team (Danno, 6 Oct): who is on it, with "added by" and "last active", the open invites, and the seat cap.
   const [team, teamInvites] = await Promise.all([teamOf(m.id), openInvites(m.id)]);
+  // Agents in this client's HelixOS (H-1385): the coach's own agents, which have a live grant, and their switches in and out.
+  const [coachAgents, agentGrants, agentSwitches] = await Promise.all([
+    db.query.forumAgents.findMany({ where: and(eq(schema.forumAgents.workspaceId, v.workspace.id), eq(schema.forumAgents.userId, v.user.id)), orderBy: [asc(schema.forumAgents.name)] }).then((rows) => rows.filter((a) => !a.builtIn)),
+    grantsForClient({ workspaceId: v.workspace.id, userId: v.user.id }, clientId),
+    agentSwitchesFor({ workspaceId: v.workspace.id, userId: v.user.id }, clientId),
+  ]);
+  const agentOn = new Set(agentGrants.filter((g) => !g.revokedAt).map((g) => g.agentId));
+  const agentName = new Map(coachAgents.map((a) => [a.id, a.name]));
   const switches = await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, m.id), eq(schema.coachChanges.coachUserId, v.user.id), inArray(schema.coachChanges.kind, ["switch_in", "switch_out"])), orderBy: [desc(schema.coachChanges.createdAt)], limit: 20 });
   // The copy-link cookie the reset action leaves when there is no email: shown once, for this client only, then it expires on its own.
   let copyLink: string | null = null;
@@ -275,6 +285,43 @@ export default async function CoachClientPage({ params, searchParams }: { params
               {switches.map((c) => (
                 <li key={c.id}>
                   {c.kind === "switch_in" ? "In" : "Out"} · {c.mode === "work" ? "Working" : "Viewing"} · {formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </div>
+      {/* Agents that may work here (H-1385): off by default; Allow and Stop are the coach's alone; every switch and change is the client's record. */}
+      <div id="agents" className="mt-3 scroll-mt-20 rounded-lg border border-line p-3 text-sm" data-testid="client-agents" data-on={agentOn.size}>
+        <p className="font-medium">Agents that may work in {u.name.split(" ")[0]}&apos;s HelixOS</p>
+        <p className="mt-1 text-xs text-ink-3">Off for every agent until you allow it here. A granted agent switches in from its own token, works only while {u.name.split(" ")[0]} lets their coach work (view only otherwise), never touches HumanOS, connected apps, the account or anything that sends, and every change it makes shows in {u.name.split(" ")[0]}&apos;s Settings → Changes by your coach under the agent&apos;s name. Stop takes effect on the agent&apos;s next call.</p>
+        {coachAgents.length ? (
+          <ul className="mt-2 divide-y" data-testid="client-agent-list">
+            {coachAgents.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="client-agent" data-agent={a.name} data-granted={agentOn.has(a.id) ? "1" : "0"}>
+                <span className="font-medium">{a.name}</span>
+                <span className="text-xs text-ink-3">{agentOn.has(a.id) ? "may work here" : "not allowed"}</span>
+                <form action={setAgentGrantAction} className="ml-auto">
+                  <input type="hidden" name="clientMembershipId" value={m.id} />
+                  <input type="hidden" name="agentId" value={a.id} />
+                  <input type="hidden" name="on" value={agentOn.has(a.id) ? "0" : "1"} />
+                  <SubmitButton className={`btn btn-sm ${agentOn.has(a.id) ? "btn-ghost" : "btn-soft"}`} pendingText="Saving…" data-testid="client-agent-toggle">
+                    {agentOn.has(a.id) ? "Stop" : "Allow"}
+                  </SubmitButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-xs text-ink-3">You have no agents yet: add one on Coach → Agents first.</p>
+        )}
+        {agentSwitches.length ? (
+          <details className="mt-2 text-xs text-ink-3">
+            <summary className="cursor-pointer">Agent switches ({agentSwitches.length})</summary>
+            <ul className="mt-1 space-y-0.5" data-testid="client-agent-switches">
+              {agentSwitches.map((c) => (
+                <li key={c.id}>
+                  {agentName.get(c.agentId ?? "") ?? "An agent"} · {c.kind === "switch_in" ? "In" : "Out"} · {c.mode === "work" ? "Working" : "Viewing"} · {formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}
                 </li>
               ))}
             </ul>
