@@ -25,13 +25,14 @@ export async function approveClaudeDraftAction(formData: FormData): Promise<void
   redirect(back(formData, r.ok ? "approved" : r.why, r.ok ? r.targetId : null));
 }
 
-/** Edit on a draft of a new offer: the offer is made with its name, and its page opens with the draft in the form. */
+/** Edit on a draft of a new offer, magnet or post: it's made with its name, and its page opens with the draft in the form. */
 export async function editNewClaudeDraftAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const draftId = str(formData, "draftId");
   const r = await startFromNewDraft({ workspaceId, userId }, draftId);
   refresh();
-  redirect(r.ok ? `/offers/${r.targetId}?draft=${draftId}#who` : back(formData, r.why));
+  const page = r.ok ? ({ offer: `/offers/${r.targetId}?draft=${draftId}#who`, magnet: `/magnets/${r.targetId}?draft=${draftId}`, content: `/content/${r.targetId}?draft=${draftId}` } as Record<string, string>)[r.area] : null;
+  redirect(page ?? back(formData, r.ok ? "That draft opens on its own page." : r.why));
 }
 
 export async function discardClaudeDraftAction(formData: FormData): Promise<void> {

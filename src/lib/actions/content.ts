@@ -12,6 +12,7 @@ import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { carriesUnreviewed, originAfterAccept, originAfterSave } from "@/lib/engine/provenance";
 import { recordConfirm } from "@/lib/provenance";
 import { createContentItem } from "@/lib/content-core";
+import { markDraftEdited } from "@/lib/claude-drafts";
 
 export async function createContentAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ team: "allow" });
@@ -57,8 +58,12 @@ export async function updateContentAction(formData: FormData): Promise<void> {
       ...(status ? { status } : {}),
     })
     .where(and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, userId)));
+  // Saved from the form opened with Claude's draft in it (H-184): that draft is settled as edited.
+  const draftId = str(formData, "draftId");
+  if (draftId) await markDraftEdited({ workspaceId, userId }, draftId, id, { name: v.actor.name, connector: false });
   refresh();
   if (held) redirect(`/content/${id}?gate=status&status=${wanted}`);
+  if (draftId) redirect(`/content/${id}?draftNote=edited`);
 }
 
 /** Accept: the coach has read this post's AI draft and keeps it. One post per click; nothing accepts more than one. */

@@ -51,3 +51,40 @@ describe("the panel's rows", () => {
     ]);
   });
 });
+
+describe("Essence, lead magnet and post drafts (D2b)", () => {
+  it("takes an Essence section's own fields only, its stories as {name, summary, when_to_use}", () => {
+    const r = readFields("essence", { mission_statement: "Help coaches sell with calm.", vision_statement: " ", tone: "warm" }, "mission_and_vision");
+    expect(r.refused).toEqual(["tone"]);
+    expect(r.fields).toEqual({ mission_statement: "Help coaches sell with calm." });
+    const st = readFields("essence", { stories: [{ name: "The empty room", summary: "Nobody came; I kept going.", when_to_use: "On doubt" }, { name: "" }] }, "representative_stories");
+    expect(st.fields).toEqual({ stories: [{ name: "The empty room", summary: "Nobody came; I kept going.", when_to_use: "On doubt" }] });
+    expect(readFields("essence", { anything: "x" }, "no_such_section").refused).toEqual(["anything"]);
+  });
+
+  it("reads a magnet's content in the editor's own format, and refuses its keyword and publishing", () => {
+    const r = readFields("magnet", { title: "Calm Mornings Checklist", content: "Start here.\n## Night before\n- Lay out clothes\n---\nBook a call to go further.", keyword: "CALM", publishedAt: "now" });
+    expect(r.refused.sort()).toEqual(["keyword", "publishedAt"]);
+    expect(r.fields.content).toEqual({ intro: "Start here.", sections: [{ heading: "Night before", items: ["Lay out clothes"] }], closing: "Book a call to go further." });
+    expect(rowsFor("magnet", null, r.fields).find((x) => x.key === "content")!.draft).toContain("## Night before");
+  });
+
+  it("takes a post's date as a real date only, and never its status or schedule", () => {
+    const r = readFields("content", { title: "Why mornings fail", suggestedDate: "2026-11-03", status: "scheduled", postAt: "2026-11-03T09:00:00", contentType: "story post" });
+    expect(r.refused.sort()).toEqual(["postAt", "status"]);
+    expect(r.fields).toEqual({ title: "Why mornings fail", suggestedDate: "2026-11-03", contentType: "Story Post" });
+    expect(readFields("content", { suggestedDate: "2026-02-30" }).problems).toHaveLength(1);
+  });
+
+  it("cleans every story and every magnet line", () => {
+    const c = cleanFields("magnet", { content: { intro: "Make $5,000 a week.", sections: [{ heading: "Start", items: ["Do this", "Join 9,000 people"] }], closing: "Book a call." } }, "");
+    expect(c.fields.content).toEqual({ intro: "", sections: [{ heading: "Start", items: ["Do this"] }], closing: "Book a call." });
+    const s = cleanFields("essence", { stories: [{ name: "Win", summary: "She made six figures.", when_to_use: "" }] }, "", "representative_stories");
+    expect(s.fields.stories).toEqual([{ name: "Win", summary: "", when_to_use: "" }]);
+  });
+
+  it("keeps Approve off on a post already scheduled or posted", () => {
+    expect(redLines("content", { fields: { hook: "New" }, base: { hook: null } }, { hook: null, status: "scheduled" }, "")[0]).toMatch(/already scheduled/);
+    expect(redLines("content", { fields: { hook: "New" }, base: { hook: null } }, { hook: null, status: "idea" }, "")).toEqual([]);
+  });
+});

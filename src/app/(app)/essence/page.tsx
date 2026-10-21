@@ -10,6 +10,9 @@ import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { EssenceOverNote } from "@/components/essence-over";
+import { ClaudeDraftCard, ClaudeDraftHistory, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { changesFor, pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 
 export const metadata = { title: "Essence" };
 
@@ -17,7 +20,7 @@ export const metadata = { title: "Essence" };
  * The client's brand voice as config: fourteen sections, one per step, save and return any time, nothing gated behind
  * completion. Every word is theirs. The one-line prompts under the hard fields are Danno's and appear only once supplied.
  */
-export default async function EssencePage({ searchParams }: { searchParams: Promise<{ step?: string; saved?: string; error?: string; chars?: string }> }) {
+export default async function EssencePage({ searchParams }: { searchParams: Promise<{ step?: string; saved?: string; error?: string; chars?: string; draft?: string; draftNote?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const data = await essenceFor(v.workspace.id, v.user.id);
@@ -29,7 +32,15 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
   const current = sectionByKey(sp.step ?? "") ?? ESSENCE_SECTIONS.find((s) => !s.optional && !sectionFilled(data, s.key)) ?? ESSENCE_SECTIONS[0];
   const idx = ESSENCE_SECTIONS.findIndex((s) => s.key === current.key);
   const next = ESSENCE_SECTIONS[idx + 1] ?? null;
-  const values = data[current.key] ?? {};
+  // Claude's drafts (H-184): one per section; the one for this section shows above its form, and Edit fills the form with it.
+  const me = { workspaceId: v.workspace.id, userId: v.user.id };
+  const [waiting, changes] = await Promise.all([pendingDrafts(me, "essence"), changesFor(me, "essence", current.key)]);
+  const draft = waiting.find((d) => d.targetId === current.key) ?? null;
+  const editing = draft && sp.draft === draft.id ? draft : null;
+  const red = draft && !editing ? await redLinesFor(me, draft) : [];
+  const drafted = new Set(waiting.map((d) => d.targetId));
+  const here = `/essence?step=${current.key}`;
+  const values = { ...(data[current.key] ?? {}), ...((editing?.fields ?? {}) as Record<string, string | string[] | Story[]>) };
   const storiesField = current.fields.find((f) => f.kind === "stories");
   const stories = storiesField ? ((values[storiesField.key] as Story[] | undefined) ?? []) : [];
   // Stories are the client's own: their story bank, never the proof bank (someone else's result is evidence, and evidence lives behind the consent gate).
@@ -63,6 +74,7 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
       <Progress value={(done.filled / done.total) * 100} tone={done.filled === done.total ? "good" : "accent"} />
       <EssenceOverNote data={data} own />
       {sp.saved ? <p className="mt-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="essence-saved">Saved.</p> : null}
+      {sp.draftNote ? <p className="mt-3 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[sp.draftNote] ?? sp.draftNote}</p> : null}
       {sp.error === "over" ? (
         <p className="mt-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="essence-over" data-part="core" role="alert">
           Not saved: that would make your Essence without Brand {Number(sp.chars ?? 0).toLocaleString()} characters, over the {ESSENCE_CAP.toLocaleString()} limit it has to stay under. Trim this section or another.
@@ -82,6 +94,7 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
                   <Link href={`/essence?step=${s.key}`} className={`flex items-center gap-2 px-2 py-2 text-sm hover:bg-surface-2 ${s.key === current.key ? "bg-accent-soft" : ""}`} data-testid="essence-section" data-section={s.key} data-filled={filled ? "1" : "0"} data-optional={s.optional ? "1" : undefined}>
                     <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${filled ? "border-good bg-good text-white" : "border-line"}`}>{filled ? "✓" : i + 1}</span>
                     <span className="min-w-0 flex-1 break-words">{s.title}</span>
+                    {drafted.has(s.key) ? <span className="h-2 w-2 shrink-0 rounded-full border border-accent-ink bg-accent" aria-label="Claude's draft waiting" data-testid="essence-draft-dot" /> : null}
                     {s.optional ? <span className="text-[10px] uppercase tracking-wide text-ink-3">optional</span> : null}
                   </Link>
                 </li>
@@ -102,9 +115,20 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
             </span>
           }
         >
-          <form action={saveEssenceSectionAction} className="space-y-4" data-testid="essence-form" data-section={current.key}>
+          {editing ? (
+            <p className="mb-4 rounded-lg border border-accent bg-accent-soft/40 p-3 text-sm" data-testid="claude-draft-editing">
+              The form below is filled with Claude&apos;s draft. Change what you like, then save; the draft is settled as edited.{" "}
+              <Link href={here} className="underline">Back to the draft</Link>
+            </p>
+          ) : draft ? (
+            <div className="mb-4">
+              <ClaudeDraftCard draft={draft} rows={rowsFor("essence", (data[current.key] ?? {}) as Record<string, unknown>, draft.fields, current.key)} red={red} tz={v.tz} editHref={`${here}&draft=${draft.id}`} back={here} />
+            </div>
+          ) : null}
+          <form key={editing ? `draft-${editing.id}` : "saved"} action={saveEssenceSectionAction} className="space-y-4" data-testid="essence-form" data-section={current.key}>
             <input type="hidden" name="section" value={current.key} />
-            <DraftKeeper id={`essence.${v.user.id}.${current.key}`} />
+            {editing ? <input type="hidden" name="draftId" value={editing.id} /> : null}
+            <DraftKeeper id={`essence.${v.user.id}.${current.key}${editing ? `.claude.${editing.id}` : ""}`} />
             {current.fields.map((f) =>
               f.kind === "stories" ? (
                 <div key={f.key} className="space-y-3">
@@ -182,6 +206,9 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
               <span className="ml-auto text-xs text-ink-3">Come back any time. Nothing waits on this being finished.</span>
             </div>
           </form>
+          <div className="mt-4">
+            <ClaudeDraftHistory rows={changes} tz={v.tz} back={here} />
+          </div>
         </Card>
       </div>
     </>
