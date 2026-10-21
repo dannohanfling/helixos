@@ -40,6 +40,8 @@ describe("badgeText", () => {
 describe("every counted item is a menu item", () => {
   it("each badge href is in the menu, so the More page can show it", () => {
     const hrefs = new Set(NAV_GROUPS.flatMap((g) => g.items.map((n) => n.href)));
-    for (const h of ["/intentions", "/whats-new", "/coach/reports", "/coach/feedback", "/recordings", "/coach", "/coach#verify", "/coach/inbox", "/forum/inbox"]) expect(hrefs.has(h), h).toBe(true);
+    // What's new is no menu item since H-164 §10: its count is the dot on the version line, under the logo and on the More page.
+    for (const h of ["/intentions", "/coach/reports", "/coach/feedback", "/recordings", "/coach", "/coach#verify", "/coach/inbox", "/forum/inbox"]) expect(hrefs.has(h), h).toBe(true);
+    expect(hrefs.has("/whats-new")).toBe(false);
   });
 });
