@@ -129,6 +129,9 @@ export function backgroundPrompt(headline: string, topic: string): string {
 export const canGenerateBackground = (provider: string | null | undefined): boolean => provider === "openai";
 
 /** The headline choices for a remake: the ladder's, then its alternates, each once. */
+/** The headline select's value for "Write my own…" (H-1358): the text comes from the field under it. Lives here, not in the client component, so the server action reads the string and not a client reference. */
+export const OWN_HEADLINE = "__own__";
+
 export function headlineChoices(headline: string, alternates: readonly string[]): string[] {
   const out: string[] = [];
   for (const h of [headline, ...alternates]) { const t = h.trim(); if (t && !out.includes(t)) out.push(t); }

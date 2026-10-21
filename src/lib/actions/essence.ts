@@ -37,6 +37,12 @@ export async function saveEssenceSectionAction(formData: FormData): Promise<void
         }
       }
       values[f.key] = stories;
+    } else if (f.kind === "outcomes") {
+      // Named rows (H-811 A2), in the order shown; an empty row is dropped by the normaliser.
+      const names = formData.getAll("outcome_name").map(String);
+      const lines = formData.getAll("outcome_line").map(String);
+      const audiences = formData.getAll("outcome_audience").map(String);
+      values[f.key] = names.map((name, i) => ({ name, line: lines[i] ?? "", audience: audiences[i] ?? "" }));
     } else {
       values[f.key] = str(formData, `${section.key}.${f.key}`);
     }

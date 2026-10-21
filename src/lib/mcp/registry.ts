@@ -11,6 +11,11 @@ import { isToolName, type Scope } from "@/lib/engine/mcp";
 
 /** `images`: pictures sent back as MCP image blocks after the text (base64 bytes and their type), never as a link (H-591). */
 export type ToolResult = { text: string; data?: unknown; images?: { data: string; mimeType: string }[] };
+/**
+ * `appId`: the connection the call came through; `switched`: on an agent token inside a client's HelixOS (H-1385), the
+ * client's viewer the client tools act as, while `v` for the agent's own tools stays the coach's own.
+ */
+export type ToolCall = { scopes: readonly Scope[]; agentId?: string | null; appId?: string; switched?: Viewer | null };
 export type ToolDef = {
   name: string;
   /** Null for the one tool every grant has (whoami). */
@@ -27,7 +32,7 @@ export type ToolDef = {
    * `call`: what this connection may do (whoami names it), and the Forum agent it speaks as (rev 769), if any; a walk calling
    * a handler directly may leave it out.
    */
-  handler: (v: Viewer, input: Record<string, unknown>, call?: { scopes: readonly Scope[]; agentId?: string | null }) => Promise<ToolResult>;
+  handler: (v: Viewer, input: Record<string, unknown>, call?: ToolCall) => Promise<ToolResult>;
 };
 export type ScopeGate = (v: Viewer) => Promise<boolean>;
 

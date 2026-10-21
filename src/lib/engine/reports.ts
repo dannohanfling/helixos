@@ -5,8 +5,10 @@
  */
 import { MEMBER_REPORT_KINDS, REPORT_SEVERITIES, type MemberReportKind, type ReportSeverity } from "@/db/schema";
 
-export const KIND_LABEL: Record<MemberReportKind, string> = { issue: "Something isn't working", suggestion: "An idea or a suggestion", ask_danno: "An Ask Danno answer was wrong" };
-export const KIND_SHORT: Record<MemberReportKind, string> = { issue: "Issue", suggestion: "Suggestion", ask_danno: "Ask Danno answer" };
+export const KIND_LABEL: Record<MemberReportKind, string> = { issue: "Something isn't working", suggestion: "An idea or a suggestion", ask_danno: "An Ask Danno answer was wrong", content: "A win or a member in the Colosseum" };
+export const KIND_SHORT: Record<MemberReportKind, string> = { issue: "Issue", suggestion: "Suggestion", ask_danno: "Ask Danno answer", content: "Content" };
+/** The kinds "I have an issue or a suggestion" offers. Content (H-745) comes only from Report on a win or a member, with its target. */
+export const FORM_REPORT_KINDS = MEMBER_REPORT_KINDS.filter((k): k is Exclude<MemberReportKind, "content"> => k !== "content");
 export const SEVERITY_LABEL: Record<ReportSeverity, string> = { red: "Blocking me", orange: "Annoying", green: "An idea" };
 /** The longest a description, a question or an answer may be. */
 export const TEXT_MAX = 4000;
@@ -29,7 +31,7 @@ export function pagePath(raw: string): string | null {
  * question and the answer instead (its description is optional). Talking to the coach is offered only on an Ask Danno answer.
  */
 export function readReport(raw: ReportInput): { value: ReportValue } | { error: string; field?: string } {
-  const kind = MEMBER_REPORT_KINDS.find((k) => k === raw.kind);
+  const kind = FORM_REPORT_KINDS.find((k) => k === raw.kind);
   if (!kind) return { error: "Pick what this is: something not working, an idea, or an Ask Danno answer.", field: "kind" };
   const severity = REPORT_SEVERITIES.find((s) => s === raw.severity) ?? (kind === "suggestion" ? "green" : null);
   if (!severity) return { error: "Pick how much it gets in your way.", field: "severity" };

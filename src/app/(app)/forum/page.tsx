@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { canReadForum, forumSettingsFor, forumStateFor, seedCoachForum } from "@/lib/forum";
@@ -16,7 +16,9 @@ import { ForumAddAgent, ForumLive } from "@/components/forum-bits";
 import { GlossaryText } from "@/components/glossary-text";
 import { SubmitButton } from "@/components/submit-button";
 import { CopyButton } from "@/components/copy-button";
-import { ApprovalButtons } from "@/components/handoff-bits";
+import { AgentTokenButton, ApprovalButtons } from "@/components/handoff-bits";
+import { revokeAgentTokenAction } from "@/lib/actions/handoff";
+import { appUrl } from "@/lib/branded-email";
 import { inboxCount, ownerInbox } from "@/lib/handoff";
 import { NUDGE_LINE, inboxHref } from "@/lib/engine/handoff";
 import "./forum.css";
@@ -87,6 +89,10 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
   // The Nudge and a stalled agent's item open its saved session link (13 Oct, H-495), when there is one.
   const sessions = own ? new Map((await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, m.workspaceId), eq(schema.handoffAgents.userId, m.userId)), columns: { agentId: true, sessionUrl: true } })).map((r) => [r.agentId, r.sessionUrl])) : new Map<string, string | null>();
   const approvals = inbox?.waiting ?? [];
+  // Connect this agent (H-727 PR 2): a member's own agents' live tokens, last four only; the coach's are on Coach → Agents.
+  const memberTokens = canEdit && v.role !== "coach" && !v.switchedInto
+    ? new Map((await db.query.agentTokens.findMany({ where: and(eq(schema.agentTokens.workspaceId, m.workspaceId), eq(schema.agentTokens.userId, m.userId), isNull(schema.agentTokens.revokedAt)), columns: { agentId: true, last4: true, createdAt: true } })).map((t) => [t.agentId, t]))
+    : null;
   const at = (iso: string) => formatDateTime(iso, v.tz, { zone: true });
   const firstName = (owner?.name ?? "This member").split(" ")[0];
   const rostra = state.waiting.length ? "waiting" : state.agents.some((a) => a.status === "working") ? "working" : "idle";
@@ -320,6 +326,35 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                         </SubmitButton>
                       </form>
                     ) : null}
+                    {memberTokens && !a.builtIn ? (
+                      <details className="fo-edit" data-testid="forum-connect-agent">
+                        <summary>Connect this agent</summary>
+                        {(() => {
+                          const t = memberTokens.get(a.id);
+                          return (
+                            <div className="fo-form">
+                              <p className="fo-fine" data-testid="forum-token-state">
+                                {t ? `Connected with a token ending ${t.last4}, made ${at(t.createdAt)}.` : "Not connected yet. Make its token, then put it in the agent's own settings."}
+                              </p>
+                              <p className="fo-fine">
+                                The agent connects to <code className="break-all">{`${appUrl()}/api/mcp`}</code> with the token sent as Authorization: Bearer. It can report to your Forum and post to your agent inbox, and nothing else. Only your own tap in your inbox approves anything.
+                              </p>
+                              <div className="fo-inline">
+                                <AgentTokenButton agentId={a.id} label={t ? "Make a new token (the old one stops)" : "Make its token"} />
+                                {t ? (
+                                  <form action={revokeAgentTokenAction}>
+                                    <input type="hidden" name="agentId" value={a.id} />
+                                    <SubmitButton className="fo-btn fo-small-btn" pendingText="Revoking…" data-testid="agent-token-revoke">
+                                      Revoke
+                                    </SubmitButton>
+                                  </form>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </details>
+                    ) : null}
                     {canEdit && !a.builtIn ? (
                       <details className="fo-edit">
                         <summary>Edit</summary>
@@ -414,6 +449,11 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                 </li>
               ) : null}
               <li>
+                {v.role !== "coach" ? (
+                  <>
+                    <b>Its own token,</b> for an agent that runs on its own (a Claude Code session, a scheduled job): open the agent above and tap Connect this agent. The token carries your Forum and your agent inbox only.{" "}
+                  </>
+                ) : null}
                 <b>The HelixOS connector.</b> In Claude (Code, Cowork or chat), Codex or any app that takes a connector, connect HelixOS and tick The Forum. The agent then has forum_report to say what it&apos;s doing, and forum_read to see the others. <Link href="/connect">How to connect</Link>
               </li>
               <li>

@@ -4,7 +4,9 @@
  * didn't give, refuses a proof or story that needs permission first, and never changes the webinar; another workspace's
  * connection finds nothing. In the wizard, at 1440 and at 390: Claude's draft beside what's there, Approve writes it, Undo puts
  * it back, Edit opens the form filled and its save settles the draft, Discard drops it and Undo brings it back, and History
- * says "by Claude (connector)".
+ * says "by Claude (connector)". PR 2: a script section's draft and a deck draft (slides by section) through the connector, with
+ * webinar_readiness; in the wizard, Approve writes the section (a script already there is kept), Undo puts it back, and Edit
+ * fills the section form.
  */
 import { chromium, type Page } from "@playwright/test";
 
@@ -90,8 +92,8 @@ async function main() {
     const writer = await connect(maya.id, ws, ["webinars", "webinars:write"]);
     const other = await connect(jordan.id, jordanM.workspaceId, ["webinars", "webinars:write"]);
     const listed = async (t: string) => ((await rpc(t, "tools/list")).result?.tools ?? []).map((x) => x.name).filter((n) => /webinar|story_bank/.test(n)).sort();
-    must(JSON.stringify(await listed(readOnly)) === JSON.stringify(["story_bank_list", "webinar_read", "webinars_list"]), `a read-only connection lists the three read tools: ${await listed(readOnly)}`);
-    must((await listed(writer)).length === 5, "a connection with Webinars: draft lists all five");
+    must(JSON.stringify(await listed(readOnly)) === JSON.stringify(["story_bank_list", "webinar_read", "webinar_readiness", "webinars_list"]), `a read-only connection lists the four read tools: ${await listed(readOnly)}`);
+    must((await listed(writer)).length === 7, "a connection with Webinars: draft lists all seven");
 
     let r = await call(writer, "webinar_create", { title: "Drafts walk webinar", offer_id: offerId });
     webinarId = String(r.data?.id ?? "");
@@ -173,6 +175,65 @@ async function main() {
     await submit(page, '[data-testid="history-row"][data-action="discarded"] [data-testid="history-undo"]');
     await page.locator('[data-testid="claude-draft-offer"]').waitFor({ timeout: 20000 });
     console.log("✓ 390: the panel fits; Edit fills the form and its save settles the draft; Discard drops it; Undo brings it back");
+
+    // ── 4. PR 2: a script section's draft, the deck's slides, and readiness. ──
+    const secs = await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, webinarId), orderBy: (t, { asc }) => [asc(t.order)] });
+    const [s1, s2] = [secs[0]!, secs[1]!];
+    await db.update(schema.webinarSections).set({ script: "My own words for this part, kept as they are.", keyPoints: null }).where(eq(schema.webinarSections.id, s2.id));
+    r = await call(writer, "webinar_draft_step", { id: webinarId, step: "script", fields: { keyPoints: "Find the leak" } });
+    must(/one section at a time/.test(r.text), `a script draft names its section: ${r.text}`);
+    r = await call(writer, "webinar_draft_step", { id: webinarId, step: "script", section: s1.sectionKey, fields: { keyPoints: ["Find the leak", "Our clients add 40 leads a week", "Fix one arch"], script: "Tonight we find the one step where people slip away, and we fix that one first.", durationMin: 6, status: "final" } });
+    must(/Nothing was saved/.test(r.text) && /status/.test(r.text), `a section field the form doesn't take is refused by name: ${r.text}`);
+    r = await call(writer, "webinar_draft_step", { id: webinarId, step: "script", section: s1.sectionKey, fields: { keyPoints: ["Find the leak", "Our clients add 40 leads a week", "Fix one arch"], script: "Tonight we find the one step where people slip away, and we fix that one first.", durationMin: 6 } });
+    must(!r.isError && r.data?.saved === true && (r.data?.fields as { keyPoints: string }).keyPoints === "Find the leak\nFix one arch", `the script draft is saved, the invented line out: ${r.text}`);
+    r = await call(writer, "webinar_deck_draft", { id: webinarId, slides: [{ sectionKey: s2.sectionKey, title: "Where the water goes", speakerNote: "Point at the arch." }, { sectionKey: s2.sectionKey, title: "One fix", imageId: "not-an-image" }, { sectionKey: "nope", title: "x" }] });
+    must(/Nothing was saved/.test(r.text) && /nope/.test(r.text), `a slide for a section that isn't there stops the call: ${r.text}`);
+    r = await call(writer, "webinar_deck_draft", { id: webinarId, slides: [{ sectionKey: s2.sectionKey, title: "Where the water goes", speakerNote: "Point at the arch." }, { sectionKey: s2.sectionKey, title: "One fix", imageId: "not-an-image" }] });
+    must(!r.isError && r.data?.saved === true && /2 slides/.test(r.text), `the deck draft is saved: ${r.text}`);
+    const deckDraft = (await db.query.webinarDrafts.findFirst({ where: and(eq(schema.webinarDrafts.webinarId, webinarId), eq(schema.webinarDrafts.step, "deck")) }))!;
+    must(deckDraft.sectionKey === s2.sectionKey && deckDraft.notes.some((n) => n.includes("not in your Images")) && !JSON.stringify(deckDraft.fields).includes("not-an-image"), `an image that isn't theirs is dropped and named: ${deckDraft.notes.join(" | ")}`);
+    let sec2 = (await db.query.webinarSections.findFirst({ where: eq(schema.webinarSections.id, s2.id) }))!;
+    must(!sec2.keyPoints, "the section itself is unchanged");
+    r = await call(readOnly, "webinar_readiness", { id: webinarId });
+    must(!r.isError && Array.isArray(r.data?.must) && ((r.data?.draftsWaiting ?? []) as unknown[]).length >= 2, `webinar_readiness lists the must-fix checks and the drafts waiting: ${r.text.split("\n")[0]}`);
+    r = await call(other, "webinar_readiness", { id: webinarId });
+    must(r.text === "No webinar with that id in your HelixOS.", "another workspace can't read its readiness");
+    r = await call(writer, "webinar_read", { id: webinarId, step: "deck" });
+    must(!r.isError && Array.isArray(r.data?.deck), "webinar_read shows the deck as each section's lines");
+
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await open(page, `${base}/webinars/${webinarId}?step=script&section=${s1.sectionKey}`, "claude-draft-script");
+    must((await page.locator('[data-testid="draft-value-keyPoints"]').innerText()).includes("Fix one arch"), "the script draft shows beside the open section");
+    await submit(page, '[data-testid="draft-approve"]');
+    const sec1 = (await db.query.webinarSections.findFirst({ where: eq(schema.webinarSections.id, s1.id) }))!;
+    must(sec1.keyPoints === "Find the leak\nFix one arch" && sec1.durationMin === 6 && sec1.origin === "ai_accepted" && sec1.status === "drafted", `Approve writes the section: ${sec1.keyPoints} / ${sec1.status} / ${sec1.origin}`);
+    must(page.url().includes(`section=${s1.sectionKey}`), "and stays on that section");
+
+    await open(page, `${base}/webinars/${webinarId}?step=deck`, "claude-draft-deck");
+    must((await page.locator('[data-testid="claude-draft-deck"]').getAttribute("data-section")) === s2.sectionKey, "the deck step shows the section's slides");
+    await submit(page, '[data-testid="draft-approve"]');
+    sec2 = (await db.query.webinarSections.findFirst({ where: eq(schema.webinarSections.id, s2.id) }))!;
+    must(sec2.keyPoints === "Where the water goes\nOne fix" && sec2.script === "My own words for this part, kept as they are.", `Approve writes the slide lines and keeps the member's own script: ${sec2.keyPoints}`);
+    await page.locator('[data-testid="webinar-history"] summary').click();
+    await submit(page, '[data-testid="history-row"][data-action="approved"] [data-testid="history-undo"]');
+    sec2 = (await db.query.webinarSections.findFirst({ where: eq(schema.webinarSections.id, s2.id) }))!;
+    must(!sec2.keyPoints && sec2.script === "My own words for this part, kept as they are.", "Undo puts the section back");
+
+    // A second deck draft, for an empty section: Edit opens the section form filled with its lines and its notes as the script.
+    await db.update(schema.webinarSections).set({ script: null }).where(eq(schema.webinarSections.id, s2.id));
+    r = await call(writer, "webinar_deck_draft", { id: webinarId, slides: [{ sectionKey: s2.sectionKey, title: "Start with the leak", speakerNote: "Ask who has lost a lead this week." }] });
+    must(!r.isError && r.data?.saved === true, `a newer deck draft replaces the older: ${r.text}`);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page, `${base}/webinars/${webinarId}?step=deck`, "claude-draft-deck");
+    must(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "the deck panel fits a phone");
+    await page.locator('[data-testid="draft-edit"]').click();
+    await page.locator('[data-testid="draft-editing"]').waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="section-key-points"]').inputValue()) === "Start with the leak" && (await page.locator('textarea[name="script"]').inputValue()).includes("Ask who has lost a lead"), "Edit fills the section form with the slides and their notes");
+    await submit(page, 'form:has(input[name="fromDraft"]) button[type="submit"]');
+    sec2 = (await db.query.webinarSections.findFirst({ where: eq(schema.webinarSections.id, s2.id) }))!;
+    const dd = (await db.query.webinarDrafts.findFirst({ where: and(eq(schema.webinarDrafts.webinarId, webinarId), eq(schema.webinarDrafts.step, "deck"), eq(schema.webinarDrafts.status, "edited")) }));
+    must(sec2.keyPoints === "Start with the leak" && Boolean(dd), "the section's own save writes it and settles the draft as edited");
+    console.log("✓ PR 2: a script section's draft and the deck's slides, refused fields and images named, readiness read only; Approve writes the section, keeps a script already there, Undo puts it back; Edit fills the section form; 1440 and 390");
     await ctx.close();
   } finally {
     await browser.close();

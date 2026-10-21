@@ -6,6 +6,7 @@ import type { PlatformLinks } from "@/lib/platforms";
 import { ComingSoonItem } from "./coming-soon-item";
 import { useNavState } from "./nav-state";
 import { isOpen } from "@/lib/engine/nav-state";
+import type { MoreTab } from "@/lib/engine/nav-badges";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -109,7 +110,8 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
   );
 }
 
-export function BottomNav({ role, badges = {} }: { role: "coach" | "client"; badges?: Record<string, number> }) {
+/** The phone's bottom bar. `more` (H-844): the More tab's total of what waits in the menu, or its dot for What's new alone. */
+export function BottomNav({ role, more = null }: { role: "coach" | "client"; more?: MoreTab | null }) {
   const pathname = usePathname();
   // The same five for a team member: Today is their team home, and the other four are theirs to work in.
   const items: NavItem[] = [
@@ -123,14 +125,20 @@ export function BottomNav({ role, badges = {} }: { role: "coach" | "client"; bad
   const moreActive = !items.slice(0, 4).some((n) => isActive(pathname, n.href));
   return (
     <PinToViewport edge="bottom">
-    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-surface/95 backdrop-blur md:hidden" data-bottom-bar data-testid="bottom-nav">
+    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-surface/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur md:hidden" data-bottom-bar data-testid="bottom-nav">
       {items.map((n) => {
         const active = n.href === "/more" ? moreActive && pathname !== "/today" : isActive(pathname, n.href);
         return (
-          <Link key={n.href} href={n.href} className={`flex min-w-0 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${active ? "text-ink" : "text-ink-3"}`}>
+          <Link key={n.href} href={n.href} className={`flex min-w-0 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${active ? "text-ink" : "text-ink-3"}`} aria-label={n.href === "/more" && more && (more.count || more.dot) ? more.label : undefined}>
             <span className="relative text-lg leading-none">
               {n.icon}
-              {n.href === "/more" && Object.values(badges).some(Boolean) ? <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-accent" aria-label="Something is due" data-testid="more-due-dot" /> : null}
+              {n.href === "/more" && more?.count ? (
+                <span className="absolute -right-2.5 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-white" aria-hidden data-testid="more-due-count" data-count={more.count}>
+                  {more.text}
+                </span>
+              ) : n.href === "/more" && more?.dot ? (
+                <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-accent" aria-hidden data-testid="more-due-dot" />
+              ) : null}
             </span>
             {n.label}
           </Link>
