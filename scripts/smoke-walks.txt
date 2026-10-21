@@ -86,3 +86,4 @@ frameworks
 verify-badge
 partner
 agent-client
+proof-bank

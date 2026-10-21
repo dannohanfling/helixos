@@ -4,6 +4,7 @@ import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-h
 import { FRAMEWORK_STATUSES, MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
 import { BOT_FEATURE_KEYS, REQUEST_STATES, UNLOCK_TYPES, type Behavior } from "@/lib/engine/bot-features";
 import type { HorizonArea, HorizonStatus } from "@/lib/engine/horizon";
+import type { CorrectionRecord } from "@/lib/engine/proof-bank";
 import { EMPTY_DEFAULTS, type MfAgendaItem, type MfDefaults, type MfObjection, type MfPillar, type MfPitch, type MfProfile, type MfUrgency } from "@/lib/engine/magic-funnel";
 
 const id = () => text("id").primaryKey();
@@ -2158,6 +2159,26 @@ export const proofs = sqliteTable(
   },
   (t) => [index("proofs_user").on(t.userId, t.status), uniqueIndex("proofs_airtable").on(t.userId, t.airtableId)],
 );
+
+/**
+ * Approve selected (H-1394): one batch per press, the proofs it approved, so "Undo the last batch" can put them back for
+ * 24 hours. A proof approved on its own page is not in a batch. Undone once; the rows stay as the record.
+ */
+export const proofBatches = sqliteTable(
+  "proof_batches",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    proofIds: text("proof_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The drafts the list corrected before approving (H-1414), with the fields as they were: Undo puts them back. */
+    corrections: text("corrections", { mode: "json" }).$type<CorrectionRecord[]>().notNull().default([]),
+    approvedAt: text("approved_at").notNull().default(sql`(datetime('now'))`),
+    undoneAt: text("undone_at"),
+  },
+  (t) => [index("proof_batches_user").on(t.userId, t.approvedAt)],
+);
+export type ProofBatch = typeof proofBatches.$inferSelect;
 
 export const GROUP_KINDS = ["own", "member", "prospect"] as const;
 

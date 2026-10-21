@@ -84,6 +84,8 @@ export const MEMBER_TABLES = {
   webinar_history: schema.webinarHistory,
   client_records: schema.clientRecords,
   proofs: schema.proofs,
+  // Approve selected (H-1394): the member's own batches, so Undo the last batch has its record.
+  proof_batches: schema.proofBatches,
   groups: schema.groups,
   targets: schema.targets,
   sync_events: schema.syncEvents,
