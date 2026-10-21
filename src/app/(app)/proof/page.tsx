@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ProofBulk } from "@/components/proof-bulk";
 import { undoLastBatchAction } from "@/lib/actions/proof-bulk";
-import { PROOF_PAGE, PROOF_VIEWS, VIEW_LABEL, canUndo, inView, isView, pageOf, viewCounts, viewOf, type ProofView } from "@/lib/engine/proof-bank";
+import { PROOF_PAGE, PROOF_VIEWS, VIEW_LABEL, inView, isView, pageOf, viewCounts, viewOf, type ProofView } from "@/lib/engine/proof-bank";
+import { undoableBatch } from "@/lib/queries/proof-batches";
 import { desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
@@ -66,8 +67,8 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
   const page = pageOf(inViewRows, Number(sp.show) || undefined);
   const rows = page.rows;
   const pickable = view === "draft" || view === "permission";
-  const lastBatch = pickable ? await db.query.proofBatches.findFirst({ where: eq(schema.proofBatches.userId, v.user.id), orderBy: [desc(schema.proofBatches.approvedAt)] }) : null;
-  const undoable = canUndo(lastBatch, Date.now());
+  const lastBatch = pickable ? await undoableBatch(v.user.id) : null;
+  const undoable = Boolean(lastBatch);
   // The same statement as a proof's own page, ticked once for the whole batch.
   const permissionLine = "Each of these people has given me permission to use what they said here in my marketing.";
   const here = (q: Record<string, string | undefined>) => {
