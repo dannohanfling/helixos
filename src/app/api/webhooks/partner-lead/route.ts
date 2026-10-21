@@ -19,7 +19,8 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body || typeof body !== "object") return NextResponse.json({ error: "a JSON body is required" }, { status: 400 });
     const workspaceId = await leadWorkspace();
-    if (!workspaceId) return NextResponse.json({ error: "no workspace for leads (set PARTNER_LEAD_WORKSPACE)" }, { status: 503 });
+    // Which workspace takes leads is the environment's to say (.env.example); the sender only hears that none is set.
+    if (!workspaceId) return NextResponse.json({ error: "no workspace takes leads yet" }, { status: 503 });
     const r = await recordLead(workspaceId, body);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
     return NextResponse.json({ ok: true, restaurantId: r.restaurantId, created: r.created, stage: r.stage });
