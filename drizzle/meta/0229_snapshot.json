@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7995e5c7-067d-4da3-8365-0f176875df21",
-  "prevId": "77a09a07-ae58-4ca1-ad2b-a9920866cb0f",
+  "id": "58f4dccc-db4a-41c8-93f6-8f0bab54bef0",
+  "prevId": "b4f9bf45-b6dd-4cb9-9e0e-e332edbe9ec6",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -69,6 +69,82 @@
         },
         "agent_auth_failures_agent": {
           "name": "agent_auth_failures_agent",
+          "columns": [
+            "agent_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "agent_client_grants": {
+      "name": "agent_client_grants",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "coach_user_id": {
+          "name": "coach_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "client_membership_id": {
+          "name": "client_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "granted_at": {
+          "name": "granted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "agent_client_grants_client": {
+          "name": "agent_client_grants_client",
+          "columns": [
+            "client_membership_id",
+            "agent_id"
+          ],
+          "isUnique": false
+        },
+        "agent_client_grants_agent": {
+          "name": "agent_client_grants_agent",
           "columns": [
             "agent_id"
           ],
@@ -5604,6 +5680,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "kind": {
           "name": "kind",
           "type": "text",
@@ -6346,6 +6429,13 @@
         },
         "agent_id": {
           "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "switched_membership_id": {
+          "name": "switched_membership_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
