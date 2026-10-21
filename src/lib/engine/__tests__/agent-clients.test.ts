@@ -4,7 +4,8 @@ import { MCP_SCOPES } from "@/db/schema";
 
 describe("an agent in a client's HelixOS (H-1385): the words and the rules", () => {
   it("the agent's own tools stay the agent's; the client tools are everything but HumanOS, the own scopes and the Partner Program", () => {
-    expect([...AGENT_OWN_SCOPES]).toEqual(["forum", "inbox", "clients"]);
+    expect([...AGENT_OWN_SCOPES]).toEqual(["forum", "inbox", "clients", "partner"]);
+    expect(isAgentOwnScope("partner")).toBe(true);
     expect(isAgentOwnScope(null)).toBe(true);
     expect(isAgentOwnScope("inbox")).toBe(true);
     expect(isAgentOwnScope("tasks")).toBe(false);
