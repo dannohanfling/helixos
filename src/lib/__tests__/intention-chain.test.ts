@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * The intention chain (H-195 #14, H-198), on a real database of its own: a week links to the member's own initiative and key
  * results only (another member's record is never linked), the link survives an edit, a tick in Tasks shows in the chain, the
  * Friday number is logged on the key result's typed KPI dated that day and never on a Numbers one, a deleted task leaves the
- * intention or keeps its words as chosen, and the initiative lists the weeks under it. And migration 0217's order.
+ * intention or keeps its words as chosen, and the initiative lists the weeks under it. And migration 0231's order.
  */
 const dir = mkdtempSync(path.join(tmpdir(), "hx-chain-"));
 process.env.DATABASE_URL = `file:${path.join(dir, "test.db")}`;
@@ -98,13 +98,13 @@ describe("the intention chain", () => {
   });
 });
 
-describe("migration 0217", () => {
+describe("migration 0231", () => {
   it("comes after every migration before it in the journal, by number and by time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
-    const at = journal.entries.findIndex((e) => e.tag === "0217_intention_chain");
+    const at = journal.entries.findIndex((e) => e.tag === "0231_intention_chain");
     expect(at).toBeGreaterThan(0);
     for (const e of journal.entries.slice(0, at)) {
-      expect(e.tag < "0217").toBe(true);
+      expect(e.tag < "0231").toBe(true);
       expect(e.when).toBeLessThan(journal.entries[at]!.when);
     }
   });
