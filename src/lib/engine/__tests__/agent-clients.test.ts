@@ -12,7 +12,7 @@ describe("an agent in a client's HelixOS (H-1385): the words and the rules", () 
     expect(CLIENT_SCOPES).not.toContain("inbox");
     expect(CLIENT_SCOPES).not.toContain("clients");
     for (const s of ["today", "tasks", "essence", "content", "dms"]) expect(CLIENT_SCOPES).toContain(s);
-    expect(new Set([...CLIENT_SCOPES, ...AGENT_OWN_SCOPES, "body"]).size).toBe(MCP_SCOPES.length);
+    expect(new Set([...CLIENT_SCOPES, ...AGENT_OWN_SCOPES, "body", "partner"]).size).toBe(MCP_SCOPES.length);
   });
 
   it("sends are refused by scope and by name, with the inbox as the way", () => {
