@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "58b83bd1-3883-4f03-bb18-196e09a28ca7",
+  "id": "7995e5c7-067d-4da3-8365-0f176875df21",
   "prevId": "77a09a07-ae58-4ca1-ad2b-a9920866cb0f",
   "tables": {
     "agent_auth_failures": {
@@ -19010,6 +19010,14 @@
         },
         "proof_ids": {
           "name": "proof_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "corrections": {
+          "name": "corrections",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

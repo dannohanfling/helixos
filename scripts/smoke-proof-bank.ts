@@ -2,7 +2,8 @@
  * The Proof Bank list (H-1393, H-1394), end to end as the coach in their own bank: a very long one-liner no longer pushes the
  * badges off the page at 1440 or 390; the status filter's counts match the bank and Draft shows only drafts; Approve selected
  * with the permission tick approves the ticked drafts and leaves the one whose picture shows a person as a draft, naming it;
- * the clean-list file ticks only its matches; without the tick nothing is approved; Undo the last batch puts them back.
+ * the clean-list file ticks only its matches and carries the transcript check's corrections (H-1414); without the tick
+ * nothing is approved; with it the corrected draft takes its new name and words; Undo the last batch puts them back, words too.
  */
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -58,7 +59,15 @@ async function main() {
   };
   const listDir = mkdtempSync(path.join(tmpdir(), "smoke-bank-"));
   const listFile = path.join(listDir, "list.json");
-  writeFileSync(listFile, JSON.stringify({ approve_clean: [{ who: "Smoke Maya C.", date: "2026-10-20", result_starts: LONG.slice(0, 120) }, { who: "Smoke Leo K.", date: "2026-10-20", result_starts: '"Smoke booked three calls' }, { who: "Smoke Nobody", date: "2026-10-20", result_starts: '"never here"' }], keep_as_draft: [{ who: "Smoke Ann P.", date: "2026-10-20", result_starts: '"Smoke doubled', why: "Speaker unclear" }] }));
+  const CORRECTED = '"Smoke booked four calls this week after the rewrite"';
+  writeFileSync(
+    listFile,
+    JSON.stringify({
+      approve_clean: [{ who: "Smoke Maya C.", date: "2026-10-20", result_starts: LONG.slice(0, 120) }, { who: "Smoke Nobody", date: "2026-10-20", result_starts: '"never here"' }],
+      approve_after_transcript_check: [{ who: "Smoke Leo K.", date: "2026-10-20", result_starts: '"Smoke booked three calls', correct_who: "Smoke Leo Kay", corrected_quote: CORRECTED }],
+      keep_as_draft: [{ who: "Smoke Ann P.", date: "2026-10-20", result_starts: '"Smoke doubled', why: "Speaker unclear" }],
+    }),
+  );
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -92,7 +101,7 @@ async function main() {
     await page.setInputFiles('[data-testid="proof-list-file"]', listFile);
     await page.locator('[data-testid="proof-list-select"]').click();
     await page.locator('[data-testid="proof-list-result"]').waitFor({ timeout: 20000 });
-    must((await page.locator('[data-testid="proof-list-result"]').innerText()).startsWith("2 matched, 1 not found"), `the list matches two and misses one: ${await page.locator('[data-testid="proof-list-result"]').innerText()}`);
+    must((await page.locator('[data-testid="proof-list-result"]').innerText()).startsWith("2 matched, 1 not found, 1 with a correction"), `the list matches two, misses one, corrects one: ${await page.locator('[data-testid="proof-list-result"]').innerText()}`);
     const picked = async () => page.locator('[data-testid="proof-pick"]:checked').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value).sort());
     must(JSON.stringify(await picked()) === JSON.stringify([ids.long, ids.quote].sort()), `only the matches are ticked: ${JSON.stringify(await picked())}`);
     must((await page.locator('[data-testid="proof-selected-count"]').innerText()).startsWith("2 selected"), "the count says 2");
@@ -105,32 +114,41 @@ async function main() {
     await page.locator('[data-testid="proof-confirm"]').waitFor({ timeout: 10000 });
     const names = await page.locator('[data-testid="proof-confirm-names"]').innerText();
     must(names.includes("Smoke Maya C.") && names.includes("Smoke Ann P."), `the confirm step names them: ${names}`);
+    const corrected = await page.locator('[data-testid="proof-confirm-corrected"]').innerText();
+    must(corrected.startsWith("1 will be corrected first") && corrected.includes("Smoke Leo K."), `the confirm step says which the list corrects first: ${corrected}`);
     await Promise.all([page.waitForURL(/bulkError=/, { timeout: 20000 }), page.locator('[data-testid="proof-bulk-approve"]').click()]);
     must((await page.locator('[data-testid="proof-bulk-error"]').innerText()).includes("permission statement"), "without the tick nothing is approved, and it says so");
     must((await counts()).approved === c.approved, "nothing approved without the tick");
-    console.log("✓ the clean list ticks only its matches; Select all and Clear; the confirm step names them; no permission tick, nothing approved");
+    console.log("✓ the clean list ticks only its matches and says which it corrects; Select all and Clear; the confirm step names them; no permission tick, nothing approved");
 
-    // ── With the tick: two approved as on their own page, the one with a person stays a draft; counts move; Undo puts them back. ──
-    for (const id of [ids.long, ids.quote, ids.person]) await page.locator(`[data-testid="proof-pick"][value="${id}"]`).check();
+    // ── With the tick: two approved as on their own page (one corrected from the list first), the one with a person stays a draft; counts move; Undo puts them back, words too. ──
+    await page.setInputFiles('[data-testid="proof-list-file"]', listFile);
+    await page.locator('[data-testid="proof-list-select"]').click();
+    await page.locator('[data-testid="proof-list-result"]').waitFor({ timeout: 20000 });
+    await page.locator(`[data-testid="proof-pick"][value="${ids.person}"]`).check();
+    must((await picked()).length === 3, "the list's two and the one ticked by hand");
     await page.locator('[data-testid="proof-approve-selected"]').click();
     await page.locator('[data-testid="proof-confirm"]').waitFor({ timeout: 10000 });
     await page.locator('[data-testid="proof-bulk-permission"]').check();
-    await Promise.all([page.waitForURL(/approved=2&held=1/, { timeout: 20000 }), page.locator('[data-testid="proof-bulk-approve"]').click()]);
-    must((await page.locator('[data-testid="proof-bulk-note"]').innerText()).includes("2 approved; 1 left as draft"), `the note counts both: ${await page.locator('[data-testid="proof-bulk-note"]').innerText()}`);
+    await Promise.all([page.waitForURL(/approved=2&held=1&corrected=1/, { timeout: 20000 }), page.locator('[data-testid="proof-bulk-approve"]').click()]);
+    must((await page.locator('[data-testid="proof-bulk-note"]').innerText()).includes("2 approved (1 corrected from the list first); 1 left as draft"), `the note counts all three: ${await page.locator('[data-testid="proof-bulk-note"]').innerText()}`);
     const after = await db.query.proofs.findMany({ where: inArray(schema.proofs.id, [ids.long, ids.quote, ids.person]) });
     const byId = new Map(after.map((p) => [p.id, p]));
     must(byId.get(ids.long)!.status === "approved" && byId.get(ids.long)!.permissionBy === coach.id && Boolean(byId.get(ids.long)!.permissionAt) && byId.get(ids.quote)!.status === "approved", "the two are approved with the permission recorded by the coach");
+    must(byId.get(ids.quote)!.who === "Smoke Leo Kay" && byId.get(ids.quote)!.quote === CORRECTED && byId.get(ids.quote)!.resultAfter === CORRECTED && byId.get(ids.quote)!.name === "Smoke bank quote", `the corrected draft has its new name and words, its own title kept: ${byId.get(ids.quote)!.who} / ${byId.get(ids.quote)!.quote}`);
     must(byId.get(ids.person)!.status === "draft" && !byId.get(ids.person)!.permissionAt, "the one whose picture shows a person stays a draft, untouched");
     const c2 = await counts();
     must(c2.approved === c.approved + 2 && Number(await page.locator('[data-testid="proof-status-approved"]').getAttribute("data-count")) === c2.approved, "the Approved count rose by two");
     const batch = (await db.query.proofBatches.findFirst({ where: eq(schema.proofBatches.userId, coach.id) }))!;
-    must(batch.proofIds.length === 2 && !batch.undoneAt, "the batch is recorded");
-    await Promise.all([page.waitForURL(/undone=2/, { timeout: 20000 }), page.locator('[data-testid="proof-undo-batch"]').click()]);
+    must(batch.proofIds.length === 2 && !batch.undoneAt && batch.corrections.length === 1 && batch.corrections[0].id === ids.quote && batch.corrections[0].before.who === "Smoke Leo K.", "the batch is recorded with what the correction replaced");
+    await Promise.all([page.waitForURL(/undone=2&restored=1/, { timeout: 20000 }), page.locator('[data-testid="proof-undo-batch"]').click()]);
     const back = await db.query.proofs.findMany({ where: inArray(schema.proofs.id, [ids.long, ids.quote]) });
     must(back.every((p) => p.status === "draft" && p.permissionAt), "Undo puts both back to draft, keeping the record of the tick");
+    const leo = back.find((p) => p.id === ids.quote)!;
+    must(leo.who === "Smoke Leo K." && leo.quote === '"Smoke booked three calls this week after the rewrite"' && leo.resultAfter === leo.quote, `Undo puts the old name and words back: ${leo.who} / ${leo.quote}`);
     must(Boolean((await db.query.proofBatches.findFirst({ where: eq(schema.proofBatches.id, batch.id) }))!.undoneAt), "the batch is marked undone");
     must((await page.locator('[data-testid="proof-undo-batch"]').count()) === 0, "a batch undoes once");
-    console.log("✓ with the tick: two approved as on their own page, the one with a person named and left as a draft, the Approved count up by two; Undo the last batch puts them back, once");
+    console.log("✓ with the tick: two approved as on their own page, one corrected from the list first, the one with a person named and left as a draft, the Approved count up by two; Undo the last batch puts them back with their old words, once");
   } finally {
     await browser.close();
     await clear();

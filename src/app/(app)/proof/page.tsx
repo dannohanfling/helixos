@@ -37,7 +37,7 @@ const TYPE_LABEL: Record<string, string> = {
   story: "Story",
 };
 
-export default async function ProofPage({ searchParams }: { searchParams: Promise<{ tag?: string; status?: string; show?: string; imported?: string; skipped?: string; dropped?: string; importError?: string; approved?: string; held?: string; undone?: string; bulkError?: string }> }) {
+export default async function ProofPage({ searchParams }: { searchParams: Promise<{ tag?: string; status?: string; show?: string; imported?: string; skipped?: string; dropped?: string; importError?: string; approved?: string; held?: string; corrected?: string; undone?: string; restored?: string; bulkError?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const [allRows, checkins, clients] = await Promise.all([
@@ -151,8 +151,8 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
           ))}
         </div>
       ) : null}
-      {sp.approved !== undefined ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="proof-bulk-note">{sp.approved} approved{Number(sp.held) ? `; ${sp.held} left as draft${Number(sp.held) === 1 ? "" : "s"}: a picture shows a person and needs its likeness permission on the proof's own page` : ""}.</p> : null}
-      {sp.undone !== undefined ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="proof-bulk-note">The last batch is undone: {sp.undone} back to draft.</p> : null}
+      {sp.approved !== undefined ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="proof-bulk-note">{sp.approved} approved{Number(sp.corrected) ? ` (${sp.corrected} corrected from the list first)` : ""}{Number(sp.held) ? `; ${sp.held} left as draft${Number(sp.held) === 1 ? "" : "s"}: a picture shows a person and needs its likeness permission on the proof's own page` : ""}.</p> : null}
+      {sp.undone !== undefined ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="proof-bulk-note">The last batch is undone: {sp.undone} back to draft{Number(sp.restored) ? `, ${sp.restored} with the words or name they had before` : ""}.</p> : null}
       {sp.bulkError ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="proof-bulk-error">{sp.bulkError}</p> : null}
       {pickable && !v.switchedInto && !v.team ? <ProofBulk status={view} permissionLine={permissionLine} /> : null}
       {undoable && !v.switchedInto && !v.team ? (
@@ -162,8 +162,8 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
           <span className="ml-2 text-ink-3">within 24 hours of Approve selected</span>
         </form>
       ) : null}
-      {/* minmax(0, …): an fr track has a min-content floor, so one long one-liner used to stretch the column 8,000 px wide (H-1393). */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      {/* minmax(0, …) on every track, the single one below lg too: an fr or auto track has a min-content floor, so one long one-liner used to stretch the column 8,000 px wide (H-1393). */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           {rows.length ? (
             <Card title="Your proof" action={<span className="text-xs text-ink-3" data-testid="proof-shown">{page.shown} of {inViewRows.length}</span>}>

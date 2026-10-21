@@ -18,6 +18,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     lines: [
       "The Proof Bank list fits the page again (a long one-liner used to push every badge off-screen), with a Draft / Permission given / Approved filter and counts, and Show 250 more so a big bank stays light.",
       "Approve selected: tick drafts (or select the clean ones from a list file), tick the permission statement once for the batch, and Approve; each proof is recorded as if approved on its own page. Undo the last batch for 24 hours.",
+      "A list can carry a corrected name or wording for a draft (checked against the transcript): the confirm step says how many will be corrected first, and Undo puts the old words back too.",
     ],
     audience: "everyone",
   },

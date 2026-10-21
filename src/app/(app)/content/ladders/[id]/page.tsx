@@ -164,7 +164,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           </form>
         </div>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <form action={updateLadderAction} className="space-y-4">
             <input type="hidden" name="id" value={l.id} />

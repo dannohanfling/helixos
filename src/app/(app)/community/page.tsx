@@ -46,7 +46,7 @@ export default async function CommunityPage() {
   return (
     <>
       <PageHeader title={m.passName ?? "Community Pass"} subtitle="Your loyalty engine. Points, tiers, and a daily rhythm for your members." action={<Badge tone="good">Elite</Badge>} />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card title="Leaderboard" action={<span className="text-xs text-ink-3">{members.length} members</span>}>
             {totals.length ? (

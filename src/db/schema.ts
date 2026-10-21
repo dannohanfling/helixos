@@ -4,6 +4,7 @@ import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-h
 import { FRAMEWORK_STATUSES, MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
 import { BOT_FEATURE_KEYS, REQUEST_STATES, UNLOCK_TYPES, type Behavior } from "@/lib/engine/bot-features";
 import type { HorizonArea, HorizonStatus } from "@/lib/engine/horizon";
+import type { CorrectionRecord } from "@/lib/engine/proof-bank";
 import { EMPTY_DEFAULTS, type MfAgendaItem, type MfDefaults, type MfObjection, type MfPillar, type MfPitch, type MfProfile, type MfUrgency } from "@/lib/engine/magic-funnel";
 
 const id = () => text("id").primaryKey();
@@ -2170,6 +2171,8 @@ export const proofBatches = sqliteTable(
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     proofIds: text("proof_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The drafts the list corrected before approving (H-1414), with the fields as they were: Undo puts them back. */
+    corrections: text("corrections", { mode: "json" }).$type<CorrectionRecord[]>().notNull().default([]),
     approvedAt: text("approved_at").notNull().default(sql`(datetime('now'))`),
     undoneAt: text("undone_at"),
   },

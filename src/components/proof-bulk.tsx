@@ -3,9 +3,9 @@
 /**
  * Approve selected (H-1394): the toolbar over the Proof Bank's Draft and Permission given views. The rows' checkboxes
  * (name="ids", form="proof-bulk") are server-rendered beside each proof; this toolbar ticks them (Select all shown, the
- * clean list), counts them, and opens the confirm step: the count, the names, the permission statement ticked once for
- * the batch, then Approve, which posts the form. The list file goes to its own action and comes back as ids to tick;
- * nothing of it is stored.
+ * clean list), counts them, and opens the confirm step: the count, the names, how many the list corrects first (H-1414),
+ * the permission statement ticked once for the batch, then Approve, which posts the form. The list file goes to its own
+ * action and comes back as ids to tick and their corrections; nothing of it is stored.
  */
 import { useActionState, useEffect, useState } from "react";
 import { FilePicker } from "@/components/file-picker";
@@ -15,15 +15,14 @@ import { approveProofsAction, selectFromListAction, type SelectFromListState } f
 const boxes = () => [...document.querySelectorAll<HTMLInputElement>('input[name="ids"][form="proof-bulk"]')];
 
 export function ProofBulk({ status, permissionLine }: { status: string; permissionLine: string }) {
-  const [count, setCount] = useState(0);
-  const [names, setNames] = useState<string[]>([]);
+  const [picked, setPicked] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
   const [listFiles, setListFiles] = useState<File[]>([]);
   const [listState, selectFromList, listing] = useActionState<SelectFromListState, FormData>(selectFromListAction, null);
   const recount = () => {
-    const picked = boxes().filter((b) => b.checked);
-    setCount(picked.length);
-    setNames([...new Set(picked.map((b) => b.dataset.who || "(no name)"))]);
+    const now: Record<string, string> = {};
+    for (const b of boxes()) if (b.checked) now[b.value] = b.dataset.who || "(no name)";
+    setPicked(now);
   };
   useEffect(() => {
     const list = document.querySelector('[data-testid="proof-list"]');
@@ -48,6 +47,11 @@ export function ProofBulk({ status, permissionLine }: { status: string; permissi
     recount();
     setConfirming(false);
   };
+  const count = Object.keys(picked).length;
+  const names = [...new Set(Object.values(picked))];
+  // The list's corrections for the drafts still ticked: the ones Approve carries.
+  const corrections = (listState?.corrections ?? []).filter((c) => c.id in picked);
+  const correctedNames = [...new Set(corrections.map((c) => picked[c.id]))];
   return (
     <div className="mb-3 rounded-lg border border-line p-3 text-sm" data-testid="proof-bulk" data-count={count}>
       <div className="flex flex-wrap items-center gap-2">
@@ -63,14 +67,22 @@ export function ProofBulk({ status, permissionLine }: { status: string; permissi
         {listing ? null : listState?.error ? (
           <span className="text-danger" data-testid="proof-list-error">{listState.error}</span>
         ) : listState ? (
-          <span className="text-ink-2" data-testid="proof-list-result">{listState.matched} matched, {listState.notFound} not found. The file is read for this once and not kept.</span>
+          <span className="text-ink-2" data-testid="proof-list-result">
+            {listState.matched} matched, {listState.notFound} not found{listState.corrections.length ? `, ${listState.corrections.length} with a correction` : ""}. The file is read for this once and not kept.
+          </span>
         ) : null}
       </form>
       {confirming && count ? (
         <form id="proof-bulk" action={approveProofsAction} className="mt-3 rounded-lg bg-surface-2 p-3" data-testid="proof-confirm">
           <input type="hidden" name="status" value={status} />
+          <input type="hidden" name="corrections" value={JSON.stringify(corrections)} />
           <p className="font-medium">Approve {count} proof{count === 1 ? "" : "s"}?</p>
           <p className="mt-1 text-xs text-ink-3" data-testid="proof-confirm-names">{names.slice(0, 40).join(", ")}{names.length > 40 ? ` and ${names.length - 40} more` : ""}</p>
+          {corrections.length ? (
+            <p className="mt-1 text-xs text-ink-2" data-testid="proof-confirm-corrected">
+              {corrections.length} will be corrected first, from the list (the name or the words, as checked against the transcript): {correctedNames.slice(0, 40).join(", ")}{correctedNames.length > 40 ? ` and ${correctedNames.length - 40} more` : ""}
+            </p>
+          ) : null}
           <label className="mt-2 flex items-start gap-2">
             <input type="checkbox" name="permission" className="mt-1" data-testid="proof-bulk-permission" />
             <span>{permissionLine}</span>
