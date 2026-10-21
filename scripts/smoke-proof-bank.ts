@@ -75,7 +75,7 @@ async function main() {
     await badgesFit(page, 1440);
     const c = await counts();
     for (const k of ["all", "draft", "permission", "approved"] as const) must(Number(await page.locator(`[data-testid="proof-status-${k}"]`).getAttribute("data-count")) === c[k], `${k} count matches the bank (${c[k]})`);
-    must((await page.locator('[data-testid="proof-row"]').count()) === c.draft && (await page.locator('[data-testid="proof-row"][data-status!="draft"]').count()) === 0, "Draft shows only drafts");
+    must((await page.locator('[data-testid="proof-row"]').count()) === c.draft && (await page.locator('[data-testid="proof-row"]:not([data-status="draft"])').count()) === 0, "Draft shows only drafts");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/proof?status=draft`);
     await page.locator('[data-testid="proof-status-filter"]').waitFor({ timeout: 20000 });
