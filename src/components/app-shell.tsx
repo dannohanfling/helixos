@@ -12,6 +12,7 @@ import { NavStateProvider } from "./nav-state";
 import { Sidebar, SidebarFoot } from "./sidebar";
 import { visibleGroups } from "./nav-groups";
 import { navStateOf } from "@/lib/engine/nav-state";
+import { moreTab } from "@/lib/engine/nav-badges";
 import { LegalFooter } from "./legal-footer";
 import { SubmitButton } from "@/components/submit-button";
 import { APP_VERSION } from "@/lib/version";
@@ -23,14 +24,17 @@ import { StreakPill } from "@/components/streak-flame/streak-pill";
 import type { FlameState } from "@/lib/engine/streak-flame";
 
 export function AppShell({ viewer, chatOn = false, points, flame = null, flameAfterWelcome = false, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, agentsOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; /** The coach's chat is set up for this person (H-693): its menu item shows; the chat itself is on /ask only. */ chatOn?: boolean; points: number; /** The streak flame (H-558): null for a team member, whose streak is the owner's. */ flame?: FlameState | null; /** The surge waits for the daily welcome or the first arrival to close. */ flameAfterWelcome?: boolean; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; /** The Agent inbox in the menu (H-727). */ agentsOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
-  const tier = tierProgress(points);
+  const tier = tierProgress(points, viewer.membership.rankKeptLevel);
   const team = Boolean(viewer.team);
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
   // except a team member, who is shown as themself.
   const who = team ? viewer.actor : viewer.user;
+  const groups = visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys);
+  // The More tab's total (H-844): every count on an item this person's menu shows, the same numbers as the sidebar and More.
+  const more = moreTab(badges, groups.flatMap((g) => g.items.filter((n) => !n.external && !n.comingSoon).map((n) => n.href)));
   return (
     <NavStateProvider initial={navStateOf(viewer.membership.navState)} persist={!viewer.switchedInto && !viewer.team}>
-    <div className="min-h-screen md:flex" data-app-shell>
+    <div className="min-h-[100dvh] md:flex" data-app-shell>
       {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold.
           H-333: the whole column folds to a rail of icons (Sidebar); what has no place on the rail carries rail-hide. */}
       <Sidebar>
@@ -48,7 +52,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
           <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} chatOn={chatOn} agentsOn={agentsOn} coachFirst={coachFirst} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
         </div>
         {/* The sidebar's controls (H-499): fold and Collapse all, at the bottom left, open or folded. */}
-        <SidebarFoot labels={visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys).map((g) => g.label)} />
+        <SidebarFoot labels={groups.map((g) => g.label)} />
         {/* The rail's foot: Settings and Log out as icons, with their names for the pointer and the screen reader. */}
         <div className="rail-only mt-1 flex flex-col items-center gap-1">
           {flame ? <StreakPill state={flame} place="rail" afterWelcome={flameAfterWelcome} /> : null}
@@ -125,7 +129,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
         <PinToViewport edge="top">
         {/* Fits a 360px phone (Danno, 12 Oct): the name hides below 400px, points go compact ("12.3K pts"), and nothing in
             the row may push it wider than the screen. */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-bg/90 px-3 py-2.5 backdrop-blur min-[400px]:gap-3 min-[400px]:px-4 md:hidden" data-testid="mobile-header">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-bg/90 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur min-[400px]:gap-3 min-[400px]:px-4 md:hidden" data-testid="mobile-header">
           <Link href="/today" className="flex shrink-0 items-center gap-2 text-sm font-bold" aria-label="HelixOS, Today">
             <AppLogo size={40} />
             <span className="hidden min-[400px]:inline">HelixOS</span>
@@ -152,7 +156,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
         </PinToViewport>
         <NavProgress />
         {/* A page that carries data-page-wide (the Coach view, rev 844) gets the wider content width; every other page keeps its own. */}
-        <main className="mx-auto w-full max-w-5xl px-4 2xl:max-w-6xl has-[[data-page-wide]]:max-w-7xl 2xl:has-[[data-page-wide]]:max-w-[96rem] pb-24 pt-5 sm:px-6 md:pb-10 md:pt-8">
+        <main className="mx-auto w-full max-w-5xl px-4 2xl:max-w-6xl has-[[data-page-wide]]:max-w-7xl 2xl:has-[[data-page-wide]]:max-w-[96rem] pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 md:pb-10 md:pt-8">
           {/* After a delete: the one line saying what went, on the list the person was sent back to. */}
           <Suspense fallback={null}>
             <DeletedNotice />
@@ -168,7 +172,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
           <LegalFooter />
         </main>
       </div>
-      <BottomNav role={viewer.role} badges={badges} />
+      <BottomNav role={viewer.role} more={more} />
     </div>
     </NavStateProvider>
   );

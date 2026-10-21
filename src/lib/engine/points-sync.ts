@@ -1,9 +1,10 @@
-import { tierFor, TIERS } from "@/lib/engine/tiers";
+import { keptTier, TIERS } from "@/lib/engine/tiers";
 
 /**
  * The points sync and the invitations on the coach's own program (H-867 parts 3 and 4, H-890, H-898): the pure rules.
- * HelixOS points are the one currency. eLoyalty sets the rank on the pass from its points (H-890), so the sync never
- * writes Tier: it sends point moves, the member's Level, and each invitation once.
+ * HelixOS points are the one currency. The rank is HelixOS's kept rank (H-1088): the higher of the highest rank a member
+ * has reached and the rank their points earn, so it never drops. The sync sends point moves, the member's Level, the kept
+ * rank as Tier (H-1098, replacing H-890's "never Tier"), and each invitation once. It never writes Points.
  */
 
 export type SyncMode = "off" | "own" | "all";
@@ -34,13 +35,19 @@ export const INVITES: Record<InviteKey, { below: (typeof PROGRAMS)[number]; rank
   lux: { below: "Luxe", rank: "Olympian", text: "Your Lux Partnership Conversation" },
 };
 
+/** The Tier on the pass (H-1098): the member's kept rank by name, the same rank HelixOS shows. */
+export function tierWords(points: number, rankKeptLevel: number | null | undefined): string {
+  return keptTier(points, rankKeptLevel).name;
+}
+
 /**
  * The invitation this member has earned now and not yet been sent, or null. A member already on that program or above never
  * gets it, and each goes once. The highest one earned wins, so a member who jumped two rungs gets the higher one only.
  */
-export function inviteDue(input: { role: string; programTier: string; points: number; sent: readonly string[] }): InviteKey | null {
+export function inviteDue(input: { role: string; programTier: string; points: number; rankKeptLevel?: number | null; sent: readonly string[] }): InviteKey | null {
   if (input.role !== "client" && input.role !== "coach") return null;
-  const rank = tierFor(input.points).level;
+  // The kept rank, never a raw points number (H-1088): a member who reached Sentinel keeps the Academy call.
+  const rank = keptTier(input.points, input.rankKeptLevel).level;
   const prog = programRank(input.programTier);
   for (const key of [...INVITE_KEYS].reverse()) {
     const rung = INVITES[key];

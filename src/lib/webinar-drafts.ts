@@ -1,7 +1,7 @@
 /**
  * Claude's webinar drafts (H-181, plan H-684), the database side: a connector call writes a draft beside the webinar, never into
  * it; the wizard's Approve writes it through, Edit opens the form filled with it, Discard drops it; every one of those is a
- * history row, and Undo (seven days) puts back what an Approve replaced. Each webinar is reached only through its own
+ * history row, and Undo (seven days) puts back what an Approve replaced. Script and deck drafts (PR 2) are one per section. Each webinar is reached only through its own
  * workspace and member: another's reads as not found.
  */
 import { and, desc, eq } from "drizzle-orm";
@@ -9,7 +9,9 @@ import { db, schema } from "@/db";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { subjectFor } from "@/lib/queries/subject";
-import { BELIEF_COLUMN, BELIEF_FIELDS, BELIEF_TYPES, CONNECTOR_LABEL, FOUNDATION_FIELDS, undoOpen, type BeliefDraft, type BeliefField, type BeliefType, type DraftableStep, type FoundationDraft, type OfferDraft } from "@/lib/engine/webinar-drafts";
+import { BELIEF_COLUMN, BELIEF_FIELDS, BELIEF_TYPES, CONNECTOR_LABEL, FOUNDATION_FIELDS, SCRIPT_FIELDS, SECTION_STEPS, deckWrite, undoOpen, type BeliefDraft, type BeliefField, type BeliefType, type DeckDraft, type DraftableStep, type FoundationDraft, type OfferDraft, type ScriptDraft } from "@/lib/engine/webinar-drafts";
+import { consentRequired } from "@/lib/engine/deck-image";
+import { slotForLine } from "@/lib/engine/deck-slot-rules";
 
 export type Owner = { workspaceId: string; userId: string };
 export type Actor = { name: string; connector: boolean; appId?: string | null; agentId?: string | null };
@@ -28,9 +30,9 @@ export async function historyFor(webinarId: string, limit = 30): Promise<schema.
   return db.query.webinarHistory.findMany({ where: eq(schema.webinarHistory.webinarId, webinarId), orderBy: [desc(schema.webinarHistory.createdAt), desc(schema.webinarHistory.id)], limit });
 }
 
-async function logHistory(o: Owner, row: { webinarId: string; draftId?: string | null; step?: schema.WebinarDraftStep | null; action: (typeof schema.WEBINAR_HISTORY_ACTIONS)[number]; by: Actor; changed?: string[]; before?: Record<string, unknown> | null }) {
+async function logHistory(o: Owner, row: { webinarId: string; draftId?: string | null; step?: schema.WebinarDraftStep | null; sectionKey?: string; action: (typeof schema.WEBINAR_HISTORY_ACTIONS)[number]; by: Actor; changed?: string[]; before?: Record<string, unknown> | null }) {
   const id = newId();
-  await db.insert(schema.webinarHistory).values({ id, workspaceId: o.workspaceId, userId: o.userId, webinarId: row.webinarId, draftId: row.draftId ?? null, step: row.step ?? null, action: row.action, byLabel: row.by.connector ? CONNECTOR_LABEL : row.by.name, byConnector: row.by.connector, changed: row.changed ?? [], before: row.before ?? null, createdAt: nowIso() });
+  await db.insert(schema.webinarHistory).values({ id, workspaceId: o.workspaceId, userId: o.userId, webinarId: row.webinarId, draftId: row.draftId ?? null, step: row.step ?? null, sectionKey: row.sectionKey ?? "", action: row.action, byLabel: row.by.connector ? CONNECTOR_LABEL : row.by.name, byConnector: row.by.connector, changed: row.changed ?? [], before: row.before ?? null, createdAt: nowIso() });
   return id;
 }
 
@@ -41,21 +43,28 @@ export async function noteCreated(o: Owner, webinarId: string, by: Actor) {
 
 /** The names a draft's fields change, for the history line ("vehicle.from", "outcomes"). */
 export function changedNames(step: DraftableStep, fields: Record<string, unknown>): string[] {
+  if (step === "deck") return ((fields as DeckDraft).slides ?? []).map((_, i) => `slide${i + 1}`);
   if (step !== "beliefs") return Object.keys(fields);
   return Object.entries(fields).flatMap(([type, v]) => Object.keys(v as Record<string, string>).map((f) => `${type}.${f}`));
 }
 
 /**
- * Claude's draft of one step, beside the webinar. One pending draft per step: a newer one replaces the older (marked replaced,
- * kept in the history). Never touches the webinar itself.
+ * Claude's draft of one step (or, for the script and the deck, one section of it), beside the webinar. One pending draft per
+ * step and section: a newer one replaces the older (marked replaced, kept in the history). Never touches the webinar itself.
  */
-export async function saveDraft(o: Owner, w: schema.Webinar, step: DraftableStep, fields: Record<string, unknown>, notes: string[], by: Actor): Promise<string> {
+export async function saveDraft(o: Owner, w: schema.Webinar, step: DraftableStep, fields: Record<string, unknown>, notes: string[], by: Actor, sectionKey = ""): Promise<string> {
   const id = newId();
   const now = nowIso();
-  await db.update(schema.webinarDrafts).set({ status: "replaced", decidedAt: now }).where(and(eq(schema.webinarDrafts.webinarId, w.id), eq(schema.webinarDrafts.step, step), eq(schema.webinarDrafts.sectionKey, ""), eq(schema.webinarDrafts.status, "pending")));
-  await db.insert(schema.webinarDrafts).values({ id, workspaceId: o.workspaceId, userId: o.userId, webinarId: w.id, step, sectionKey: "", fields, notes, byLabel: by.connector ? CONNECTOR_LABEL : by.name, appId: by.appId ?? null, agentId: by.agentId ?? null, status: "pending", createdAt: now });
-  await logHistory(o, { webinarId: w.id, draftId: id, step, action: "drafted", by, changed: changedNames(step, fields) });
+  await db.update(schema.webinarDrafts).set({ status: "replaced", decidedAt: now }).where(and(eq(schema.webinarDrafts.webinarId, w.id), eq(schema.webinarDrafts.step, step), eq(schema.webinarDrafts.sectionKey, sectionKey), eq(schema.webinarDrafts.status, "pending")));
+  await db.insert(schema.webinarDrafts).values({ id, workspaceId: o.workspaceId, userId: o.userId, webinarId: w.id, step, sectionKey, fields, notes, byLabel: by.connector ? CONNECTOR_LABEL : by.name, appId: by.appId ?? null, agentId: by.agentId ?? null, status: "pending", createdAt: now });
+  await logHistory(o, { webinarId: w.id, draftId: id, step, sectionKey, action: "drafted", by, changed: changedNames(step, fields) });
   return id;
+}
+
+/** The webinar's section by key, or null. */
+export async function sectionOf(webinarId: string, sectionKey: string): Promise<schema.WebinarSection | null> {
+  if (!sectionKey) return null;
+  return (await db.query.webinarSections.findFirst({ where: and(eq(schema.webinarSections.webinarId, webinarId), eq(schema.webinarSections.sectionKey, sectionKey)) })) ?? null;
 }
 
 export type Citation = { field: string; id: string; why: string };
@@ -68,7 +77,22 @@ export type Citation = { field: string; id: string; why: string };
  */
 export async function checkCitations(o: Owner & { name?: string }, step: DraftableStep, fields: Record<string, unknown>): Promise<{ fields: Record<string, unknown>; refused: Citation[] }> {
   const refused: Citation[] = [];
-  if (step === "foundation") return { fields, refused };
+  if (step === "foundation" || step === "script") return { fields, refused };
+  if (step === "deck") {
+    // A picture must be one of the member's own Images, and a screenshot or proof image needs its consent tick (the deck's own rule).
+    const images = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, o.workspaceId), eq(schema.deckImages.userId, o.userId)) });
+    const slides = ((fields as DeckDraft).slides ?? []).map((sl, i) => {
+      if (!sl.imageId) return sl;
+      const img = images.find((x) => x.id === sl.imageId);
+      const why = !img ? "not in your Images" : consentRequired(img.kind) && !img.consentTick ? `needs permission first: that ${img.kind} has no consent tick yet` : "";
+      if (!why) return sl;
+      refused.push({ field: `slide${i + 1}.imageId`, id: sl.imageId, why });
+      const { imageId: _drop, ...rest } = sl;
+      void _drop;
+      return rest;
+    });
+    return { fields: { slides }, refused };
+  }
   const subject = await subjectFor({ userId: o.userId, workspaceId: o.workspaceId, name: o.name ?? "" });
   if (step === "offer") {
     const f = { ...(fields as OfferDraft) };
@@ -103,8 +127,26 @@ export async function checkCitations(o: Owner & { name?: string }, step: Draftab
   return { fields: out, refused };
 }
 
+/** The picture slots a deck draft's slides fill: the slot each slide's line asks for, keyed as the deck keys it. */
+function deckSlotsFor(sectionKey: string, d: DeckDraft): { slotKey: string; imageId: string }[] {
+  return d.slides.flatMap((sl, i) => {
+    const slot = sl.imageId ? slotForLine(sl.title) : null;
+    return slot && sl.imageId ? [{ slotKey: `${sectionKey}:kp${i}:${slot.kind}`, imageId: sl.imageId }] : [];
+  });
+}
+
 /** What a draft would replace, read now, for the history's Undo. */
-async function currentValues(w: schema.Webinar, step: DraftableStep, fields: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function currentValues(w: schema.Webinar, step: DraftableStep, fields: Record<string, unknown>, sectionKey = ""): Promise<Record<string, unknown>> {
+  if (step === "script" || step === "deck") {
+    const sec = await sectionOf(w.id, sectionKey);
+    const cols = step === "script" ? [...SCRIPT_FIELDS, "status", "origin"] : ["keyPoints", "script", "status", "origin"];
+    const out: Record<string, unknown> = Object.fromEntries(cols.map((k) => [k, (sec as Record<string, unknown> | null)?.[k] ?? null]));
+    if (step === "deck") {
+      const slots = await db.query.deckSlots.findMany({ where: eq(schema.deckSlots.webinarId, w.id) });
+      out.slots = Object.fromEntries(deckSlotsFor(sectionKey, fields as DeckDraft).map((x) => [x.slotKey, slots.find((r) => r.slotKey === x.slotKey)?.imageId ?? null]));
+    }
+    return out;
+  }
   if (step === "foundation" || step === "offer") return Object.fromEntries(Object.keys(fields).map((k) => [k, (w as Record<string, unknown>)[k] ?? null]));
   const rows = await db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, w.id) });
   const out: Record<string, Record<string, string | null>> = {};
@@ -115,9 +157,57 @@ async function currentValues(w: schema.Webinar, step: DraftableStep, fields: Rec
   return out;
 }
 
+/**
+ * A section's columns as the section form's save writes them. Claude's script approved by the member counts as read and kept
+ * (origin ai_accepted); a script long enough moves a section still to write on to drafted, and a final one stays final.
+ */
+async function writeSection(w: schema.Webinar, sectionKey: string, set: Record<string, unknown>) {
+  await db.update(schema.webinarSections).set(set as Partial<schema.WebinarSection>).where(and(eq(schema.webinarSections.webinarId, w.id), eq(schema.webinarSections.sectionKey, sectionKey)));
+  await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, w.id));
+}
+const sectionStatus = (sec: schema.WebinarSection | null, script: string | null | undefined) => (sec?.status === "final" || sec?.status === "omitted" ? sec.status : script && script.length > 40 ? "drafted" : (sec?.status ?? "todo"));
+
+/** Approve for a script or deck draft: the section's own columns, and for the deck the pictures its lines ask for. */
+async function writeSectionDraft(w: schema.Webinar, step: "script" | "deck", sectionKey: string, fields: Record<string, unknown>) {
+  const sec = await sectionOf(w.id, sectionKey);
+  if (step === "script") {
+    const d = fields as ScriptDraft;
+    const set: Record<string, unknown> = Object.fromEntries(SCRIPT_FIELDS.filter((k) => k in d).map((k) => [k, d[k]]));
+    if (d.script) set.origin = "ai_accepted";
+    set.status = sectionStatus(sec, d.script ?? sec?.script);
+    await writeSection(w, sectionKey, set);
+    return;
+  }
+  const d = fields as DeckDraft;
+  const out = deckWrite(d.slides, { script: sec?.script ?? null });
+  const set: Record<string, unknown> = { keyPoints: out.keyPoints };
+  if (out.script) {
+    set.script = out.script;
+    set.origin = "ai_accepted";
+    set.status = sectionStatus(sec, out.script);
+  }
+  await writeSection(w, sectionKey, set);
+  for (const x of deckSlotsFor(sectionKey, d)) await putSlot(w.id, x.slotKey, x.imageId);
+}
+
+/** One picture slot set (or cleared, with null), the way the Deck step's picker sets it. */
+async function putSlot(webinarId: string, slotKey: string, imageId: string | null) {
+  const row = await db.query.deckSlots.findFirst({ where: and(eq(schema.deckSlots.webinarId, webinarId), eq(schema.deckSlots.slotKey, slotKey)) });
+  if (row) await db.update(schema.deckSlots).set({ imageId, droppedAt: null }).where(eq(schema.deckSlots.id, row.id));
+  else if (imageId) await db.insert(schema.deckSlots).values({ id: newId(), webinarId, slotKey, imageId, createdAt: nowIso() });
+}
+
+/** Undo of an approved script or deck draft: the section's columns and the slots as they were. */
+async function restoreSection(w: schema.Webinar, sectionKey: string, before: Record<string, unknown>) {
+  const { slots, ...cols } = before as Record<string, unknown> & { slots?: Record<string, string | null> };
+  await writeSection(w, sectionKey, cols);
+  for (const [k, v] of Object.entries(slots ?? {})) await putSlot(w.id, k, v);
+}
+
 /** Writes a step's values into the webinar: the same columns the wizard's own save writes. */
 async function writeValues(w: schema.Webinar, step: DraftableStep, values: Record<string, unknown>) {
   const now = nowIso();
+  if (step === "script" || step === "deck") throw new Error("A section's draft is written with writeSectionDraft");
   if (step === "foundation") {
     const set: Record<string, unknown> = {};
     for (const k of FOUNDATION_FIELDS) if (k in values) set[k] = k === "outcomes" ? ((values[k] as string[] | null) ?? []) : k === "originStory" ? ((values[k] as Record<string, string> | null) ?? {}) : values[k];
@@ -156,10 +246,13 @@ export async function approveDraft(o: Owner & { name?: string }, draftId: string
   const step = d.step as DraftableStep;
   const checked = await checkCitations(o, step, d.fields);
   if (checked.refused.length) return { ok: false, why: `Not approved: ${checked.refused.map((r) => `${r.field} ${r.why}`).join("; ")}. Discard it, or edit it and pick another.` };
-  const before = await currentValues(w, step, d.fields);
-  await writeValues(w, step, d.fields);
+  const sectional = SECTION_STEPS.includes(step);
+  if (sectional && !(await sectionOf(w.id, d.sectionKey))) return { ok: false, why: "That section isn't in the webinar any more. Discard the draft." };
+  const before = await currentValues(w, step, d.fields, d.sectionKey);
+  if (sectional) await writeSectionDraft(w, step as "script" | "deck", d.sectionKey, d.fields);
+  else await writeValues(w, step, d.fields);
   await db.update(schema.webinarDrafts).set({ status: "approved", decidedAt: nowIso(), decidedBy: by.name }).where(eq(schema.webinarDrafts.id, d.id));
-  await logHistory(o, { webinarId: w.id, draftId: d.id, step, action: "approved", by, changed: changedNames(step, d.fields), before });
+  await logHistory(o, { webinarId: w.id, draftId: d.id, step, sectionKey: d.sectionKey, action: "approved", by, changed: changedNames(step, d.fields), before });
   return { ok: true };
 }
 
@@ -167,7 +260,7 @@ export async function discardDraft(o: Owner, draftId: string, by: Actor): Promis
   const got = await ownDraft(o, draftId);
   if (!got || got.d.status !== "pending") return { ok: false, why: "That draft isn't waiting any more." };
   await db.update(schema.webinarDrafts).set({ status: "discarded", decidedAt: nowIso(), decidedBy: by.name }).where(eq(schema.webinarDrafts.id, draftId));
-  await logHistory(o, { webinarId: got.w.id, draftId, step: got.d.step, action: "discarded", by });
+  await logHistory(o, { webinarId: got.w.id, draftId, step: got.d.step, sectionKey: got.d.sectionKey, action: "discarded", by });
   return { ok: true };
 }
 
@@ -176,7 +269,7 @@ export async function markDraftEdited(o: Owner, draftId: string, webinarId: stri
   const got = await ownDraft(o, draftId);
   if (!got || got.d.status !== "pending" || got.w.id !== webinarId) return;
   await db.update(schema.webinarDrafts).set({ status: "edited", decidedAt: nowIso(), decidedBy: by.name }).where(eq(schema.webinarDrafts.id, draftId));
-  await logHistory(o, { webinarId, draftId, step: got.d.step, action: "edited", by });
+  await logHistory(o, { webinarId, draftId, step: got.d.step, sectionKey: got.d.sectionKey, action: "edited", by });
 }
 
 /**
@@ -191,18 +284,32 @@ export async function undoHistory(o: Owner, historyId: string, by: Actor): Promi
   if (!undoOpen(h.createdAt, Date.now())) return { ok: false, why: "Undo is open for seven days, and that was longer ago." };
   const d = h.draftId ? await db.query.webinarDrafts.findFirst({ where: eq(schema.webinarDrafts.id, h.draftId) }) : null;
   const step = h.step as DraftableStep | null;
-  if (h.action === "approved" && step && h.before) await writeValues(w, step, h.before);
+  if (h.action === "approved" && step && h.before) {
+    if (SECTION_STEPS.includes(step)) await restoreSection(w, h.sectionKey, h.before);
+    else await writeValues(w, step, h.before);
+  }
   else if (h.action === "drafted" && d) {
     if (d.status !== "pending") return { ok: false, why: "That draft was already approved, edited or discarded; undo that instead." };
     await db.update(schema.webinarDrafts).set({ status: "discarded", decidedAt: nowIso(), decidedBy: by.name }).where(eq(schema.webinarDrafts.id, d.id));
   } else if (h.action === "discarded" && d && step) {
-    const newer = await db.query.webinarDrafts.findFirst({ where: and(eq(schema.webinarDrafts.webinarId, w.id), eq(schema.webinarDrafts.step, step), eq(schema.webinarDrafts.status, "pending")) });
+    const newer = await db.query.webinarDrafts.findFirst({ where: and(eq(schema.webinarDrafts.webinarId, w.id), eq(schema.webinarDrafts.step, step), eq(schema.webinarDrafts.sectionKey, h.sectionKey), eq(schema.webinarDrafts.status, "pending")) });
     if (newer) return { ok: false, why: "A newer draft of that step is waiting, so this one stays discarded." };
     await db.update(schema.webinarDrafts).set({ status: "pending", decidedAt: null, decidedBy: null }).where(eq(schema.webinarDrafts.id, d.id));
   } else return { ok: false, why: "That can't be undone here." };
   await db.update(schema.webinarHistory).set({ undoneAt: nowIso(), undoneBy: by.name }).where(eq(schema.webinarHistory.id, h.id));
-  await logHistory(o, { webinarId: w.id, draftId: h.draftId, step, action: "undone", by, changed: h.changed });
+  await logHistory(o, { webinarId: w.id, draftId: h.draftId, step, sectionKey: h.sectionKey, action: "undone", by, changed: h.changed });
   return { ok: true };
+}
+
+/** A script draft (or a deck draft's lines) as the section form's default values, for Edit. */
+export function sectionDefaults(sec: schema.WebinarSection, d: schema.WebinarDraft | null): schema.WebinarSection {
+  if (!d || d.sectionKey !== sec.sectionKey) return sec;
+  if (d.step === "script") return { ...sec, ...(d.fields as Partial<schema.WebinarSection>) };
+  if (d.step === "deck") {
+    const out = deckWrite((d.fields as DeckDraft).slides ?? [], { script: sec.script });
+    return { ...sec, keyPoints: out.keyPoints, script: out.script ?? sec.script };
+  }
+  return sec;
 }
 
 /** A foundation draft as the wizard form's default values, for Edit. */

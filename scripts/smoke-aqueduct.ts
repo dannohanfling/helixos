@@ -3,7 +3,9 @@
  * in both looks with the waterfall on the painted one and the leak panel's words right; a period switch that moves the leak
  * swaps the picture; a missing count shows "—", its steps are left out and one quiet line says so; the water's widths follow
  * the counts; 1440, 1024 and 390 (the tags hide under 760px, no sideways scroll); reduced motion, Pause remembered, the tab
- * hidden, and keyboard reach for every toggle.
+ * hidden, and keyboard reach for every toggle. H-966: the water's body and three flow layers at their own speeds, the channel
+ * filling when the scene opens (not when it was left paused), the leak as a sheet with streaks and a splash, and under reduced
+ * motion the same water, still.
  */
 import { chromium, type Page } from "@playwright/test";
 
@@ -89,6 +91,10 @@ async function main() {
       must((await page.locator('[data-testid="aqueduct-photo"]').evaluate((el) => (el as HTMLImageElement).naturalWidth)) === 1680, `fixture ${b}: the picture loads`);
       const fall = page.locator('[data-testid="aqueduct-fall"]');
       must((await fall.getAttribute("data-step")) === String(b) && Number(await fall.getAttribute("data-x")) === FALLS.day[b][0], `fixture ${b}: the waterfall sits on the painted one (x ${FALLS.day[b][0]})`);
+      if (b === 0) {
+        // H-966: a falling sheet with five streaks, and a splash (mist, spray, ripples) where it lands; not a single stroke.
+        must((await fall.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1 && (await fall.locator('[data-testid="aqueduct-fall-streak"]').count()) === 5 && (await fall.locator('[data-testid="aqueduct-mist"]').count()) === 1 && (await fall.locator(".aq-spray").count()) === 4 && (await fall.locator(".aq-ripple").count()) === 2, "the leak falls as a sheet with five streaks and lands in a splash");
+      }
       must((await page.locator(`[data-testid="aqueduct-step-${b}"]`).getAttribute("data-kind")) === "leak" && (await page.locator('[data-testid^="aqueduct-step-"][data-kind="leak"]').count()) === 1, `fixture ${b}: only the leak's tag is amber`);
       const { n, expected } = slipped(now, leak);
       const headline = await page.locator('[data-testid="aqueduct-headline"]').innerText();
@@ -109,9 +115,59 @@ async function main() {
     must((await page.locator('[data-testid="aqueduct-scene"]').getAttribute("data-picture")) === "/aqueduct/aqueduct-day-none" && (await page.locator('[data-testid="aqueduct-fall"]').count()) === 0 && (await page.locator('[data-testid="aqueduct-holding"]').count()) === 1, "no leak: the intact aqueduct, no waterfall, holding");
     console.log("✓ seven fixtures: the right picture and waterfall in both looks, the amber tag, the headline, the usual, the repair link, the tinted row; and holding");
 
-    // ── The water's widths follow the counts; a period switch moves the leak and swaps the picture. ──
+    // ── The filmed loop (H-1180): Golden hour with no leak plays it over the photo, with no drawn water; Night draws. ──
+    const sceneEl = page.locator('[data-testid="aqueduct-scene"]');
+    const loopEl = page.locator('[data-testid="aqueduct-loop"]');
+    const tagAt = async () => JSON.stringify(await page.locator('[data-testid="aqueduct-stage-3"]').boundingBox());
+    // Back to no leak right after a leak is a repair moment (the old picture under the new, the drawn water, no loop). Once it
+    // has been seen the page opens on the plain scene, so reload until then.
+    for (let i = 0; i < 20 && (await sceneEl.getAttribute("data-loop")) !== "1"; i++) {
+      await page.waitForTimeout(500);
+      await page.goto(url(), { waitUntil: "networkidle" });
+    }
+    must((await sceneEl.getAttribute("data-loop")) === "1" && (await page.locator('[data-testid="aqueduct-photo"]').count()) === 1, "no leak, Golden hour: the photo, with its loop listed");
+    await page.waitForFunction(() => document.querySelector('[data-testid="aqueduct-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
+    const src = await loopEl.evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, paused: v.paused, opacity: getComputedStyle(v).opacity, auto: v.autoplay }));
+    must(/\/aqueduct\/aqueduct-day-none-loop\.(mp4|webm)\?v=\d+$/.test(src.src) && !src.paused && src.opacity === "1" && !src.auto, `the loop plays over the photo, started by the page: ${JSON.stringify(src)}`);
+    must((await page.locator('[data-testid="aqueduct-water"]').count()) === 0 && (await page.locator('[data-testid="aqueduct-fountain"]').count()) === 0 && (await page.locator("[data-flow]").count()) === 0, "no drawn water, streaks or fountain over the loop");
+    const loopBox = (await loopEl.boundingBox())!;
+    const photoBox = (await page.locator('[data-testid="aqueduct-photo"]').boundingBox())!;
+    must(Math.abs(loopBox.x - photoBox.x) < 1 && Math.abs(loopBox.width - photoBox.width) < 1 && Math.abs(loopBox.height - photoBox.height) < 1, "the loop sits exactly over the photo");
+    const tagDay = await tagAt();
+    await page.click('[data-testid="aqueduct-pause"]');
+    await page.waitForFunction(() => document.querySelector('[data-testid="aqueduct-loop"]')?.getAttribute("data-loop-mode") !== "video", null, { timeout: 5000 });
+    must(await loopEl.evaluate((v: HTMLVideoElement) => v.paused), "Pause holds the loop, and the photo shows");
+    await page.click('[data-testid="aqueduct-pause"]');
+    await page.click('[data-testid="aqueduct-look-night"]');
+    await page.waitForTimeout(300);
+    must((await sceneEl.getAttribute("data-loop")) === "0" && (await loopEl.count()) === 0 && (await page.locator('[data-testid="aqueduct-water"]').count()) === 1, "Night keeps the drawn water until its own loop arrives");
+    must((await tagAt()) === tagDay, "the labels sit where they were");
+    const lres = await page.request.get(`${base}/aqueduct/aqueduct-day-none-loop.mp4?v=1`);
+    must(lres.ok() && /immutable/.test(lres.headers()["cache-control"] ?? ""), `the loop files are cached as immutable (${lres.headers()["cache-control"]})`);
+    const ql = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
+    const qp = await ql.newPage();
+    await qp.goto(url(), { waitUntil: "networkidle" });
+    await qp.click('[data-testid="aqueduct-look-day"]');
+    await qp.waitForTimeout(500);
+    must((await qp.locator('[data-testid="aqueduct-loop"]').count()) === 0 && (await qp.locator('[data-testid="aqueduct-photo"]').count()) === 1, "reduced motion: the photo, and no video");
+    await ql.close();
+    const bl = await browser.newContext({ viewport: { width: 390, height: 844 }, storageState: await ctx.storageState() });
+    const bp = await bl.newPage();
+    await bp.route(/\/aqueduct\/.*-loop\.(mp4|webm)(\?.*)?$/, (r) => r.abort());
+    await bp.goto(url(), { waitUntil: "networkidle" });
+    await bp.click('[data-testid="aqueduct-look-day"]');
+    await bp.waitForTimeout(2500);
+    const blocked = await bp.evaluate(() => { const v = document.querySelector('[data-testid="aqueduct-loop"]') as HTMLVideoElement | null; return v ? getComputedStyle(v).opacity : "gone"; });
+    must((blocked === "gone" || blocked === "0") && (await bp.locator('[data-testid="aqueduct-photo"]').count()) === 1, `390, a loop that won't load: the photo stays (${blocked})`);
+    must((await bp.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")) === true, "390: nothing scrolls sideways");
+    await bl.close();
+    console.log("✓ the filmed loop: Golden hour with no leak plays it over the photo with no drawn water, Pause holds it, Night draws, the labels stay, cached as immutable; reduced motion and a blocked loop keep the photo");
+
+    // ── The water's widths follow the counts (drawn on Night); a period switch moves the leak and swaps the picture. ──
     const widths = await page.locator('[data-testid="aqueduct-segment"]').evaluateAll((els) => els.map((el) => Number(el.getAttribute("data-width"))));
     must(widths[0] === waterWidth(BEFORE[1], BEFORE[1]) && widths[1] === waterWidth(BEFORE[2], BEFORE[1]) && widths[6] === waterWidth(BEFORE[7], BEFORE[1]), `the widths follow the counts: ${widths.join(", ")}`);
+    await page.click('[data-testid="aqueduct-look-day"]');
+    await page.waitForTimeout(300);
     // Over 7 days (the logs at 3 and 10 days ago) the leak is at step 4; over 30 days a tenfold batch at 20 days against one at
     // 45 days dominates, and the engine says where that leak falls (step 1 by construction, checked rather than assumed).
     const times = (c: C, k: number): C => c.map((x) => (x === null ? null : x * k)) as C;
@@ -161,12 +217,27 @@ async function main() {
 
     // ── Motion: Pause remembered, reduced motion, the tab hidden; keyboard reach. ──
     await page.goto(url(), { waitUntil: "networkidle" });
-    must((await page.locator(".aq-dash").first().evaluate((el) => getComputedStyle(el).animationName)) === "aq-flow", "the water moves");
+    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "aq-run", "the water moves");
+    // H-966: every segment carries the body and the three flow layers, each running at its own speed.
+    const layers = await page.locator('[data-testid="aqueduct-segment"]').evaluateAll((els) => els.map((el) => [...el.querySelectorAll("[data-flow]")].map((p) => p.getAttribute("data-flow")).join(",")));
+    must(layers.length === 7 && layers.every((l) => l === "band,streak-a,streak-b,spark"), `each segment runs ripple bands, two lanes of streaks and a sparkle: ${layers[0]}`);
+    const speeds = await page.locator('[data-testid="aqueduct-segment"]').first().evaluate((el) => [...el.querySelectorAll("[data-flow]")].map((p) => getComputedStyle(p).animationDuration.split(",")[0]));
+    must(new Set(speeds).size === 4, `the layers run at their own speeds: ${speeds.join(" ")}`);
+    // The channel fills when the scene opens: the front runs, then the mask goes and the water keeps flowing.
+    await page.goto(url(), { waitUntil: "domcontentloaded" });
+    must((await page.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "1" && (await page.locator("mask#aq-front").count()) === 1, "the channel fills when the scene opens");
+    await page.waitForFunction("document.querySelector('[data-testid=\"aqueduct-water\"]')?.getAttribute('data-filling') === '0'", undefined, { timeout: 8000 });
+    must((await page.locator("mask#aq-front").count()) === 0 && (await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "running", "once full, the front's mask goes and the water keeps flowing");
+    await page.waitForLoadState("networkidle");
     await page.click('[data-testid="aqueduct-pause"]');
     must((await page.locator('[data-testid="aqueduct-scene"]').getAttribute("data-paused")) === "1", "Pause the water holds it");
-    must((await page.locator(".aq-dash").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused", "every stroke pauses");
+    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused" && (await page.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused", "every stroke pauses, the channel and the fall");
     await page.waitForTimeout(400);
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.aqueductPaused, "Pause is remembered");
+    // Left paused, the scene opens full and still: no front waiting on a Play.
+    await page.goto(url(), { waitUntil: "domcontentloaded" });
+    must((await page.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0", "a paused scene opens with the channel already full");
+    await page.waitForLoadState("networkidle");
     await page.click('[data-testid="aqueduct-pause"]');
     await page.evaluate("Object.defineProperty(document, 'hidden', { get: () => true, configurable: true }); document.dispatchEvent(new Event('visibilitychange'))");
     await page.waitForTimeout(200);
@@ -174,7 +245,10 @@ async function main() {
     const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
     const sp = await still.newPage();
     await sp.goto(url(), { waitUntil: "networkidle" });
-    must((await sp.locator(".aq-dash").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none", "reduced motion stops all animation");
+    must((await sp.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationName)) === "none", "reduced motion stops all animation");
+    // The still still looks like water: the body and its layers are drawn, with no front.
+    must((await sp.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0" && (await sp.locator("[data-flow]").count()) === 28 && (await sp.locator(".aq-core").count()) === 7 && (await sp.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1, "reduced motion: the same water, still, with no front");
+    await sp.screenshot({ path: "screenshots/aqueduct-reduced-1440.png" });
     await still.close();
     await page.goto(url(), { waitUntil: "networkidle" });
     const reached = { pause: false, look: false, period: false };

@@ -81,7 +81,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
       {sp.pdf ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-pdf-built">PDF built. It is live at the link below.</p> : null}
       {sp.uploaded ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-uploaded">File uploaded. It is live at the link below.</p> : null}
       {sp.stripped && m.notes ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm whitespace-pre-wrap" data-testid="magnet-stripped">{m.notes}</p> : null}
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card title="The magnet">
             {isUnreviewed(m.origin) ? <UnreviewedMark action={acceptMagnetAction} fields={{ id: m.id }} className="mb-3" /> : null}

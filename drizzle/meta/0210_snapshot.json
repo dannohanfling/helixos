@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d8b1a792-dd15-4413-bf1b-04031655e356",
+  "id": "2db255f5-3156-4782-b8eb-027fddfcaee1",
   "prevId": "cdfdeb5d-7da8-4112-b736-c53465f51bf1",
   "tables": {
     "agent_auth_failures": {
@@ -7395,38 +7395,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "outreach_messages": {
-          "name": "outreach_messages",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "scripts_written": {
-          "name": "scripts_written",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "videos_recorded": {
-          "name": "videos_recorded",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "videos_posted": {
-          "name": "videos_posted",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
         "referral_asks": {
           "name": "referral_asks",
           "type": "integer",
@@ -11163,13 +11131,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -14766,6 +14727,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "rank_clip_seen_level": {
+          "name": "rank_clip_seen_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "whats_new_seen": {
           "name": "whats_new_seen",
           "type": "integer",
@@ -16155,13 +16123,6 @@
         },
         "tier_code": {
           "name": "tier_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "ladder_tier": {
-          "name": "ladder_tier",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

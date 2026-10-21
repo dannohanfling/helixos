@@ -4,4 +4,7 @@ export type StoryType = (typeof STORY_TYPES)[number];
 export const STORY_STATUSES = ["ready", "check", "needs_permission"] as const;
 export type StoryStatus = (typeof STORY_STATUSES)[number];
 export const STATUS_WORDS: Record<StoryStatus, string> = { ready: "Ready", check: "Check before using", needs_permission: "Needs permission" };
-export const MATERIAL_KINDS = ["teaching", "story"] as const;
+export const MATERIAL_KINDS = ["teaching", "story", "framework"] as const;
+/** A framework (H-1262): a draft is the coach's alone; published ones reach members and the ladder writer. */
+export const FRAMEWORK_STATUSES = ["draft", "published"] as const;
+export type FrameworkStatus = (typeof FRAMEWORK_STATUSES)[number];

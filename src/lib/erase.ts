@@ -59,6 +59,12 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
     ids[label] = rows.map((r) => r.id);
   }
   for (const c of CHILD_TABLES) ids[c.label] = await childIds(c.table, c.fk, ids[c.parent] ?? []);
+  // Block and report (H-745): the blocks made against this member, and the Content reports about them, go with them as well.
+  ids.member_blocks = [...new Set([...ids.member_blocks, ...(await childIds(schema.memberBlocks, "blockedMembershipId", [m.id]))])];
+  const about = (await db.select({ id: schema.memberReports.id }).from(schema.memberReports).where(and(eq(schema.memberReports.workspaceId, workspaceId), eq(schema.memberReports.targetUserId, m.userId)))) as { id: string }[];
+  ids.member_reports = [...new Set([...ids.member_reports, ...about.map((r) => r.id)])];
+  // Applause (H-1171): what others gave on this member's wins goes with the wins.
+  ids.win_applause = [...new Set([...ids.win_applause, ...(await childIds(schema.winApplause, "winId", ids.colosseum_wins ?? []))])];
 
   const elsewhere = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, m.userId), ne(schema.memberships.workspaceId, workspaceId)) });
   const userGoes = !elsewhere;
@@ -75,6 +81,7 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
       ids[label] = ((await db.select({ id: col(table, key) }).from(table).where(eq(col(table, "workspaceId"), workspaceId))) as { id: string }[]).map((r) => r.id);
     }
     ids.lessons = await childIds(schema.lessons, "courseId", ids.courses ?? []);
+    ids.program_call_skips = await childIds(schema.programCallSkips, "callId", ids.program_calls ?? []);
     // The Board's seat library sits in board_seats beside members' custom seats, with no user: it goes with the workspace.
     ids.board_seat_library = ((await db.select({ id: schema.boardSeats.id }).from(schema.boardSeats).where(and(eq(schema.boardSeats.workspaceId, workspaceId), isNull(schema.boardSeats.userId)))) as { id: string }[]).map((r) => r.id);
   }
@@ -208,6 +215,7 @@ export async function eraseMember(plan: ErasePlan, ranByUserId: string): Promise
   if (plan.workspaceGoes) {
     await db.transaction(async (tx) => {
       await drop(tx, schema.lessons, plan.ids.lessons ?? []);
+      await drop(tx, schema.programCallSkips, plan.ids.program_call_skips ?? []);
       await drop(tx, schema.boardSeats, plan.ids.board_seat_library ?? []);
       for (const [label, table] of Object.entries(WORKSPACE_TABLES)) await drop(tx, table, plan.ids[label] ?? [], label === "files" ? "key" : "id");
       await drop(tx, schema.workspaces, [plan.workspaceId]);
