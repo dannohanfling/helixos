@@ -4,6 +4,7 @@ import { aqueductFor } from "@/lib/aqueduct";
 import { aqueductRepairFor } from "@/lib/aqueduct-repair";
 import { setAqueductPeriodAction } from "@/lib/actions/aqueduct";
 import { pct, count, PERIODS } from "@/lib/engine/aqueduct";
+import { previewRepair } from "@/lib/engine/aqueduct-repair";
 import { AqueductScene } from "@/components/aqueduct-scene";
 import { SubmitButton } from "@/components/submit-button";
 import "@/components/aqueduct.css";
@@ -14,11 +15,15 @@ export const metadata = { title: "The Aqueduct" };
  * The Aqueduct (rev 711): the member's lead pipeline as a Roman aqueduct, the leak at their weakest step. The picture and the
  * live water on top, then the leak panel (or "holding"), then every stage with now, before and its step rate. Calm throughout.
  */
-export default async function AqueductPage() {
+export default async function AqueductPage({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
   const v = await requireViewer();
   const a = await aqueductFor(v);
   const p = a.panel;
-  const r = aqueductRepairFor(v, a);
+  // A coach on their own Aqueduct can watch the repair moment on demand (Roma Vivit 2 PR 5): sample numbers into a full
+  // fountain, and it writes nothing. Never for a member, a coach switched into one, or a team member.
+  const ownCoach = v.role === "coach" && !v.switchedInto && !v.team;
+  const preview = ownCoach && (await searchParams).preview === "repair";
+  const r = preview ? { repair: previewRepair(a.leak), stamp: false } : aqueductRepairFor(v, a);
   return (
     <div className="aq-page" data-testid="aqueduct">
       <header className="aq-head">
@@ -36,7 +41,21 @@ export default async function AqueductPage() {
           ))}
         </form>
       </header>
-      <AqueductScene initialLook={a.look} initialPaused={a.paused} ownLook={!v.switchedInto} now={a.now} leak={a.leak} stepRates={a.stepRates} repair={r.repair} stamp={r.stamp} />
+      <AqueductScene key={preview ? "preview" : "live"} initialLook={a.look} initialPaused={a.paused} ownLook={!v.switchedInto} now={a.now} leak={preview ? null : a.leak} stepRates={a.stepRates} repair={r.repair} stamp={r.stamp} />
+      {ownCoach ? (
+        <p className="aq-preview">
+          {preview ? (
+            <Link href="/aqueduct" data-testid="aqueduct-preview-end">
+              End the preview
+            </Link>
+          ) : (
+            <Link href="/aqueduct?preview=repair" data-testid="aqueduct-preview">
+              Preview the repair
+            </Link>
+          )}
+          <span className="aq-quiet">Only you see this. It plays the moment with sample numbers and saves nothing.</span>
+        </p>
+      ) : null}
       {p ? (
         <section className="aq-panel" data-testid="aqueduct-leak" data-step={a.leak!.step}>
           <p className="aq-eyebrow">Where your water is leaking</p>
