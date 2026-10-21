@@ -8,7 +8,7 @@
  */
 import { cutText } from "@/lib/engine/cut";
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, ne, sql, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, or, sql, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { appUrl } from "@/lib/branded-email";
 import { hashSecret, safeEqual } from "@/lib/crypto";
@@ -283,6 +283,9 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   const who = await ownerOf(o);
   const row = await insertMessage(o, { fromAgentId: from.id, toIds: [...new Set(to)], kind: p.kind, title: p.title, body: p.body, replyToId, threadId, fileIds: p.files, needsApproval: reasons.length > 0, approvalReasons: reasons, claimsApproval: claimsApproval(text, who.first) }, [...new Set(to)]);
   await audit(o, from.id, "post", hId(row.seq), p.title);
+  // H-1494: a "Merged PR #N" post settles every open "needs you" item that names that PR.
+  const mergedPr = /^Merged PR #(\d+)\b/i.exec(p.title);
+  if (mergedPr) await clearNeedsForPr(o, Number(mergedPr[1]));
   // H-351: a replacement marks the post it replaces in the same call (the agent's own post only).
   if (p.supersedes !== null) await supersedeHandoff(o, from.id, hId(p.supersedes), hId(row.seq));
   // A status message updates the sender's Forum building.
@@ -426,6 +429,8 @@ export async function decideHandoff(o: Owner, actorUserId: string, messageId: st
   const to = row.fromAgentId ? [row.fromAgentId] : [];
   await insertMessage(o, { fromAgentId: null, toIds: to, kind: "answer", title: cutText(`${word}: ${hId(row.seq)} ${row.title}`, HANDOFF_MAX.title), body: scrubText(cutText(note, HANDOFF_MAX.change)).text, replyToId: row.id, threadId: row.threadId ?? row.id, decision, decidedAt: now, decidedBy: actorUserId, decisionForId: row.id }, to);
   await audit(o, null, decision === "approved" ? "approve" : decision === "changed" ? "change" : "decline", hId(row.seq), note || null);
+  // H-1494: the decision settles every open "needs you" item that names this H-number.
+  await clearNeedsForRef(o, hId(row.seq));
   return { ok: true, text: `${word}: ${hId(row.seq)}. ${row.fromAgentId ? "The agent reads its inbox every few minutes; this post says when it has." : ""}` };
 }
 
@@ -456,14 +461,122 @@ export async function noteDecision(o: Owner, messageId: string, note: string): P
 }
 
 /** The owner's view: messages newest first, the waiting decisions, and the menu count (waiting decisions and unread for the owner). */
-export async function ownerInbox(o: Owner, limit = 60): Promise<{ items: InboxItem[]; waiting: InboxItem[]; acks: Map<string, { recipient: string; note: string | null; at: string }[]> }> {
+export async function ownerInbox(o: Owner, limit = 60): Promise<{ items: InboxItem[]; waiting: InboxItem[]; fresh: InboxItem[]; needs: OpenNeed[]; acks: Map<string, { recipient: string; note: string | null; at: string }[]> }> {
   const rows = await db.query.handoffMessages.findMany({ where: mine(o), orderBy: desc(schema.handoffMessages.seq), limit });
+  // H-1488: New for you, the messages to the owner the number counted as unread, plus those read in the last few minutes, so the
+  // list survives the page's own refresh of the number once it has marked them read.
+  const recent = new Date(Date.now() - FRESH_KEEP_MS).toISOString();
+  const freshRows = (
+    await db
+      .select({ m: schema.handoffMessages })
+      .from(schema.handoffDeliveries)
+      .innerJoin(schema.handoffMessages, eq(schema.handoffMessages.id, schema.handoffDeliveries.messageId))
+      .where(and(mine(o), eq(schema.handoffDeliveries.recipient, DANNO), eq(schema.handoffMessages.needsApproval, false), or(isNull(schema.handoffDeliveries.deliveredAt), gt(schema.handoffDeliveries.deliveredAt, recent))))
+      .orderBy(desc(schema.handoffMessages.seq))
+      .limit(limit)
+  ).map((r) => r.m);
+  const needs = await openNeeds(o);
   const waitingRows = await db.query.handoffMessages.findMany({ where: and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)), orderBy: asc(schema.handoffMessages.seq) });
   const deliveries = rows.length ? await db.query.handoffDeliveries.findMany({ where: inArray(schema.handoffDeliveries.messageId, rows.map((r) => r.id)) }) : [];
   const [agents, { first }] = await Promise.all([agentsOf(o), ownerOf(o)]);
   const acks = new Map<string, { recipient: string; note: string | null; at: string }[]>();
   for (const d of deliveries) if (d.ackedAt) acks.set(d.messageId, [...(acks.get(d.messageId) ?? []), { recipient: d.recipient === DANNO ? first : (agents.find((a) => a.id === d.recipient)?.name ?? "An agent"), note: d.ackNote, at: d.ackedAt }]);
-  return { items: await describe(o, rows, first), waiting: await describe(o, waitingRows, first), acks };
+  return { items: await describe(o, rows, first), waiting: await describe(o, waitingRows, first), fresh: await describe(o, freshRows, first), needs, acks };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// H-1488 and H-1494: one list for the owner. The Inbox number counts exactly what the Inbox shows as waiting on them (the
+// undecided approvals and the agents' open "needs you" items) plus the unread messages it lists under New for you.
+
+const H_REF = /\bH-(\d+)\b/;
+/** An item older than this gets "still needed?" to its agent at its next check-in (H-1494 §3). */
+export const NEED_STALE_MS = 72 * 60 * 60 * 1000;
+/** New for you keeps a message this long after the page marked it read. */
+const FRESH_KEEP_MS = 15 * 60 * 1000;
+
+export type OpenNeed = { id: string; agentId: string | null; agent: string | null; what: string; detail: string | null; when: string | null; at: string; ref: string | null; stale: boolean };
+
+/** The H-number an item names, if any: the thread the Inbox links it to, and the approval whose decision settles it. */
+export const needRef = (what: string, detail: string | null): string | null => {
+  const m = H_REF.exec(`${what} ${detail ?? ""}`);
+  return m ? `H-${m[1]}` : null;
+};
+/** The pull requests an item names (#99), settled by a "Merged PR #99" post. */
+export const needPrs = (what: string, detail: string | null): number[] => [...`${what} ${detail ?? ""}`.matchAll(/(?:^|[^\w])#(\d+)\b/g)].map((m) => Number(m[1]));
+
+/** SQLite's datetime('now') ("2026-10-21 05:00:00") is UTC without a zone; an ISO stamp passes through. */
+const sqlTime = (t: string): number => new Date(/[TZ]/.test(t) ? t : `${t.replace(" ", "T")}Z`).getTime();
+
+const openNeedsWhere = (o: Owner) => and(eq(schema.forumNeeds.workspaceId, o.workspaceId), eq(schema.forumNeeds.userId, o.userId), isNull(schema.forumNeeds.doneAt));
+
+async function settleNeeds(o: Owner, keep: (n: schema.ForumNeed) => boolean, by: "member" | "agent"): Promise<number> {
+  const open = await db.query.forumNeeds.findMany({ where: openNeedsWhere(o) });
+  const gone = open.filter((n) => !keep(n));
+  if (!gone.length) return 0;
+  const now = nowIso();
+  await db.update(schema.forumNeeds).set({ doneAt: now, doneBy: by }).where(and(openNeedsWhere(o), inArray(schema.forumNeeds.id, gone.map((n) => n.id))));
+  return gone.length;
+}
+
+/** A decision on H-N settles the items that name H-N. */
+export const clearNeedsForRef = (o: Owner, ref: string): Promise<number> => settleNeeds(o, (n) => !new RegExp(`\\b${ref}\\b`).test(`${n.what} ${n.detail ?? ""}`), "member");
+/** A "Merged PR #N" post settles the items that name #N. */
+export const clearNeedsForPr = (o: Owner, pr: number): Promise<number> => settleNeeds(o, (n) => !needPrs(n.what, n.detail).includes(pr), "agent");
+
+/**
+ * Items already answered elsewhere go done (H-1494 §2 and §4): one naming an H-number that has its decision, or a PR a
+ * "Merged PR #N" post reports. Runs on every read of the list, so what piled up before this settles on the first look.
+ */
+export async function sweepNeeds(o: Owner): Promise<number> {
+  const open = await db.query.forumNeeds.findMany({ where: openNeedsWhere(o) });
+  if (!open.length) return 0;
+  const seqs = [...new Set(open.map((n) => needRef(n.what, n.detail)).filter((r): r is string => Boolean(r)).map((r) => Number(r.slice(2))))];
+  const decided = new Set(seqs.length ? (await db.query.handoffMessages.findMany({ where: and(mine(o), inArray(schema.handoffMessages.seq, seqs), isNotNull(schema.handoffMessages.decision)), columns: { seq: true } })).map((m) => m.seq) : []);
+  const prs = new Set(open.flatMap((n) => needPrs(n.what, n.detail)));
+  const merged = new Set<number>();
+  if (prs.size) for (const m of await db.query.handoffMessages.findMany({ where: and(mine(o), sql`${schema.handoffMessages.title} like 'Merged PR #%'`), columns: { title: true } })) {
+    const k = /^Merged PR #(\d+)\b/i.exec(m.title);
+    if (k && prs.has(Number(k[1]))) merged.add(Number(k[1]));
+  }
+  let n = 0;
+  if (decided.size) n += await settleNeeds(o, (x) => { const r = needRef(x.what, x.detail); return r === null || !decided.has(Number(r.slice(2))); }, "member");
+  if (merged.size) n += await settleNeeds(o, (x) => !needPrs(x.what, x.detail).some((p) => merged.has(p)), "agent");
+  return n;
+}
+
+/** The open "needs you" items, oldest first, swept first. */
+export async function openNeeds(o: Owner, now: Date = new Date()): Promise<OpenNeed[]> {
+  await sweepNeeds(o);
+  const [rows, agents] = await Promise.all([db.query.forumNeeds.findMany({ where: openNeedsWhere(o), orderBy: asc(schema.forumNeeds.createdAt) }), agentsOf(o)]);
+  return rows.map((r) => ({
+    id: r.id,
+    agentId: r.agentId,
+    agent: r.agentId ? (agents.find((a) => a.id === r.agentId)?.name ?? "A removed agent") : null,
+    what: r.what,
+    detail: r.detail,
+    when: r.when,
+    at: r.createdAt,
+    ref: needRef(r.what, r.detail),
+    stale: now.getTime() - sqlTime(r.createdAt) > NEED_STALE_MS,
+  }));
+}
+
+/** The owner ticks an item on the Inbox or the Forum, done or not needed: either way it leaves the list. */
+export async function tickNeed(o: Owner, id: string): Promise<boolean> {
+  const done = await db.update(schema.forumNeeds).set({ doneAt: nowIso(), doneBy: "member" }).where(and(openNeedsWhere(o), eq(schema.forumNeeds.id, id))).returning({ id: schema.forumNeeds.id });
+  return done.length > 0;
+}
+
+/** The three parts of the Inbox number, each by the query the Inbox lists with. */
+export async function inboxCounts(o: Owner): Promise<{ waiting: number; needs: number; fresh: number }> {
+  const [waiting] = await db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)));
+  const [needs] = await db.select({ n: sql<number>`count(*)` }).from(schema.forumNeeds).where(openNeedsWhere(o));
+  const [fresh] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(schema.handoffDeliveries)
+    .innerJoin(schema.handoffMessages, eq(schema.handoffMessages.id, schema.handoffDeliveries.messageId))
+    .where(and(mine(o), eq(schema.handoffDeliveries.recipient, DANNO), isNull(schema.handoffDeliveries.deliveredAt), eq(schema.handoffMessages.needsApproval, false)));
+  return { waiting: Number(waiting?.n ?? 0), needs: Number(needs?.n ?? 0), fresh: Number(fresh?.n ?? 0) };
 }
 
 /** The Superseded tab (H-351): every replaced post, newest first, never deleted; `q` narrows by H-number, title or body. */
@@ -547,14 +660,10 @@ export async function waitingCount(o: Owner): Promise<number> {
   return Number(waiting?.n ?? 0);
 }
 
+/** The Inbox number (H-1488): what waits on the owner (approvals and "needs you" items) plus the unread messages to them. */
 export async function inboxCount(o: Owner): Promise<number> {
-  const [waiting] = await db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)));
-  const [unread] = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(schema.handoffDeliveries)
-    .innerJoin(schema.handoffMessages, eq(schema.handoffMessages.id, schema.handoffDeliveries.messageId))
-    .where(and(mine(o), eq(schema.handoffDeliveries.recipient, DANNO), isNull(schema.handoffDeliveries.deliveredAt), eq(schema.handoffMessages.needsApproval, false)));
-  return Number(waiting?.n ?? 0) + Number(unread?.n ?? 0);
+  const c = await inboxCounts(o);
+  return c.waiting + c.needs + c.fresh;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -684,7 +793,7 @@ export async function agentSettings(o: Owner, agentId: string): Promise<schema.H
   return (await db.query.handoffAgents.findFirst({ where }))!;
 }
 
-export type Checkin = { act: CheckinAct; line: string; items: InboxItem[]; waitingOn: string | null; lastStatus: string | null; count: number };
+export type Checkin = { act: CheckinAct; line: string; items: InboxItem[]; waitingOn: string | null; lastStatus: string | null; count: number; /** This agent's "needs you" items open for more than three days (H-1494 §3): still needed? */ stale: string[] };
 
 export async function checkinFor(o: Owner, agent: schema.ForumAgent, now: Date = new Date()): Promise<Checkin> {
   const s = await agentSettings(o, agent.id);
@@ -717,7 +826,8 @@ export async function checkinFor(o: Owner, agent: schema.ForumAgent, now: Date =
   if (agent.stalledAt) await heardFrom(o, agent);
   const items = decided.act === "work" || decided.act === "reply" ? await inboxFor(o, agent.id) : [];
   const fresh = await db.query.forumAgents.findFirst({ where: eq(schema.forumAgents.id, agent.id), columns: { now: true, last: true } });
-  return { ...decided, items, waitingOn: decided.act === "wait" && waitingOn.length ? waitingOn.join(", ") : null, lastStatus: fresh?.now ?? fresh?.last ?? null, count: counted };
+  const stale = (await openNeeds(o, now)).filter((n) => n.agentId === agent.id && n.stale).map((n) => n.what);
+  return { ...decided, items, waitingOn: decided.act === "wait" && waitingOn.length ? waitingOn.join(", ") : null, lastStatus: fresh?.now ?? fresh?.last ?? null, count: counted, stale };
 }
 
 /** handoff_busy: on with a note while a long job runs (its building shows it working on that), off when it ends. */

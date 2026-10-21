@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 330,
+    date: "2026-10-21",
+    title: "The Inbox number means something",
+    lines: [
+      "The number by Inbox now counts exactly what the Inbox shows: the approvals waiting on you, your agents' open \"needs you\" items (now listed there too, with Done and Not needed), and the messages to you under New for you.",
+      "An item clears on its own when you decide the approval it names, when its PR is reported merged, or when the agent clears it; one open more than three days asks the agent whether it is still needed.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 328,
     date: "2026-10-19",
     title: "Every date and time in your own time zone",
