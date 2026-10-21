@@ -125,9 +125,11 @@ defineTool({
     const agent = await callingAgent(owner(v), call?.agentId);
     const c = await checkinFor(owner(v), agent);
     // Wait and quiet stay a line or two, so an idle check-in costs almost nothing.
-    if (c.act === "wait" || c.act === "quiet") return { text: `${c.act}: ${c.line}${c.lastStatus && c.act === "wait" ? ` Last: ${c.lastStatus.slice(0, 60)}` : ""}`.slice(0, 190) };
+    // H-1494: an item of this agent's on What needs you for more than three days gets a line here, until it clears it or its owner ticks it.
+    const stale = c.stale.length ? ` Still needed? ${c.stale.map((w) => `"${w.slice(0, 60)}"`).join(", ")} (needs_cleared when not).` : "";
+    if (c.act === "wait" || c.act === "quiet") return { text: `${`${c.act}: ${c.line}${c.lastStatus && c.act === "wait" ? ` Last: ${c.lastStatus.slice(0, 60)}` : ""}`.slice(0, 190)}${stale.slice(0, 200)}` };
     return {
-      text: `${c.act}: ${c.line}\n${c.items.map(lineOf(v)).join("\n")}`,
+      text: `${c.act}: ${c.line}${stale}\n${c.items.map(lineOf(v)).join("\n")}`,
       data: { act: c.act, items: c.items.map((m) => ({ id: m.ref, kind: m.kind, title: m.title, from: m.from, from_danno: m.fromDanno, decision: m.decision, decision_for: m.decisionFor })), waiting_on: c.waitingOn, last_status: c.lastStatus },
     };
   },

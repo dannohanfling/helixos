@@ -181,10 +181,12 @@ async function main() {
     // until it plays. Chromium here can't decode H.264, so the phone's MP4 never plays: the poster has to carry it.
     const phoneTier = (await bar.getAttribute("data-waiting")) === "true" ? "ember" : flameTier(days);
     await p.waitForFunction(() => document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-phone") === "true", null, { timeout: 5000 });
-    const poster = bar.locator('[data-flame-poster="true"]');
     await p.waitForFunction(() => ((document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.naturalWidth ?? 0) > 0, null, { timeout: 5000 });
-    const posterSrc = (await poster.getAttribute("src")) ?? "";
-    const phoneMode = await bar.locator('[data-flame="fire"]').getAttribute("data-flame-mode");
+    // The MP4's refusal can land between two reads (mode "still" with the poster not yet swapped for the still), so the pair is
+    // read together and given a moment to agree.
+    const readPair = () => ({ mode: document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-mode") ?? "", src: (document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.getAttribute("src") ?? "" });
+    await p.waitForFunction((tier) => { const q = (() => ({ mode: document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-mode") ?? "", src: (document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.getAttribute("src") ?? "" }))(); return q.mode === "still" ? q.src.includes(`streak-${tier}-still.jpg`) : q.src.includes(`streak-${tier}-pill-m-poster.jpg`); }, phoneTier, { timeout: 5000 }).catch(() => undefined);
+    const { mode: phoneMode, src: posterSrc } = await p.evaluate(readPair);
     must(
       phoneMode === "still" ? posterSrc.includes(`streak-${phoneTier}-still.jpg`) : posterSrc.includes(`streak-${phoneTier}-pill-m-poster.jpg`),
       `the phone shows the tier's picture at once (${phoneMode}, ${posterSrc})`,
@@ -202,6 +204,12 @@ async function main() {
     const bb = await bar.boundingBox();
     must(bb && bb.height >= 44 && bb.x + bb.width <= 390, `the phone pill fits the bar (${JSON.stringify(bb)})`);
     must((await p.locator('[data-testid="mobile-header"] [data-flame="fire"]').count()) === 1, "one fire in the phone bar");
+    // H-1487: no box around the fire. The layer holding the poster and the video blends with screen under a radial mask.
+    const blend = await p.locator('[data-testid="streak-pill-bar"] [data-flame-blend="screen"]').evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { mode: cs.mixBlendMode, mask: cs.maskImage || (cs as unknown as Record<string, string>).webkitMaskImage || "" };
+    });
+    must(blend.mode === "screen" && /radial-gradient/.test(blend.mask), `the phone pill's fire blends with screen under a radial mask (${JSON.stringify(blend)})`);
     await noSideways(p, "the phone bar");
     await p.screenshot({ path: "screenshots/fl02-phone.png" });
     await bar.tap();

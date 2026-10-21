@@ -12,13 +12,33 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 333,
+    n: 335,
     date: "2026-10-19",
     title: "A shorter menu, in five groups",
     lines: [
       "The menu now reads Daily, HumanOS, My business, Get leads, My bot, Learn, and Board and agents. My business, Get leads, My bot and Learn start shut; tap one to open it, and it stays the way you left it.",
       "My Helix is the progress line under the logo, and What's new is the version line at the bottom of the menu. Avatars sit inside Offers, and connecting Claude is in Settings → Connected apps.",
       "New members see each tool once their My Helix reaches it, with a line on Today when one opens. Everyone already here keeps every tool. Settings → Your menu has \"Show all tools\" to see them all at any time.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 334,
+    date: "2026-10-21",
+    title: "The streak flame without its box",
+    lines: [
+      "On a phone the flame sat in a hard black rectangle, in the top bar and on the streak sheet. The black now blends away and the edges fade, so only the fire shows, a little larger in the bar.",
+      "The waiting ember is brighter too: still low and slow with its amber Waiting on you tag, but it reads.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 333,
+    date: "2026-10-21",
+    title: "The Inbox number means something",
+    lines: [
+      "The number by Inbox now counts exactly what the Inbox shows: the approvals waiting on you, your agents' open \"needs you\" items (now listed there too, with Done and Not needed), and the messages to you under New for you.",
+      "An item clears on its own when you decide the approval it names, when its PR is reported merged, or when the agent clears it; one open more than three days asks the agent whether it is still needed.",
     ],
     audience: "everyone",
   },
