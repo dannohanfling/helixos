@@ -66,6 +66,13 @@ const nextConfig: NextConfig = {
   env: { HELIX_BUILD_DATE: build.date, HELIX_BUILD_SHA: build.sha },
   // A reading pack for an agent (H-26 C) arrives through a server action: files up to 20 MB each, a few at a time.
   experimental: { serverActions: { bodySizeLimit: "25mb" } },
+  // My bot as one page (H-164 §15): the old addresses answer with a redirect to their tab, any notice in the query kept.
+  async redirects() {
+    return [
+      { source: "/brain", destination: "/my-bot", permanent: false },
+      { source: "/bot-features", destination: "/my-bot/skills", permanent: false },
+    ];
+  },
   async headers() {
     // Find a food (Body, rev 237 phase 13) scans a barcode with the camera on that one page, and nowhere else.
     const cameraHere = securityHeaders.map((h) => (h.key === "Permissions-Policy" ? { ...h, value: h.value.replace("camera=()", "camera=(self)") } : h));

@@ -220,7 +220,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
               </div>
             </Card>
             <Card id="bot" title="On your bot">
-              <p className="mb-3 text-xs text-ink-3">Only an offer with a role here reaches your Community Loyalty bot, whatever its status on this page. What your bot will be sent is on <Link href="/brain" className="underline">Your bot</Link>, for you to approve before anything goes.</p>
+              <p className="mb-3 text-xs text-ink-3">Only an offer with a role here reaches your Community Loyalty bot, whatever its status on this page. What your bot will be sent is on <Link href="/my-bot" className="underline">Your bot</Link>, for you to approve before anything goes.</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Role on your bot">
                   <select className="field" name="botRole" defaultValue={shown.botRole} data-testid="offer-bot-role">

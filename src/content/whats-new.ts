@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 339,
+    date: "2026-10-19",
+    title: "My bot is one page, with three tabs",
+    lines: [
+      "Your bot and Bot Features are now one page, My bot, with three tabs: What it says (everything your bot is sent, for your approval), Skills (the features it unlocks) and Connection (your Community Loyalty connection and whether the bot is reading).",
+      "Old links still work and land on the right tab.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 338,
     date: "2026-10-19",
     title: "A calmer Today, and a close that's a check plus your win",

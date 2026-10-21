@@ -225,7 +225,7 @@ async function main() {
     console.log("✓ a stranger joins through the link: their own login, Maya's HelixOS, the banner, the team home, the short menu");
 
     // ── 3. Closed, on the server. ──
-    const closedPages = ["/body", "/body/foods", "/body/weight", "/body/training/health", "/rewards", "/offers", "/intentions", "/numbers", "/brain", "/essence", "/pathway", "/courses", "/integrations", "/connect", "/coach", `/coach/${mayaM.id}`, "/community", "/proof", "/magnets", "/avatars", "/socrates/scripts", "/groups", "/recordings", "/evidence", "/doctrine", "/certification"];
+    const closedPages = ["/body", "/body/foods", "/body/weight", "/body/training/health", "/rewards", "/offers", "/intentions", "/numbers", "/my-bot", "/my-bot/connection", "/essence", "/pathway", "/courses", "/integrations", "/connect", "/coach", `/coach/${mayaM.id}`, "/community", "/proof", "/magnets", "/avatars", "/socrates/scripts", "/groups", "/recordings", "/evidence", "/doctrine", "/certification"];
     // Office Hours opened to a team member in H-413 (scripts/smoke-ooh.ts walks it); it is no longer on the closed list.
     must(await opens(sam, "/office-hours"), "Office Hours opens for a team member (H-413)");
     for (const p of closedPages) {

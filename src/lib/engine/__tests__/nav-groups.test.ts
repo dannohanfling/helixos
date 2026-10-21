@@ -107,14 +107,14 @@ describe("the menu: five groups and tools by stage", () => {
   it("a new client sees Daily, Learn and Essence; each phase opens its pages, and nothing closes again", () => {
     const at = (phase: number) => visibleGroups({ ...client, toolsPhase: phase }).flatMap((g) => g.items).map((n) => n.href);
     expect(at(0)).toEqual(expect.arrayContaining(["/today", "/content", "/courses", "/essence"]));
-    for (const h of ["/offers", "/pathway", "/magnets", "/brain", "/clients", "/library", "/my-board", "/socrates/foundations"]) expect(at(0), h).not.toContain(h);
+    for (const h of ["/offers", "/pathway", "/magnets", "/my-bot", "/clients", "/library", "/my-board", "/socrates/foundations"]) expect(at(0), h).not.toContain(h);
     expect(at(1)).toContain("/offers");
     expect(at(2)).toEqual(expect.arrayContaining(["/pathway", "/proof", "/goals", "/numbers"]));
     expect(at(3)).toEqual(expect.arrayContaining(["/images", "/library", "/my-board"]));
     expect(at(4)).toEqual(expect.arrayContaining(["/magnets", "/webinars", "/aqueduct"]));
     expect(at(5)).toContain("/socrates/foundations");
     expect(at(6)).toContain("/clients");
-    expect(at(7)).toEqual(expect.arrayContaining(["/brain", "/bot-features"]));
+    expect(at(7)).toEqual(expect.arrayContaining(["/my-bot", "/my-bot/skills"]));
     expect(toolsOpenedAt(1).map((n) => n.href)).toEqual(["/offers"]);
   });
   it("the coach, a team member and Show all tools see every tool", () => {
@@ -122,6 +122,6 @@ describe("the menu: five groups and tools by stage", () => {
     expect(toolsPhaseOf({ role: "client", team: true, showAllTools: false, toolsPhase: 0 })).toBeNull();
     expect(toolsPhaseOf({ role: "client", showAllTools: true, toolsPhase: 0 })).toBeNull();
     expect(toolsPhaseOf({ role: "client", showAllTools: false, toolsPhase: 3 })).toBe(3);
-    expect(visibleGroups({ ...client, toolsPhase: null }).flatMap((g) => g.items).some((n) => n.href === "/brain")).toBe(true);
+    expect(visibleGroups({ ...client, toolsPhase: null }).flatMap((g) => g.items).some((n) => n.href === "/my-bot")).toBe(true);
   });
 });

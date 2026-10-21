@@ -25,7 +25,7 @@ export async function requestFeatureAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", team: "refuse", reason: "Turning on {first}'s bot features is theirs to ask for." });
   const key = str(formData, "key");
   const feature = featureOf(key);
-  if (!feature) redirect("/bot-features");
+  if (!feature) redirect("/my-bot/skills");
   const view = (await featuresFor(v.membership)).find((x) => x.feature.key === feature.key)!;
   if (view.state !== "unlocked") back(feature.key, view.state === "locked" ? "error=locked" : "sent=1");
   const raw = Object.fromEntries(feature.setup.map((s) => [s.key, str(formData, s.key)]));

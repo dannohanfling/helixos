@@ -21,7 +21,7 @@ import { logSync } from "@/lib/integrations";
 
 const REASON = "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS.";
 /** Where the card sits: Settings or the Connect page. Anything else goes to Settings. */
-const backTo = (raw: string | null): string => (raw === "/connect-tools" ? "/connect-tools" : "/settings");
+const backTo = (raw: string | null): string => (raw === "/connect-tools" || raw === "/my-bot/connection" ? raw : "/settings");
 const answer = (back: string, code: string): never => redirect(`${back}?cl=${code}#community-loyalty`);
 
 /** Tests the pasted key, then keeps it. A refusal keeps nothing, and an old key that worked stays as it was. */

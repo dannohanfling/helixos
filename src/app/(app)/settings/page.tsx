@@ -482,7 +482,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </p>
         </Card>
         <Card id="your-bot" title="What your bot says about your business">
-          <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/brain" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>
+          <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/my-bot" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>
           {draftNote ? <p className="mb-3 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[draftNote] ?? draftNote}</p> : null}
           {botEditing ? (
             <p className="mb-3 rounded-lg border border-accent bg-accent-soft/40 p-3 text-sm" data-testid="claude-draft-editing">
