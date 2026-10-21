@@ -16,6 +16,8 @@ import { allow } from "@/lib/rate-limit";
 import { APP_VERSION } from "@/lib/version";
 import { authenticateBearer, issuer, type Grant } from "@/lib/mcp/oauth";
 import { gateFor, isCoachOwn, toolsFor, type ToolDef } from "@/lib/mcp/registry";
+import { isAgentOwnScope, notSwitchedRefusal, SEND_SCOPES, SEND_TOOLS, sendRefusal, viewOnlyRefusal } from "@/lib/engine/agent-clients";
+import { recordAgentChange } from "@/lib/agent-clients";
 import "@/lib/mcp/tools";
 
 /** Per grant: a minute's and a day's worth, the way the plan set them. */
@@ -53,9 +55,31 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
       error = "gate";
       text = def.scope === "body" ? "HumanOS's AI switch is off for this member, so HumanOS tools do nothing. They can turn it on in HumanOS settings." : def.scope === "inbox" ? "The Handoff inbox opens only in a member's own HelixOS, so its tools do nothing here." : "This tool isn't available for this member right now.";
     } else {
-      const r = await def.handler(grant.viewer, args, { scopes: grant.scopes, agentId: grant.agentId });
-      text = r.data === undefined ? r.text : `${r.text}\n\n${JSON.stringify(r.data, null, 2)}`;
-      images = r.images ?? [];
+      // An agent inside a client's HelixOS (H-1385): the agent's own tools act as the agent (the coach's own viewer); the client
+      // tools act as the client, never send or publish as them, write only in work mode, and every write lands in the client's record.
+      const switched = grant.ownViewer && grant.viewer.switchedInto ? grant.viewer : null;
+      const own = isAgentOwnScope(def.scope);
+      const v = own ? (grant.ownViewer ?? grant.viewer) : grant.viewer;
+      const first = switched?.switchedInto?.clientName.split(" ")[0] ?? "";
+      if (grant.agentToken && !own && !switched) {
+        // A granted agent's client tools never act as the coach: they run only inside a client's HelixOS.
+        ok = false;
+        error = "not-switched";
+        text = notSwitchedRefusal();
+      } else if (switched && !own && (SEND_TOOLS.has(def.name) || (def.scope && SEND_SCOPES.includes(def.scope)))) {
+        ok = false;
+        error = "switched-send";
+        text = sendRefusal(first);
+      } else if (switched && !own && def.kind === "write" && switched.switchedInto!.mode !== "work") {
+        ok = false;
+        error = "switched-view";
+        text = viewOnlyRefusal(first);
+      } else {
+        const r = await def.handler(v, args, { scopes: grant.scopes, agentId: grant.agentId, appId: grant.app.id, switched });
+        text = r.data === undefined ? r.text : `${r.text}\n\n${JSON.stringify(r.data, null, 2)}`;
+        images = r.images ?? [];
+        if (switched && !own && def.kind === "write" && grant.agentId) await recordAgentChange(switched, grant.agentId, def.name);
+      }
     }
   } catch (e) {
     ok = false;
@@ -65,8 +89,9 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
   const ms = Date.now() - t0;
   // Automatic lights (H-19): a call through an agent's own connection lights its building. Not the tools that set or read the
   // light themselves, and not a scheduled check-in, which isn't work until it says "work".
-  if (ok && grant.agentId && !SELF_LIT.has(def.name)) await agentCalled({ workspaceId: grant.viewer.workspace.id, userId: grant.viewer.user.id }, grant.agentId).catch(() => undefined);
-  await db.insert(schema.mcpCalls).values({ id: newId(), workspaceId: grant.viewer.workspace.id, userId: grant.viewer.user.id, appId: grant.app.id, tool: def.name, ok, error, ms });
+  const owner = grant.ownViewer ?? grant.viewer;
+  if (ok && grant.agentId && !SELF_LIT.has(def.name)) await agentCalled({ workspaceId: owner.workspace.id, userId: owner.user.id }, grant.agentId).catch(() => undefined);
+  await db.insert(schema.mcpCalls).values({ id: newId(), workspaceId: owner.workspace.id, userId: owner.user.id, appId: grant.app.id, tool: def.name, ok, error, ms });
   await db.update(schema.connectedApps).set({ lastUsedAt: nowIso(), lastTool: def.name }).where(eq(schema.connectedApps.id, grant.app.id));
   return textResult(text, !ok, images);
 }

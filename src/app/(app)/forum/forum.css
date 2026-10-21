@@ -37,6 +37,7 @@
 .fo-map { position: relative; border: 1px solid var(--fo-line); border-radius: 18px; overflow: hidden; background: #0c0a07; }
 .fo-scene { position: relative; width: 100%; aspect-ratio: 1680 / 944; }
 .fo-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.8s ease; }
+.fo-loop { pointer-events: none; }
 .fo-scene svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
 .fo-map[data-look="night"] .fo-halo { opacity: 0; transition: opacity 0.6s; mix-blend-mode: screen; pointer-events: none; }
 .fo-bld.fo-working .fo-halo { opacity: 1; animation: fo-breathe 2.6s ease-in-out infinite; }

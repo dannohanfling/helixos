@@ -1,8 +1,11 @@
 import { isNull, and, eq, inArray, ne, notInArray } from "drizzle-orm";
+import { TIERS } from "@/lib/engine/tiers";
 /** The Daily welcome (H-312) is "seen" for the demo's members whatever the day, so no walk meets it by surprise; the welcome walk clears the mark for its own run. */
 const WELCOME_SEEN = "9999-12-31";
 /** The seed's members arrived before the first arrival ceremony (H-472): stamped seen, so the walks' logins never get it. */
 const ARRIVED = "2026-10-01T00:00:00.000Z";
+/** Every rank there is: a clip seen at this level covers them all. */
+const RANK_LEVELS = TIERS.length;
 import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
@@ -19,6 +22,7 @@ import { SECTION_TEMPLATES } from "@/lib/engine/webinar";
 import { placeholdersIn } from "@/lib/engine/webinar-context";
 import { repurposeAll } from "@/lib/engine/repurpose";
 import { ADMIN_ONBOARDING_KEYS } from "@/lib/engine/pathway";
+import { DEFAULT_CALLS, DEFAULT_CALLS_LINK, DEFAULT_CALLS_PASSCODE } from "@/lib/engine/calls";
 import stories from "@/data/seed/webinar/stories.json";
 import analogies from "@/data/seed/webinar/analogies.json";
 import objections from "@/data/seed/webinar/objections.json";
@@ -135,6 +139,10 @@ async function wipeDemo(): Promise<void> {
   // And any alias whose feed is already gone (made before the seed cleared feeds, H-171): an orphan keeps its address taken.
   await db.delete(schema.leaderboardSlugAliases).where(notInArray(schema.leaderboardSlugAliases.feedId, db.select({ id: schema.leaderboardFeeds.id }).from(schema.leaderboardFeeds)));
   await db.delete(schema.leaderboardFeeds).where(eq(schema.leaderboardFeeds.workspaceId, ws.id));
+  // The weekly calls (H-828): their skips first, by call.
+  const callIds = (await db.query.programCalls.findMany({ where: eq(schema.programCalls.workspaceId, ws.id), columns: { id: true } })).map((c) => c.id);
+  if (callIds.length) await db.delete(schema.programCallSkips).where(inArray(schema.programCallSkips.callId, callIds));
+  await db.delete(schema.programCalls).where(eq(schema.programCalls.workspaceId, ws.id));
   for (const t of byWs) await db.delete(t).where(eq(t.workspaceId, ws.id));
   await db.delete(schema.dmTemplates).where(eq(schema.dmTemplates.workspaceId, ws.id));
   if (userIds.length) {
@@ -183,7 +191,11 @@ export async function seedDemo(): Promise<void> {
     clientInviteCode: "ACADEMY1",
     coachInviteCode: "COACH001",
     airtableBaseId: "appz2UoSLKvSr4OWQ",
+    callsLink: DEFAULT_CALLS_LINK,
+    callsPasscode: DEFAULT_CALLS_PASSCODE,
   });
+  // The weekly calls (H-828): the usual week, as migration 0211 gives every workspace with a coach.
+  await db.insert(schema.programCalls).values(DEFAULT_CALLS.map((c) => ({ id: newId(), workspaceId: wsId, ...c, link: null, active: true })));
   const password = await hashPassword("demo1234");
   const coachId = newId();
   const clientId = newId();
@@ -207,6 +219,9 @@ export async function seedDemo(): Promise<void> {
   await seedDemoWave2(wsId, clientId, client2Id, today);
   // Everyone the seed makes arrived before the first arrival ceremony (H-472): the walks' logins never get it; a fresh sign-up does.
   await db.update(schema.memberships).set({ firstArrivalSeenAt: ARRIVED }).where(isNull(schema.memberships.firstArrivalSeenAt));
+  // And their ranks' relic clips count as seen (H-934): the demo's points go back weeks, before the clips went live, so the walks'
+  // logins would otherwise open on the catch-up ceremony. The scenes walk clears it where it checks the catch-up.
+  await db.update(schema.memberships).set({ rankClipSeenLevel: RANK_LEVELS }).where(isNull(schema.memberships.rankClipSeenLevel));
   console.log("Demo workspace ready. Coach: coach@demo.helixos.app / demo1234 · Client: client@demo.helixos.app / demo1234 · Client invite code: ACADEMY1");
 }
 

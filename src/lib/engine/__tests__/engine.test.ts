@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addDays, isWeekday, startOfWeek, todayInTz, weekday } from "@/lib/dates";
 import { runningStreak, streakBonus, weeklyStreakDay } from "../streak";
-import { nextTier, tierFor, tierProgress } from "../tiers";
+import { keptTier, nextTier, rankOf, tierFor, tierProgress } from "../tiers";
 import { closeActivityPoints, contentPoints, taskPoints } from "../points";
 import { nextBestActions } from "../nba";
 
@@ -50,9 +50,32 @@ describe("tiers", () => {
     expect(tierFor(0).name).toBe("Artisan");
     expect(tierFor(99).name).toBe("Artisan");
     expect(tierFor(100).name).toBe("Philosopher");
-    expect(tierFor(3000).name).toBe("Sentinel");
-    expect(tierFor(99999).name).toBe("Olympian");
-    expect(nextTier(60000)).toBeNull();
+    // The table from 19 Oct (H-1088): Alchemist 2,000, Sentinel 5,000, Centurion 12,000, Oracle 25,000, Titan 50,000, Olympian 100,000.
+    expect(tierFor(1999).name).toBe("Sage");
+    expect(tierFor(2000).name).toBe("Alchemist");
+    expect(tierFor(3000).name).toBe("Alchemist");
+    expect(tierFor(5000).name).toBe("Sentinel");
+    expect(tierFor(99999).name).toBe("Titan");
+    expect(tierFor(100000).name).toBe("Olympian");
+    expect(nextTier(100000)).toBeNull();
+  });
+  it("keeps every rank already reached (H-1088)", () => {
+    // A Sentinel at 3,181 stays Sentinel, with Centurion at 12,000 next and the bar never running backwards.
+    const kept = tierProgress(3181, 5);
+    expect(kept.current.name).toBe("Sentinel");
+    expect(kept.next?.name).toBe("Centurion");
+    expect(kept.toNext).toBe(12000 - 3181);
+    expect(kept.pct).toBe(0);
+    // An Alchemist at 1,800 stays Alchemist; a Sage at 600 stays Sage with Alchemist at 2,000 next.
+    expect(keptTier(1800, 4).name).toBe("Alchemist");
+    expect(tierProgress(600, 3)).toMatchObject({ current: { name: "Sage" }, next: { name: "Alchemist", minPoints: 2000 }, toNext: 1400 });
+    // A new member reaches Alchemist at exactly 2,000, not 1,500.
+    expect(keptTier(1500, null).name).toBe("Sage");
+    expect(keptTier(2000, null).name).toBe("Alchemist");
+    // Points past the kept rank win: the kept rank is a floor, never a ceiling.
+    expect(keptTier(12500, 5).name).toBe("Centurion");
+    expect(rankOf({ rankKeptLevel: 5 }, 100).name).toBe("Sentinel");
+    expect(nextTier(3181, 5)?.name).toBe("Centurion");
   });
   it("computes progress to the next tier", () => {
     const p = tierProgress(300);

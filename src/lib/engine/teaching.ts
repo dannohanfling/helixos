@@ -186,20 +186,21 @@ export function rank<T extends { key: string; goodFor?: string | null }>(cands: 
 export const TAKE = { teaching: 12, stories: 8 } as const;
 
 /** The writer's block: each item with a short id it names back in MATERIAL_USED. Only ready stories, never a price, reach here. */
-export function libraryBlock(teaching: Pick<TeachingEntry, "question" | "answer">[], stories: Pick<StoryItem, "type" | "title" | "what" | "exactWords" | "numbers">[]): string {
-  if (!teaching.length && !stories.length) return "";
+export function libraryBlock(teaching: Pick<TeachingEntry, "question" | "answer">[], stories: Pick<StoryItem, "type" | "title" | "what" | "exactWords" | "numbers">[], frameworks: string[] = []): string {
+  if (!teaching.length && !stories.length && !frameworks.length) return "";
   const t = teaching.map((e, i) => `[T${i + 1}] Q: ${e.question}\nA: ${e.answer.slice(0, 1200)}`);
   const s = stories.map((e, i) => `[S${i + 1}] (${e.type.replace("_", " ")}) ${e.title}\nWhat: ${e.what.slice(0, 800)}${e.exactWords ? `\nExact words: ${e.exactWords}` : ""}${e.numbers ? `\nNumbers: ${e.numbers}` : ""}`);
   return [
-    "FROM YOUR TEACHING LIBRARY AND STORY BANK (use what fits; quote Exact words exactly; numbers only as written; never a price; name the ids you used in MATERIAL_USED):",
+    `FROM YOUR TEACHING LIBRARY, STORY BANK${frameworks.length ? " AND FRAMEWORKS" : ""} (use what fits; quote Exact words exactly; numbers only as written; never a price; a framework's steps in their order; name the ids you used in MATERIAL_USED):`,
     ...t,
     ...s,
-    "After NOTES, add one more field, MATERIAL_USED, with the ids you drew on, comma separated (for example: T2, S1), or NONE.",
+    ...frameworks,
+    "After NOTES, add one more field, MATERIAL_USED, with the ids you drew on, comma separated (for example: T2, S1, F1), or NONE.",
   ].join("\n\n");
 }
-/** "T2, S1, t5" → the ids the writer named, in order, once each; anything else ignored. */
+/** "T2, S1, F1, t5" → the ids the writer named, in order, once each; anything else ignored. */
 export function usedIds(text: string): string[] {
-  return [...new Set((text.match(/\b[TS]\d{1,2}\b/gi) ?? []).map((x) => x.toUpperCase()))];
+  return [...new Set((text.match(/\b[TSF]\d{1,2}\b/gi) ?? []).map((x) => x.toUpperCase()))];
 }
 
 /** "724" or a Fathom link's ?timestamp=724 → "12:04", for the Material used panel. */

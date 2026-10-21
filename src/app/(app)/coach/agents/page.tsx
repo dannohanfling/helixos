@@ -15,7 +15,8 @@ import {
   sendReadingPackAction,
   tieConnectionAction,
 } from "@/lib/actions/handoff";
-import { AGENT_TOKEN_CLIENT, agentConnections, agentSettings } from "@/lib/handoff";
+import { AGENT_TOKEN_CLIENT, agentConnections, agentPartnerScopes, agentSettings } from "@/lib/handoff";
+import { setAgentPartnerScopeAction } from "@/lib/actions/partner";
 import { CHECK_LINE, connectionOf, envVarFor, failuresSince, pingLine } from "@/lib/engine/agent-connection";
 import { seedCoachForum } from "@/lib/forum";
 import { appUrl } from "@/lib/branded-email";
@@ -77,6 +78,7 @@ export default async function CoachAgentsPage({
     ),
   );
   const conns = await agentConnections(o, agents.map((a) => a.id));
+  const partnerOn = await agentPartnerScopes(o, agents.map((a) => a.id));
   const now = new Date();
   const clock = (iso: string) =>
     new Intl.DateTimeFormat("en-US", { timeZone: coach.tz, hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(
@@ -434,6 +436,19 @@ export default async function CoachAgentsPage({
                         data-testid="agent-token-revoke"
                       >
                         Revoke
+                      </SubmitButton>
+                    </form>
+                  ) : null}
+                  {t ? (
+                    // Partner Program tools (H-1361): on this agent's token or not; a new token starts without them.
+                    <form action={setAgentPartnerScopeAction} className="flex items-center gap-2 text-sm">
+                      <input type="hidden" name="agentId" value={a.id} />
+                      <input type="hidden" name="on" value={partnerOn.get(a.id) ? "0" : "1"} />
+                      <span data-testid="agent-partner-state" data-on={partnerOn.get(a.id) ? "1" : "0"}>
+                        Partner Program tools: {partnerOn.get(a.id) ? "on" : "off"}
+                      </span>
+                      <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…" data-testid="agent-partner-toggle">
+                        {partnerOn.get(a.id) ? "Turn off" : "Turn on"}
                       </SubmitButton>
                     </form>
                   ) : null}

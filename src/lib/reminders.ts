@@ -82,7 +82,7 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
         }
         // One true line the client does not already know: the streak, a streak that broke yesterday, or a rank within reach.
         const points = await totalPoints(ws.id, m.userId);
-        const next = nextTier(points);
+        const next = nextTier(points, m.rankKeptLevel);
         const yesterday = prevCountingDay(today, m.workDays);
         const brokenYesterday = streak === 0 && active.has(prevCountingDay(yesterday, m.workDays)) && !active.has(yesterday);
         const e = brandedEmail(morningCopy({ first, streak, brokenYesterday, points, nextTier: next ? { name: next.name, minPoints: next.minPoints } : null, hours }), { base: appUrl });
