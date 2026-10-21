@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 334,
+    date: "2026-10-21",
+    title: "The streak flame without its box",
+    lines: [
+      "On a phone the flame sat in a hard black rectangle, in the top bar and on the streak sheet. The black now blends away and the edges fade, so only the fire shows, a little larger in the bar.",
+      "The waiting ember is brighter too: still low and slow with its amber Waiting on you tag, but it reads.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 333,
     date: "2026-10-21",
     title: "The Inbox number means something",
