@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LadderProfile, Proof } from "@/db/schema";
-import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, ctaRung, keywordOf, masterBlock, outputContract, parseLadderOutput, parseRungs, productPitchHits, readyToPost, rungGapMinutes, rungsForAirtable, scaffold, targetWords } from "../ladder";
+import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, ctaRung, keywordOf, masterBlock, outputContract, parseLadderOutput, parseRungs, productPitchHits, readyToPost, rungGapMinutes, rungsForAirtable, scaffold, targetWords, looksLikeAPerson } from "../ladder";
 import { readFileSync } from "node:fs";
 import { CHANNEL_SPECS } from "../repurpose";
 
@@ -264,5 +264,29 @@ describe("keywords know what they fetch (L1, rev 562)", () => {
     expect(block).toContain("- ROOM — the community — fetches a conversation: A conversation about the Academy and the community.");
     expect(block).toContain("- LOST — no target yet — fetches no target yet");
     expect(block).toContain("BUILT FROM WHAT THE KEYWORD FETCHES");
+  });
+});
+
+describe("testimonials read the name before the quote (H-1358)", () => {
+  it("a writing prompt like Try: \"…\" is not a testimonial; a person's quote with no approved proof is, and the note says where", () => {
+    const withTry = good({ rungs: good().rungs.map((r) => (r.n === 4 ? { ...r, body: `${r.body}\nTry: "Write one sentence about what you noticed today."` } : r)) });
+    const okChecks = checklist(withTry, profile, proofs);
+    expect(okChecks.find((c) => c.key === "testimonials")?.ok).toBe(true);
+    const withMaria = good({ rungs: good().rungs.map((r) => (r.n === 3 ? { ...r, body: `${r.body}\nMaria: "I booked three calls in a week."` } : r)) });
+    const bad = checklist(withMaria, profile, proofs).find((c) => c.key === "testimonials")!;
+    expect(bad.ok).toBe(false);
+    expect(bad.note).toContain("Rung 3 quotes");
+    expect(bad.note).toContain("as if from Maria");
+    expect(bad.note).toContain("I booked three calls");
+  });
+  it("names the part for a leftover in the caption or an alternate headline", () => {
+    const l = good({ igCaption: `${good().igCaption}\nTom: "Doubled my bookings in a month."`, altHeadlines: ["WHAT HAPPENS / WHEN YOU STOP (gold: STOP)"] });
+    const bad = checklist(l, profile, proofs).find((c) => c.key === "testimonials")!;
+    expect(bad.ok).toBe(false);
+    expect(bad.note).toContain("The IG caption quotes");
+  });
+  it("looksLikeAPerson: label words are not people", () => {
+    for (const w of ["Try", "Step", "Note", "Tip", "Example", "Monday"]) expect(looksLikeAPerson(w)).toBe(false);
+    for (const w of ["Maria", "Brianna T.", "Ana Ruiz"]) expect(looksLikeAPerson(w)).toBe(true);
   });
 });

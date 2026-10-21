@@ -160,16 +160,22 @@ async function main() {
     must(tap.width >= 26 && tap.height >= 26, "an avatar draws at least 26px with a 44px tap area around it");
     await seat.click({ force: true }); // it is moving, as a member taps it
     must((await page.locator('[data-testid="arena-card"]').innerText()).includes("points"), "tapping a seat opens its card");
-    // Golden hour, filmed (H-1253): the arena's loop plays over the photo, started by the page; Pause holds it with the seats.
-    const arenaLoop = page.locator('[data-testid="arena-loop"]');
+    // Golden hour (H-1367): doves and an eagle fly over the still photo on a canvas in the photo's box; Pause holds them.
+    const birds = page.locator('[data-testid="arena-birds"]');
     if ((await page.locator('[data-testid="arena"]').getAttribute("data-look")) === "day") {
-      must((await page.locator('[data-testid="arena"]').getAttribute("data-loop")) === "1", "the arena lists its golden-hour loop");
-      await page.waitForFunction(() => document.querySelector('[data-testid="arena-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
-      const lp = await arenaLoop.evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, paused: v.paused, opacity: getComputedStyle(v).opacity, auto: v.autoplay }));
-      must(/\/colosseum\/colosseum-day-loop\.(mp4|webm)\?v=\d+$/.test(lp.src) && !lp.paused && lp.opacity === "1" && !lp.auto, `the arena's loop plays over the photo: ${JSON.stringify(lp)}`);
-      const lb = (await arenaLoop.boundingBox())!;
+      must((await page.locator('[data-testid="arena"]').getAttribute("data-birds-scene")) === "1", "the golden-hour arena has its birds");
+      must((await page.locator('[data-testid="arena-loop"]').count()) === 0, "and no filmed loop any more");
+      await page.waitForFunction(() => document.querySelector('[data-testid="arena-birds"]')?.getAttribute("data-birds") === "flying", null, { timeout: 15000 });
+      const bb = (await birds.boundingBox())!;
       const pb = (await page.locator('[data-testid="arena-photo"]').boundingBox())!;
-      must(Math.abs(lb.x - pb.x) < 1 && Math.abs(lb.width - pb.width) < 1 && Math.abs(lb.height - pb.height) < 1, "the loop sits exactly over the arena photo");
+      must(Math.abs(bb.x - pb.x) < 1 && Math.abs(bb.width - pb.width) < 1 && Math.abs(bb.height - pb.height) < 1, "the canvas sits exactly over the arena photo");
+      const cv = await birds.evaluate((c: HTMLCanvasElement) => ({ w: c.width, h: c.height, cw: c.clientWidth, dpr: Math.min(window.devicePixelRatio || 1, 2) }));
+      must(Math.abs(cv.w - cv.cw * cv.dpr) <= 2, `the canvas is drawn at the device's pixels, capped at 2: ${JSON.stringify(cv)}`);
+      // The first doves come 2 to 6 s in and cross in 8 to 12 s: a crossing is counted well within 25 s.
+      await page.waitForFunction(() => Number(document.querySelector('[data-testid="arena-birds"]')?.getAttribute("data-airborne")) > 0, null, { timeout: 8000 });
+      await page.waitForFunction(() => Number(document.querySelector('[data-testid="arena-birds"]')?.getAttribute("data-crossings")) >= 1, null, { timeout: 25000 });
+      const sheets = await page.evaluate(() => performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.includes("/colosseum/birds/")));
+      must(sheets.some((n) => /dove\.webp\?v=\d+$/.test(n)) && sheets.some((n) => /eagle\.webp\?v=\d+$/.test(n)) && !sheets.some((n) => n.includes(".png")), `the WebP sheets were fetched under a version tag, no PNG: ${sheets.join(", ")}`);
     }
     await page.click('[data-testid="arena-pause"]');
     await page.waitForTimeout(400);
@@ -178,9 +184,9 @@ async function main() {
     const p4 = await pos();
     must(p3.x === p4.x && p3.y === p4.y, "Pause holds every seat");
     must((await page.locator('[data-testid="arena-pause"]').innerText()).includes("Set the arena moving"), "the label flips");
-    if ((await page.locator('[data-testid="arena"]').getAttribute("data-loop")) === "1") {
-      await page.waitForFunction(() => document.querySelector('[data-testid="arena-loop"]')?.getAttribute("data-loop-mode") !== "video", null, { timeout: 5000 });
-      must(await arenaLoop.evaluate((v: HTMLVideoElement) => v.paused), "Pause holds the loop too, and the photo shows");
+    if ((await page.locator('[data-testid="arena"]').getAttribute("data-birds-scene")) === "1") {
+      await page.waitForFunction(() => document.querySelector('[data-testid="arena-birds"]')?.getAttribute("data-birds") === "still", null, { timeout: 5000 });
+      must((await birds.count()) === 1, "Pause holds the birds where they are, and the photo stays");
     }
     await page.waitForTimeout(500);
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.arenaPaused, "Pause is remembered");
@@ -191,12 +197,13 @@ async function main() {
     const s1 = await sp.locator('[data-testid="arena-seat"]').first().evaluate((el) => (el as HTMLElement).style.left);
     await sp.waitForTimeout(1200);
     must(s1 === (await sp.locator('[data-testid="arena-seat"]').first().evaluate((el) => (el as HTMLElement).style.left)), "reduced motion keeps every seat still");
+    must((await sp.locator('[data-testid="arena-birds"]').count()) === 0, "reduced motion: the still photo alone, no birds canvas at all");
     await still.close();
     await page.goto(`${base}/colosseum?tab=arena`, { waitUntil: "networkidle" });
     await page.click('[data-testid="arena-look-night"]');
     await page.waitForTimeout(400);
     must((await page.locator('[data-testid="arena"]').getAttribute("data-look")) === "night", "Night swaps the photo");
-    console.log("✓ 1440, 1024 and 390 keep the shape with no sideways scroll; the orbit stays on its ring; a tap opens the card; Pause holds and is remembered; reduced motion is still; Night swaps the photo");
+    console.log("✓ 1440, 1024 and 390 keep the shape with no sideways scroll; the orbit stays on its ring; a tap opens the card; Pause holds and is remembered; by day the doves and the eagle fly over the photo and a crossing is counted; reduced motion is still with no birds; Night swaps the photo");
 
     // ── Keyboard: a seat, the tabs and Pause are all reachable. ──
     await page.goto(`${base}/colosseum`, { waitUntil: "networkidle" });
