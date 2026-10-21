@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "14cfa31a-4cb6-44c1-b366-3ab1d4198236",
-  "prevId": "de9de82a-cb9f-4835-afa9-f8df0083a255",
+  "id": "8d72f371-2d06-4634-8636-510711a0602c",
+  "prevId": "8ab9eb04-3ab1-448e-a044-752703233472",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -14563,6 +14563,34 @@
           "notNull": false,
           "autoincrement": false
         },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "done_draft": {
+          "name": "done_draft",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "done_draft_by": {
+          "name": "done_draft_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "done_draft_at": {
+          "name": "done_draft_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "target_kind": {
           "name": "target_kind",
           "type": "text",
@@ -14613,6 +14641,13 @@
           "name": "member_reports_user",
           "columns": [
             "user_id"
+          ],
+          "isUnique": false
+        },
+        "member_reports_parent": {
+          "name": "member_reports_parent",
+          "columns": [
+            "parent_id"
           ],
           "isUnique": false
         }
@@ -20338,6 +20373,13 @@
           "autoincrement": false,
           "default": false
         },
+        "drafted_by": {
+          "name": "drafted_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "read_at": {
           "name": "read_at",
           "type": "text",
@@ -23363,6 +23405,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": true
+        },
+        "auto_done_after_merge": {
+          "name": "auto_done_after_merge",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         },
         "colosseum_on": {
           "name": "colosseum_on",
