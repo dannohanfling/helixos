@@ -58,19 +58,24 @@ describe("the Inbox number is the list (H-1488, H-1494)", () => {
       [hermes, "Allow the PR #99 rebase"],
     ] as const) expect((await reportToForum(o, { agent: agent.name, needs_you: { what } }, "agent")).ok).toBe(true);
     await post(hermes, { kind: "status", title: "Merged PR #99: the rebase", body: "On main." });
+    // H-1554: a merge reported under another title, a Ready the member decided, and an ask naming a superseded post all settle too.
+    const readyDone = await post(viator, { kind: "status", title: "Ready to merge PR #77: the digest", body: "Gated.", needs_approval: true });
+    expect((await decideHandoff(o, U, readyDone.id, "approved", "")).ok).toBe(true);
+    await post(hermes, { kind: "status", title: "#88 is on main (merged this morning)", body: "Live." });
+    for (const what of ["Tap Approve on the #77 Ready", "Allow the #88 rebase", `Approve H-${old.seq} (stalled session v1)`]) expect((await reportToForum(o, { agent: hermes.name, needs_you: { what } }, "agent")).ok).toBe(true);
     const list = await ownerInbox(o);
     // Waiting: the undecided plan and the v2 plan (its v1 is superseded, the held one waits on its hold). Needs: the plain one.
     expect(list.waiting.map((m) => m.title).sort()).toEqual(["Plan: stalled session v2", "Plan: the push stack"]);
     expect(list.needs.map((n) => n.what)).toEqual(["Pick the merge order for the push stack"]);
     // New for you: the FYI and the Merged post, to Danno without an approval; the decision's own answer went to the agent.
-    expect(list.fresh.map((m) => m.title).sort()).toEqual(["FYI: Host pages are on", "Merged PR #99: the rebase"]);
+    expect(list.fresh.map((m) => m.title).sort()).toEqual(["#88 is on main (merged this morning)", "FYI: Host pages are on", "Merged PR #99: the rebase"]);
     const counts = await inboxCounts(o);
-    expect(counts).toEqual({ waiting: 2, needs: 1, fresh: 2 });
+    expect(counts).toEqual({ waiting: 2, needs: 1, fresh: 3 });
     expect(await inboxCount(o)).toBe(list.waiting.length + list.needs.length + list.fresh.length);
     // Opening the page reads the messages: the number drops to what still waits, and the list keeps them for a while.
     await markOwnerRead(o);
     expect(await inboxCount(o)).toBe(3);
-    expect((await ownerInbox(o)).fresh.length).toBe(2);
+    expect((await ownerInbox(o)).fresh.length).toBe(3);
     // Done on the Inbox, then the decision on the push stack: nothing waits.
     expect(await tickNeed(o, list.needs[0]!.id)).toBe(true);
     expect(await tickNeed(o, list.needs[0]!.id)).toBe(false);

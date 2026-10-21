@@ -524,19 +524,23 @@ export const clearNeedsForRef = (o: Owner, ref: string): Promise<number> => sett
 export const clearNeedsForPr = (o: Owner, pr: number): Promise<number> => settleNeeds(o, (n) => !needPrs(n.what, n.detail).includes(pr), "agent");
 
 /**
- * Items already answered elsewhere go done (H-1494 §2 and §4): one naming an H-number that has its decision, or a PR a
- * "Merged PR #N" post reports. Runs on every read of the list, so what piled up before this settles on the first look.
+ * Items already answered elsewhere go done (H-1494 §2 and §4, widened in H-1554): one naming an H-number that has its
+ * decision or was superseded; one naming a PR that any post reports merged (whatever its title), or whose own Ready post
+ * is decided or superseded. Runs on every read of the list, so what piled up before this settles on the first look.
  */
 export async function sweepNeeds(o: Owner): Promise<number> {
   const open = await db.query.forumNeeds.findMany({ where: openNeedsWhere(o) });
   if (!open.length) return 0;
+  const answered = or(isNotNull(schema.handoffMessages.decision), isNotNull(schema.handoffMessages.supersededById));
   const seqs = [...new Set(open.map((n) => needRef(n.what, n.detail)).filter((r): r is string => Boolean(r)).map((r) => Number(r.slice(2))))];
-  const decided = new Set(seqs.length ? (await db.query.handoffMessages.findMany({ where: and(mine(o), inArray(schema.handoffMessages.seq, seqs), isNotNull(schema.handoffMessages.decision)), columns: { seq: true } })).map((m) => m.seq) : []);
+  const decided = new Set(seqs.length ? (await db.query.handoffMessages.findMany({ where: and(mine(o), inArray(schema.handoffMessages.seq, seqs), answered), columns: { seq: true } })).map((m) => m.seq) : []);
   const prs = new Set(open.flatMap((n) => needPrs(n.what, n.detail)));
   const merged = new Set<number>();
-  if (prs.size) for (const m of await db.query.handoffMessages.findMany({ where: and(mine(o), sql`${schema.handoffMessages.title} like 'Merged PR #%'`), columns: { title: true } })) {
-    const k = /^Merged PR #(\d+)\b/i.exec(m.title);
-    if (k && prs.has(Number(k[1]))) merged.add(Number(k[1]));
+  if (prs.size) {
+    // A merge report under any title ("Merged PR #99", "#99 is on main, merged"), or a Ready for the PR that Danno has decided
+    // or the agent replaced: either way the ask about that PR is over.
+    const posts = await db.query.handoffMessages.findMany({ where: and(mine(o), or(sql`lower(${schema.handoffMessages.title}) like '%merged%'`, and(sql`lower(${schema.handoffMessages.title}) like '%ready%'`, answered))), columns: { title: true } });
+    for (const m of posts) for (const pr of needPrs(m.title, null)) if (prs.has(pr)) merged.add(pr);
   }
   let n = 0;
   if (decided.size) n += await settleNeeds(o, (x) => { const r = needRef(x.what, x.detail); return r === null || !decided.has(Number(r.slice(2))); }, "member");
@@ -544,10 +548,10 @@ export async function sweepNeeds(o: Owner): Promise<number> {
   return n;
 }
 
-/** The open "needs you" items, oldest first, swept first. */
+/** The open "needs you" items, newest first (H-1554), swept first. */
 export async function openNeeds(o: Owner, now: Date = new Date()): Promise<OpenNeed[]> {
   await sweepNeeds(o);
-  const [rows, agents] = await Promise.all([db.query.forumNeeds.findMany({ where: openNeedsWhere(o), orderBy: asc(schema.forumNeeds.createdAt) }), agentsOf(o)]);
+  const [rows, agents] = await Promise.all([db.query.forumNeeds.findMany({ where: openNeedsWhere(o), orderBy: desc(schema.forumNeeds.createdAt) }), agentsOf(o)]);
   return rows.map((r) => ({
     id: r.id,
     agentId: r.agentId,
