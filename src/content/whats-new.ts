@@ -12,12 +12,22 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 333,
+    n: 334,
     date: "2026-10-21",
     title: "The streak flame without its box",
     lines: [
       "On a phone the flame sat in a hard black rectangle, in the top bar and on the streak sheet. The black now blends away and the edges fade, so only the fire shows, a little larger in the bar.",
       "The waiting ember is brighter too: still low and slow with its amber Waiting on you tag, but it reads.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 333,
+    date: "2026-10-21",
+    title: "The Inbox number means something",
+    lines: [
+      "The number by Inbox now counts exactly what the Inbox shows: the approvals waiting on you, your agents' open \"needs you\" items (now listed there too, with Done and Not needed), and the messages to you under New for you.",
+      "An item clears on its own when you decide the approval it names, when its PR is reported merged, or when the agent clears it; one open more than three days asks the agent whether it is still needed.",
     ],
     audience: "everyone",
   },
