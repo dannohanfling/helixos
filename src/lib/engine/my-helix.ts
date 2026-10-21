@@ -85,6 +85,8 @@ export type HelixFacts = {
   botLive: boolean;
   webinar: { any: boolean; named: boolean; registration: boolean; delivered: boolean; offers: boolean; debrief: boolean; sale: boolean };
   ticks: string[];
+  /** Docket #10 (H-195): the one line given when a rung was ticked by hand, by its key. */
+  reasons?: Record<string, string>;
 };
 export const EMPTY_FACTS: HelixFacts = {
   essence: [],
@@ -207,11 +209,20 @@ export function longestRun(days: Iterable<string>): number {
   return best;
 }
 
-export type HelixRung = RungDef & { done: boolean; ticked: boolean; tick: boolean; words: string };
+/**
+ * Docket #10 (H-195, K.Y.): what a rung means, in plain words, where its label alone leaves a member guessing. "Four
+ * diagnostics answered" waits for Danno's own line: HelixOS doesn't say what the four are, and this never makes them up.
+ */
+export const RUNG_NOTES: Record<string, string> = {
+  "p2-journey": "The steps a customer takes from first contact to client, laid out on your Pathway. It ticks once a pathway has two or more offers on it.",
+  "p1-offer-shared": "Post your offer in the group, then press Done with one line on where and when.",
+};
+
+export type HelixRung = RungDef & { done: boolean; ticked: boolean; tick: boolean; words: string; note: string | null; reason: string | null };
 /** Every rung with its state, in order, bottom to top. */
 export function helixRungs(defs: RungDef[], f: HelixFacts): HelixRung[] {
   return defs
     .slice()
     .sort(byPlace)
-    .map((r) => ({ ...r, done: rungDone(r, f), ticked: f.ticks.includes(r.key), tick: isTick(r.signal), words: signalWords(r.signal) }));
+    .map((r) => ({ ...r, done: rungDone(r, f), ticked: f.ticks.includes(r.key), tick: isTick(r.signal), words: signalWords(r.signal), note: RUNG_NOTES[r.key] ?? null, reason: f.reasons?.[r.key] ?? null }));
 }

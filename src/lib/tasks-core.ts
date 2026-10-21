@@ -13,7 +13,7 @@ import { taskPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 
 export const TASK_URGENCIES = ["top3", "high", "medium", "low"] as const;
-export const TASK_CATEGORIES = ["sales", "content", "community", "system", "admin", "fulfillment"] as const;
+export const TASK_CATEGORIES = ["sales", "content", "community", "system", "admin", "fulfillment", "personal"] as const;
 export type TaskUrgency = (typeof TASK_URGENCIES)[number];
 export type TaskCategory = (typeof TASK_CATEGORIES)[number];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,7 +46,8 @@ export async function addTask(v: Viewer, input: NewTask): Promise<{ task: schema
     dueDate,
     status: dueDate <= v.today ? "today" : "upcoming",
     focusDate: urgency === "top3" && dueDate === v.today ? v.today : null,
-    points: taskPoints(urgency),
+    // A personal task (docket #8, H-195) earns no business points.
+    points: category === "personal" ? 0 : taskPoints(urgency),
     repeatEveryDays: repeat,
   });
   return { task: (await db.query.tasks.findFirst({ where: eq(schema.tasks.id, id) }))!, created: true };
@@ -97,8 +98,9 @@ export async function toggleTask(v: Viewer, task: schema.Task): Promise<Ticked> 
     return { done: false, points: 0, awarded: false, next: null };
   }
   await db.update(schema.tasks).set({ status: "done", completedAt: nowIso() }).where(and(eq(schema.tasks.id, task.id), eq(schema.tasks.userId, userId)));
-  const points = taskPoints(task.urgency, task.points);
-  const awarded = await award({ workspaceId: v.workspace.id, userId }, "task", points, `Task: ${task.title}`, task.id);
+  // A personal task (docket #8, H-195) is the member's own life: done is done, with no business points.
+  const points = task.category === "personal" ? 0 : taskPoints(task.urgency, task.points);
+  const awarded = points > 0 ? await award({ workspaceId: v.workspace.id, userId }, "task", points, `Task: ${task.title}`, task.id) : false;
   let next: schema.Task | null = null;
   if (task.repeatEveryDays) {
     const id = newId();

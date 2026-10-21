@@ -12,13 +12,24 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 321,
+    n: 322,
     date: "2026-10-19",
     title: "Your week adds up: the intention chain",
     lines: [
       "On Intentions, \"Your chain\" shows how this week adds up: the initiative it moves, this month's intention, this week's, its tasks done, and the key results moved. Each step is a tap.",
       "Link your week to an initiative in Business goals, and each key result to one of yours there. On Friday, the number you write for a linked key result is logged on it, dated that day.",
       "Tick a week's task right on the week card, and deleting one in Tasks asks whether to take it off your intention too.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 321,
+    date: "2026-10-19",
+    title: "Personal tasks, wins that weren't on the list, and offer tiers you set",
+    lines: [
+      "Tasks have a Personal area: for your own life, with no points and kept out of your business numbers.",
+      "On Today, \"Did something else? Add it\" logs a win that wasn't on your list. Close the day has \"Also today\": outreach messages from any app (WhatsApp too), scripts written, videos recorded and videos posted. Outreach counts toward DMs started on the Aqueduct.",
+      "On an offer you can set its tier (Freebie, Starter, Core or Premium) for My Helix. Customer journey mapped leads to your Pathway, and when you tick a rung yourself you can add one line on how you did it.",
     ],
     audience: "everyone",
   },

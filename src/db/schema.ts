@@ -449,7 +449,7 @@ export const tasks = sqliteTable(
     details: text("details"),
     status: text("status", { enum: ["upcoming", "today", "in_progress", "done"] }).notNull().default("upcoming"),
     urgency: text("urgency", { enum: ["top3", "high", "medium", "low"] }).notNull().default("medium"),
-    category: text("category", { enum: ["sales", "content", "community", "system", "admin", "fulfillment"] })
+    category: text("category", { enum: ["sales", "content", "community", "system", "admin", "fulfillment", "personal"] })
       .notNull()
       .default("sales"),
     dueDate: text("due_date"),
@@ -940,6 +940,11 @@ export const dailyLogs = sqliteTable(
     ctaPosts: integer("cta_posts").notNull().default(0),
     beliefPosts: integer("belief_posts").notNull().default(0),
     storiesCreated: integer("stories_created").notNull().default(0),
+    /** Docket #9 (H-195): wins that weren't on the list, counted in the close. Outreach in any app feeds the Aqueduct's DMs started stage. */
+    outreachMessages: integer("outreach_messages").notNull().default(0),
+    scriptsWritten: integer("scripts_written").notNull().default(0),
+    videosRecorded: integer("videos_recorded").notNull().default(0),
+    videosPosted: integer("videos_posted").notNull().default(0),
     referralAsks: integer("referral_asks").notNull().default(0),
     createdAt: createdAt(),
   },
@@ -1351,6 +1356,8 @@ export const offers = sqliteTable(
     /* The offer ladder (handoff 27 Sep, Phase 1 of a client's Airtable import): where an offer sits and its full sales copy. */
     /** The ladder code ("T03", "B1"); blank for an offer off the ladder. */
     tierCode: text("tier_code"),
+    /** Docket #10 (H-195): the offer's tier, set by the member (Freebie, Starter, Core, Premium); null reads it from the price, as before. */
+    ladderTier: text("ladder_tier", { enum: ["freebie", "starter", "core", "premium"] }),
     /** Its place in its pathway: T00 is 0, B3 is 3. */
     tierOrder: integer("tier_order"),
     /** The client's pathway (sub-brand) this offer belongs to. */
@@ -5183,6 +5190,8 @@ export const helixTicks = sqliteTable(
     rungKey: text("rung_key").notNull(),
     /** Who ticked it: the member, or the coach switched in (then also logged as the coach's change). */
     byUserId: text("by_user_id").notNull(),
+    /** Docket #10 (H-195): one line on how it was done ("posted it in the group on Tuesday"), shown on the rung. */
+    reason: text("reason"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("helix_ticks_member_rung").on(t.workspaceId, t.userId, t.rungKey)],

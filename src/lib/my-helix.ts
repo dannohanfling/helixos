@@ -26,7 +26,7 @@ export async function factsFor(m: Member): Promise<HelixFacts> {
   const [essence, avatars, offers, ladders, logs, magnets, content, scripts, clients, botKeys, webinars, setups, ticks, objectionBank] = await Promise.all([
     db.query.essences.findFirst({ where: mine(schema.essences), columns: { data: true } }),
     db.query.avatars.findMany({ where: and(mine(schema.avatars), isNull(schema.avatars.archivedAt)), columns: { who: true, pains: true } }),
-    db.query.offers.findMany({ where: mine(schema.offers), columns: { objectionAssetIds: true, status: true, promise: true, mechanismName: true, pathSteps: true, container: true, price: true, objTime: true, objMoney: true, objPartner: true, objTriedBefore: true, objDiy: true, pathwayId: true } }),
+    db.query.offers.findMany({ where: mine(schema.offers), columns: { ladderTier: true, objectionAssetIds: true, status: true, promise: true, mechanismName: true, pathSteps: true, container: true, price: true, objTime: true, objMoney: true, objPartner: true, objTriedBefore: true, objDiy: true, pathwayId: true } }),
     db.query.ladders.findMany({ where: mine(schema.ladders), columns: { launchedAt: true, shippedAt: true } }),
     db.query.dailyLogs.findMany({ where: mine(schema.dailyLogs), columns: { date: true, posts: true, newLeads: true, dmsStarted: true, callsBooked: true, callsHeld: true, offersMade: true } }),
     db.query.leadMagnets.findMany({ where: mine(schema.leadMagnets), columns: { publishedAt: true } }),
@@ -36,7 +36,7 @@ export async function factsFor(m: Member): Promise<HelixFacts> {
     db.query.botKeys.findMany({ where: and(mine(schema.botKeys), isNull(schema.botKeys.revokedAt)), columns: { lastUsedAt: true } }),
     db.query.webinars.findMany({ where: mine(schema.webinars), columns: { id: true, title: true, promise: true, status: true, registrationUrl: true, showed: true, offersMade: true, debriefLeak: true, debriefFix: true, sales: true, revenue: true, isExample: true } }),
     db.query.mfSetups.findMany({ where: mine(schema.mfSetups), columns: { webinarId: true, live: true } }),
-    db.query.helixTicks.findMany({ where: mine(schema.helixTicks), columns: { rungKey: true } }),
+    db.query.helixTicks.findMany({ where: mine(schema.helixTicks), columns: { rungKey: true, reason: true } }),
     assetsFor(m.workspaceId, m.userId, "objection"),
   ]);
   const data = (essence?.data ?? {}) as EssenceData;
@@ -63,7 +63,8 @@ export async function factsFor(m: Member): Promise<HelixFacts> {
         return fixed === 5 || fixed + bank >= 5;
       }),
       // The pathway's tiers, read from the offers' prices: a free one is the Freebie; one, two, three priced offers reach Starter, Core, Premium.
-      tiers: [...(live.some((o) => (o.price ?? 0) === 0) ? ["freebie"] : []), ...(priced >= 1 ? ["starter"] : []), ...(priced >= 2 ? ["core"] : []), ...(priced >= 3 ? ["premium"] : [])],
+      // Docket #10 (H-195): a tier the member set on an offer counts first; the price-derived ladder still fills in the rest.
+      tiers: [...new Set([...live.flatMap((o) => (o.ladderTier ? [o.ladderTier] : [])), ...(live.some((o) => (o.price ?? 0) === 0) ? ["freebie"] : []), ...(priced >= 1 ? ["starter"] : []), ...(priced >= 2 ? ["core"] : []), ...(priced >= 3 ? ["premium"] : [])])],
     },
     pathwayMax: Math.max(0, ...byPathway.values()),
     ladders: { launched: ladders.filter((l) => l.launchedAt).length, shipped: ladders.filter((l) => l.shippedAt).length },
@@ -85,6 +86,7 @@ export async function factsFor(m: Member): Promise<HelixFacts> {
       sale: real.some((w) => (w.sales ?? 0) > 0 || (w.revenue ?? 0) > 0),
     },
     ticks: ticks.map((t) => t.rungKey),
+    reasons: Object.fromEntries(ticks.filter((t) => t.reason).map((t) => [t.rungKey, t.reason!])),
   };
 }
 
@@ -104,7 +106,7 @@ export async function helixFor(v: { workspace: { id: string }; user: { id: strin
 }
 
 /** A tick on a rung no signal covers; a signal rung's tick is stored but never counts. */
-export async function tickRung(m: Member, key: string, on: boolean, byUserId: string): Promise<void> {
+export async function tickRung(m: Member, key: string, on: boolean, byUserId: string, reason: string | null = null): Promise<void> {
   const defs = await rungDefs();
   if (!defs.some((r) => r.key === key)) return;
   const where = and(eq(schema.helixTicks.workspaceId, m.workspaceId), eq(schema.helixTicks.userId, m.userId), eq(schema.helixTicks.rungKey, key));
@@ -113,7 +115,7 @@ export async function tickRung(m: Member, key: string, on: boolean, byUserId: st
     return;
   }
   if (await db.query.helixTicks.findFirst({ where })) return;
-  await db.insert(schema.helixTicks).values({ id: newId(), workspaceId: m.workspaceId, userId: m.userId, rungKey: key, byUserId });
+  await db.insert(schema.helixTicks).values({ id: newId(), workspaceId: m.workspaceId, userId: m.userId, rungKey: key, byUserId, reason: reason?.trim().slice(0, 200) || null });
 }
 
 /** The rungs the member has now seen lit: the once-glow never repeats for these. */
