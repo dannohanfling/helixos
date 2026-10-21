@@ -36,7 +36,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
     <nav className="space-y-2" data-testid="side-nav" data-rail={rail ? "true" : "false"}>
       {groups.map((g) => {
         const activeItem = g.items.find((n) => n.href === activeHref);
-        const open = rail || isOpen(nav.state, g.label, currentGroup);
+        const open = rail || isOpen(nav.state, g.label, currentGroup, nav.closed);
         return (
           <div key={g.label} data-testid="nav-group" data-group={g.label} data-open={open}>
             {rail ? (

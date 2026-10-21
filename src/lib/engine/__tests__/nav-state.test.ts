@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allCollapsed, isOpen, isTypingIn, navStateOf, RAIL_KEY, toggleAll, toggleGroup } from "../nav-state";
+import { allCollapsed, EMPTY_NAV, isOpen, isTypingIn, navStateOf, NONE_CLOSED, RAIL_KEY, toggleAll, toggleGroup } from "../nav-state";
 
 describe("navStateOf", () => {
   it.each([undefined, null, "junk", 12, [], {}, { collapsed: "x" }, { rail: "yes" }])("safely normalizes %j", (raw) => {
@@ -99,5 +99,16 @@ describe("groups that start shut (H-164 §10)", () => {
     expect(allCollapsed(shut, all)).toBe(true);
     const open = toggleAll(shut, all);
     expect(all.every((g) => isOpen(open, g, null))).toBe(true);
+  });
+
+  it("a coach's or a team member's menu starts with every group open, and a shut one stays shut by the stored true (H-164 §10)", () => {
+    expect(isOpen(EMPTY_NAV, "Get leads", null, NONE_CLOSED)).toBe(true);
+    expect(isOpen(EMPTY_NAV, "Get leads", null)).toBe(false);
+    const shut = toggleGroup(EMPTY_NAV, "Get leads", NONE_CLOSED);
+    expect(shut.collapsed).toEqual({ "Get leads": true });
+    expect(isOpen(shut, "Get leads", null, NONE_CLOSED)).toBe(false);
+    expect(toggleGroup(shut, "Get leads", NONE_CLOSED).collapsed).toEqual({});
+    expect(allCollapsed(EMPTY_NAV, ["Get leads", "Learn"], NONE_CLOSED)).toBe(false);
+    expect(toggleAll(EMPTY_NAV, ["Get leads", "Learn"], NONE_CLOSED).collapsed).toEqual({ "Get leads": true, Learn: true });
   });
 });

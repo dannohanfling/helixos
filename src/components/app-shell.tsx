@@ -11,7 +11,7 @@ import { BottomNav, SideNav } from "./nav";
 import { NavStateProvider } from "./nav-state";
 import { Sidebar, SidebarFoot } from "./sidebar";
 import { toolsPhaseOf, visibleGroups } from "./nav-groups";
-import { navStateOf } from "@/lib/engine/nav-state";
+import { navStateOf, DEFAULT_CLOSED, NONE_CLOSED } from "@/lib/engine/nav-state";
 import { moreTab } from "@/lib/engine/nav-badges";
 import { LegalFooter } from "./legal-footer";
 import { SubmitButton } from "@/components/submit-button";
@@ -35,7 +35,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
   // The More tab's total (H-844): every count on an item this person's menu shows, the same numbers as the sidebar and More.
   const more = moreTab(badges, groups.flatMap((g) => g.items.filter((n) => !n.external && !n.comingSoon).map((n) => n.href)));
   return (
-    <NavStateProvider initial={navStateOf(viewer.membership.navState)} persist={!viewer.switchedInto && !viewer.team}>
+    <NavStateProvider initial={navStateOf(viewer.membership.navState)} persist={!viewer.switchedInto && !viewer.team} closed={viewer.role === "client" && !team ? DEFAULT_CLOSED : NONE_CLOSED}>
     <div className="min-h-[100dvh] md:flex" data-app-shell>
       {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold.
           H-333: the whole column folds to a rail of icons (Sidebar); what has no place on the rail carries rail-hide. */}
