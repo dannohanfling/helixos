@@ -88,3 +88,11 @@ describe("Essence, lead magnet and post drafts (D2b)", () => {
     expect(redLines("content", { fields: { hook: "New" }, base: { hook: null } }, { hook: null, status: "idea" }, "")).toEqual([]);
   });
 });
+
+describe("what the bot says (D2c)", () => {
+  it("takes the bot's words only, never its booking link or the guarantee's terms", () => {
+    const r = readFields("bot_profile", { whatIDo: "I help coaches.", bookingUrl: "https://x", guaranteeTerms: {}, botQuestion2: "When can you start?" });
+    expect(r.refused.sort()).toEqual(["bookingUrl", "guaranteeTerms"]);
+    expect(r.fields).toEqual({ whatIDo: "I help coaches.", botQuestion2: "When can you start?" });
+  });
+});

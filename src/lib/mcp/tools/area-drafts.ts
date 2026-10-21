@@ -1,5 +1,5 @@
 /**
- * Claude's drafts of the Essence, lead magnets and posts on the connector (H-184, plan H-220 PR D2b). Each draft sits beside
+ * Claude's drafts of the Essence, lead magnets, posts and what the bot says on the connector (H-184, plan H-220 PRs D2b, D2c). Each draft sits beside
  * what the member has, for them to Approve, Edit or Discard on its own page; nothing is published, scheduled or sent, and a
  * magnet's keyword, address and files are never touched. Each connection reaches only its own member's rows; a team member's
  * connection reads and never drafts.
@@ -11,7 +11,7 @@ import type { DraftArea } from "@/db/schema";
 import type { Viewer } from "@/lib/auth";
 import { siteUrl } from "@/lib/app-url";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
-import { CONTENT_FIELDS, MAGNET_FIELDS, cleanFields, readFields, type FieldSpec } from "@/lib/engine/claude-drafts";
+import { BOT_FIELDS, CONTENT_FIELDS, MAGNET_FIELDS, cleanFields, readFields, type FieldSpec } from "@/lib/engine/claude-drafts";
 import { ESSENCE_SECTIONS, normalizeEssence, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
 import { areaFacts, areaRow, pendingDrafts, redLinesFor, saveDraft, type Actor } from "@/lib/claude-drafts";
 
@@ -181,3 +181,34 @@ defineTool({
   },
 });
 
+// ── Your bot ──
+
+defineTool({
+  name: "bot_profile_read",
+  scope: "bot",
+  kind: "read",
+  description: "What the member's bot says about their business: what they do, the three questions it asks before booking (blank uses the house question), and what to expect when booking; and whether Claude's draft of it is waiting.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => {
+    const row = await areaRow(owner(v), "bot_profile", v.membership.id);
+    const [draft] = await pendingDrafts(owner(v), "bot_profile", v.membership.id);
+    const fields = Object.fromEntries(BOT_FIELDS.map((f) => [f.key, row?.[f.key] ?? null]));
+    return { text: `What your bot says about the business.${draft ? " Claude's draft is waiting on it." : ""}`, data: { fields, draft: draft ? { id: draft.id, fields: draft.fields, by: draft.byLabel, at: draft.createdAt } : null, link: `${siteUrl()}/settings#your-bot` } };
+  },
+});
+
+defineTool({
+  name: "bot_profile_draft",
+  scope: "bot",
+  kind: "write",
+  description:
+    `Writes Claude's draft of what the member's bot says about their business, beside it. The bot keeps its current answers until the member taps Approve in Settings → What your bot says, and nothing is sent to their bot or to Community Loyalty from here; the booking link and the guarantee's terms are never touched. Fields (exactly these names): ${describe(BOT_FIELDS)}. No income claims and no figures the member didn't give.`,
+  input: {
+    fields: z.record(z.string(), z.unknown()).describe("The fields, by the names above"),
+    source_words: z.string().max(8000).optional().describe("The member's own words this draft is built from"),
+  },
+  handler: async (v, input, call): Promise<ToolResult> => {
+    drafter(v, "what the bot says");
+    return draftOf(v, call, "bot_profile", v.membership.id, input.fields, String(input.source_words ?? ""), "what your bot says about your business", "Settings → What your bot says");
+  },
+});

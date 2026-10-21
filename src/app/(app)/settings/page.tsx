@@ -67,13 +67,16 @@ import { REASON_LABEL, reasonOf, reportStatus, shortName } from "@/lib/engine/bl
 import { KIND_SHORT } from "@/lib/engine/reports";
 import { setupFor } from "@/lib/setup-card";
 import { SetupList } from "@/components/setup-card";
+import { ClaudeDraftCard, ClaudeDraftHistory, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { changesFor, pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 import { CallsSettingsCard } from "@/components/calls-settings";
 import { callsWithSkips } from "@/lib/calls";
 
 export const metadata = { title: "Settings" };
 
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string; botDraft?: string; draftNote?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
   const ownMedia = v.switchedInto ? [] : await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), columns: { id: true, caption: true, kind: true }, orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 96 });
@@ -87,7 +90,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField, botDraft, draftNote } = await searchParams;
+  // Claude's draft of what the bot says (H-184): the one waiting, the one being edited in the form, and what happened to drafts here.
+  const meBot = { workspaceId: v.workspace.id, userId: v.user.id };
+  const [botWaiting, botChanges] = v.team ? [[], []] : await Promise.all([pendingDrafts(meBot, "bot_profile", v.membership.id), changesFor(meBot, "bot_profile", v.membership.id)]);
+  const botDraftRow = botWaiting[0] ?? null;
+  const botEditing = botDraftRow && botDraft === botDraftRow.id ? botDraftRow : null;
+  const botRed = botDraftRow && !botEditing ? await redLinesFor(meBot, botDraftRow) : [];
+  const bot = { ...v.membership, ...((botEditing?.fields ?? {}) as Partial<typeof v.membership>) };
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -440,11 +450,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Card>
         <Card id="your-bot" title="What your bot says about your business">
           <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/brain" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>
-          <form action={updateBotFactsAction} className="space-y-3">
+          {draftNote ? <p className="mb-3 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[draftNote] ?? draftNote}</p> : null}
+          {botEditing ? (
+            <p className="mb-3 rounded-lg border border-accent bg-accent-soft/40 p-3 text-sm" data-testid="claude-draft-editing">
+              The form below is filled with Claude&apos;s draft. Change what you like, then save; the draft is settled as edited.{" "}
+              <a href="/settings#your-bot" className="underline">Back to the draft</a>
+            </p>
+          ) : botDraftRow ? (
+            <div className="mb-3">
+              <ClaudeDraftCard draft={botDraftRow} rows={rowsFor("bot_profile", v.membership as unknown as Record<string, unknown>, botDraftRow.fields)} red={botRed} tz={v.tz} editHref={`/settings?botDraft=${botDraftRow.id}#your-bot`} back="/settings#your-bot" />
+            </div>
+          ) : null}
+          <form key={botEditing ? `draft-${botEditing.id}` : "saved"} action={updateBotFactsAction} className="space-y-3">
+            {botEditing ? <input type="hidden" name="draftId" value={botEditing.id} /> : null}
             <Field label="What I do" hint="One paragraph, the first thing your bot knows about you.">
-              <textarea className="field" name="whatIDo" rows={4} defaultValue={v.membership.whatIDo ?? ""} data-testid="what-i-do" />
+              <textarea className="field" name="whatIDo" rows={4} defaultValue={bot.whatIDo ?? ""} data-testid="what-i-do" />
             </Field>
-            {[v.membership.botQuestion1, v.membership.botQuestion2, v.membership.botQuestion3].map((q, i) => (
+            {[bot.botQuestion1, bot.botQuestion2, bot.botQuestion3].map((q, i) => (
               <Field key={i} label={`Question ${i + 1} your bot asks before booking`} hint="Blank uses the house question shown.">
                 <input className="field" name={`botQuestion${i + 1}`} defaultValue={q ?? ""} placeholder={QUALIFYING_DEFAULTS[i]} data-testid={`bot-question-${i + 1}`} />
               </Field>
@@ -458,7 +480,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <input className="field" name="bookingUrl" type="url" maxLength={500} placeholder="https://" defaultValue={v.membership.bookingUrl ?? ""} data-testid="booking-url" />
             </Field>
             <Field label="What to expect when you book" hint="A few lines your bot can say about the call: how long, what you'll cover, what to bring.">
-              <textarea className="field" name="bookingExpect" rows={3} maxLength={500} defaultValue={v.membership.bookingExpect ?? ""} data-testid="booking-expect" />
+              <textarea className="field" name="bookingExpect" rows={3} maxLength={500} defaultValue={bot.bookingExpect ?? ""} data-testid="booking-expect" />
             </Field>
             <details className="rounded-lg border p-3">
               <summary className="cursor-pointer text-sm font-medium">Your guarantee&apos;s full terms</summary>
@@ -498,6 +520,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               Save
             </SubmitButton>
           </form>
+          {v.team ? null : (
+            <div className="mt-4">
+              <ClaudeDraftHistory rows={botChanges} tz={v.tz} back="/settings#your-bot" />
+            </div>
+          )}
         </Card>
         {v.switchedInto || v.team ? null : <BotConnectionCard workspaceId={v.workspace.id} userId={v.user.id} membershipId={v.membership.id} tz={v.membership.timezone ?? v.workspace.timezone} />}
         {v.switchedInto || v.team || !mfAvailable(v.membership) ? null : (

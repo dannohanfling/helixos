@@ -12,13 +12,23 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 327,
+    n: 328,
     date: "2026-10-19",
     title: "Every date and time in your own time zone",
     lines: [
       "Dates across HelixOS now follow the time zone in your Settings: your Board, Content, Images, Groups, Numbers, the Colosseum's week, check-ins and more. Something you did late in the evening shows on your day, not the next day in London.",
       "Settings has every time zone in the world, searchable: type a city or a region. If you never set one, HelixOS takes your device's zone and tells you once: \"We're showing times in Australia/Sydney (AEDT). Change it in Settings.\"",
       "Coaches see their own zone on the coach pages, Integrations and Recordings, and the points check and the loyalty desk name their zone instead of UTC.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 327,
+    date: "2026-10-20",
+    title: "Claude drafts what your bot says, you approve it",
+    lines: [
+      "Through the HelixOS connector, Claude can now draft what your bot says about your business: what you do, the three questions it asks before booking, and what to expect on the call.",
+      "It waits in amber in Settings until you approve it. Your bot keeps its current answers until then, and nothing is sent to your bot from a draft.",
     ],
     audience: "everyone",
   },
