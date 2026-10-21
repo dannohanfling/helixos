@@ -8,6 +8,7 @@
  * nothing of it is stored.
  */
 import { useActionState, useEffect, useState } from "react";
+import { FilePicker } from "@/components/file-picker";
 import { SubmitButton } from "@/components/submit-button";
 import { approveProofsAction, selectFromListAction, type SelectFromListState } from "@/lib/actions/proof-bulk";
 
@@ -17,6 +18,7 @@ export function ProofBulk({ status, permissionLine }: { status: string; permissi
   const [count, setCount] = useState(0);
   const [names, setNames] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
+  const [listFiles, setListFiles] = useState<File[]>([]);
   const [listState, selectFromList, listing] = useActionState<SelectFromListState, FormData>(selectFromListAction, null);
   const recount = () => {
     const picked = boxes().filter((b) => b.checked);
@@ -55,10 +57,8 @@ export function ProofBulk({ status, permissionLine }: { status: string; permissi
         <button type="button" className="btn btn-primary btn-sm" disabled={!count} onClick={() => setConfirming(true)} data-testid="proof-approve-selected">Approve selected</button>
       </div>
       <form action={selectFromList} className="mt-2 flex flex-wrap items-center gap-2" data-testid="proof-list-form">
-        <label className="text-xs text-ink-3">
-          Select the clean drafts from a list file{" "}
-          <input type="file" name="list" accept="application/json,.json" className="text-xs" data-testid="proof-list-file" />
-        </label>
+        <span className="text-xs text-ink-3">Select the clean drafts from a list file:</span>
+        <FilePicker kind="file" files={listFiles} onChange={setListFiles} accept="application/json,.json" name="list" testId="proof-list-file" labels={{ upload: "Choose the list file" }} />
         <SubmitButton className="btn btn-soft btn-sm" pendingText="Matching…" data-testid="proof-list-select">Select from the list</SubmitButton>
         {listing ? null : listState?.error ? (
           <span className="text-danger" data-testid="proof-list-error">{listState.error}</span>
