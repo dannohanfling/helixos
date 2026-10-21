@@ -13,11 +13,11 @@ import { DEFAULT_CALLS, DEFAULT_CALLS_LINK, DEFAULT_CALLS_PASSCODE, readCall, re
  * undoes it, and sets the shared link and passcode. Coach only; every call is checked against the coach's own workspace. A
  * refusal comes back as `?callsError=` with the field it names, so the form keeps what was typed.
  */
-const back = (what: string, at = "calls") => `/settings?calls=${what}#${at}`;
+const back = (what: string, at = "calls") => `/settings?tab=coach&calls=${what}#${at}`;
 /** `call` names the call whose form was refused (or "new"), so the card opens that form again with the typing put back. */
 const refuse = (error: string, field?: string | null, at = "calls") => {
   const call = at.startsWith("call-") ? at.slice(5) : at === "calls-add" ? "new" : null;
-  return `/settings?callsError=${encodeURIComponent(error)}${field ? `&field=${field}` : ""}${call ? `&call=${call}` : ""}#${at}`;
+  return `/settings?tab=coach&callsError=${encodeURIComponent(error)}${field ? `&field=${field}` : ""}${call ? `&call=${call}` : ""}#${at}`;
 };
 
 async function ownCall(workspaceId: string, callId: string) {
