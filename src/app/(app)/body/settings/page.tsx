@@ -6,7 +6,7 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { formatDate, formatDateTime } from "@/lib/dates";
+import { formatDate, formatDateTime, stampDate } from "@/lib/dates";
 import { MACROS, MACRO_NAME, nextRefeed } from "@/lib/engine/body";
 import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory, templateSendsFor, trainingLibrary, whoopStatus } from "@/lib/queries/body";
 import { EMPTY_PLAN, liftTypeIds } from "@/lib/engine/body-plan";
@@ -354,7 +354,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm" data-testid="whoop-connected" data-known={whoop.known ? "1" : "0"}>
             <span>
               <span className="font-medium">WHOOP connected</span>
-              {whoop.connectedAt ? <span className="text-ink-3"> · since {formatDate(whoop.connectedAt.slice(0, 10))}</span> : null}
+              {whoop.connectedAt ? <span className="text-ink-3"> · since {stampDate(whoop.connectedAt, v.tz)}</span> : null}
               {whoop.lastSyncAt ? <span className="text-ink-3"> · synced {formatDateTime(whoop.lastSyncAt, v.tz)}</span> : null}
               {whoop.lastError ? (
                 <span className="text-warn" data-testid="whoop-last-error" data-code={whoop.lastError}>
@@ -386,7 +386,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
             Didn&apos;t sync: {sp.whoopError.slice(0, 200)}
           </p>
         ) : null}
-        <HealthConnect status={health ? { made: formatDate(health.createdAt.slice(0, 10)), lastUsed: health.lastUsedAt ? formatDateTime(health.lastUsedAt, v.tz) : null } : null} endpoint={`${appUrl()}/api/body/health-weigh-in`} shortcutUrl={shortcutUrl} />
+        <HealthConnect status={health ? { made: stampDate(health.createdAt, v.tz), lastUsed: health.lastUsedAt ? formatDateTime(health.lastUsedAt, v.tz) : null } : null} endpoint={`${appUrl()}/api/body/health-weigh-in`} shortcutUrl={shortcutUrl} />
       </Card>
 
       <Card className="mb-8" title="Download your HumanOS data" id="download">

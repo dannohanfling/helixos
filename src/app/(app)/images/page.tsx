@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { deleteDeckImageAction, updateDeckImageCaptionAction } from "@/lib/actions/deck-images";
 import { DeckImageUpload } from "@/components/deck-image-upload";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 import { NO_PEOPLE } from "@/lib/engine/deck-image";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -71,7 +71,7 @@ export default async function ImagesPage({ searchParams }: { searchParams: Promi
                   <img src={`/api/deck-images/${img.id}`} alt={img.caption ?? KIND_LABEL[img.kind]} className={`mb-2 h-32 w-full rounded ${img.kind === "photo" ? "object-cover" : "object-contain bg-surface-2"}`} loading="lazy" decoding="async" data-testid="library-image-thumb" />
                   <div className="flex items-center justify-between">
                     <Badge>{KIND_LABEL[img.kind] ?? img.kind}</Badge>
-                    <span className="text-[11px] text-ink-3">{formatDate(img.createdAt.slice(0, 10))}</span>
+                    <span className="text-[11px] text-ink-3">{stampDate(img.createdAt, v.tz)}</span>
                   </div>
                   <form action={updateDeckImageCaptionAction} className="mt-2 space-y-1">
                     <input type="hidden" name="id" value={img.id} />
@@ -85,7 +85,7 @@ export default async function ImagesPage({ searchParams }: { searchParams: Promi
                   </form>
                   {img.consentTick ? (
                     <p className="mt-1 text-[11px] text-ink-3" data-testid="library-image-consent">
-                      {img.consentName === NO_PEOPLE ? "No people in it, confirmed" : `Consent recorded: ${img.consentName},`}{img.consentAt ? ` ${formatDate(img.consentAt.slice(0, 10))}` : ""}.
+                      {img.consentName === NO_PEOPLE ? "No people in it, confirmed" : `Consent recorded: ${img.consentName},`}{img.consentAt ? ` ${stampDate(img.consentAt, v.tz)}` : ""}.
                     </p>
                   ) : null}
                   <form action={deleteDeckImageAction} className="mt-2 text-right">

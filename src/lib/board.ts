@@ -8,7 +8,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { draft } from "@/lib/ai";
-import { addDays, formatDate, nowIso, startOfWeek } from "@/lib/dates";
+import { addDays, formatDate, nowIso, startOfWeek, dayOf } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { essenceBlockFor } from "@/lib/queries/essence";
 import { logsBetween } from "@/lib/queries/daily";
@@ -154,7 +154,7 @@ export async function boardContext(v: Viewer, question: string, mode: Mode): Pro
     const items = await db.query.contentItems.findMany({ where: mine(schema.contentItems), orderBy: desc(schema.contentItems.createdAt), limit: 80 });
     const ideas = items.filter((i) => i.status === "idea");
     const upcoming = items.filter((i) => i.postAt && i.postAt.slice(0, 10) >= today && i.postAt.slice(0, 10) <= addDays(today, 14));
-    const posted = items.filter((i) => i.postedAt && i.postedAt.slice(0, 10) >= addDays(today, -14));
+    const posted = items.filter((i) => i.postedAt && dayOf(i.postedAt, v.tz) >= addDays(today, -14));
     const ladders = await db.query.ladders.findMany({ where: mine(schema.ladders), orderBy: desc(schema.ladders.createdAt), limit: 5 });
     out.push({ key: "content", label: "Content", href: "/content", text: [`Ideas: ${ideas.length}${ideas.length ? ` (${ideas.slice(0, 5).map((i) => i.title).join("; ")})` : ""}.`, `On the calendar, next 14 days: ${upcoming.length}.`, `Posted in the last 14 days: ${posted.length}.`, ladders.length ? `Recent ladders: ${ladders.map((l) => `${l.topic} (${l.shippedAt ? "shipped" : "draft"})`).join("; ")}.` : "No ladders yet."].join("\n") });
   }
@@ -178,7 +178,7 @@ export async function boardContext(v: Viewer, question: string, mode: Mode): Pro
     if (answered.length) {
       const ids = answered.flatMap((d) => d.stepTasks.filter((x): x is string => Boolean(x)));
       const done = new Set(ids.length ? (await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, m.userId), inArray(schema.tasks.id, ids), eq(schema.tasks.status, "done")), columns: { id: true } })).map((t) => t.id) : []);
-      out.push({ key: "decisions", label: `Past decisions (${answered.length})`, href: "/my-board#decisions", text: answered.map((d) => `- ${d.createdAt.slice(0, 10)}: ${d.answer!.decision} → ${d.answer!.recommendation} (${d.stepTasks.filter((x) => x && done.has(x)).length} of ${d.answer!.steps.length} steps done)`).join("\n") });
+      out.push({ key: "decisions", label: `Past decisions (${answered.length})`, href: "/my-board#decisions", text: answered.map((d) => `- ${dayOf(d.createdAt, v.tz)}: ${d.answer!.decision} → ${d.answer!.recommendation} (${d.stepTasks.filter((x) => x && done.has(x)).length} of ${d.answer!.steps.length} steps done)`).join("\n") });
     }
   }
   // HumanOS (rev 664 §3): only with the member's own My Board switch on, only when the decision touches energy, health or time,

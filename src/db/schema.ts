@@ -154,6 +154,8 @@ export const memberships = sqliteTable(
     firstArrivalSeenAt: text("first_arrival_seen_at"),
     /** The streak flame (H-558): the streak day whose daily surge has played, so it plays once per day. */
     streakSurgeSeenOn: text("streak_surge_seen_on"),
+    // The one-time "We're showing times in {zone}" line (H-457): when the member saw it, or chose their zone in Settings.
+    tzPromptSeenAt: text("tz_prompt_seen_at"),
     /** The living scenes' sounds (H-400): the crowd, the applause and the fire loop; one switch, on by default, the member's own. */
     soundsOn: integer("sounds_on", { mode: "boolean" }).notNull().default(true),
     /** Team access (H-413): the newest Office Hours request a team member booked for this owner, until the owner opens Office Hours. */

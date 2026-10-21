@@ -29,7 +29,7 @@ import { tasksFromNotes } from "@/lib/queries/tasks";
 import { AdjustPointsForm } from "@/components/adjust-points-form";
 import { isNotNull } from "drizzle-orm";
 import { daysSinceNudge } from "@/lib/nudge";
-import { addDays, daysBetween, formatDate, formatDateTime, todayInTz, hourInTz } from "@/lib/dates";
+import { addDays, daysBetween, formatDate, formatDateTime, todayInTz, hourInTz, stampDate } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
@@ -179,7 +179,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
     <>
       <PageHeader
         title={`${u.avatarEmoji ?? ""} ${u.name}`.trim()}
-        subtitle={<span className="flex items-center gap-2">{hasHeadshot(m) ? <MemberAvatar membershipId={m.id} hasPhoto emoji={u.avatarEmoji} size={40} version={m.headshotUpdatedAt} name={u.name} /> : null}<span>{`${m.businessName ? `${m.businessName} · ` : ""}${m.programTier} · joined ${formatDate(m.createdAt.slice(0, 10))} · ${u.email}`}</span></span>}
+        subtitle={<span className="flex items-center gap-2">{hasHeadshot(m) ? <MemberAvatar membershipId={m.id} hasPhoto emoji={u.avatarEmoji} size={40} version={m.headshotUpdatedAt} name={u.name} /> : null}<span>{`${m.businessName ? `${m.businessName} · ` : ""}${m.programTier} · joined ${stampDate(m.createdAt, v.tz)} · ${u.email}`}</span></span>}
         action={
           <span className="flex items-center gap-2">
             {emailsBlocked ? (
@@ -395,7 +395,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 <span>
                   <span className="font-medium">{t.name}</span> <span className="text-ink-3">· {t.email}</span>
                   <span className="block text-xs text-ink-3">
-                    added by {t.addedByName} on {formatDate(t.member.createdAt.slice(0, 10))} · last active {lastActiveWords(t.member.lastActiveAt)}
+                    added by {t.addedByName} on {stampDate(t.member.createdAt, v.tz)} · last active {lastActiveWords(t.member.lastActiveAt)}
                   </span>
                 </span>
                 <form action={coachRemoveTeamMemberAction}>
@@ -611,7 +611,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
               <ul className="space-y-2" data-testid="coach-checkins" data-count={checkins.length}>
                 {checkins.slice(0, 8).map((c) => (
                   <li key={c.id} className="rounded-lg border p-2 text-xs" data-testid="coach-checkin" data-monday={c.monday}>
-                    <div className="mb-1 font-semibold text-ink-2">Week of {formatDate(c.monday, { month: "short", day: "numeric" })} · sent {formatDate(c.sentAt.slice(0, 10), { month: "short", day: "numeric" })}</div>
+                    <div className="mb-1 font-semibold text-ink-2">Week of {formatDate(c.monday, { month: "short", day: "numeric" })} · sent {stampDate(c.sentAt, v.tz, { month: "short", day: "numeric" })}</div>
                     <ul className="space-y-0.5 text-ink-2">
                       {c.lines.map((l, i) => (
                         <li key={i}>{l}</li>
@@ -705,7 +705,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 <ul className="mt-1 space-y-0.5 text-sm">
                   {waiting.map((p) => (
                     <li key={p.id}>
-                      {libByKey.get(p.libraryTaskKey)?.name ?? p.libraryTaskKey} <span className="text-xs text-ink-3">· {p.submittedAt ? formatDate(p.submittedAt.slice(0, 10)) : ""}</span>
+                      {libByKey.get(p.libraryTaskKey)?.name ?? p.libraryTaskKey} <span className="text-xs text-ink-3">· {p.submittedAt ? stampDate(p.submittedAt, v.tz) : ""}</span>
                     </li>
                   ))}
                 </ul>

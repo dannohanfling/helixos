@@ -196,7 +196,7 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
         <p className="mt-2 text-[11px] text-ink-3">Off-plan meals join this page when they arrive.</p>
       </Card>
       {/* B9b: a client sends the week's numbers to their coach, sharing on or off. A coach has no coach to send to. */}
-      {v.role === "client" ? <CheckinCard monday={monday} sent={(await checkinsFor(v.workspace.id, v.user.id)).find((c) => c.monday === monday) ?? null} justSent={sp.checkin === "sent"} lines={weekNumbers({ label: `${w.monday} to ${w.sunday}`, nutrition: w.nutrition, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weigh: { avg: w.weigh.avg, days: w.weigh.days }, prevWeigh: { avg: w.weigh.prevAvg, days: 0 }, weightUnit: w.settings.weightUnit, sleepAvg: w.sleep?.avg ?? null, burnAvg: w.burn?.avg ?? null, habits: w.habits ?? { due: 0, kept: 0 } }).split("\n")} /> : null}
+      {v.role === "client" ? <CheckinCard tz={v.tz} monday={monday} sent={(await checkinsFor(v.workspace.id, v.user.id)).find((c) => c.monday === monday) ?? null} justSent={sp.checkin === "sent"} lines={weekNumbers({ label: `${w.monday} to ${w.sunday}`, nutrition: w.nutrition, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weigh: { avg: w.weigh.avg, days: w.weigh.days }, prevWeigh: { avg: w.weigh.prevAvg, days: 0 }, weightUnit: w.settings.weightUnit, sleepAvg: w.sleep?.avg ?? null, burnAvg: w.burn?.avg ?? null, habits: w.habits ?? { due: 0, kept: 0 } }).split("\n")} /> : null}
     </>
   );
 }

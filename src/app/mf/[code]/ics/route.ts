@@ -20,6 +20,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
     details: `${v.ctx.title} with ${HOST}. ${w.full}. ${v.ctx.joinUrl ? `Join: ${v.ctx.joinUrl}` : "Your join link comes to you in Messenger."}`,
     when: w,
     location: v.ctx.joinUrl,
+    // The host's zone named in the file (H-457); the times stay UTC instants, which every calendar shows in its owner's own time.
+    zone: v.ctx.tz,
   });
   return new Response(body, { status: 200, headers: { ...HEADERS, "content-type": "text/calendar; charset=utf-8", "content-disposition": `attachment; filename="inner-circle-call-${w.isoDay}.ics"` } });
 }

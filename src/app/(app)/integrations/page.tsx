@@ -84,7 +84,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                 ))}
                 <div className="flex flex-wrap items-center gap-2">
                   <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">Save</SubmitButton>
-                  {row?.lastSyncAt ? <span className="text-xs text-ink-3">Last sync {formatDateTime(row.lastSyncAt, v.workspace.timezone)}</span> : null}
+                  {row?.lastSyncAt ? <span className="text-xs text-ink-3">Last sync {formatDateTime(row.lastSyncAt, v.tz)}</span> : null}
                   {row?.lastError ? <span className="text-xs text-danger">Last error: {row.lastError}</span> : null}
                 </div>
               </form>
@@ -245,7 +245,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                     {e.userId ? <span className="text-ink-3"> · {userName.get(e.userId) ?? "coach"}</span> : null}
                     {e.note ? <span className="block truncate text-ink-3">{e.note}</span> : null}
                   </span>
-                  <span className="shrink-0 text-ink-3">{formatDateTime(e.createdAt.includes("T") ? e.createdAt : e.createdAt.replace(" ", "T") + "Z", v.workspace.timezone)}</span>
+                  <span className="shrink-0 text-ink-3">{formatDateTime(e.createdAt.includes("T") ? e.createdAt : e.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
                 </li>
               ))}
             </ul>

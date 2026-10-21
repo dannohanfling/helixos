@@ -221,6 +221,8 @@ export async function seedDemo(): Promise<void> {
   await db.update(schema.memberships).set({ firstArrivalSeenAt: ARRIVED }).where(isNull(schema.memberships.firstArrivalSeenAt));
   // The demo accounts were here before tools opened by phase (H-164 §12), like everyone migration 0221 found: every tool shows.
   await db.update(schema.memberships).set({ showAllTools: true });
+  // And saw the one-time time zone line (H-457): the walks keep the workspace's zone; the zones walk clears it to show the line.
+  await db.update(schema.memberships).set({ tzPromptSeenAt: ARRIVED }).where(isNull(schema.memberships.tzPromptSeenAt));
   // And their ranks' relic clips count as seen (H-934): the demo's points go back weeks, before the clips went live, so the walks'
   // logins would otherwise open on the catch-up ceremony. The scenes walk clears it where it checks the catch-up.
   await db.update(schema.memberships).set({ rankClipSeenLevel: RANK_LEVELS }).where(isNull(schema.memberships.rankClipSeenLevel));

@@ -1,6 +1,7 @@
 "use server";
 
 import { PLATFORMS, cleanPlatformLink } from "@/lib/platforms";
+import { canonicalZone } from "@/lib/engine/zones";
 
 import { readMoney } from "@/lib/engine/money";
 import { queueProgress } from "@/lib/chat-progress";
@@ -35,17 +36,6 @@ async function ownAvatar(workspaceId: string, userId: string, picked: string): P
   return img && (img.kind === "photo" || img.kind === "logo") ? img.id : null;
 }
 
-/** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
-function validTimezone(tz: string): string | null {
-  if (!tz) return null;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return tz;
-  } catch {
-    return null;
-  }
-}
-
 export async function updateProfileAction(formData: FormData): Promise<void> {
   // Refused before anything is written: a coach switched in never changes the client's own account.
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "{first}'s name, email, password and time zone are their own account settings." });
@@ -69,7 +59,9 @@ async function updateProfile(formData: FormData): Promise<void> {
       eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 17)),
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",
       scoreboardEmail: formData.get("scoreboardEmail") === "on",
-      timezone: validTimezone(str(formData, "timezone")),
+      // A typo keeps the zone the member had (H-457); choosing one here also retires the one-time "We're showing times in" line.
+      timezone: canonicalZone(str(formData, "timezone")) ?? v.membership.timezone,
+      tzPromptSeenAt: v.membership.tzPromptSeenAt ?? nowIso(),
       // The streak's week (H-289 §2): every day unless the member picks Monday to Friday.
       workDays: str(formData, "workDays") === "weekdays" ? "weekdays" : "all",
       // The Setup card (H-270 §1, S2): the time zone and reminder hours chosen by the member, not defaulted.

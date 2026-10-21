@@ -12,13 +12,24 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 328,
+    n: 329,
     date: "2026-10-19",
     title: "A shorter menu, in five groups",
     lines: [
       "The menu now reads Daily, HumanOS, My business, Get leads, My bot, Learn, and Board and agents. My business, Get leads, My bot and Learn start shut; tap one to open it, and it stays the way you left it.",
       "My Helix is the progress line under the logo, and What's new is the version line at the bottom of the menu. Avatars sit inside Offers, and connecting Claude is in Settings → Connected apps.",
       "New members see each tool once their My Helix reaches it, with a line on Today when one opens. Everyone already here keeps every tool. Settings → Your menu has \"Show all tools\" to see them all at any time.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 328,
+    date: "2026-10-19",
+    title: "Every date and time in your own time zone",
+    lines: [
+      "Dates across HelixOS now follow the time zone in your Settings: your Board, Content, Images, Groups, Numbers, the Colosseum's week, check-ins and more. Something you did late in the evening shows on your day, not the next day in London.",
+      "Settings has every time zone in the world, searchable: type a city or a region. If you never set one, HelixOS takes your device's zone and tells you once: \"We're showing times in Australia/Sydney (AEDT). Change it in Settings.\"",
+      "Coaches see their own zone on the coach pages, Integrations and Recordings, and the points check and the loyalty desk name their zone instead of UTC.",
     ],
     audience: "everyone",
   },
