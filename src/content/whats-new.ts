@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 336,
+    date: "2026-10-21",
+    title: "The Inbox clears what is already done",
+    lines: [
+      "A row on Waiting on you settles itself when any post says its pull request merged, when the Ready it names was decided or replaced, or when the post it names was superseded, not only on a decision. The newest asks sit first. (H-1554)",
+    ],
+    audience: "coach",
+  },
+  {
     n: 335,
     date: "2026-10-21",
     title: "A Scene motion switch in Settings",
