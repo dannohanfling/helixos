@@ -12,13 +12,77 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 321,
+    n: 327,
     date: "2026-10-19",
     title: "Every date and time in your own time zone",
     lines: [
       "Dates across HelixOS now follow the time zone in your Settings: your Board, Content, Images, Groups, Numbers, the Colosseum's week, check-ins and more. Something you did late in the evening shows on your day, not the next day in London.",
       "Settings has every time zone in the world, searchable: type a city or a region. If you never set one, HelixOS takes your device's zone and tells you once: \"We're showing times in Australia/Sydney (AEDT). Change it in Settings.\"",
       "Coaches see their own zone on the coach pages, Integrations and Recordings, and the points check and the loyalty desk name their zone instead of UTC.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 326,
+    date: "2026-10-20",
+    title: "Claude drafts your Essence, lead magnets and posts",
+    lines: [
+      "Through the HelixOS connector, Claude can now draft a section of your Essence, a lead magnet or a post, the same way it drafts offers: in amber, waiting for your Approve, Edit or Discard.",
+      "A lead magnet is never published from a draft, and a post lands on your calendar as In progress on its date. Scheduling it is still your own step, and a post already scheduled can't be drafted over.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 325,
+    date: "2026-10-19",
+    title: "Claude drafts your offers, you approve them",
+    lines: [
+      "Through the HelixOS connector, Claude can now write a draft of one of your offers, or a new one. It sits on the offer in amber, \"Claude's draft: not approved yet\", and nothing changes until you press Approve.",
+      "Edit opens the offer with the draft filled in, and Discard drops it. Anything Claude got wrong, like a price you haven't given it, shows in red, and Approve waits until you've checked it.",
+      "\"Drafts waiting\" on Today lists every draft for you, and an amber dot marks the menu item that holds one.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 324,
+    date: "2026-10-19",
+    title: "One answer for the same report sent twice",
+    lines: [
+      "If you sent the same thing more than once, Danno can put them together. My reports shows them under one, and one reply answers them all.",
+      "A follow-up on any of them goes to the same place, so nothing gets lost.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 323,
+    date: "2026-10-19",
+    title: "Hear back on what you report",
+    lines: [
+      "When you send \"I have an issue or a suggestion\", you'll see \"Got it, Danno will see this soon\" straight away.",
+      "Danno's replies come to you as each report moves: seen, being worked on, done and how, or not now and why. A line on Today points to them, and an email follows if your emails are on.",
+      "My reports, from the same button, lists everything you've sent with its replies, and you can add a follow-up to the same report.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 322,
+    date: "2026-10-19",
+    title: "Your week adds up: the intention chain",
+    lines: [
+      "On Intentions, \"Your chain\" shows how this week adds up: the initiative it moves, this month's intention, this week's, its tasks done, and the key results moved. Each step is a tap.",
+      "Link your week to an initiative in Business goals, and each key result to one of yours there. On Friday, the number you write for a linked key result is logged on it, dated that day.",
+      "Tick a week's task right on the week card, and deleting one in Tasks asks whether to take it off your intention too.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 321,
+    date: "2026-10-19",
+    title: "Personal tasks, wins that weren't on the list, and offer tiers you set",
+    lines: [
+      "Tasks have a Personal area: for your own life, with no points and kept out of your business numbers.",
+      "On Today, \"Did something else? Add it\" logs a win that wasn't on your list. Close the day has \"Also today\": outreach messages from any app (WhatsApp too), scripts written, videos recorded and videos posted. Outreach counts toward DMs started on the Aqueduct.",
+      "On an offer you can set its tier (Freebie, Starter, Core or Premium) for My Helix. Customer journey mapped leads to your Pathway, and when you tick a rung yourself you can add one line on how you did it.",
     ],
     audience: "everyone",
   },

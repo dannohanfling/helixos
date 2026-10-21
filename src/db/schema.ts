@@ -25,6 +25,8 @@ export const workspaces = sqliteTable("workspaces", {
   timezone: text("timezone").notNull().default("America/Los_Angeles"),
   /** "Connected apps open to clients" (MCP, rev 247 B5): whether clients may connect Claude to their HelixOS. On by default; coaches always may. */
   connectedAppsOpen: integer("connected_apps_open", { mode: "boolean" }).notNull().default(true),
+  /** "Send Done messages automatically after merge" (H-202): an agent's Done draft goes at once instead of waiting for Send. Off. */
+  autoDoneAfterMerge: integer("auto_done_after_merge", { mode: "boolean" }).notNull().default(false),
   /** The Colosseum (rev 699): off until the coach turns it on for the workspace. */
   colosseumOn: integer("colosseum_on", { mode: "boolean" }).notNull().default(false),
   clientInviteCode: text("client_invite_code").notNull().unique(),
@@ -451,7 +453,7 @@ export const tasks = sqliteTable(
     details: text("details"),
     status: text("status", { enum: ["upcoming", "today", "in_progress", "done"] }).notNull().default("upcoming"),
     urgency: text("urgency", { enum: ["top3", "high", "medium", "low"] }).notNull().default("medium"),
-    category: text("category", { enum: ["sales", "content", "community", "system", "admin", "fulfillment"] })
+    category: text("category", { enum: ["sales", "content", "community", "system", "admin", "fulfillment", "personal"] })
       .notNull()
       .default("sales"),
     dueDate: text("due_date"),
@@ -872,7 +874,8 @@ export const communityShares = sqliteTable(
  * A key result as set and as checked on Friday (rev 158): `actual` is "how many did you get", against the number in the text;
  * `kept` marks one saved as written though it reads like a task, for the coach.
  */
-export type IntentionKeyResult = { text: string; done: boolean | null; actual?: number | null; kept?: boolean };
+/** `krId` (H-198): the member's own key result in Business goals this one counts toward; its Friday number is logged there. */
+export type IntentionKeyResult = { text: string; done: boolean | null; actual?: number | null; kept?: boolean; krId?: string | null };
 export type IntentionTask = { title: string; taskId: string | null };
 export const weeklyIntentions = sqliteTable(
   "weekly_intentions",
@@ -892,6 +895,8 @@ export const weeklyIntentions = sqliteTable(
     tasks: text("tasks", { mode: "json" }).$type<IntentionTask[]>().notNull().default([]),
     /** When the key results were marked done or not; null until then. */
     reviewedAt: text("reviewed_at"),
+    /** The intention chain (H-198): the member's initiative in Business goals this week rolls up under; null until they link it. */
+    initiativeId: text("initiative_id"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
     createdAt: createdAt(),
   },
@@ -939,6 +944,11 @@ export const dailyLogs = sqliteTable(
     ctaPosts: integer("cta_posts").notNull().default(0),
     beliefPosts: integer("belief_posts").notNull().default(0),
     storiesCreated: integer("stories_created").notNull().default(0),
+    /** Docket #9 (H-195): wins that weren't on the list, counted in the close. Outreach in any app feeds the Aqueduct's DMs started stage. */
+    outreachMessages: integer("outreach_messages").notNull().default(0),
+    scriptsWritten: integer("scripts_written").notNull().default(0),
+    videosRecorded: integer("videos_recorded").notNull().default(0),
+    videosPosted: integer("videos_posted").notNull().default(0),
     referralAsks: integer("referral_asks").notNull().default(0),
     createdAt: createdAt(),
   },
@@ -1350,6 +1360,8 @@ export const offers = sqliteTable(
     /* The offer ladder (handoff 27 Sep, Phase 1 of a client's Airtable import): where an offer sits and its full sales copy. */
     /** The ladder code ("T03", "B1"); blank for an offer off the ladder. */
     tierCode: text("tier_code"),
+    /** Docket #10 (H-195): the offer's tier, set by the member (Freebie, Starter, Core, Premium); null reads it from the price, as before. */
+    ladderTier: text("ladder_tier", { enum: ["freebie", "starter", "core", "premium"] }),
     /** Its place in its pathway: T00 is 0, B3 is 3. */
     tierOrder: integer("tier_order"),
     /** The client's pathway (sub-brand) this offer belongs to. */
@@ -1749,6 +1761,65 @@ export const webinarHistory = sqliteTable(
   (t) => [index("webinar_history_webinar").on(t.webinarId, t.createdAt)],
 );
 export type WebinarHistoryRow = typeof webinarHistory.$inferSelect;
+
+/**
+ * Claude's drafts everywhere else (H-184, plan H-220 PR D2): one table for every area a connector drafts in (offers first; Essence,
+ * lead magnets, content, Pathway, courses and the bot profile next). A draft sits beside what's approved and never writes into it
+ * until the member's Approve. `targetId` is the row it changes, null for a new one; `base` is what those fields said when it was
+ * written, so a later change shows as a conflict.
+ */
+export const DRAFT_AREAS = ["offer", "essence", "magnet", "content", "pathway", "course", "bot_profile"] as const;
+export type DraftArea = (typeof DRAFT_AREAS)[number];
+export const DRAFT_STATUSES = ["pending", "approved", "edited", "discarded", "replaced"] as const;
+export const drafts = sqliteTable(
+  "drafts",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    area: text("area", { enum: DRAFT_AREAS }).notNull(),
+    targetId: text("target_id"),
+    fields: text("fields", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+    base: text("base", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+    /** The member's own words the draft was built from (the connector's source_words): a figure in them counts as theirs. */
+    source: text("source").notNull().default(""),
+    /** What the tool took out on the way in (an income claim, a figure not in the member's own facts), in plain words. */
+    notes: text("notes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    byLabel: text("by_label").notNull(),
+    appId: text("app_id"),
+    agentId: text("agent_id"),
+    status: text("status", { enum: DRAFT_STATUSES }).notNull().default("pending"),
+    decidedAt: text("decided_at"),
+    decidedBy: text("decided_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("drafts_member").on(t.workspaceId, t.userId, t.status), index("drafts_target").on(t.area, t.targetId)],
+);
+export type Draft = typeof drafts.$inferSelect;
+
+/** Every draft written, approved, edited, discarded or undone (H-184), with what an Approve replaced, so Undo (seven days) puts it back. */
+export const CHANGE_ACTIONS = ["drafted", "approved", "edited", "discarded", "undone"] as const;
+export const changeHistory = sqliteTable(
+  "change_history",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    area: text("area", { enum: DRAFT_AREAS }).notNull(),
+    targetId: text("target_id"),
+    draftId: text("draft_id"),
+    action: text("action", { enum: CHANGE_ACTIONS }).notNull(),
+    byLabel: text("by_label").notNull(),
+    byConnector: integer("by_connector", { mode: "boolean" }).notNull().default(false),
+    changed: text("changed", { mode: "json" }).$type<string[]>().notNull().default([]),
+    before: text("before", { mode: "json" }).$type<Record<string, unknown> | null>(),
+    undoneAt: text("undone_at"),
+    undoneBy: text("undone_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("change_history_target").on(t.area, t.targetId, t.createdAt), index("change_history_member").on(t.workspaceId, t.userId)],
+);
+export type ChangeHistoryRow = typeof changeHistory.$inferSelect;
 
 /** The coach's choice of which image fills a suggested slot on a webinar's slide, keyed by the slot's stable key. */
 export const deckSlots = sqliteTable(
@@ -2496,6 +2567,10 @@ export const formDrafts = sqliteTable(
 );
 export type FormDraft = typeof formDrafts.$inferSelect;
 
+/** Where a member report stands (H-202): New, Seen, Working on it, Done, or Not now (always with a reason). */
+export const REPORT_STATUSES = ["new", "seen", "working", "done", "not_now"] as const;
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+
 /**
  * What a member sends from "I have an issue or a suggestion" in the menu: their words, the page they were on, how much it gets
  * in their way, and an optional screenshot, kept in the private store under reports/<workspace>/. For an Ask Danno answer, the
@@ -2521,6 +2596,16 @@ export const memberReports = sqliteTable(
     screenshotType: text("screenshot_type"),
     seenAt: text("seen_at"),
     doneAt: text("done_at"),
+    /** Where it stands (H-202): New until the coach answers; seenAt and doneAt follow it for older readers. */
+    status: text("status", { enum: REPORT_STATUSES }).notNull().default("new"),
+    /** The 3 to 6 words a reply calls it ("the GoHighLevel connection"); the coach's to edit. Null reads it from the words. */
+    topic: text("topic"),
+    /** Merged into another report of the same member (H-202): it sits under that one, and one reply answers both. */
+    parentId: text("parent_id"),
+    /** An agent's Done note, written after its fix merged (H-202): an amber draft until the coach presses Send. */
+    doneDraft: text("done_draft"),
+    doneDraftBy: text("done_draft_by"),
+    doneDraftAt: text("done_draft_at"),
     /**
      * A Content report (H-745): what was reported, a Colosseum win or a member (their membership id), and whose it is. The reason
      * (spam, harassment or hurtful, something else) is the severity: red, orange, green. Null on every other kind.
@@ -2532,9 +2617,39 @@ export const memberReports = sqliteTable(
     handledAt: text("handled_at"),
     createdAt: createdAt(),
   },
-  (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId)],
+  (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId), index("member_reports_parent").on(t.parentId)],
 );
 export type MemberReport = typeof memberReports.$inferSelect;
+
+/**
+ * Everything said on a report after it was sent (H-202): the instant receipt, each reply the coach sent with a status, and the
+ * member's follow-ups. Who, when and the words, kept for good; the member reads their own, newest first, on My reports.
+ */
+export const REPORT_MESSAGE_KINDS = ["receipt", "status", "followup"] as const;
+export const reportMessages = sqliteTable(
+  "report_messages",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    reportId: text("report_id").notNull(),
+    /** The member the report is from. */
+    userId: text("user_id").notNull(),
+    /** Who wrote it: the coach for a status reply, the member for a follow-up; null for the automatic receipt. */
+    byUserId: text("by_user_id"),
+    kind: text("kind", { enum: REPORT_MESSAGE_KINDS }).notNull(),
+    status: text("status", { enum: REPORT_STATUSES }),
+    body: text("body").notNull(),
+    /** Whether an email went (only a status reply, and only while the member's Emails from HelixOS is on). */
+    emailed: integer("emailed", { mode: "boolean" }).notNull().default(false),
+    /** The agent that drafted a Done sent on its own after merge (H-202), by name; null when the coach wrote and sent it. */
+    draftedBy: text("drafted_by"),
+    /** When the member saw it on My reports; a status reply unread shows a line on their Today. */
+    readAt: text("read_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("report_messages_report").on(t.reportId, t.createdAt), index("report_messages_user").on(t.workspaceId, t.userId)],
+);
+export type ReportMessage = typeof reportMessages.$inferSelect;
 
 export const RECORDING_SOURCES = ["webhook", "sync", "backfill"] as const;
 /** exact: the title names a series (rev 491; rev 261 phrases before); slot: placed by its start time; close: rev 261 only, kept for old rows. */
@@ -3809,7 +3924,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "partner", "clients"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "magnets", "forum", "inbox", "body", "partner", "clients"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {
@@ -5182,6 +5297,8 @@ export const helixTicks = sqliteTable(
     rungKey: text("rung_key").notNull(),
     /** Who ticked it: the member, or the coach switched in (then also logged as the coach's change). */
     byUserId: text("by_user_id").notNull(),
+    /** Docket #10 (H-195): one line on how it was done ("posted it in the group on Tuesday"), shown on the rung. */
+    reason: text("reason"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("helix_ticks_member_rung").on(t.workspaceId, t.userId, t.rungKey)],

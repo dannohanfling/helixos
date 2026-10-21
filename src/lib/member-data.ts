@@ -82,6 +82,9 @@ export const MEMBER_TABLES = {
   // Claude's webinar drafts and their history (H-181): the member's own, exported and erased with them.
   webinar_drafts: schema.webinarDrafts,
   webinar_history: schema.webinarHistory,
+  // Claude's drafts everywhere else and their history (H-184): the member's own, exported and erased with them.
+  drafts: schema.drafts,
+  change_history: schema.changeHistory,
   client_records: schema.clientRecords,
   proofs: schema.proofs,
   // Approve selected (H-1394): the member's own batches, so Undo the last batch has its record.
@@ -175,6 +178,8 @@ export const MEMBER_TABLES = {
   // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row). A
   // Content report about the member (H-745, target_user_id) is erased with them too (src/lib/erase.ts), never exported to them.
   member_reports: schema.memberReports,
+  // H-202: everything said on the member's reports (the receipt, the coach's replies, their follow-ups).
+  report_messages: schema.reportMessages,
   // Rev 444: a form's unsent draft, kept so it follows the member to another device.
   form_drafts: schema.formDrafts,
 } as const;

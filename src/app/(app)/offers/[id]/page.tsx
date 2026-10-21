@@ -20,6 +20,9 @@ import { DraftKeeper } from "@/components/draft-keeper";
 import { OfferAvatars } from "@/components/offer-avatars";
 import { avatarData, importFromOffers } from "@/lib/avatars";
 import { ItemGone } from "@/components/item-gone";
+import { ClaudeDraftCard, ClaudeDraftHistory, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { changesFor, pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -36,7 +39,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return ownTitle(async (v) => (await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, v.user.id)), columns: { name: true } }))?.name, "Offers");
 }
 
-export default async function OfferWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
+export default async function OfferWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; draft?: string; draftNote?: string }> }) {
   const sp = await searchParams;
   const v = await requireViewer();
   const { id } = await params;
@@ -57,6 +60,14 @@ export default async function OfferWizardPage({ params, searchParams }: { params
   const legacyFilled = LEGACY_OFFER_OBJECTIONS.filter((l) => (offer[l.field] ?? "").trim());
   const onePager = offerOnePager(offer, components);
   const groups = ["clarity", "belief", "value", "risk"] as const;
+  // Claude's draft of this offer (H-184): the one waiting, the one being edited in the form below, and what happened to drafts here.
+  const me = { workspaceId: v.workspace.id, userId: v.user.id };
+  const [waiting, changes] = await Promise.all([pendingDrafts(me, "offer", offer.id), changesFor(me, "offer", offer.id)]);
+  const draft = waiting[0] ?? null;
+  const editing = draft && sp.draft === draft.id ? draft : null;
+  const red = draft && !editing ? await redLinesFor(me, draft) : [];
+  const shown: schema.Offer = editing ? { ...offer, ...(editing.fields as Partial<schema.Offer>) } : offer;
+  const here = `/offers/${offer.id}`;
 
   return (
     <>
@@ -85,47 +96,71 @@ export default async function OfferWizardPage({ params, searchParams }: { params
           </div>
         }
       />
+      {sp.draftNote ? (
+        <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[sp.draftNote] ?? sp.draftNote}</p>
+      ) : null}
+      {editing ? (
+        <p className="mb-4 rounded-lg border border-accent bg-accent-soft/40 p-3 text-sm" data-testid="claude-draft-editing">
+          The form below is filled with Claude&apos;s draft. Change what you like, then save the offer; the draft is settled as edited.{" "}
+          <Link href={here} className="underline">Back to the draft</Link>
+        </p>
+      ) : draft ? (
+        <div className="mb-4">
+          <ClaudeDraftCard draft={draft} rows={rowsFor("offer", offer as Record<string, unknown>, draft.fields)} red={red} tz={v.tz} editHref={`${here}?draft=${draft.id}#who`} back={here} />
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-4">
-          <form action={updateOfferAction} className="space-y-4">
+          <form key={editing ? `draft-${editing.id}` : "saved"} action={updateOfferAction} className="space-y-4">
             <input type="hidden" name="id" value={offer.id} />
-            <DraftKeeper id={`offer.${v.user.id}.${offer.id}`} />
+            {editing ? <input type="hidden" name="draftId" value={editing.id} /> : null}
+            <DraftKeeper id={`shown.${v.user.id}.${offer.id}`} />
             <Card id="who" title="1 · Who and what" action={<SubmitButton className="btn btn-accent btn-sm" pendingText="Saving…">Save offer</SubmitButton>}>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Offer name">
-                  <input className="field" name="name" defaultValue={offer.name} required />
+                  <input className="field" name="name" defaultValue={shown.name} required />
                 </Field>
                 <Field label="Status">
-                  <select className="field" name="status" defaultValue={offer.status}>
+                  <select className="field" name="status" defaultValue={shown.status}>
                     <option value="draft">Draft</option>
                     <option value="live">Live</option>
                     <option value="retired">Retired</option>
                   </select>
                 </Field>
                 <div className="sm:col-span-2">
-                  <T name="avatar" label="The one person this is for" value={offer.avatar} hint="Not 'business owners'. One specific human with a pain, a goal, and things they've already tried." placeholder="Busy moms of school-age kids who've tried every diet and quit by week three." />
+                  <T name="avatar" label="The one person this is for" value={shown.avatar} hint="Not 'business owners'. One specific human with a pain, a goal, and things they've already tried." placeholder="Busy moms of school-age kids who've tried every diet and quit by week three." />
                 </div>
                 <div className="sm:col-span-2">
-                  <T name="coreProblem" label="Their core problem, in their words" value={offer.coreProblem} placeholder="I lose 10 lbs and gain it back every single time. I'm sick of starting over." />
+                  <T name="coreProblem" label="Their core problem, in their words" value={shown.coreProblem} placeholder="I lose 10 lbs and gain it back every single time. I'm sick of starting over." />
                 </div>
               </div>
             </Card>
             <Card id="promise" title="2 · The Big Promise">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <T name="promise" label="I help [who] go from [pain] to [outcome] in [time] without [thing they hate]" value={offer.promise} hint="A number, a clock, and a 'without'. That's what makes it repeatable." placeholder="I help busy moms drop 15 lbs in 90 days without giving up wine or weekends." />
+                  <T name="promise" label="I help [who] go from [pain] to [outcome] in [time] without [thing they hate]" value={shown.promise} hint="A number, a clock, and a 'without'. That's what makes it repeatable." placeholder="I help busy moms drop 15 lbs in 90 days without giving up wine or weekends." />
                 </div>
-                <T name="oneBelief" label="The ONE belief (domino)" value={offer.oneBelief} hint="If they believe this, they buy." placeholder="If they believe the plan does the work and they only have to follow it, they buy." />
-                <T name="difference" label="How is this different from everything they've seen?" value={offer.difference} />
+                <T name="oneBelief" label="The ONE belief (domino)" value={shown.oneBelief} hint="If they believe this, they buy." placeholder="If they believe the plan does the work and they only have to follow it, they buy." />
+                <T name="difference" label="How is this different from everything they've seen?" value={shown.difference} />
               </div>
             </Card>
             <Card id="method" title="3 · Your method">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Named mechanism" hint="Capital letters. Yours.">
-                  <input className="field" name="mechanismName" defaultValue={offer.mechanismName ?? ""} placeholder="The 12-Minute Tuesday System" />
+                  <input className="field" name="mechanismName" defaultValue={shown.mechanismName ?? ""} placeholder="The 12-Minute Tuesday System" />
+                </Field>
+                {/* Docket #10 (H-195): where an offer's tier is set. Blank reads it from the price, as before. */}
+                <Field label="Tier" hint="Freebie, Starter, Core or Premium. Leave it on the price and HelixOS works it out from what you charge.">
+                  <select className="field" name="ladderTier" defaultValue={offer.ladderTier ?? ""} data-testid="offer-tier">
+                    <option value="">Read from the price</option>
+                    <option value="freebie">Freebie</option>
+                    <option value="starter">Starter</option>
+                    <option value="core">Core</option>
+                    <option value="premium">Premium</option>
+                  </select>
                 </Field>
                 <Field label="Container">
-                  <select className="field" name="container" defaultValue={offer.container} required data-testid="offer-container">
+                  <select className="field" name="container" defaultValue={shown.container} required data-testid="offer-container">
                     <option value="">Choose one</option>
                     {OFFER_CONTAINERS.map((c) => (
                       <option key={c}>{c}</option>
@@ -136,13 +171,13 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                   <div className="label">The path (3 to 5 steps from problem to promise)</div>
                   <div className="grid gap-2 sm:grid-cols-5">
                     {[1, 2, 3, 4, 5].map((i) => (
-                      <input key={i} className="field" name={`step${i}`} defaultValue={offer.pathSteps[i - 1] ?? ""} placeholder={`Step ${i}`} />
+                      <input key={i} className="field" name={`step${i}`} defaultValue={shown.pathSteps[i - 1] ?? ""} placeholder={`Step ${i}`} />
                     ))}
                   </div>
                 </div>
-                <T name="howItWorks" label="How it works (delivery)" value={offer.howItWorks} placeholder="Two 30-minute group calls a week, a daily check-in, templates for every meal." />
+                <T name="howItWorks" label="How it works (delivery)" value={shown.howItWorks} placeholder="Two 30-minute group calls a week, a daily check-in, templates for every meal." />
                 <Field label="Length">
-                  <input className="field" name="length" defaultValue={offer.length ?? ""} placeholder="90 days" />
+                  <input className="field" name="length" defaultValue={shown.length ?? ""} placeholder="90 days" />
                 </Field>
               </div>
             </Card>
@@ -150,35 +185,35 @@ export default async function OfferWizardPage({ params, searchParams }: { params
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Price" hint="With its currency: a bare $ to a mixed room is a different number to each half of it.">
                     <div className="flex flex-wrap gap-2">
-                      <select className="field w-28 shrink-0" name="currency" defaultValue={offer.currency} data-testid="offer-currency">
+                      <select className="field w-28 shrink-0" name="currency" defaultValue={shown.currency} data-testid="offer-currency">
                         {CURRENCIES.map((c) => (
                           <option key={c}>{c}</option>
                         ))}
                       </select>
                       <div className="min-w-[8rem] flex-1">
-                        <MoneyInput name="price" plain defaultValue={offer.price} data-testid="offer-price" />
+                        <MoneyInput name="price" plain defaultValue={shown.price} data-testid="offer-price" />
                       </div>
                     </div>
                   </Field>
                 <Field label="Payment plan">
-                  <input className="field" name="paymentPlan" defaultValue={offer.paymentPlan ?? ""} placeholder="3 x $550" />
+                  <input className="field" name="paymentPlan" defaultValue={shown.paymentPlan ?? ""} placeholder="3 x $550" />
                 </Field>
                 <div className="sm:col-span-2">
-                  <T name="guarantee" label="Guarantee / risk reversal" value={offer.guarantee} placeholder="Follow the plan for 90 days and don't lose 10 lbs? I coach you free until you do." />
+                  <T name="guarantee" label="Guarantee / risk reversal" value={shown.guarantee} placeholder="Follow the plan for 90 days and don't lose 10 lbs? I coach you free until you do." />
                 </div>
-                <T name="whyNow" label="Why now" value={offer.whyNow} placeholder="Next cohort opens Monday. 12 seats." />
-                <T name="whyTrust" label="Why trust you" value={offer.whyTrust} placeholder="Results, years, your own story." />
-                <T name="scarcity" label="Scarcity (real)" value={offer.scarcity} />
-                <T name="urgency" label="Urgency (real)" value={offer.urgency} />
+                <T name="whyNow" label="Why now" value={shown.whyNow} placeholder="Next cohort opens Monday. 12 seats." />
+                <T name="whyTrust" label="Why trust you" value={shown.whyTrust} placeholder="Results, years, your own story." />
+                <T name="scarcity" label="Scarcity (real)" value={shown.scarcity} />
+                <T name="urgency" label="Urgency (real)" value={shown.urgency} />
                 <div className="sm:col-span-2">
-                  <T name="ctaFooter" label="Deck footer" hint="one line drawn on every slide from the offer onward: where to go and what to do. Leave it empty for none." value={offer.ctaFooter} />
+                  <T name="ctaFooter" label="Deck footer" hint="one line drawn on every slide from the offer onward: where to go and what to do. Leave it empty for none." value={shown.ctaFooter} />
                 </div>
               </div>
             </Card>
             <Card id="fit" title="5 · Fit">
               <div className="grid gap-3 sm:grid-cols-2">
-                <T name="forYouIf" label="This is for you if…" value={offer.forYouIf} />
-                <T name="notForYouIf" label="This is not for you if…" value={offer.notForYouIf} />
+                <T name="forYouIf" label="This is for you if…" value={shown.forYouIf} />
+                <T name="notForYouIf" label="This is not for you if…" value={shown.notForYouIf} />
                 <p className="text-xs text-ink-3 sm:col-span-2">
                   The three questions your bot asks before booking are yours, not this offer&apos;s: they live under <Link href="/settings#your-bot" className="underline">Settings</Link>.
                 </p>
@@ -188,7 +223,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
               <p className="mb-3 text-xs text-ink-3">Only an offer with a role here reaches your Community Loyalty bot, whatever its status on this page. What your bot will be sent is on <Link href="/brain" className="underline">Your bot</Link>, for you to approve before anything goes.</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Role on your bot">
-                  <select className="field" name="botRole" defaultValue={offer.botRole} data-testid="offer-bot-role">
+                  <select className="field" name="botRole" defaultValue={shown.botRole} data-testid="offer-bot-role">
                     {BOT_ROLES.map((r) => (
                       <option key={r} value={r}>
                         {BOT_ROLE_LABEL[r]}
@@ -197,37 +232,37 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                   </select>
                 </Field>
                 <Field label="Name on your bot" hint="Blank uses the offer's name.">
-                  <input className="field" name="botName" defaultValue={offer.botName ?? ""} placeholder={offer.name} data-testid="offer-bot-name" />
+                  <input className="field" name="botName" defaultValue={shown.botName ?? ""} placeholder={shown.name} data-testid="offer-bot-name" />
                 </Field>
                 <div className="sm:col-span-2">
                   <Field label="When your bot offers it, one sentence" hint="How it comes up in the conversation. Your bot reads it as part of how you talk about money.">
-                    <input className="field" name="botFor" defaultValue={offer.botFor ?? ""} placeholder="Get started comes up when they ask how to start, or after we have talked budget." data-testid="offer-bot-for" />
+                    <input className="field" name="botFor" defaultValue={shown.botFor ?? ""} placeholder="Get started comes up when they ask how to start, or after we have talked budget." data-testid="offer-bot-for" />
                   </Field>
                 </div>
                 <Field label="The terms, as a fact" hint="Your bot knows this and shares it when the time comes. You approve it on Your bot.">
-                  <input className="field" name="botTerms" defaultValue={offer.botTerms ?? ""} placeholder="$500 today, then $500 a month." data-testid="offer-bot-terms" />
+                  <input className="field" name="botTerms" defaultValue={shown.botTerms ?? ""} placeholder="$500 today, then $500 a month." data-testid="offer-bot-terms" />
                 </Field>
                 <Field label="When it shares the terms" hint={`Blank uses: ${TERMS_WHEN_DEFAULT}`}>
-                  <input className="field" name="botTermsWhen" defaultValue={offer.botTermsWhen ?? ""} placeholder={TERMS_WHEN_DEFAULT} data-testid="offer-bot-terms-when" />
+                  <input className="field" name="botTermsWhen" defaultValue={shown.botTermsWhen ?? ""} placeholder={TERMS_WHEN_DEFAULT} data-testid="offer-bot-terms-when" />
                 </Field>
                 <div className="sm:col-span-2">
                   <Field label="Cancelling, said only if asked (optional)">
-                    <input className="field" name="botCancelLine" defaultValue={offer.botCancelLine ?? ""} placeholder="Get started is month to month. Cancel anytime." data-testid="offer-bot-cancel" />
+                    <input className="field" name="botCancelLine" defaultValue={shown.botCancelLine ?? ""} placeholder="Get started is month to month. Cancel anytime." data-testid="offer-bot-cancel" />
                   </Field>
                 </div>
                 <Field label="Deposit amount">
-                  <MoneyInput name="depositAmount" plain defaultValue={offer.depositAmount} data-testid="offer-deposit" />
+                  <MoneyInput name="depositAmount" plain defaultValue={shown.depositAmount} data-testid="offer-deposit" />
                 </Field>
                 <p className="self-end text-xs text-ink-3">The payment link is the one under Links below; an entry or core offer can&apos;t be pushed without it.</p>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="refundableIfNotFit" defaultChecked={offer.refundableIfNotFit} data-testid="offer-refundable" /> Refunded in full if the call shows it&apos;s not a fit
+                  <input type="checkbox" name="refundableIfNotFit" defaultChecked={shown.refundableIfNotFit} data-testid="offer-refundable" /> Refunded in full if the call shows it&apos;s not a fit
                 </label>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="guaranteeCovered" defaultChecked={offer.guaranteeCovered} data-testid="offer-guarantee-covered" /> Covered by your guarantee
+                  <input type="checkbox" name="guaranteeCovered" defaultChecked={shown.guaranteeCovered} data-testid="offer-guarantee-covered" /> Covered by your guarantee
                 </label>
                 <div className="sm:col-span-2">
                   <Field label="The refund, said only if they hesitate to pay" hint={`Blank uses: ${REFUND_LINE_DEFAULT}`}>
-                    <input className="field" name="botRefundLine" defaultValue={offer.botRefundLine ?? ""} placeholder={REFUND_LINE_DEFAULT} data-testid="offer-refund-line" />
+                    <input className="field" name="botRefundLine" defaultValue={shown.botRefundLine ?? ""} placeholder={REFUND_LINE_DEFAULT} data-testid="offer-refund-line" />
                   </Field>
                 </div>
               </div>
@@ -240,7 +275,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                   return (
                     <li key={o.id} className="rounded-lg bg-surface-2 p-2">
                       <label className="flex items-start gap-2">
-                        <input type="checkbox" name="objectionAssetIds" value={o.id} defaultChecked={offer.objectionAssetIds.includes(o.id)} className="mt-1" data-testid="offer-objection" data-has-reframe={rs.length ? "1" : "0"} />
+                        <input type="checkbox" name="objectionAssetIds" value={o.id} defaultChecked={shown.objectionAssetIds.includes(o.id)} className="mt-1" data-testid="offer-objection" data-has-reframe={rs.length ? "1" : "0"} />
                         <span className="min-w-0 flex-1">
                           <span className="font-medium">{o.name}</span>
                           {isSharedObjection(o) ? <span className="text-xs text-ink-3"> · shared, Evolve Omega</span> : null}
@@ -289,13 +324,13 @@ export default async function OfferWizardPage({ params, searchParams }: { params
             <Card title="Links">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Sales page">
-                  <input className="field" name="salesPageUrl" type="url" defaultValue={offer.salesPageUrl ?? ""} />
+                  <input className="field" name="salesPageUrl" type="url" defaultValue={shown.salesPageUrl ?? ""} />
                 </Field>
                 <Field label="Payment link">
-                  <input className="field" name="paymentLink" type="url" defaultValue={offer.paymentLink ?? ""} />
+                  <input className="field" name="paymentLink" type="url" defaultValue={shown.paymentLink ?? ""} />
                 </Field>
                 <div className="sm:col-span-2">
-                  <T name="notes" label="Notes" value={offer.notes} />
+                  <T name="notes" label="Notes" value={shown.notes} />
                 </div>
               </div>
             </Card>
@@ -372,6 +407,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
               </SubmitButton>
             </form>
           </Card>
+          <ClaudeDraftHistory rows={changes} tz={v.tz} back={here} />
         </div>
 
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">

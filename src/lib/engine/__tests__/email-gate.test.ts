@@ -47,7 +47,8 @@ describe("emails from HelixOS: who may be emailed automatically (29 Sep)", () =>
     // automated, gated like the reminders and behind its own switch. email-change: the confirmation link to a new login
     // address and the heads-up to the old one (H-47), asked for by the member or their coach, not gated, like the reset link.
     // forum-watch: the owner's own alert when an agent stops checking in (H-495), automated, gated, behind its own switch (off).
-    expect(senders).toEqual(["src/lib/actions/account.ts", "src/lib/actions/bot-features.ts", "src/lib/actions/coach.ts", "src/lib/actions/connect.ts", "src/lib/email-change.ts", "src/lib/forum-watch.ts", "src/lib/handoff.ts", "src/lib/reminders.ts", "src/lib/scoreboard.ts"]);
+    // report-replies: the coach's reply on a member's report (H-202), sent with the coach's Send, gated like the Nudge.
+    expect(senders).toEqual(["src/lib/actions/account.ts", "src/lib/actions/bot-features.ts", "src/lib/actions/coach.ts", "src/lib/actions/connect.ts", "src/lib/email-change.ts", "src/lib/forum-watch.ts", "src/lib/handoff.ts", "src/lib/reminders.ts", "src/lib/report-replies.ts", "src/lib/scoreboard.ts"]);
     const watch = body(readFileSync(join(SRC, "lib/forum-watch.ts"), "utf8"), "watchForum");
     expect(watch).toMatch(/settings\?\.stallEmails && zone\.membershipId && \(await canEmail\(zone\.membershipId\)\)/);
     const reminders = readFileSync(join(SRC, "lib/reminders.ts"), "utf8");

@@ -923,6 +923,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="HelixOS Airtable base ID" hint="The base the Pathway, curriculum and DM templates are refreshed from.">
                   <input className="field" name="airtableBaseId" defaultValue={v.workspace.airtableBaseId ?? ""} placeholder="appXXXXXXXXXXXXXX" />
                 </Field>
+                <label className="flex items-start gap-2 text-sm" data-testid="auto-done-label">
+                  <input type="checkbox" name="autoDoneAfterMerge" defaultChecked={v.workspace.autoDoneAfterMerge} className="mt-1" data-testid="auto-done" />
+                  <span>
+                    Send Done messages automatically after merge
+                    <span className="block text-xs text-ink-3">When an agent&apos;s fix for a member&apos;s report merges, its Done message goes to the member at once, from your account, marked as drafted by that agent. Off: it waits on Issues and ideas as a draft until you press Send.</span>
+                  </span>
+                </label>
                 <fieldset className="space-y-2" data-testid="platform-links">
                   <legend className="label">Platforms menu links</legend>
                   <p className="text-xs text-ink-3">Where the Platforms section of everyone&apos;s menu points. Leave one blank for the address shown; Community appears once it has a link (a client&apos;s own community link on Community wins for them).</p>

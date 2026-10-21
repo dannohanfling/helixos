@@ -11,10 +11,12 @@ import { WeekCard } from "@/components/week-card";
 import { monthShareFor, monthThreadLinkFor, shareFor, threadLinkFor } from "@/lib/community";
 import { MonthAnswers, MonthCard } from "@/components/month-card";
 import { Card, PageHeader } from "@/components/ui";
+import { IntentionChain } from "@/components/intention-chain";
+import { chainFor, planChoices } from "@/lib/intention-chain";
 
 export const metadata = { title: "Intentions" };
 
-type Sp = { weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; feedbackMonth?: string };
+type Sp = { weekLinked?: string; weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; feedbackMonth?: string };
 
 /**
  * Intentions (handoff rev 130): the week and the month together. This week's 3-1-3 (the form, the set week with Edit, or the
@@ -36,6 +38,7 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
   const taskIds = (week?.tasks ?? []).map((t) => t.taskId).filter((x): x is string => Boolean(x));
   const tasks = taskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, taskIds)) }) : [];
   const taskDone = Object.fromEntries(tasks.map((t) => [t.id, t.status === "done"]));
+  const [chain, choices] = await Promise.all([chainFor({ workspaceId: ws, userId: v.user.id }, v.today), planChoices({ workspaceId: ws, userId: v.user.id })]);
   const [share, thread, monthShare, monthThread] = await Promise.all([week ? shareFor(ws, v.user.id, week) : null, threadLinkFor(ws, thisWeek), month ? monthShareFor(ws, v.user.id, month) : null, monthThreadLinkFor(ws, thisMonth)]);
   // End-of-month feedback (rev 157: here, not on Today; all month since 9 Oct): this month's form, or last month's first while it
   // has no response and the 7th hasn't passed. Last month's, once sent, stays above this month's through the 7th to change. What
@@ -63,6 +66,8 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
         ) : null}
       </div>
       <WeekCard week={week ?? null} today={v.today} taskDone={taskDone} sp={sp} back="/intentions" share={share} owner={v.switchedInto ? null : v.user.id} />
+      {/* The intention chain (H-198): initiative, month, week, tasks, key results; linking is the member's own. */}
+      {week ? <IntentionChain chain={chain} choices={choices} links={{ initiativeId: week.initiativeId, krIds: week.keyResults.map((k) => k.krId ?? null) }} linked={Boolean(sp.weekLinked)} canLink={!v.switchedInto && !v.team} /> : null}
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-3">This month</h2>
         {/* Where the month's thread is (1 Oct), set or not: only to look, so no points and no share count. */}

@@ -2,6 +2,7 @@
  * Issues and ideas on the connector (H-583, plan H-591): reports_list, report_read and report_mark, for the coach's daily
  * triage. Coach-only: listed and run only on the coach's own connection, never on an agent token or a client's connection,
  * and only for the coach's own workspace. Seen is the one thing they set; Done stays the coach's, on Coach → Issues and ideas.
+ * The one exception (H-202): report_done_draft, for the coach's own agents only, writes a Done draft the coach sends.
  * Nothing here returns a store key, a store address or a signed link: the screenshot comes back as the picture itself.
  */
 import { and, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
@@ -13,6 +14,8 @@ import { formatDateTime, instantOf, nowIso } from "@/lib/dates";
 import { IMAGE_MAX_BYTES, IMAGE_TYPES, REPORT_STATES, firstName, listLimit, listRow, type ReportState } from "@/lib/engine/report-tools";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { readProofObject } from "@/lib/proof-storage";
+import { callingAgent } from "@/lib/handoff";
+import { saveDoneDraft } from "@/lib/report-replies";
 
 const NOT_FOUND = "No report with that id in your workspace.";
 const utcOf = (stamp: string) => new Date(instantOf(stamp)).toISOString();
@@ -66,8 +69,9 @@ defineTool({
   handler: async (v, input): Promise<ToolResult> => {
     const state = (input.state as ReportState | undefined) ?? "new";
     const limit = listLimit(input.limit as number | undefined);
-    const where: SQL[] = [eq(schema.memberReports.workspaceId, v.workspace.id)];
-    if (state === "new") where.push(isNull(schema.memberReports.seenAt));
+    // Merged reports come once, as the report on top (H-202).
+    const where: SQL[] = [eq(schema.memberReports.workspaceId, v.workspace.id), isNull(schema.memberReports.parentId)];
+    if (state === "new") where.push(eq(schema.memberReports.status, "new"));
     if (state === "open") where.push(isNull(schema.memberReports.doneAt));
     const rows = await db.query.memberReports.findMany({ where: and(...where), orderBy: [desc(schema.memberReports.createdAt), desc(schema.memberReports.id)], limit });
     const senders = await sendersOf(v, rows.map((r) => r.userId));
@@ -131,7 +135,30 @@ defineTool({
     const r = await reportOf(v, input.id);
     if (!r) throw new Error(NOT_FOUND);
     const seenAt = r.seenAt ?? nowIso();
-    if (!r.seenAt) await db.update(schema.memberReports).set({ seenAt }).where(and(eq(schema.memberReports.id, r.id), eq(schema.memberReports.workspaceId, v.workspace.id)));
+    // A quiet Seen, with no message to the member (H-202): a New report becomes Seen; any later status stays.
+    if (!r.seenAt) await db.update(schema.memberReports).set({ seenAt, ...(r.status === "new" ? { status: "seen" as const } : {}) }).where(and(eq(schema.memberReports.id, r.id), eq(schema.memberReports.workspaceId, v.workspace.id)));
     return { text: r.seenAt ? "It was already Seen." : "Marked Seen.", data: { id: r.id, seenAt, doneAt: r.doneAt } };
+  },
+});
+
+defineTool({
+  name: "report_done_draft",
+  scope: "inbox",
+  kind: "write",
+  coachAgent: true,
+  description:
+    "After your fix for a member's report has merged, write the Done message for it: one short, friendly line in Danno's voice, saying how it was fixed. It waits on the report as a draft until Danno presses Send on Coach → Issues and ideas; if his \"Send Done messages automatically after merge\" is on, it goes to the member at once from his account, marked as drafted by you. On a report merged into another, it goes on the one on top. Only for the agents of the workspace's coach. The report's id comes in your brief.",
+  input: {
+    id: z.string().min(1).max(64).describe("The report's id, from your brief"),
+    text: z.string().min(1).max(2000).describe("The Done message to the member, e.g. \"Done: the GoHighLevel connection is fixed. It now reconnects on its own. Thanks for flagging it!\""),
+  },
+  handler: async (v, input, call): Promise<ToolResult> => {
+    const agent = await callingAgent({ workspaceId: v.workspace.id, userId: v.user.id }, call?.agentId);
+    const out = await saveDoneDraft({ workspaceId: v.workspace.id, userId: v.user.id, name: v.user.name }, typeof input.id === "string" ? input.id.trim() : "", String(input.text ?? ""), agent.name);
+    if (!out.ok) throw new Error(out.error === "That report isn't here any more." ? NOT_FOUND : out.error);
+    const coach = v.user.name.trim().split(/\s+/)[0] || "your coach";
+    return out.sent
+      ? { text: `Sent to the member as Done, from ${coach}'s account, marked as drafted by ${agent.name}${out.emailed ? ", and emailed" : ""}.`, data: { id: out.reportId, sent: true, emailed: out.emailed } }
+      : { text: `Saved as a Done draft on the report. It goes when ${coach} presses Send.`, data: { id: out.reportId, sent: false } };
   },
 });

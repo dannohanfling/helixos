@@ -12,6 +12,9 @@ import { refreshStale } from "@/lib/planner-status";
 import { outcomesForItem } from "@/lib/queries/outcomes";
 import { addDays, formatDate, rangeDays, startOfWeek, stampDate, dayOf } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
+import { ClaudeDraftCard, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 
 export const metadata = { title: "Content" };
 
@@ -23,7 +26,7 @@ const STATUS_META: Record<(typeof CONTENT_STATUSES)[number], { label: string; ic
   posted: { label: "Posted", icon: "✅" },
 };
 
-function ContentCard({ item, today, outcomes = [] }: { item: ContentItem; today: string; outcomes?: ChannelOutcome[] }) {
+function ContentCard({ item, today, outcomes = [], drafted = false }: { item: ContentItem; today: string; outcomes?: ChannelOutcome[]; drafted?: boolean }) {
   const meta = STATUS_META[item.status];
   const day = item.postAt?.slice(0, 10);
   const late = item.status !== "posted" && day && day < today;
@@ -36,6 +39,7 @@ function ContentCard({ item, today, outcomes = [] }: { item: ContentItem; today:
         <span>{item.platform}</span>
         <span>· {item.contentType}</span>
         {item.hasCta ? <span className="badge badge-accent">CTA</span> : null}
+        {drafted ? <span className="rounded-full border border-accent bg-accent-soft px-1.5 font-semibold text-accent-ink" data-testid="content-has-draft">Claude&apos;s draft</span> : null}
         {day ? <span className={late ? "font-semibold text-danger" : ""}>· {late ? "late · " : ""}{formatDate(day, { month: "short", day: "numeric" })}</span> : null}
       </div>
       {outcomes.length ? (
@@ -65,9 +69,15 @@ function ContentCard({ item, today, outcomes = [] }: { item: ContentItem; today:
   );
 }
 
-export default async function ContentPage({ searchParams }: { searchParams: Promise<{ view?: string; from?: string }> }) {
+export default async function ContentPage({ searchParams }: { searchParams: Promise<{ view?: string; from?: string; draftNote?: string }> }) {
   const v = await requireViewer({ team: "allow" });
-  const { view = "board", from } = await searchParams;
+  const { view = "board", from, draftNote } = await searchParams;
+  // Claude's drafts (H-184): new posts waiting here, and a mark on each post with a draft waiting on its own page. Never a team member's.
+  const me = { workspaceId: v.workspace.id, userId: v.user.id };
+  const waitingDrafts = v.team ? [] : await pendingDrafts(me, "content");
+  const freshDrafts = waitingDrafts.filter((d) => !d.targetId);
+  const freshReds = await Promise.all(freshDrafts.map((d) => redLinesFor(me, d)));
+  const draftedIds = new Set(waitingDrafts.map((d) => d.targetId).filter(Boolean) as string[]);
   // The calendar's first Monday (friction walk CL1, 7 Oct: three fixed weeks with no way forward or back): the week asked for,
   // else this week. Three weeks from there, with Earlier and Later.
   const calendarFrom = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? startOfWeek(from) : startOfWeek(v.today);
@@ -107,6 +117,14 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
         }
       />
       <Tabs items={tabs} current={view} />
+      {draftNote ? <p className="mt-3 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[draftNote] ?? draftNote}</p> : null}
+      {freshDrafts.length ? (
+        <div className="mt-3 space-y-3" data-testid="claude-new-posts">
+          {freshDrafts.map((d, i) => (
+            <ClaudeDraftCard key={d.id} draft={d} title={`A new post: ${String(d.fields.title ?? "untitled")}`} rows={rowsFor("content", null, d.fields)} red={freshReds[i] ?? []} tz={v.tz} editHref={null} back="/content" open="/content" />
+          ))}
+        </div>
+      ) : null}
 
       {view === "board" ? (
         <div className="grid gap-3 md:grid-cols-4">
@@ -121,7 +139,7 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
                   <span className="badge">{col.length}</span>
                 </div>
                 <div className="space-y-2">
-                  {col.length ? col.map((i) => <ContentCard key={i.id} item={i} today={v.today} outcomes={outcomesByItem.get(i.id)} />) : <div className="rounded-lg border border-dashed p-3 text-center text-xs text-ink-3">Empty</div>}
+                  {col.length ? col.map((i) => <ContentCard drafted={draftedIds.has(i.id)} key={i.id} item={i} today={v.today} outcomes={outcomesByItem.get(i.id)} />) : <div className="rounded-lg border border-dashed p-3 text-center text-xs text-ink-3">Empty</div>}
                 </div>
               </div>
             );

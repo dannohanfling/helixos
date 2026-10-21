@@ -3,12 +3,14 @@ import { createContentAction, updateContentAction } from "@/lib/actions/content"
 import { Field } from "./ui";
 import { SubmitButton } from "@/components/submit-button";
 
-export function ContentForm({ item, today }: { item?: ContentItem; today: string }) {
+/** `draftId`: the form is filled with Claude's draft (H-184); its save settles that draft as edited. */
+export function ContentForm({ item, today, draftId }: { item?: ContentItem; today: string; draftId?: string }) {
   const postDate = item?.postAt?.slice(0, 10) ?? today;
   const postTime = item?.postAt?.slice(11, 16) ?? "09:00";
   return (
     <form action={item ? updateContentAction : createContentAction} className="grid gap-3 sm:grid-cols-2">
       {item ? <input type="hidden" name="id" value={item.id} /> : null}
+      {draftId ? <input type="hidden" name="draftId" value={draftId} /> : null}
       <div className="sm:col-span-2">
         <Field label="Title / working idea">
           <input className="field" name="title" required defaultValue={item?.title ?? ""} placeholder="Why most diets fail by week 3 (and the fix)" />

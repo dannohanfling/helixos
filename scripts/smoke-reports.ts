@@ -47,6 +47,8 @@ const must = (ok: unknown, msg: string) => {
   if (!ok) throw new Error(msg);
 };
 
+const DRAFT = "Done: the broken button is fixed. It now saves on the first tap. Thanks for flagging it!";
+
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, desc, eq } = await import("drizzle-orm");
@@ -155,20 +157,34 @@ async function main() {
     must(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth === 1600), "the screenshot shows, shrunk to 1600 wide");
     const askRow = page.locator(`#r-${ask.id} [data-testid="report-row"]`);
     must((await askRow.innerText()).includes("wants to talk") && (await askRow.innerText()).includes("Twelve, always."), "the Ask Danno answer shows the answer and the wish to talk");
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), issueRow.locator('[data-testid="report-seen"]').click()]);
-    // The page refreshes after the action's answer; on a busy dev server that can take a few seconds, so wait for it.
-    await page.locator(`#r-${issue.id} [data-testid="report-row"][data-seen="1"]`).waitFor({ timeout: 10000 }).catch(() => undefined);
-    must((await page.locator(`#r-${issue.id} [data-testid="report-row"]`).getAttribute("data-seen")) === "1", "Seen marks it");
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(`#r-${ask.id} [data-testid="report-done"]`).click()]);
-    await page.locator(`#r-${ask.id}`).waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
-    must(!(await page.locator(`#r-${ask.id}`).count()), "Done takes it off Open");
+    // H-202: each status is a reply in Danno's words, edited and sent with Send, logged on the report.
+    must((await issueRow.locator('[data-testid="report-log-line"][data-kind="receipt"]').innerText()).includes("will see this soon"), "the receipt is on the report");
+    await issueRow.locator('[data-testid="reply-seen"] > summary').click();
+    const seenBox = issueRow.locator('[data-testid="reply-seen"] [data-testid="reply-message"]');
+    must((await seenBox.inputValue()).startsWith(`Thanks, ${maya.name.split(" ")[0]}. I've got your note about`), `the Seen reply is prefilled in Danno's words: ${await seenBox.inputValue()}`);
+    await issueRow.locator('[data-testid="reply-seen"] [data-testid="reply-topic"]').fill("the broken button");
+    await seenBox.fill(`Thanks, ${maya.name.split(" ")[0]}. I've got your note about the broken button and I'm on it.`);
+    await submit(page, `#r-${issue.id} [data-testid="reply-seen"] [data-testid="reply-send"]`);
+    const sent = (await db.query.reportMessages.findMany({ where: eq(schema.reportMessages.reportId, issue.id) })).filter((m) => m.kind === "status");
+    must(sent.length === 1 && sent[0]!.status === "seen" && sent[0]!.body.includes("the broken button"), "Seen sends once, with the edited words");
+    must((await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }))!.status === "seen", "and the report is Seen");
+    await page.goto(`${base}/coach/reports?tab=new`);
+    const askRow2 = page.locator(`#r-${ask.id} [data-testid="report-row"]`);
+    await askRow2.waitFor({ timeout: 20000 });
+    await askRow2.locator('[data-testid="reply-done"] > summary').click();
+    await submit(page, `#r-${ask.id} [data-testid="reply-done"] [data-testid="reply-send"]`);
+    must((await page.locator(`#r-${ask.id} [data-testid="reply-error"]`).innerText()).includes("how it was fixed"), "Done is refused while it doesn't say how");
+    await page.locator(`#r-${ask.id} [data-testid="reply-done"] > summary`).click();
+    await page.locator(`#r-${ask.id} [data-testid="reply-done"] [data-testid="reply-message"]`).fill("Done: the answer about posts is fixed. Ask Danno now reads your plan first. Thanks for flagging it!");
+    await submit(page, `#r-${ask.id} [data-testid="reply-done"] [data-testid="reply-send"]`);
+    must((await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, ask.id) }))!.status === "done", "Done sends with the line on how");
     await page.goto(`${base}/coach/reports?tab=done`);
-    must((await page.locator(`#r-${ask.id} [data-testid="report-row"]`).getAttribute("data-done")) === "1" && (await page.locator(`#r-${ask.id} [data-testid="report-row"]`).getAttribute("data-seen")) === "1", "Done is on the Done tab, seen too");
+    must((await page.locator(`#r-${ask.id} [data-testid="report-row"]`).getAttribute("data-status")) === "done", "and it's on the Done tab");
     await page.goto(`${base}/today`);
-    must((await page.locator('[data-testid="coach-new-reports"]').innerText()).includes("1 new issue and idea"), "two opened: one left new");
+    must((await page.locator('[data-testid="coach-new-reports"]').innerText()).includes("1 new issue and idea"), "two answered: one left new");
     const coachShot = await page.request.get(`${base}/api/reports/${issue.id}/screenshot`);
     must(coachShot.status() === 200 && coachShot.headers()["content-type"] === "image/jpeg", `the coach opens the screenshot (${coachShot.status()})`);
-    console.log("✓ the coach: counts in the menu, on Today and on the Coach page; the inbox newest first with the screenshot; Seen and Done");
+    console.log("✓ the coach: counts in the menu, on Today and on the Coach page; the inbox newest first with the screenshot; Seen and Done sent as replies");
 
     // ── 5. Monthly feedback: new until the coach opens it. ──
     await page.goto(`${base}/coach/feedback`);
@@ -229,7 +245,7 @@ async function main() {
         const token = ((await exchangeCode({ code, verifier, clientId: client.id, redirectUri: CALLBACK, resource: null, expectedResource: `${base}/api/mcp` })) as { access_token: string }).access_token;
         return { token, clientId: client.id };
       };
-      await db.update(schema.memberReports).set({ seenAt: null, doneAt: null }).where(eq(schema.memberReports.id, issue.id));
+      await db.update(schema.memberReports).set({ seenAt: null, doneAt: null, status: "new" }).where(eq(schema.memberReports.id, issue.id));
       const own = await connect(coachU.id);
       await seedCoachForum(O);
       const agentRow = (await db.query.forumAgents.findMany({ where: and(eq(schema.forumAgents.workspaceId, ws), eq(schema.forumAgents.userId, coachU.id)) })).find((a) => !a.builtIn)!;
@@ -267,11 +283,87 @@ async function main() {
         must((await listed(member.token)).length === 0, "a client's connection never lists them");
         r = await call(member.token, "report_read", { id: issue.id });
         must(r.isError && /not found/i.test(r.text) && !r.images.length, `a client's connection calling one by name: not found (${r.text})`);
+        // H-202: the coach's own agents write a Done draft; a member's connection never sees the tool.
+        const draftTool = async (token: string) => ((await rpc(token, "tools/list")).result?.tools ?? []).some((t) => t.name === "report_done_draft");
+        must((await draftTool(agentToken)) && (await draftTool(own.token)), "the coach's agent token, and the connection tied to an agent, list report_done_draft");
+        must(!(await draftTool(member.token)), "a client's connection never lists report_done_draft");
+        r = await call(member.token, "report_done_draft", { id: issue.id, text: DRAFT });
+        must(r.isError && /not found/i.test(r.text), `a client's connection calling it by name: not found (${r.text})`);
+        r = await call(agentToken, "report_done_draft", { id: issue.id, text: "Done: the button is fixed. [how it was fixed, one line]. Thanks!" });
+        must(r.isError && /how it was fixed/.test(r.text), `a draft with its blank still in is refused (${r.text})`);
+        r = await call(agentToken, "report_done_draft", { id: issue.id, text: DRAFT });
+        must(!r.isError && r.data?.sent === false, `the agent's Done draft is saved, not sent (${r.text})`);
+        const drafted = (await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }))!;
+        must(drafted.doneDraft === DRAFT && drafted.doneDraftBy === agentRow.name && drafted.status !== "done", "on the report as a draft by that agent; nothing sent");
         console.log("✓ the connector: listed under new with the sender's first name and member id, read with the screenshot byte for byte, marked Seen (gone from new, still open); hidden from an agent token and a client, not found by name");
       } finally {
         await revokeAgentTokens(O, agentRow.id).catch(() => undefined);
         for (const c of [own, member]) await db.delete(schema.connectedApps).where(eq(schema.connectedApps.clientId, c.clientId));
       }
+    }
+
+    // ── 8. The member hears back (H-202): a Today line, the reply on My reports, and a follow-up on the same report. ──
+    await logout(page).catch(() => undefined);
+    await login(page, "As a client");
+    await page.goto(`${base}/today`);
+    const replyLine = page.locator('[data-testid="today-report-reply"]');
+    await replyLine.waitFor({ timeout: 20000 });
+    must((await replyLine.innerText()).includes("My reports"), "Today says there's a reply");
+    await page.goto(`${base}/reports`);
+    const mine = page.locator(`#r-${issue.id} [data-testid="my-report"]`);
+    await mine.waitFor({ timeout: 20000 });
+    must((await mine.innerText()).includes("the broken button and I'm on it"), "My reports shows the reply in the coach's words");
+    await mine.locator('[data-testid="follow-up"] > summary').click();
+    await mine.locator('[data-testid="follow-up-text"]').fill("It still fails on my phone.");
+    await submit(page, `#r-${issue.id} [data-testid="follow-up-send"]`);
+    const back = (await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }))!;
+    must(back.status === "new", "a follow-up sends it back to New for the coach");
+    must((await db.query.reportMessages.findMany({ where: eq(schema.reportMessages.reportId, issue.id) })).some((m) => m.kind === "followup" && m.body === "It still fails on my phone."), "on the same report");
+    await page.goto(`${base}/today`);
+    await page.waitForTimeout(500);
+    must(!(await page.locator('[data-testid="today-report-reply"]').count()), "and Today's line is gone once read");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/reports`);
+    await mine.waitFor({ timeout: 20000 });
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    must(over <= 1, `My reports: nothing scrolls sideways at 390 (${over}px over)`);
+    await page.setViewportSize({ width: 1440, height: 950 });
+    console.log("✓ the member: a Today line, the reply on My reports, a follow-up on the same report sends it back to New");
+
+    // ── 9. Merge and the agent's Done draft (H-202): the same member's second report goes under the first, the amber draft
+    // fills Done, and one Send answers both; the member hears it once and sees both under one report. ──
+    {
+      const twin = newId();
+      await db.insert(schema.memberReports).values({ id: twin, workspaceId: ws, userId: maya.id, kind: "issue", severity: "orange", description: "The same button is still broken on my phone." });
+      await logout(page);
+      await login(page, "As the coach");
+      await page.goto(`${base}/settings`);
+      must((await page.locator('[data-testid="auto-done"]').count()) === 1 && !(await page.locator('[data-testid="auto-done"]').isChecked()), "Settings has the auto-send switch, off by default");
+      await page.goto(`${base}/coach/reports?tab=new`);
+      const card = page.locator(`#r-${issue.id}`);
+      await card.waitFor({ timeout: 20000 });
+      must((await card.locator('[data-testid="done-draft"]').innerText()).includes(DRAFT), "the agent's Done draft shows on the report");
+      await card.locator('[data-testid="report-merge"] > summary').click();
+      await card.locator(`[data-testid="merge-pick"][value="${twin}"]`).check();
+      await submit(page, `#r-${issue.id} [data-testid="merge-send"]`);
+      must((await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, twin) }))!.parentId === issue.id, "the second report sits under the first");
+      await page.goto(`${base}/coach/reports?tab=new`);
+      await card.waitFor({ timeout: 20000 });
+      must((await card.locator('[data-testid="report-row"]').getAttribute("data-merged")) === "1" && !(await page.locator(`#r-${twin}`).count()), "listed once, with the merged one under it");
+      must((await card.locator('[data-testid="reply-done"] [data-testid="reply-message"]').inputValue()) === DRAFT, "Done opens with the draft in it");
+      const before = (await db.query.reportMessages.findMany({ where: eq(schema.reportMessages.workspaceId, ws) })).filter((m) => m.kind === "status").length;
+      await submit(page, `#r-${issue.id} [data-testid="reply-done"] [data-testid="reply-send"]`);
+      const [top, under] = await Promise.all([db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }), db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, twin) })]);
+      must(top!.status === "done" && under!.status === "done" && top!.doneDraft === null, "one Send: both Done, and the draft is gone");
+      const sent = (await db.query.reportMessages.findMany({ where: eq(schema.reportMessages.workspaceId, ws) })).filter((m) => m.kind === "status");
+      must(sent.length === before + 1 && sent.some((m) => m.reportId === issue.id && m.status === "done" && m.body === DRAFT), "the member hears it once");
+      await logout(page);
+      await login(page, "As a client");
+      await page.goto(`${base}/reports`);
+      const merged = page.locator(`#r-${issue.id} [data-testid="my-report-merged"]`);
+      await merged.waitFor({ timeout: 20000 });
+      must((await merged.innerText()).includes("still broken on my phone") && !(await page.locator(`#r-${twin}`).count()), "My reports shows both under one");
+      console.log("✓ merge and drafts: the second report under the first, the agent's draft fills Done, one Send answers both, the member sees one report");
     }
 
     console.log("\nsmoke-reports: all checks passed");
