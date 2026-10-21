@@ -96,7 +96,7 @@ async function main() {
   if (!(await redo.count())) {
     const hero = page.locator('[data-testid="lockin-hero"]');
     const heroBox = (await hero.boundingBox())!;
-    const thenBox = (await page.locator("text=Then").first().boundingBox())!;
+    const thenBox = (await page.locator('[data-testid="then-title"]').boundingBox())!;
     if (heroBox.width < 600 || thenBox.y < heroBox.y + heroBox.height) throw new Error(`the lock-in is the hero, full width, with Then below it: ${JSON.stringify({ heroBox, thenBox })}`);
     if (await page.locator('[data-testid="lockin-summary"]').count()) throw new Error("no lock-in summary before the lock-in");
     const fits = async (sel: string) => page.locator(sel).evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
@@ -162,11 +162,22 @@ async function main() {
   if (before === after) throw new Error(`task completion did not change counter (${before} -> ${after})`);
   console.log(`✓ task toggled (${before?.trim()} -> ${after?.trim()})`);
 
+  // H-164 §14: Today in three parts once locked in: the next best action, the Top 3, then one list by when it's due.
+  if (!(await page.locator('[data-testid="today-nba"]').count()) || !(await page.locator('[data-testid="top3-title"]').count()) || !(await page.locator('[data-testid="then-title"]').count())) throw new Error("Today shows its three parts: next best action, Top 3, Then");
+  const mainText = await page.locator("main").innerText();
+  for (const gone of ["Also on your plate", "Content to ship", "Coming up", "Next on your pathway"]) if (mainText.includes(gone)) throw new Error(`"${gone}" is folded into Then or moved to My Helix`);
+  const ats = await page.locator('[data-testid="then-item"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-late")));
+  if (ats.indexOf("1") > -1 && ats.lastIndexOf("1") > ats.indexOf("0") && ats.indexOf("0") > -1) throw new Error(`Then lists overdue items first: ${ats.join(",")}`);
+  console.log(`✓ Today in three parts; Then holds ${ats.length} item${ats.length === 1 ? "" : "s"}, overdue first`);
+
   // Evening close (expand if already closed today)
   const editClose = page.locator('summary:has-text("Edit today")');
   if (await editClose.isVisible()) await editClose.click();
   const early = page.locator('[data-testid="close-early"] > summary');
   if (await early.isVisible()) await early.click();
+  // H-164 §16: with something already seen the close is a check plus the win line; the boxes sit folded for a correction.
+  const numbers = page.locator('[data-testid="close-numbers"]');
+  if (!(await numbers.evaluate((d) => (d as HTMLDetailsElement).open))) await numbers.locator("summary").click();
   await page.fill('input[name="dmsStarted"]', "3");
   await page.fill('input[name="callsBooked"]', "1");
   await page.fill('input[name="win"]', "Booked a call from a cold DM.");
