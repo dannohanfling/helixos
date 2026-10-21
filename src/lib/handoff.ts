@@ -104,6 +104,36 @@ export async function revokeAgentTokens(o: Owner, agentId: string, why = "revoke
   if (live.length && why === "revoked") await audit(o, agentId, "token revoked");
 }
 
+/**
+ * The Partner Program on an agent's token (H-1361): the coach ticks it per agent on Coach → Agents, and the live token's
+ * connection gains or loses the `partner` scope. A token made later starts without it. Nothing else on the token changes.
+ */
+export async function setAgentPartnerScope(o: Owner, agentId: string, on: boolean): Promise<boolean> {
+  const live = await db.query.agentTokens.findMany({ where: and(eq(schema.agentTokens.workspaceId, o.workspaceId), eq(schema.agentTokens.userId, o.userId), eq(schema.agentTokens.agentId, agentId), isNull(schema.agentTokens.revokedAt)) });
+  if (!live.length) return false;
+  for (const t of live) {
+    const app = await db.query.connectedApps.findFirst({ where: eq(schema.connectedApps.id, t.appId) });
+    if (!app) continue;
+    const scopes = app.scopes.filter((x) => x !== "partner");
+    if (on) scopes.push("partner");
+    await db.update(schema.connectedApps).set({ scopes }).where(eq(schema.connectedApps.id, app.id));
+  }
+  await audit(o, agentId, on ? "partner tools on" : "partner tools off");
+  return true;
+}
+
+/** Whether an agent's live token carries the Partner Program. */
+export async function agentPartnerScopes(o: Owner, agentIds: string[]): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  if (!agentIds.length) return out;
+  const live = await db.query.agentTokens.findMany({ where: and(eq(schema.agentTokens.workspaceId, o.workspaceId), eq(schema.agentTokens.userId, o.userId), inArray(schema.agentTokens.agentId, agentIds), isNull(schema.agentTokens.revokedAt)) });
+  for (const t of live) {
+    const app = await db.query.connectedApps.findFirst({ where: eq(schema.connectedApps.id, t.appId), columns: { scopes: true } });
+    if (app?.scopes.includes("partner")) out.set(t.agentId, true);
+  }
+  return out;
+}
+
 /** A bearer agent token to its live token row and connection, or null. Only a token of the right shape is looked up. */
 export async function agentTokenRow(token: string): Promise<{ tokenId: string; appId: string } | null> {
   if (!/^hxa_[A-Za-z0-9_-]{40,50}$/.test(token)) {

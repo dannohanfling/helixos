@@ -245,6 +245,12 @@ export const WORKSPACE_TABLES = {
   program_calls: schema.programCalls,
   // Danno's frameworks (H-1262): the coach's reviewed library, published to every member; no member's own.
   frameworks: schema.frameworks,
+  // The Partner Program (H-1361): the coach's own records, by workspace.
+  partner_restaurants: schema.partnerRestaurants,
+  partner_touches: schema.partnerTouches,
+  partner_payments: schema.partnerPayments,
+  partner_payout_lines: schema.partnerPayoutLines,
+  partner_files: schema.partnerFiles,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */
