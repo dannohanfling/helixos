@@ -124,6 +124,15 @@ export const memberships = sqliteTable(
     /** My Helix (rev 707): "Pause the helix", remembered; and the rungs the member has already seen lit, so the once-glow never repeats. */
     helixPaused: integer("helix_paused", { mode: "boolean" }).notNull().default(false),
     helixSeen: text("helix_seen", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /**
+     * Tools open as a client reaches them (H-164 §12): the highest My Helix phase reached (it only ever rises, so nothing closes
+     * again), the highest whose opening Today has announced, "Show all tools" (the member's or the coach's switch; on for everyone
+     * here before this, so nothing anyone used went away) and the share of rungs done, for the progress line under the logo.
+     */
+    toolsPhase: integer("tools_phase").notNull().default(0),
+    toolsAnnounced: integer("tools_announced").notNull().default(0),
+    showAllTools: integer("show_all_tools", { mode: "boolean" }).notNull().default(false),
+    helixPct: integer("helix_pct").notNull().default(0),
     /** The Aqueduct (rev 711): "Pause the water", and the period (30 or 7 days), both remembered. */
     aqueductPaused: integer("aqueduct_paused", { mode: "boolean" }).notNull().default(false),
     aqueductPeriod: integer("aqueduct_period").notNull().default(30),

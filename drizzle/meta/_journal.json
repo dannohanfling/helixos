@@ -1394,6 +1394,13 @@
       "when": 1792572416016,
       "tag": "0241_scene_motion",
       "breakpoints": true
+    },
+    {
+      "idx": 199,
+      "version": "6",
+      "when": 1792596415762,
+      "tag": "0242_tools_open",
+      "breakpoints": true
     }
   ]
 }

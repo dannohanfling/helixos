@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
-import { NAV_GROUPS, navVisible, withAppLinks, withCoachName, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
+import { NAV_GROUPS, navVisible, toolsPhaseOf, withAppLinks, withCoachName, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
 import { appLinks, appLinksOn } from "@/lib/app-links";
 import { hasAppFor } from "@/lib/queries/app-devices";
 import { chatWidgetProps } from "@/lib/chat";
@@ -34,7 +34,7 @@ export default async function MorePage() {
   const chatOn = (await chatWidgetProps(v)) !== null;
   // Get the app (H-655): the same rule as the side menu's.
   const hasApp = v.team ? false : Boolean(await hasAppFor(v.membership.id));
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withAppLinks(withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }), appLinksOn(appLinks())).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, hasApp })) }))
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withAppLinks(withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }), appLinksOn(appLinks())).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, hasApp, toolsPhase: toolsPhaseOf({ role: v.role, team: Boolean(v.team), showAllTools: v.membership.showAllTools, toolsPhase: v.membership.toolsPhase }) })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length);
   return (
@@ -44,6 +44,18 @@ export default async function MorePage() {
         <div className="flex justify-end">
           <CollapseAllButton labels={groups.map((g) => g.label)} />
         </div>
+        {/* My Helix as a progress line (H-164 §10), on the phone as under the logo on a desktop. */}
+        {v.role === "client" && !v.team ? (
+          <Link href="/my-helix" className="card block p-3" data-testid="helix-progress">
+            <span className="flex items-center justify-between text-sm font-medium">
+              <span>🌀 My Helix</span>
+              <span className="tabular text-ink-2">{v.membership.helixPct}%</span>
+            </span>
+            <span className="mt-2 block h-2 overflow-hidden rounded-full bg-surface-2">
+              <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(2, Math.min(100, v.membership.helixPct))}%` }} />
+            </span>
+          </Link>
+        ) : null}
         {groups.map((g) => (
           <NavGroupCard key={g.label} label={g.label}>
             {g.items.map((n) =>
@@ -86,8 +98,9 @@ export default async function MorePage() {
             </SubmitButton>
           </form>
         </div>
-        <Link href="/whats-new" className="block text-center text-[11px] text-ink-3" data-testid="app-version">
-          {APP_VERSION}
+        <Link href="/whats-new" className="flex items-center justify-center gap-1.5 text-[11px] text-ink-3" data-testid="app-version">
+          {APP_VERSION} · What&apos;s new
+          {badges["/whats-new"] ? <NewDot /> : null}
         </Link>
       </div>
     </>

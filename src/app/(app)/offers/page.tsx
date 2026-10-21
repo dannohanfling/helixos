@@ -4,7 +4,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { createOfferAction } from "@/lib/actions/offers";
-import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
+import { Badge, Disclosure, Empty, Field, PageHeader, Progress, Tabs } from "@/components/ui";
 import { scoreOffer } from "@/lib/engine/offer-score";
 import { SubmitButton } from "@/components/submit-button";
 import { MoneyInput } from "@/components/money-input";
@@ -53,6 +53,8 @@ export default async function OffersPage({ searchParams }: { searchParams: Promi
           </Disclosure>
         }
       />
+      {/* Avatars is a tab inside Offers (H-164 §10): one menu item, two tabs. */}
+      <Tabs current="offers" items={[{ key: "offers", label: "Offers", href: "/offers" }, { key: "avatars", label: "Avatars", href: "/avatars" }]} />
       {sp.draftNote ? (
         <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[sp.draftNote] ?? sp.draftNote}</p>
       ) : null}

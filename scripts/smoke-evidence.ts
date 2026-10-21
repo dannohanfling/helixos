@@ -80,8 +80,11 @@ async function main() {
     if (empty !== "Nothing here yet. Write the claim you want to make, then search for the research behind it. What you pick and confirm lands here.") throw new Error(`empty state wording differs: "${empty}"`);
     const nav = await page.locator('nav a[href="/evidence"]').first().innerText();
     if (!/published research/i.test(nav)) throw new Error(`nav must say what Evidence is: "${nav}"`);
+    // The Proof Bank sits in My business, which starts shut (H-1010); on its own page its group shows open.
+    await page.goto(`${base}/proof`);
     const proofNav = await page.locator('nav a[href="/proof"]').first().innerText();
     if (!/your clients' results/i.test(proofNav)) throw new Error(`nav must say what the Proof Bank is: "${proofNav}"`);
+    await page.goto(`${base}/evidence`);
     console.log("✓ Evidence in the nav, one line under each of Evidence and Proof Bank");
 
     // The shared starter shelf: nine, labelled Evolve Omega's, each with a working DOI link, the two featured ones named

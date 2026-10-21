@@ -4,9 +4,9 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { setTestAccountAction, switchToClientAction } from "@/lib/actions/switch";
+import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction, setClientTierAction, setOohOverrideAction, setClientShowAllToolsAction } from "@/lib/actions/coach";
 import { setAgentGrantAction } from "@/lib/actions/agent-clients";
 import { agentSwitchesFor, grantsForClient } from "@/lib/agent-clients";
-import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction, setClientTierAction, setOohOverrideAction } from "@/lib/actions/coach";
 import { PROGRAM_ORDER } from "@/lib/engine/recordings";
 import { oohAccessWords, oohSwitchWords } from "@/lib/engine/office-hours";
 import { oohAccessOf } from "@/lib/office-hours-access";
@@ -253,6 +253,18 @@ export default async function CoachClientPage({ params, searchParams }: { params
             </form>
           ) : null}
           <p className="text-xs text-ink-3" data-testid="ooh-access-words">{oohAccessWords(ooh)}</p>
+        </div>
+        {/* Tools open as a client reaches them (H-164 §12); the coach can open them all. */}
+        <div className="space-y-1 sm:col-span-2">
+          <div className="font-semibold">Menu</div>
+          <form action={setClientShowAllToolsAction} className="flex flex-wrap items-center gap-2" data-testid="tools-switch-form">
+            <input type="hidden" name="membershipId" value={m.id} />
+            <input type="hidden" name="on" value={m.showAllTools ? "0" : "1"} />
+            <SubmitButton className={`btn btn-xs ${m.showAllTools ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="tools-switch">
+              {m.showAllTools ? "Open by stage instead" : "Open every tool"}
+            </SubmitButton>
+            <span className="text-xs text-ink-3" data-testid="tools-switch-words">{m.showAllTools ? "Every tool is in their menu." : `Their menu opens tools as they reach each stage of My Helix (up to phase ${m.toolsPhase} now).`}</span>
+          </form>
         </div>
       </div>
       {/* Switch to client (rev 216): into this client's HelixOS, to look, or to set it up when they let their coach work in it. */}

@@ -60,6 +60,8 @@ import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 import { logTiming, tick } from "@/lib/timing";
+import { after } from "next/server";
+import { markAnnounced, newlyOpen, refreshTools } from "@/lib/tools-open";
 import { waitingByMenu, waitingCount as draftsWaitingCount } from "@/lib/claude-drafts";
 import { callsBetween } from "@/lib/calls";
 import { canJoin, joinState, nextCallLine, nextCallWithin } from "@/lib/engine/calls";
@@ -139,6 +141,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const replies = !v.switchedInto && !v.team ? await unreadReplies({ workspaceId: v.workspace.id, userId: v.user.id }) : null;
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
+  // Tools open as a client reaches them (H-164 §12): what opened since Today last said so, said once; then, once the page has
+  // shown, My Helix is read again so the next opening is ready. Never for a team member; a coach switched in doesn't use it up.
+  const opened = v.role === "client" && !v.team ? newlyOpen(v.membership) : [];
+  if (v.role === "client" && !v.team) {
+    after(async () => {
+      if (opened.length && !v.switchedInto) await markAnnounced(v.membership.id, v.membership.toolsPhase);
+      await refreshTools(v);
+    });
+  }
   // Claude's drafts waiting for this member's Approve (H-184), the webinar wizard's included: one line, to the list.
   const draftsWaiting = v.team ? 0 : draftsWaitingCount(await waitingByMenu({ workspaceId: v.workspace.id, userId: v.user.id }));
   // Applause on the member's wins (H-1171): one quiet line, grouped, until they close it; only where the Colosseum is on.
@@ -298,6 +309,18 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               Board check-in: {b.due} step{b.due === 1 ? "" : "s"} from &ldquo;{b.decision}&rdquo; {b.due === 1 ? "is" : "are"} due →
             </Link>
           ))}
+        </div>
+      ) : null}
+      {opened.length ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-good bg-good-soft px-3 py-2 text-sm" data-testid="today-tools-opened">
+          <span className="font-medium">New:</span>
+          {opened.map((n, i) => (
+            <span key={n.href}>
+              <Link href={n.href} className="font-medium underline">{n.label}</Link>
+              {i < opened.length - 1 ? "," : ""}
+            </span>
+          ))}
+          <span>{opened.length === 1 ? "is" : "are"} open in your menu, for the stage you&apos;ve reached.</span>
         </div>
       ) : null}
       {draftsWaiting ? (

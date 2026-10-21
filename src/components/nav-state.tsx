@@ -2,10 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { saveNavStateAction } from "@/lib/actions/nav";
-import { EMPTY_NAV, RAIL_KEY, allCollapsed, isTypingIn, toggleAll, toggleGroup, type NavState } from "@/lib/engine/nav-state";
+import { DEFAULT_CLOSED, EMPTY_NAV, RAIL_KEY, allCollapsed, isTypingIn, toggleAll, toggleGroup, type NavState } from "@/lib/engine/nav-state";
 
 type Store = {
   state: NavState;
+  /** The groups that start shut for this menu (H-164 §10): the client's four; none on a coach's or a team member's. */
+  closed: readonly string[];
   toggle: (label: string) => void;
   toggleAll: (labels: string[]) => void;
   allCollapsed: (labels: string[]) => boolean;
@@ -18,7 +20,7 @@ const Ctx = createContext<Store | null>(null);
  * The menu's state for this session (H-333), seeded from the membership on the server so the first paint is already right, and
  * saved back a moment after each change. The sidebar, the phone's More page and the rail all read the one store.
  */
-export function NavStateProvider({ initial, persist = true, children }: { initial: NavState; persist?: boolean; children: ReactNode }) {
+export function NavStateProvider({ initial, persist = true, closed = DEFAULT_CLOSED, children }: { initial: NavState; persist?: boolean; closed?: readonly string[]; children: ReactNode }) {
   const [state, setState] = useState<NavState>(initial);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const save = useCallback(
@@ -41,12 +43,13 @@ export function NavStateProvider({ initial, persist = true, children }: { initia
   const store = useMemo<Store>(
     () => ({
       state,
-      toggle: (label) => apply((s) => toggleGroup(s, label)),
-      toggleAll: (labels) => apply((s) => toggleAll(s, labels)),
-      allCollapsed: (labels) => allCollapsed(state, labels),
+      closed,
+      toggle: (label) => apply((s) => toggleGroup(s, label, closed)),
+      toggleAll: (labels) => apply((s) => toggleAll(s, labels, closed)),
+      allCollapsed: (labels) => allCollapsed(state, labels, closed),
       setRail: (on) => apply((s) => ({ ...s, rail: on })),
     }),
-    [state, apply],
+    [state, apply, closed],
   );
   // "[" folds the sidebar to the rail and back, on a desktop, never while typing.
   useEffect(() => {
@@ -67,6 +70,7 @@ export function useNavState(): Store {
   return (
     s ?? {
       state: EMPTY_NAV,
+      closed: DEFAULT_CLOSED,
       toggle: () => undefined,
       toggleAll: () => undefined,
       allCollapsed: () => false,

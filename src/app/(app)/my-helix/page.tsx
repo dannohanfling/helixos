@@ -1,5 +1,7 @@
 import { requireViewer } from "@/lib/auth";
 import { helixFor } from "@/lib/my-helix";
+import { after } from "next/server";
+import { syncTools } from "@/lib/tools-open";
 import { MyHelix } from "@/components/my-helix";
 import "@/components/my-helix.css";
 
@@ -12,6 +14,8 @@ export const metadata = { title: "My Helix" };
 export default async function MyHelixPage() {
   const v = await requireViewer();
   const h = await helixFor(v);
+  // Tools open as a client reaches them (H-164 §12): what this page just read opens the menu's pages up to the phase reached.
+  if (!v.team) after(() => syncTools(v, h));
   return (
     <div className="hx-page" data-testid="my-helix">
       <MyHelix
