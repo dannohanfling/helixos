@@ -19,6 +19,7 @@ import { COLOSSEUM_BIRDS } from "@/lib/engine/scene-birds";
 import { ModeratePanel } from "@/components/colosseum-moderate";
 import { top3CheerKey } from "@/lib/engine/ambience";
 import { armSounds, playSound } from "@/lib/sounds";
+import { keepStill, useQuiet } from "@/components/scene-life";
 
 type Look = "day" | "night";
 type RingSeat = ArenaSeat & { ring: number; index: number; of: number };
@@ -27,6 +28,8 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
   const [look, setLook] = useState<Look>(initialLook);
   const [modFor, setModFor] = useState<string | null>(null);
   const [paused, setPaused] = useState(initialPaused);
+  // Reduced motion, or the member's Scene motion switch off (Roma Vivit 2 PR 6): the loop holds every avatar still.
+  const quiet = useQuiet();
   // Golden hour (H-1367): doves and an eagle fly over the still photo, held with Pause and at night.
   const birds = look === "day";
   const [picked, setPicked] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = keepStill();
     const nodes = [...el.querySelectorAll<HTMLButtonElement>("[data-seat]")].map((n) => ({ n, ring: Number(n.dataset.ring), index: Number(n.dataset.index), of: Number(n.dataset.of) }));
     let raf = 0;
     let t0 = performance.now();
@@ -81,7 +84,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", wake);
     };
-  }, [rings, paused]);
+  }, [rings, paused, quiet]);
 
   // The top-3 cheer (H-637): once a week, the first time the member sees themselves among this week's champions. The mark is
   // this browser's, and it is only set once the cheer has actually started: before the first tap on the page, or with sounds off,

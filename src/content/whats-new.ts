@@ -12,13 +12,22 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 335,
+    n: 336,
     date: "2026-10-19",
     title: "A shorter menu, in five groups",
     lines: [
       "The menu now reads Daily, HumanOS, My business, Get leads, My bot, Learn, and Board and agents. My business, Get leads, My bot and Learn start shut; tap one to open it, and it stays the way you left it.",
       "My Helix is the progress line under the logo, and What's new is the version line at the bottom of the menu. Avatars sit inside Offers, and connecting Claude is in Settings → Connected apps.",
       "New members see each tool once their My Helix reaches it, with a line on Today when one opens. Everyone already here keeps every tool. Settings → Your menu has \"Show all tools\" to see them all at any time.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 335,
+    date: "2026-10-21",
+    title: "A Scene motion switch in Settings",
+    lines: [
+      "Settings, Sounds and motion: turn Scene motion off and the Colosseum, the Aqueduct, the Forum and the Council Chamber stay still, with no flames, water, birds, circling arena or speaking clips. Celebrations stay still too, the same as when your device asks for reduced motion. It is on by default and only you can change it.",
     ],
     audience: "everyone",
   },

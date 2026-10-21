@@ -16,6 +16,7 @@ import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
 import { BoardAmbience } from "@/components/board-ambience";
+import { useQuiet } from "@/components/scene-life";
 
 type Props = {
   seats: Seat[];
@@ -65,14 +66,8 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
   const [text, setText] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [look, setLook] = useState<SceneLook>(initialLook);
-  const [still, setStill] = useState(false);
-  useEffect(() => {
-    const q = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const set = () => setStill(q.matches);
-    set();
-    q.addEventListener("change", set);
-    return () => q.removeEventListener("change", set);
-  }, []);
+  // Reduced motion, or the member's Scene motion switch off (Roma Vivit 2 PR 6): no clips, the still and the glow.
+  const still = useQuiet();
   // The member's own look, remembered for the Council Chamber, the Colosseum and the Aqueduct.
   const chooseLook = (k: SceneLook) => {
     setLook(k);
