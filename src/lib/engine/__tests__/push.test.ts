@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DAILY_CAP, DEFAULT_PREFS, PUSH_TYPES, callTimeLabel, dueCallStep, dueDaily, dueIntentions, dueWebinar, isQuiet, mayPush, pushCopy, shouldAsk, wants, type DailyState, type PushType } from "@/lib/engine/push";
+import { DAILY_CAP, DEFAULT_PREFS, PUSH_TYPES, callTimeLabel, dueCallStep, dueDaily, dueIntentions, dueWebinar, lastWeekPlace, isQuiet, mayPush, pushCopy, shouldAsk, wants, type DailyState, type PushType } from "@/lib/engine/push";
 
 const day = (over: Partial<DailyState> = {}): DailyState => ({ hour: 8, today: "2026-10-19", morningHour: 8, eveningHour: 17, lockedIn: false, closed: false, activeToday: false, streak: 0, ...over });
 
@@ -137,10 +137,31 @@ describe("event pushes (H-767): weekly intentions and your webinar", () => {
     expect(dueWebinar(at, new Date("2026-10-20T17:40:00.000Z"))).toBe(false);
     expect(dueWebinar(at, new Date("2026-10-20T17:57:00.000Z"))).toBe(false);
   });
-  it("rank up, intentions and webinar are ready to switch; the bot, the coach and the Colosseum stay Coming soon", () => {
-    const ready = (t: string) => PUSH_TYPES.find((p) => p.type === t)?.ready;
-    expect(["rank_up", "intentions", "webinar"].every(ready)).toBe(true);
-    expect(["bot_call", "coach_answer", "colosseum"].some(ready)).toBe(false);
+  it("every kind is ready to switch now (H-1151)", () => {
+    expect(PUSH_TYPES.every((p) => p.ready)).toBe(true);
     expect(pushCopy("rank_up", { rank: "Sentinel" }).body).toBe("You've risen to Sentinel. Come see your seat.");
+  });
+});
+
+describe("the last three event pushes (H-1151)", () => {
+  it("Colosseum: last week's top 3 by points, ties share a place, nobody on zero", () => {
+    const week = [
+      { userId: "a", points: 90 },
+      { userId: "b", points: 60 },
+      { userId: "c", points: 60 },
+      { userId: "d", points: 40 },
+      { userId: "e", points: 0 },
+    ];
+    expect(lastWeekPlace(week, "a")).toBe(1);
+    expect(lastWeekPlace(week, "b")).toBe(2);
+    expect(lastWeekPlace(week, "c")).toBe(2);
+    expect(lastWeekPlace(week, "d")).toBe(null);
+    expect(lastWeekPlace(week, "e")).toBe(null);
+    expect(lastWeekPlace([{ userId: "x", points: 5 }], "x")).toBe(1);
+  });
+  it("the words: neutral for a booked call, covered for Office Hours, last week for the Colosseum", () => {
+    expect(pushCopy("bot_call", { day: "Tuesday", time: "2:00 PM" }).body).toBe("A call was booked for Tuesday at 2:00 PM.");
+    expect(pushCopy("coach_answer", { coach: "Danno" }).body).toBe("Danno covered your Office Hours question.");
+    expect(pushCopy("colosseum").body).toBe("You finished in the top 3 last week.");
   });
 });

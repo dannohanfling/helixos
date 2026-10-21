@@ -90,7 +90,7 @@ async function main() {
     // ── 3. Settings → Notifications. ──
     await page.goto(`${base}/settings/notifications`, { waitUntil: "networkidle" });
     must(await page.locator('[data-testid="notifications-devices"]').innerText().then((t) => /iPhone/.test(t) && /Notifications on/.test(t)), "the phone is listed with notifications on");
-    must(await page.locator('[data-testid="notifications-type-bot_call"]').isDisabled(), "a Coming soon kind can't be changed yet");
+    must((await page.locator('input[data-testid^="notifications-type-"]:disabled').count()) === 0, "every kind can be switched now (H-1151)");
     must(!(await page.locator('[data-testid="notifications-type-call"]').isDisabled()) && (await page.locator('[data-testid="notifications-type-call"]').isChecked()), "live call reminders are ready: on by default, and can be switched");
     await page.uncheck('[data-testid="notifications-type-morning"]');
     await page.selectOption('[data-testid="notifications-quiet-start"]', "22");
@@ -103,7 +103,7 @@ async function main() {
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/settings/notifications")), page.click('[data-testid="notifications-save"]')]);
     await page.waitForLoadState("networkidle");
     must(!("morning" in (await db.query.pushPrefs.findFirst({ where: eq(schema.pushPrefs.membershipId, m.id) }))!.types), "back to the default stores nothing");
-    console.log("✓ Settings → Notifications: the phone listed, switches and quiet hours saved, Coming soon kinds untouched");
+    console.log("✓ Settings → Notifications: the phone listed, every kind switchable, switches and quiet hours saved");
 
     // ── 4. The sender, with a fake Apple and Google. ──
     const sent: { token: string; body: string; path: string }[] = [];
@@ -180,7 +180,23 @@ async function main() {
     } finally {
       await db.delete(schema.webinars).where(eq(schema.webinars.id, wb.id));
     }
-    console.log(`✓ event pushes: rank up only when switched on, once per rank${level > 1 ? "" : " (seed at the first rank: not sent)"}; her webinar 15 minutes before`);
+    // A call booked with one of her contacts, and her Office Hours request marked covered (H-1151).
+    await db.update(schema.pushPrefs).set({ types: { coach_answer: true } }).where(eq(schema.pushPrefs.membershipId, m.id));
+    await db.delete(schema.pushSends).where(eq(schema.pushSends.membershipId, m.id));
+    const callAt = new Date(noon.getTime() + 2 * 86_400_000);
+    const [ct] = await db.insert(schema.contacts).values({ id: `push-walk-c-${Date.now()}`, workspaceId: ws.id, userId: maya.id, name: "Walk contact", platform: "Chatbot", stage: "call_booked", callAt: callAt.toISOString(), callBookedAt: new Date(noon.getTime() - 5 * 60_000).toISOString() }).returning();
+    const [oh] = await db.insert(schema.officeHoursRequests).values({ id: `push-walk-oh-${Date.now()}`, workspaceId: ws.id, userId: maya.id, friday: today, description: "Walk question", triedSelf: "Tried", goal: "Goal", category: "Other", outcome: "covered", updatedAt: new Date(noon.getTime() - 60 * 60_000).toISOString().slice(0, 19).replace("T", " ") }).returning();
+    try {
+      sent.length = 0;
+      const ev = await runEventPushes(noon, fake);
+      must(ev.some((r) => r.type === "bot_call" && r.outcome.sent) && sent.some((x) => /^A call was booked for \w+day at \d/.test(x.body) && x.path === "/conversations"), `a booked call: ${JSON.stringify(ev)}`);
+      must(ev.some((r) => r.type === "coach_answer" && r.outcome.sent) && sent.some((x) => / covered your Office Hours question\.$/.test(x.body) && x.path === "/office-hours"), `Office Hours covered: ${JSON.stringify(ev)}`);
+      must(!(await runEventPushes(noon, fake)).some((r) => r.outcome.sent), "each only once");
+    } finally {
+      await db.delete(schema.contacts).where(eq(schema.contacts.id, ct.id));
+      await db.delete(schema.officeHoursRequests).where(eq(schema.officeHoursRequests.id, oh.id));
+    }
+    console.log(`✓ event pushes: rank up only when switched on, once per rank${level > 1 ? "" : " (seed at the first rank: not sent)"}; her webinar 15 minutes before; a booked call and a covered Office Hours question, each once`);
 
     // ── 5. The cron needs its secret. ──
     must((await page.request.get(`${base}/api/cron/push`)).status() === 401, "the push cron answers only with the cron secret");

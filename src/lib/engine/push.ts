@@ -26,11 +26,11 @@ export const PUSH_TYPES: { type: PushType; label: string; example: string; defau
   { type: "morning", label: "Morning lock-in", example: "Your three moves for today are ready.", defaultOn: true, ready: true },
   { type: "evening", label: "Evening close", example: "Close out the day. Your +20 is waiting.", defaultOn: true, ready: true },
   { type: "streak", label: "Streak waiting on you", example: "Your 12-day streak is waiting on you.", defaultOn: true, ready: true },
-  { type: "bot_call", label: "A call booked by your bot", example: "Your bot booked a call for Tuesday at 2:00 PM.", defaultOn: true, ready: false },
+  { type: "bot_call", label: "A call booked with one of your contacts", example: "A call was booked for Tuesday at 2:00 PM.", defaultOn: true, ready: true },
   { type: "rank_up", label: "Rank up", example: "You've risen to Sentinel. Come see your seat.", defaultOn: false, ready: true },
-  { type: "coach_answer", label: "Your coach answered", example: "Danno answered your Office Hours question.", defaultOn: false, ready: false },
+  { type: "coach_answer", label: "Your Office Hours question covered", example: "Danno covered your Office Hours question.", defaultOn: false, ready: true },
   { type: "intentions", label: "Weekly intentions", example: "Set this week's intentions. Two minutes.", defaultOn: false, ready: true },
-  { type: "colosseum", label: "Colosseum top 3", example: "You're in the top 3 this week.", defaultOn: false, ready: false },
+  { type: "colosseum", label: "Colosseum top 3", example: "You finished in the top 3 last week.", defaultOn: false, ready: true },
   { type: "webinar", label: "Your webinar starts soon", example: "Your webinar starts in 15 minutes.", defaultOn: false, ready: true },
 ];
 
@@ -75,15 +75,15 @@ export function pushCopy(
       if (v.step === "soon") return { title, body: "We start in 15 minutes. Tap to join." };
       return { title, body: `Live call today at ${v.time ?? "the usual time"}. Bring one question.` };
     case "bot_call":
-      return { title, body: `Your bot booked a call for ${v.day ?? "soon"} at ${v.time ?? ""}.`.replace(" at .", ".") };
+      return { title, body: v.day ? `A call was booked for ${v.day}${v.time ? ` at ${v.time}` : ""}.` : "A call was booked with one of your contacts." };
     case "rank_up":
       return { title, body: `You've risen to ${v.rank ?? "a new rank"}. Come see your seat.` };
     case "coach_answer":
-      return { title, body: `${v.coach ?? "Your coach"} answered your Office Hours question.` };
+      return { title, body: `${v.coach ?? "Your coach"} covered your Office Hours question.` };
     case "intentions":
       return { title, body: "Set this week's intentions. Two minutes." };
     case "colosseum":
-      return { title, body: "You're in the top 3 this week." };
+      return { title, body: "You finished in the top 3 last week." };
     case "webinar":
       return { title, body: "Your webinar starts in 15 minutes." };
   }
@@ -179,6 +179,17 @@ export function dueIntentions(s: { weekday: number; hour: number; weekDue: boole
 export function dueWebinar(scheduledIso: string, now: Date): boolean {
   const min = (Date.parse(scheduledIso) - now.getTime()) / 60_000;
   return min <= CALL_SOON_MINUTES && min > CALL_SOON_LATEST;
+}
+
+/**
+ * Colosseum top 3 (H-767, H-1151): Monday from 9 AM, for last week's final standings (Monday to Sunday), among the members
+ * the arena shows. Ties share a place; a week with no points puts no one on the podium. Returns the member's place, or null.
+ */
+export function lastWeekPlace(weekPoints: { userId: string; points: number }[], userId: string): number | null {
+  const mine = weekPoints.find((r) => r.userId === userId)?.points ?? 0;
+  if (mine <= 0) return null;
+  const place = 1 + weekPoints.filter((r) => r.points > mine).length;
+  return place <= 3 ? place : null;
 }
 
 /**
