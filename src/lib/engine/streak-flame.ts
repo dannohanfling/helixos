@@ -132,7 +132,7 @@ export function flameClip(look: FlameLook, place: "bar" | "stage", mobile = fals
   const waiting = look === "risk";
   const v = `?v=${FLAME_FILES_VERSION}`;
   const still = `${base}-still.jpg${v}`;
-  const common = { still, rate: waiting ? 0.7 : 1, dim: waiting ? 0.4 : 0 };
+  const common = { still, rate: waiting ? 0.7 : 1, dim: waiting ? 0.18 : 0 };
   if (mobile) return { mp4: `${base}-${size}-m.mp4${v}`, webm: null, poster: `${base}-${size}-m-poster.jpg${v}`, ...common };
   return { mp4: `${base}-${size}.mp4${v}`, webm: `${base}-${size}.webm${v}`, poster: still, ...common };
 }

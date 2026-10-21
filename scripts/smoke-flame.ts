@@ -202,6 +202,12 @@ async function main() {
     const bb = await bar.boundingBox();
     must(bb && bb.height >= 44 && bb.x + bb.width <= 390, `the phone pill fits the bar (${JSON.stringify(bb)})`);
     must((await p.locator('[data-testid="mobile-header"] [data-flame="fire"]').count()) === 1, "one fire in the phone bar");
+    // H-1487: no box around the fire. The layer holding the poster and the video blends with screen under a radial mask.
+    const blend = await p.locator('[data-testid="streak-pill-bar"] [data-flame-blend="screen"]').evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { mode: cs.mixBlendMode, mask: cs.maskImage || (cs as unknown as Record<string, string>).webkitMaskImage || "" };
+    });
+    must(blend.mode === "screen" && /radial-gradient/.test(blend.mask), `the phone pill's fire blends with screen under a radial mask (${JSON.stringify(blend)})`);
     await noSideways(p, "the phone bar");
     await p.screenshot({ path: "screenshots/fl02-phone.png" });
     await bar.tap();
