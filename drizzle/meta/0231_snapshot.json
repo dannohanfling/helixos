@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0f24907f-f6c0-4950-8f86-cdbd39adf30f",
-  "prevId": "58f4dccc-db4a-41c8-93f6-8f0bab54bef0",
+  "id": "0ef51718-913d-44a2-84b6-ce68692b3c5a",
+  "prevId": "36c0cd41-52bf-4edf-b758-f29b7ce80414",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -7499,6 +7499,38 @@
           "autoincrement": false,
           "default": 0
         },
+        "outreach_messages": {
+          "name": "outreach_messages",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "scripts_written": {
+          "name": "scripts_written",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "videos_recorded": {
+          "name": "videos_recorded",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "videos_posted": {
+          "name": "videos_posted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "referral_asks": {
           "name": "referral_asks",
           "type": "integer",
@@ -11440,6 +11472,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "created_at": {
@@ -16545,6 +16584,13 @@
         },
         "tier_code": {
           "name": "tier_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ladder_tier": {
+          "name": "ladder_tier",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
