@@ -315,6 +315,8 @@ async function main() {
     await login(page, "As a client");
     await page.goto(`${base}/settings?tab=connections`);
     if ((await page.locator('[data-testid="chat-share"]').getAttribute("data-on")) !== "1") throw new Error("progress sharing is on by default");
+    // The goal card sits on the You tab, the one Settings opens on.
+    await page.goto(`${base}/settings`);
     const goalForm = page.locator('form:has(input[name="target"])');
     await goalForm.locator('input[name="target"]').fill("7500");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), goalForm.locator("button").last().click()]);
