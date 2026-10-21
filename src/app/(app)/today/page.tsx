@@ -59,6 +59,7 @@ import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 import { logTiming, tick } from "@/lib/timing";
+import { waitingByMenu, waitingCount as draftsWaitingCount } from "@/lib/claude-drafts";
 import { callsBetween } from "@/lib/calls";
 import { canJoin, joinState, nextCallLine, nextCallWithin } from "@/lib/engine/calls";
 import { CallJoin } from "@/components/call-join";
@@ -137,6 +138,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const replies = !v.switchedInto && !v.team ? await unreadReplies({ workspaceId: v.workspace.id, userId: v.user.id }) : null;
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
+  // Claude's drafts waiting for this member's Approve (H-184), the webinar wizard's included: one line, to the list.
+  const draftsWaiting = v.team ? 0 : draftsWaitingCount(await waitingByMenu({ workspaceId: v.workspace.id, userId: v.user.id }));
   // Applause on the member's wins (H-1171): one quiet line, grouped, until they close it; only where the Colosseum is on.
   const applause = v.workspace.colosseumOn && !v.switchedInto && !v.team ? await applauseNews(v) : null;
   // A member's agent inbox (H-727 PR 2): one calm line while a plan waits for their OK, nothing otherwise. The coach's own
@@ -295,6 +298,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
+      ) : null}
+      {draftsWaiting ? (
+        <Link href="/drafts" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-drafts">
+          Drafts waiting ({draftsWaiting}): Claude&apos;s drafts for you to approve, edit or discard →
+        </Link>
       ) : null}
       {tools && tools.done < tools.total ? (
         <Link href="/connect-tools" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-connect-tools">

@@ -13,5 +13,6 @@ import "./forum";
 import "./handoff";
 import "./reports";
 import "./webinars";
+import "./offers";
 import "./clients";
 import "./partner";

@@ -82,6 +82,9 @@ export const MEMBER_TABLES = {
   // Claude's webinar drafts and their history (H-181): the member's own, exported and erased with them.
   webinar_drafts: schema.webinarDrafts,
   webinar_history: schema.webinarHistory,
+  // Claude's drafts everywhere else and their history (H-184): the member's own, exported and erased with them.
+  drafts: schema.drafts,
+  change_history: schema.changeHistory,
   client_records: schema.clientRecords,
   proofs: schema.proofs,
   // Approve selected (H-1394): the member's own batches, so Undo the last batch has its record.
