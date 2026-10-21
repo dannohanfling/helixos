@@ -26,6 +26,11 @@ export type ToolDef = {
    * calling through a connection they signed in with. Never on an agent token, whatever its scopes.
    */
   coachOnly?: boolean;
+  /**
+   * The coach's own agents only (H-202): listed and run only on a connection tied to one of the coach's agents (an agent token,
+   * or a connection the coach tied to an agent), the coach not switched into a client and not a team member. Never a member's.
+   */
+  coachAgent?: boolean;
   description: string;
   input: z.ZodRawShape;
   /**
@@ -52,17 +57,22 @@ export function defineTool(def: ToolDef): ToolDef {
   return def;
 }
 
-/** Who is calling, for the coach-only tools: on an agent token, and whether they're the coach themselves. */
-export type Caller = { agentToken: boolean; viewer: Pick<Viewer, "role" | "switchedInto" | "team"> };
+/** Who is calling, for the coach-only tools: on an agent token, the agent it speaks as, and whether they're the coach themselves. */
+export type Caller = { agentToken: boolean; agentId?: string | null; viewer: Pick<Viewer, "role" | "switchedInto" | "team"> };
 
 /** The coach's own connection: the coach themselves, not switched into a client, not a team member, not an agent token. */
 export function isCoachOwn(c: Caller | undefined): boolean {
   return Boolean(c && !c.agentToken && c.viewer.role === "coach" && !c.viewer.switchedInto && !c.viewer.team);
 }
 
+/** One of the coach's own agents: the coach's connection (not switched, not a team member) tied to an agent of theirs. */
+export function isCoachAgent(c: Caller | undefined): boolean {
+  return Boolean(c && c.agentId && c.viewer.role === "coach" && !c.viewer.switchedInto && !c.viewer.team);
+}
+
 /** The tools a grant may see: scope-less ones, and those whose scope it holds; a coach-only tool only for the coach's own connection. */
 export function toolsFor(scopes: readonly Scope[], caller?: Caller): ToolDef[] {
-  return [...tools.values()].filter((t) => (t.scope === null || scopes.includes(t.scope)) && (!t.coachOnly || isCoachOwn(caller)));
+  return [...tools.values()].filter((t) => (t.scope === null || scopes.includes(t.scope)) && (!t.coachOnly || isCoachOwn(caller)) && (!t.coachAgent || isCoachAgent(caller)));
 }
 
 export const allTools = (): ToolDef[] => [...tools.values()];
