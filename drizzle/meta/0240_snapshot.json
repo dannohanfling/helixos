@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d7a28214-0aff-4d57-b86e-6403cd8ce0f1",
-  "prevId": "8d72f371-2d06-4634-8636-510711a0602c",
+  "id": "c510fcbe-8d0d-4a11-b811-4b20cf5b461e",
+  "prevId": "1af64219-c9f1-4a98-aa14-715641f5ef1b",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -14964,6 +14964,13 @@
         },
         "streak_surge_seen_on": {
           "name": "streak_surge_seen_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tz_prompt_seen_at": {
+          "name": "tz_prompt_seen_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
