@@ -181,7 +181,6 @@ async function main() {
     // until it plays. Chromium here can't decode H.264, so the phone's MP4 never plays: the poster has to carry it.
     const phoneTier = (await bar.getAttribute("data-waiting")) === "true" ? "ember" : flameTier(days);
     await p.waitForFunction(() => document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-phone") === "true", null, { timeout: 5000 });
-    const poster = bar.locator('[data-flame-poster="true"]');
     await p.waitForFunction(() => ((document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.naturalWidth ?? 0) > 0, null, { timeout: 5000 });
     // The MP4's refusal can land between two reads (mode "still" with the poster not yet swapped for the still), so the pair is
     // read together and given a moment to agree.
