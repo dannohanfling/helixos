@@ -35,7 +35,7 @@ describe("MCP server (rev 224): the pure parts", () => {
   });
 
   it("scopes: one per area, Body among them, unknown ones named, and words for each", () => {
-    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "clients"]);
+    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "partner", "clients"]);
     expect(parseScopes("content content:write content:publish")).toEqual({ scopes: ["content", "content:write", "content:publish"], unknown: [] });
     expect(parseScopes("today tasks body")).toEqual({ scopes: ["today", "tasks", "body"], unknown: [] });
     expect(parseScopes("today admin")).toEqual({ scopes: ["today"], unknown: ["admin"] });
@@ -45,7 +45,7 @@ describe("MCP server (rev 224): the pure parts", () => {
     // Voice to Ship (rev 638): publishing is its own tick, never pre-ticked, and says it reads back first.
     expect(SCOPE_WORDS["content:publish"].line).toMatch(/never pre-ticked/i);
     expect(SCOPE_WORDS["content:publish"].line).toMatch(/reading back exactly what will post/);
-    expect([...OPT_IN_SCOPES].sort()).toEqual(["body", "clients", "content:publish", "inbox"]);
+    expect([...OPT_IN_SCOPES].sort()).toEqual(["body", "clients", "content:publish", "inbox", "partner"]);
   });
 
   it("the lifetimes: a code ten minutes, access an hour, refresh thirty days", () => {

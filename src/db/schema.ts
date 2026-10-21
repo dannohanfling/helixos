@@ -3282,6 +3282,168 @@ export const frameworks = sqliteTable(
 );
 export type FrameworkRow = typeof frameworks.$inferSelect;
 
+/** The Partner Program (H-1307, plan H-1361): the fixed lists live in src/lib/engine/partner.ts, the columns stay plain text. */
+export const PARTNER_PAYMENT_STATUSES = ["paid", "refunded", "chargeback", "failed"] as const;
+export const PARTNER_PAYOUT_KINDS = ["monthly", "setup", "yearly_installment", "adjustment"] as const;
+
+/**
+ * A restaurant in the Grub N Chill Partner Program (H-1307, plan H-1361): the pipeline record, its dates, its numbers and the
+ * onboarding answers. `ownerContact` is a person's details: never in a log, a list or the Forum, only on an explicit read.
+ * Logo, photos and a menu file are rows in `files`, linked by `partnerFiles`.
+ */
+export const partnerRestaurants = sqliteTable(
+  "partner_restaurants",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    business: text("business").notNull(),
+    type: text("type").notNull().default("restaurant"),
+    city: text("city"),
+    source: text("source"),
+    referredBy: text("referred_by"),
+    stage: text("stage").notNull().default("talking"),
+    plan: text("plan"),
+    foundingPartner: integer("founding_partner", { mode: "boolean" }).notNull().default(false),
+    firstContactAt: text("first_contact_at"),
+    demoAt: text("demo_at"),
+    signedAt: text("signed_at"),
+    paidAt: text("paid_at"),
+    formCompleteAt: text("form_complete_at"),
+    handedToWalletpushAt: text("handed_to_walletpush_at"),
+    liveAt: text("live_at"),
+    featuredInGroupAt: text("featured_in_group_at"),
+    cancelledAt: text("cancelled_at"),
+    setupApprovedAt: text("setup_approved_at"),
+    walletpushStatus: text("walletpush_status").notNull().default("not handed"),
+    walletpushNote: text("walletpush_note"),
+    googleReviewsAtStart: integer("google_reviews_at_start"),
+    googleRatingAtStart: real("google_rating_at_start"),
+    passHolders: integer("pass_holders"),
+    reviewsGained: integer("reviews_gained"),
+    conciergeChats: integer("concierge_chats"),
+    resultsAsOf: text("results_as_of"),
+    risk: text("risk").notNull().default("none"),
+    cancelReason: text("cancel_reason"),
+    nextStep: text("next_step"),
+    nextStepDate: text("next_step_date"),
+    notes: text("notes"),
+    address: text("address"),
+    businessPhone: text("business_phone"),
+    website: text("website"),
+    facebookPage: text("facebook_page"),
+    instagram: text("instagram"),
+    ownerContact: text("owner_contact"),
+    brandColors: text("brand_colors"),
+    hours: text("hours"),
+    menuLink: text("menu_link"),
+    googleBusinessProfile: text("google_business_profile"),
+    reservationLink: text("reservation_link"),
+    reward: text("reward"),
+    welcomeReward: text("welcome_reward"),
+    conciergeVoice: text("concierge_voice"),
+    topCustomerQuestions: text("top_customer_questions"),
+    restaurantContactForMessages: text("restaurant_contact_for_messages"),
+    termsAcceptedAt: text("terms_accepted_at"),
+    featureConsent: integer("feature_consent", { mode: "boolean" }).notNull().default(false),
+    directoryCard: text("directory_card"),
+    /** Fields a webhook sent that have no column yet (PR B): kept, never dropped silently. */
+    extra: text("extra", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_restaurants_workspace_stage").on(t.workspaceId, t.stage), index("partner_restaurants_workspace_business").on(t.workspaceId, t.business)],
+);
+export type PartnerRestaurant = typeof partnerRestaurants.$inferSelect;
+
+/** A touch with a restaurant: who, how, what was said, what is next. */
+export const partnerTouches = sqliteTable(
+  "partner_touches",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    who: text("who").notNull(),
+    channel: text("channel").notNull(),
+    firstConversation: integer("first_conversation", { mode: "boolean" }).notNull().default(false),
+    note: text("note"),
+    nextStep: text("next_step"),
+    nextStepDate: text("next_step_date"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_touches_restaurant").on(t.restaurantId, t.date)],
+);
+export type PartnerTouch = typeof partnerTouches.$inferSelect;
+
+/** A payment a restaurant made (or that failed, was refunded or charged back). `month` is YYYY-MM, the statement month. */
+export const partnerPayments = sqliteTable(
+  "partner_payments",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    plan: text("plan").notNull(),
+    amount: real("amount").notNull(),
+    tax: real("tax").notNull().default(0),
+    feesDeducted: real("fees_deducted").notNull().default(0),
+    promo: integer("promo", { mode: "boolean" }).notNull().default(false),
+    status: text("status", { enum: PARTNER_PAYMENT_STATUSES }).notNull().default("paid"),
+    processor: text("processor"),
+    month: text("month").notNull(),
+    /** The processor's or webhook's own id, so the same payment never lands twice. */
+    externalId: text("external_id"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_payments_restaurant_month").on(t.restaurantId, t.month), uniqueIndex("partner_payments_external").on(t.workspaceId, t.externalId)],
+);
+export type PartnerPayment = typeof partnerPayments.$inferSelect;
+
+/** One line of a month's statement to the fulfillment partner: built by partner_payouts_build, approved by Danno, never paid from here. */
+export const partnerPayoutLines = sqliteTable(
+  "partner_payout_lines",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    month: text("month").notNull(),
+    kind: text("kind", { enum: PARTNER_PAYOUT_KINDS }).notNull(),
+    amount: real("amount").notNull(),
+    /** For a yearly installment, which of the 12; for a monthly or setup line, the payment it came from. */
+    paymentId: text("payment_id"),
+    installment: integer("installment"),
+    note: text("note"),
+    approvedByDannoAt: text("approved_by_danno_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_payout_lines_workspace_month").on(t.workspaceId, t.month), index("partner_payout_lines_restaurant").on(t.restaurantId, t.month)],
+);
+export type PartnerPayoutLine = typeof partnerPayoutLines.$inferSelect;
+
+/** A file (logo, photo, menu) of a restaurant: a row in `files`, named by its role. */
+export const partnerFiles = sqliteTable(
+  "partner_files",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    fileId: text("file_id").notNull(),
+    role: text("role").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_files_restaurant").on(t.restaurantId, t.role)],
+);
+export type PartnerFile = typeof partnerFiles.$inferSelect;
+
 /** What a ladder was given from the library and story bank, and which the writer said it used: the Material used panel and the "not in the last 10 ladders" rule. */
 export const ladderMaterial = sqliteTable(
   "ladder_material",
@@ -3624,7 +3786,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "clients"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "partner", "clients"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {

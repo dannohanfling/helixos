@@ -14,3 +14,4 @@ import "./handoff";
 import "./reports";
 import "./webinars";
 import "./clients";
+import "./partner";

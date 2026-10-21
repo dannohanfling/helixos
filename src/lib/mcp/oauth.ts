@@ -151,7 +151,7 @@ async function authenticateAgentToken(token: string): Promise<Grant | null> {
   const viewer = await viewerFor(app.userId, app.workspaceId);
   if (!viewer || viewer.membership.id !== app.membershipId || viewer.team) return null;
   if (viewer.role === "client" && !viewer.workspace.connectedAppsOpen) return null;
-  const scopes: Scope[] = app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox");
+  const scopes: Scope[] = app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox" || s === "partner");
   // A client's HelixOS (H-1385): the switch tools come with a live grant; a switch whose grant ended falls back to the coach's own.
   const { liveGrantsOf, switchedViewerFor } = await import("@/lib/agent-clients");
   const grants = viewer.role === "coach" ? await liveGrantsOf({ workspaceId: viewer.workspace.id, userId: viewer.user.id }, app.agentId) : [];
