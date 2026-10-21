@@ -3786,7 +3786,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "partner"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "partner", "clients"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {
@@ -3836,6 +3836,8 @@ export const connectedApps = sqliteTable(
      * connector, which can't send a token) or made with an agent token. Null for an ordinary connection: no inbox tools.
      */
     agentId: text("agent_id"),
+    /** An agent token switched into a client's HelixOS (H-1385): the client's membership, while the coach's grant for that agent stands. */
+    switchedMembershipId: text("switched_membership_id"),
     createdAt: createdAt(),
   },
   (t) => [index("connected_apps_member").on(t.workspaceId, t.userId)],
@@ -4563,6 +4565,8 @@ export const coachChanges = sqliteTable(
     /** The client whose HelixOS it was: theirs, so it is in their export and goes with deletion on request. */
     userId: text("user_id").notNull(),
     coachUserId: text("coach_user_id").notNull(),
+    /** The coach's agent that made the change or switched (H-1385), when it was an agent on its token and not the coach themselves. */
+    agentId: text("agent_id"),
     kind: text("kind", { enum: ["switch_in", "switch_out", "change"] }).notNull(),
     mode: text("mode", { enum: ["view", "work"] }).notNull(),
     /** What was done, in plain words ("Saved an offer"). */
@@ -4575,6 +4579,26 @@ export const coachChanges = sqliteTable(
   (t) => [index("coach_changes_client").on(t.clientMembershipId, t.createdAt)],
 );
 export type CoachChange = typeof coachChanges.$inferSelect;
+
+/**
+ * An agent working in a client's HelixOS (H-1385): the coach's grant, per client and per agent, off by default. Revoked
+ * rows stay as the record; a live grant has no revokedAt. The agent's token switches in only while one stands, and only
+ * while the client's own "Let my coach work in my HelixOS" is on does it work rather than view.
+ */
+export const agentClientGrants = sqliteTable(
+  "agent_client_grants",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    coachUserId: text("coach_user_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    clientMembershipId: text("client_membership_id").notNull(),
+    grantedAt: text("granted_at").notNull().default(sql`(datetime('now'))`),
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [index("agent_client_grants_client").on(t.clientMembershipId, t.agentId), index("agent_client_grants_agent").on(t.agentId)],
+);
+export type AgentClientGrant = typeof agentClientGrants.$inferSelect;
 
 /**
  * Team access (Danno, 6 Oct): a person a member invited into their HelixOS, with their own login. A row here is not a

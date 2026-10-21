@@ -162,12 +162,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // Switch to client (rev 216): what the coach changed while working in this member's HelixOS, for the member to see.
   const coachChangeRows = v.role === "client" ? await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, v.membership.id), eq(schema.coachChanges.kind, "change")), orderBy: [desc(schema.coachChanges.createdAt)], limit: 50 }) : [];
   const coachNames = new Map((coachChangeRows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(coachChangeRows.map((c) => c.coachUserId))]) }) : []).map((u) => [u.id, u.name]));
+  // H-1385: a change an agent made as the client names the agent, as the coach's.
+  const agentIds = [...new Set(coachChangeRows.map((c) => c.agentId).filter((x): x is string => Boolean(x)))];
+  const agentNames = new Map((agentIds.length ? await db.query.forumAgents.findMany({ where: inArray(schema.forumAgents.id, agentIds), columns: { id: true, name: true } }) : []).map((a) => [a.id, a.name]));
   const changesList = coachChangeRows.length ? (
     <ul className="mt-2 space-y-1 text-sm" data-testid="coach-changes">
       {coachChangeRows.map((c) => (
         <li key={c.id} data-testid="coach-change">
           <span className="font-medium">{c.action}</span>
-          {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {coachNames.get(c.coachUserId) ?? "your coach"} (coach) · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
+          {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {c.agentId ? <span data-testid="coach-change-agent">{agentNames.get(c.agentId) ?? "an agent"} ({(coachNames.get(c.coachUserId) ?? "your coach").split(" ")[0]}&apos;s agent)</span> : <>{coachNames.get(c.coachUserId) ?? "your coach"} (coach)</>} · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
         </li>
       ))}
     </ul>

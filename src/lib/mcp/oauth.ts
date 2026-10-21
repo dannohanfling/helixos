@@ -113,7 +113,11 @@ export async function revokeByToken(token: string): Promise<void> {
  * `agentId`: the Forum agent this connection speaks as (rev 769), from its agent token or the owner's tie; null otherwise.
  * `agentToken`: the call came on an agent token (hxa_), not on a connection the owner signed in with (H-591).
  */
-export type Grant = { app: schema.ConnectedApp; scopes: Scope[]; viewer: Viewer; agentId: string | null; agentToken: boolean };
+/**
+ * `viewer`: who the tools act as. On an agent token switched into a client's HelixOS (H-1385) that is the client, with the
+ * coach as the actor; `ownViewer` is then the coach's own, for the agent's own tools (the Forum, the inbox, the switch).
+ */
+export type Grant = { app: schema.ConnectedApp; scopes: Scope[]; viewer: Viewer; ownViewer?: Viewer; agentId: string | null; agentToken: boolean };
 
 /**
  * A bearer token to the member it acts as: the token unexpired and unrevoked, the grant live, the member still in the
@@ -147,8 +151,20 @@ async function authenticateAgentToken(token: string): Promise<Grant | null> {
   const viewer = await viewerFor(app.userId, app.workspaceId);
   if (!viewer || viewer.membership.id !== app.membershipId || viewer.team) return null;
   if (viewer.role === "client" && !viewer.workspace.connectedAppsOpen) return null;
-  // An agent token carries the Forum and the inbox, and the Partner Program when the coach ticked it on that agent (H-1361).
-  return { app, scopes: app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox" || s === "partner"), viewer, agentId: app.agentId, agentToken: true };
+  const scopes: Scope[] = app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox" || s === "partner");
+  // A client's HelixOS (H-1385): the switch tools come with a live grant; a switch whose grant ended falls back to the coach's own.
+  const { liveGrantsOf, switchedViewerFor } = await import("@/lib/agent-clients");
+  const grants = viewer.role === "coach" ? await liveGrantsOf({ workspaceId: viewer.workspace.id, userId: viewer.user.id }, app.agentId) : [];
+  if (grants.length) {
+    const { CLIENT_SCOPES } = await import("@/lib/engine/agent-clients");
+    scopes.push("clients", ...CLIENT_SCOPES);
+  }
+  if (app.switchedMembershipId) {
+    const switched = await switchedViewerFor(viewer, app.agentId, app.switchedMembershipId);
+    if (switched) return { app, scopes, viewer: switched, ownViewer: viewer, agentId: app.agentId, agentToken: true };
+    await db.update(schema.connectedApps).set({ switchedMembershipId: null }).where(eq(schema.connectedApps.id, app.id));
+  }
+  return { app, scopes, viewer, ownViewer: viewer, agentId: app.agentId, agentToken: true };
 }
 
 /** What the consent form signs, so a POST can only approve the request the page rendered for this member. */
