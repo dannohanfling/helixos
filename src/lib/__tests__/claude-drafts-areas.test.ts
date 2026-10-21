@@ -109,3 +109,13 @@ describe("each member's own", () => {
     expect(await d.approveDraft(JO, stray, HER)).toMatchObject({ ok: false });
   });
 });
+
+describe("what the bot says", () => {
+  it("Approve writes the bot's words on her own membership only, never the booking link", async () => {
+    await db.update(schema.memberships).set({ bookingUrl: "https://book.example/maya", whatIDo: "Old words." }).where(eq(schema.memberships.id, "m-u-maya"));
+    const id = await d.saveDraft(MAYA, "bot_profile", "m-u-maya", { whatIDo: "I help coaches sell with calm.", botQuestion1: "What are you building?" }, [], CLAUDE);
+    expect(await d.approveDraft(MAYA, id, HER)).toMatchObject({ ok: true });
+    expect(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, "m-u-maya") })).toMatchObject({ whatIDo: "I help coaches sell with calm.", botQuestion1: "What are you building?", bookingUrl: "https://book.example/maya" });
+    expect(await d.areaRow(JO, "bot_profile", "m-u-maya")).toBeNull();
+  });
+});

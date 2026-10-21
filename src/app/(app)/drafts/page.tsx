@@ -41,6 +41,8 @@ export default async function DraftsPage() {
         return t ? { name: magnets.find((m) => m.id === t)?.title ?? "A lead magnet", href: `/magnets/${t}` } : { name: fresh("lead magnet", d.fields.title), href: "/magnets" };
       case "content":
         return t ? { name: posts.find((p) => p.id === t)?.title ?? "A post", href: `/content/${t}` } : { name: fresh("post", d.fields.title), href: "/content" };
+      case "bot_profile":
+        return { name: "What your bot says about your business", href: "/settings#your-bot" };
       case "essence":
         return { name: sectionByKey(t ?? "")?.title ?? "Your Essence", href: `/essence?step=${t ?? ""}` };
       default:

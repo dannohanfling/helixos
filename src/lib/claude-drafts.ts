@@ -35,6 +35,8 @@ export async function areaRow(o: Owner, area: DraftArea, targetId: string | null
   // An Essence draft's target is the section's key; the row is that section as it stands (empty until written).
   if (area === "essence") return sectionByKey(targetId) ? ((normalizeEssence((await essenceRow(o))?.data ?? {}) as EssenceData)[targetId] ?? {}) : null;
   if (area === "magnet") return ((await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, targetId), eq(schema.leadMagnets.workspaceId, o.workspaceId), eq(schema.leadMagnets.userId, o.userId)) })) as Record<string, unknown> | undefined) ?? null;
+  // What the bot says about the business lives on the member's own membership in this workspace.
+  if (area === "bot_profile") return ((await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, targetId), eq(schema.memberships.workspaceId, o.workspaceId), eq(schema.memberships.userId, o.userId)) })) as Record<string, unknown> | undefined) ?? null;
   if (area === "content") {
     const c = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, targetId), eq(schema.contentItems.workspaceId, o.workspaceId), eq(schema.contentItems.userId, o.userId)) });
     // A post's pillar lives as the first "Pillar: …" line of its notes, and its suggested date is the day it's set for.
@@ -168,6 +170,12 @@ async function write(o: Owner, area: DraftArea, targetId: string | null, values:
       .set({ ...(cols as Partial<schema.ContentItem>), ...(notes !== undefined ? { notes } : {}), ...(suggestedDate !== undefined ? { postAt: suggestedDate ? `${suggestedDate}T${time}:00` : null } : {}), ...(row?.status === "idea" && suggestedDate ? { status: "creating" as const } : {}), origin: "ai_accepted" })
       .where(and(eq(schema.contentItems.id, id), eq(schema.contentItems.workspaceId, o.workspaceId), eq(schema.contentItems.userId, o.userId)));
     return { ok: true, id };
+  }
+  if (area === "bot_profile") {
+    if (!targetId) return { ok: false, why: "Your bot's words belong to you; there's no new one to make." };
+    // Only these words: the bot is sent nothing here (it keeps its answers until the next push the member approves on Your bot).
+    if (Object.keys(set).length) await db.update(schema.memberships).set(set as Partial<schema.Membership>).where(and(eq(schema.memberships.id, targetId), eq(schema.memberships.workspaceId, o.workspaceId), eq(schema.memberships.userId, o.userId)));
+    return { ok: true, id: targetId };
   }
   return { ok: false, why: "Drafts of that kind come later." };
 }

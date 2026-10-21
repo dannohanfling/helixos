@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 327,
+    date: "2026-10-20",
+    title: "Claude drafts what your bot says, you approve it",
+    lines: [
+      "Through the HelixOS connector, Claude can now draft what your bot says about your business: what you do, the three questions it asks before booking, and what to expect on the call.",
+      "It waits in amber in Settings until you approve it. Your bot keeps its current answers until then, and nothing is sent to your bot from a draft.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 326,
     date: "2026-10-20",
     title: "Claude drafts your Essence, lead magnets and posts",
