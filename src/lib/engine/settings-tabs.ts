@@ -24,6 +24,8 @@ export const TAB_OF_ANCHOR: Record<string, SettingsTab> = {
   welcome: "you",
   setup: "you",
   "login-email": "you",
+  blocked: "you",
+  "your-reports": "you",
   publishing: "connections",
   "community-loyalty": "connections",
   ai: "connections",
@@ -46,6 +48,7 @@ export const TAB_OF_ANCHOR: Record<string, SettingsTab> = {
   "your-coach": "data",
   workspace: "coach",
   invites: "coach",
+  calls: "coach",
 };
 
 /** The tabs a viewer sees: the coach's own tab for the coach only. */

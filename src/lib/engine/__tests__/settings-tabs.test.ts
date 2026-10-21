@@ -18,6 +18,7 @@ describe("Settings in tabs (H-164 §16)", () => {
     expect(tabOfAnchor("publishing")).toBe("connections");
     expect(tabOfAnchor("your-bot")).toBe("bot");
     expect(tabOfAnchor("account")).toBe("data");
+    expect(tabOfAnchor("calls")).toBe("coach");
     expect(tabOfAnchor("you")).toBeNull();
     expect(tabOfAnchor("not-a-card")).toBeNull();
   });
