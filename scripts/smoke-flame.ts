@@ -183,8 +183,11 @@ async function main() {
     await p.waitForFunction(() => document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-phone") === "true", null, { timeout: 5000 });
     const poster = bar.locator('[data-flame-poster="true"]');
     await p.waitForFunction(() => ((document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.naturalWidth ?? 0) > 0, null, { timeout: 5000 });
-    const posterSrc = (await poster.getAttribute("src")) ?? "";
-    const phoneMode = await bar.locator('[data-flame="fire"]').getAttribute("data-flame-mode");
+    // The MP4's refusal can land between two reads (mode "still" with the poster not yet swapped for the still), so the pair is
+    // read together and given a moment to agree.
+    const readPair = () => ({ mode: document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-mode") ?? "", src: (document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.getAttribute("src") ?? "" });
+    await p.waitForFunction((tier) => { const q = (() => ({ mode: document.querySelector('[data-testid="streak-pill-bar"] [data-flame="fire"]')?.getAttribute("data-flame-mode") ?? "", src: (document.querySelector('[data-testid="streak-pill-bar"] [data-flame-poster="true"]') as HTMLImageElement | null)?.getAttribute("src") ?? "" }))(); return q.mode === "still" ? q.src.includes(`streak-${tier}-still.jpg`) : q.src.includes(`streak-${tier}-pill-m-poster.jpg`); }, phoneTier, { timeout: 5000 }).catch(() => undefined);
+    const { mode: phoneMode, src: posterSrc } = await p.evaluate(readPair);
     must(
       phoneMode === "still" ? posterSrc.includes(`streak-${phoneTier}-still.jpg`) : posterSrc.includes(`streak-${phoneTier}-pill-m-poster.jpg`),
       `the phone shows the tier's picture at once (${phoneMode}, ${posterSrc})`,
