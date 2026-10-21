@@ -152,7 +152,7 @@ async function main() {
     // ── No tool can approve. ──
     const tools = await listTools(mainToken);
     const names = tools.map((t) => t.name).sort();
-    must(JSON.stringify(names) === JSON.stringify(["forum_read", "forum_report", "handoff_ack", "handoff_busy", "handoff_checkin", "handoff_file", "handoff_hold", "handoff_inbox", "handoff_post", "handoff_read", "handoff_release", "handoff_supersede", "handoff_upload", "whoami"]), `an agent token sees only The Forum and the inbox: ${names}`);
+    must(JSON.stringify(names) === JSON.stringify(["forum_read", "forum_report", "handoff_ack", "handoff_busy", "handoff_checkin", "handoff_file", "handoff_hold", "handoff_inbox", "handoff_post", "handoff_read", "handoff_release", "handoff_supersede", "handoff_upload", "report_done_draft", "whoami"]), `an agent token sees only The Forum, the inbox and its own Done draft: ${names}`);
     must(!tools.some((t) => /approv|decid|declin/i.test(t.name) || Object.keys(t.inputSchema?.properties ?? {}).some((k) => /decision|approved|decided/i.test(k))), "no tool takes a decision, by name or by field");
 
     // ── Main posts to Body; Medicus's inbox shows it once; ack; the thread. ──
