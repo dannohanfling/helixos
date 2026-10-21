@@ -5,7 +5,8 @@ import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { ApprovalButtons, DecisionNote, HoldButtons } from "@/components/handoff-bits";
 import { HandoffMarkdown } from "@/components/handoff-markdown";
-import { answerHandoffAction, setApprovalEmailsAction, setCheckinsPausedAction, setStallEmailsAction, writeToAgentAction } from "@/lib/actions/handoff";
+import { answerHandoffAction, setApprovalEmailsAction, setCheckinsPausedAction, setStallEmailsAction, tickInboxNeedAction, writeToAgentAction } from "@/lib/actions/handoff";
+import { InboxRefresh } from "@/components/inbox-refresh";
 import { markOwnerRead, ownerInbox, supersededInbox, type InboxItem, type Owner } from "@/lib/handoff";
 import { HOLD_LABEL, SUPERSEDED_LABEL, TITLE_PREFIXES } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
@@ -48,7 +49,7 @@ export async function HandoffInboxView({ o, ownerFirst: first, tz, tab, q, base,
   const history = tab === "history";
   const supersededTab = tab === "superseded";
   const superseded = supersededTab ? await supersededInbox(o, q ?? "") : [];
-  const [{ items, waiting, acks }, settings, log, agents] = await Promise.all([
+  const [{ items, waiting, fresh, needs, acks }, settings, log, agents] = await Promise.all([
     ownerInbox(o),
     coach ? forumSettingsFor(o) : Promise.resolve(null),
     history ? db.query.handoffAudit.findMany({ where: and(eq(schema.handoffAudit.workspaceId, o.workspaceId), eq(schema.handoffAudit.userId, o.userId)), orderBy: desc(schema.handoffAudit.at), limit: 200 }) : Promise.resolve([]),
@@ -63,7 +64,7 @@ export async function HandoffInboxView({ o, ownerFirst: first, tz, tab, q, base,
   const nudgeFallback = coach ? "/coach/agents" : null;
 
   const Message = ({ m, decide }: { m: InboxItem; decide?: boolean }) => (
-    <article className="rounded-xl border p-3" data-testid="handoff-message" data-ref={m.ref}>
+    <article id={m.ref} className="rounded-xl border p-3" data-testid="handoff-message" data-ref={m.ref}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-ink-3">
         <span className="font-mono font-semibold text-ink">{m.ref}</span>
         <span>{m.kind}</span>
@@ -145,6 +146,7 @@ export async function HandoffInboxView({ o, ownerFirst: first, tz, tab, q, base,
 
   return (
     <>
+      {readOnly ? null : <InboxRefresh />}
       <PageHeader
         title={coach ? "Inbox" : readOnly ? `${first}'s agent inbox` : "Agent inbox"}
         subtitle={
@@ -230,12 +232,58 @@ export async function HandoffInboxView({ o, ownerFirst: first, tz, tab, q, base,
             </Card>
           ) : (
             <>
-              <Card title={`${readOnly ? `Waiting for ${first}'s decision` : "Waiting for your decision"}${waiting.length ? ` (${waiting.length})` : ""}`}>
+              {/* H-1488 and H-1494: one list. The approvals waiting for a decision and the agents' open "needs you" items, the same
+                  rows the Inbox number counts (with New for you below); an item leaves when its agent clears it, when the
+                  approval it names is decided, when a "Merged PR #N" post names its PR, or on Done / Not needed here. */}
+              <Card title={`${readOnly ? `Waiting on ${first}` : "Waiting on you"}${waiting.length + needs.length ? ` (${waiting.length + needs.length})` : ""}`}>
                 <div className="space-y-3" data-testid="handoff-waiting">
-                  {waiting.length ? waiting.map((m) => <Message key={m.id} m={m} decide />) : <p className="text-sm text-ink-2">{readOnly ? `Nothing waits for ${first}.` : "Nothing waits for you."}</p>}
+                  {waiting.map((m) => (
+                    <Message key={m.id} m={m} decide />
+                  ))}
+                  {needs.map((n) => (
+                    <div key={n.id} className="rounded-xl border p-3" data-testid="handoff-need" data-stale={n.stale ? "true" : undefined}>
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-ink-3">
+                        <span className="font-medium text-ink">{n.agent ?? "The Forum"}</span>
+                        {n.when ? <span>{n.when}</span> : null}
+                        <span>{at(n.at)}</span>
+                        {n.stale ? <span className="rounded-full bg-surface-2 px-2 py-0.5">open more than three days</span> : null}
+                      </div>
+                      <p className="mt-1 text-sm [overflow-wrap:anywhere]">{n.what}</p>
+                      {n.detail ? <p className="mt-1 text-xs text-ink-2 [overflow-wrap:anywhere]">{n.detail}</p> : null}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {n.ref ? (
+                          <a href={`#${n.ref}`} className="text-xs underline" data-testid="handoff-need-thread">
+                            Read {n.ref}
+                          </a>
+                        ) : null}
+                        {!readOnly ? (
+                          <form action={tickInboxNeedAction} className="flex gap-2">
+                            <input type="hidden" name="id" value={n.id} />
+                            <SubmitButton className="btn btn-soft btn-sm" pendingText="…" data-testid="handoff-need-done">
+                              Done
+                            </SubmitButton>
+                            <SubmitButton className="btn btn-ghost btn-sm" pendingText="…" data-testid="handoff-need-skip">
+                              Not needed
+                            </SubmitButton>
+                          </form>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                  {waiting.length + needs.length ? null : <p className="text-sm text-ink-2">{readOnly ? `Nothing waits for ${first}.` : "Nothing waits for you."}</p>}
                 </div>
                 <p className="mt-3 text-xs text-ink-3">{readOnly ? `Only ${first}'s own tap approves anything.` : "Only your tap here, or on The Forum, approves anything."} It reaches the agent once, in its next inbox check, and never carries over to later work.</p>
               </Card>
+              {fresh.length ? (
+                <Card title={`New for you (${fresh.length})`}>
+                  <p className="mb-3 text-xs text-ink-3">Messages to you that you had not opened: the Inbox number counts them until this page has shown them.</p>
+                  <div className="space-y-3" data-testid="handoff-fresh">
+                    {fresh.map((m) => (
+                      <Message key={m.id} m={m} />
+                    ))}
+                  </div>
+                </Card>
+              ) : null}
               <Card title="Messages">
                 <div className="space-y-3" data-testid="handoff-messages">
                   {items.length ? items.map((m) => <Message key={m.id} m={m} />) : <p className="text-sm text-ink-2">{coach ? "No messages yet. Make an agent a token on Agents, and it can post here." : "No messages yet."}</p>}
