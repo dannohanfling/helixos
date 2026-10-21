@@ -74,7 +74,8 @@ async function main() {
   const page = await ctx.newPage();
   const failures: string[] = [];
   page.on("response", (r) => {
-    if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
+    // The fixture's picture points at a stand-in host on purpose (its showsAPerson is the point); its bytes are not.
+    if (r.status() >= 500 && !r.url().includes("/api/proofs/attachments/smoke-bank-")) failures.push(`${r.status()} ${r.url()}`);
   });
   try {
     await login(page);
