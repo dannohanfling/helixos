@@ -81,7 +81,7 @@ export async function updateBotFactsAction(formData: FormData): Promise<void> {
   const conditions = str(formData, "termsConditions").split("\n").map((l) => l.trim()).filter(Boolean);
   // Bot connection (rev 808): the link the bot sends to book a call, and what to expect. A link must be a full https:// one.
   const bookingUrl = opt(formData, "bookingUrl");
-  if (bookingUrl && !/^https:\/\/[^\s]+$/.test(bookingUrl)) redirect(`/settings?botError=${encodeURIComponent("The booking link has to be a full link starting with https://.")}#your-bot`);
+  if (bookingUrl && !/^https:\/\/[^\s]+$/.test(bookingUrl)) redirect(`/settings?tab=bot&botError=${encodeURIComponent("The booking link has to be a full link starting with https://.")}#your-bot`);
   await db
     .update(schema.memberships)
     .set({
@@ -164,7 +164,7 @@ export async function resetBrandKitAction(): Promise<void> {
   const { workspaceId, userId } = await ctx();
   await db.delete(schema.brandKits).where(and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)));
   refresh();
-  redirect("/settings?brand=reset#brand-kit");
+  redirect("/settings?tab=brand&brand=reset#brand-kit");
 }
 
 /**
@@ -217,12 +217,12 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
   const useHeadshot = keepConsent ?? str(formData, "graphicUseHeadshot") === "1";
   const problems = brandKitProblems(kit);
   // Refused with the problems named, and what was typed comes back with it: a refusal never empties the form.
-  if (problems.length) redirect(`/settings?brand=${encodeURIComponent(problems.join(" "))}&draft=${encodeURIComponent(JSON.stringify(kit))}#brand-kit`);
+  if (problems.length) redirect(`/settings?tab=brand&brand=${encodeURIComponent(problems.join(" "))}&draft=${encodeURIComponent(JSON.stringify(kit))}#brand-kit`);
   const existing = await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) });
   if (existing) await db.update(schema.brandKits).set({ ...kit, graphicUseHeadshot: useHeadshot }).where(eq(schema.brandKits.id, existing.id));
   else await db.insert(schema.brandKits).values({ id: newId(), workspaceId, userId, ...kit, graphicUseHeadshot: useHeadshot });
   refresh();
-  redirect("/settings?brand=saved#brand-kit");
+  redirect("/settings?tab=brand&brand=saved#brand-kit");
 }
 
 /** The emoji picker (H-94): a pick saves at once; exactly one emoji, the member's own setting. */

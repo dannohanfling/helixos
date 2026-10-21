@@ -221,7 +221,9 @@ async function main() {
     await page.fill('input[name="callsBooked"]', "1");
     await page.fill('input[name="cashCollected"]', "350");
     await submit(page, 'button:has-text("Close the day"), button:has-text("Save")');
-    const after = await points(page);
+    // The total in the header follows the save on the next render: read it until it moves (up to 10 s) before judging it.
+    let after = await points(page);
+    for (let i = 0; i < 20 && after === before; i++) { await page.waitForTimeout(500); after = await points(page); }
     const goalAfter = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, maya.id), eq(schema.goals.primary, true)) });
     if (after - before !== 25) throw new Error(`editing the close should award +25 for the booked call, got ${after - before}`);
     if ((goalAfter?.actual ?? 0) - (goalBefore?.actual ?? 0) !== 250) throw new Error(`goal should move by the cash delta (250), moved ${(goalAfter?.actual ?? 0) - (goalBefore?.actual ?? 0)}`);

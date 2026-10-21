@@ -58,7 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/body/goals", label: "Health goals", icon: "🎯", hint: "on pace?", bodyOnly: true },
       { href: "/body/sleep", label: "Sleep", icon: "🛌", hint: "last night", bodyOnly: true },
       { href: "/body/practices", label: "Practices", icon: "🧘", hint: "habits + streaks", bodyOnly: true },
-      { href: "/settings#humanos", label: "Turn on HumanOS", icon: "🧬", line: "Food, training, sleep, practices", bodyOffOnly: true },
+      { href: "/settings?tab=programs#humanos", label: "Turn on HumanOS", icon: "🧬", line: "Food, training, sleep, practices", bodyOffOnly: true },
     ],
   },
   // The client's five groups (H-164 §10, plan H-209 §11): Daily above, then these four, closed until opened (DEFAULT_CLOSED in

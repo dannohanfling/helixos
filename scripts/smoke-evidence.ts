@@ -105,7 +105,7 @@ async function main() {
     console.log("✓ without an AI key the terms are the claim's own words, and it says so");
 
     // With a key: the model turns the claim into terms and names the effect and field
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await page.selectOption('select[name="provider"]', "anthropic");
     await page.fill('input[name="key"]', "sk-ant-good");
     await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');

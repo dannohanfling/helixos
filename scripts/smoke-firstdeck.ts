@@ -50,7 +50,7 @@ async function main() {
     const user = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     // The walk drafts some 25 times; a second run on the same day would meet the client's daily cap (40 calls) partway through.
     await db.delete(schema.aiUsage).where(eq(schema.aiUsage.userId, user.id));
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await page.selectOption('select[name="provider"]', "anthropic");
     await page.fill('input[name="key"]', "sk-ant-good");
     await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');
@@ -146,7 +146,7 @@ async function main() {
     const { ownerBrandName } = await import("@/lib/queries/webinar");
     must((await ownerBrandName(await w(), "the workspace")) !== "House starter kit", "the footer names the member's business, never the starter kit");
     // The kit is the member's own (rev 568): the client's Settings has the card, pre-filled with the starter.
-    await page.goto(`${base}/settings#brand-kit`);
+    await page.goto(`${base}/settings?tab=brand#brand-kit`);
     await page.locator('[data-testid="brand-starter"]').waitFor({ timeout: 20000 });
     must((await page.locator('[data-testid="brand-hex-ground"]').inputValue()) === "F7F5F0" && (await page.locator('[data-testid="brand-form"] input[name="displayFont"]').inputValue()) === "Montserrat", "Settings shows the starter kit pre-filled, to edit rather than start blank");
     await page.fill('[data-testid="brand-form"] input[name="name"]', "Rooted Rest");

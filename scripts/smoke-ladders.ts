@@ -263,7 +263,7 @@ async function main() {
     const obj2 = await putDeckObject(deckImageKey(ws, maya.id, otherId, "jpg"), photoBytes, "image/jpeg");
     await db.insert(schema.deckImages).values({ id: otherId, workspaceId: ws, userId: maya.id, kind: "photo", blobKey: obj2.key, blobUrl: obj2.url, mime: "image/jpeg", width: 1200, height: 1500, caption: "Desk at night" });
     // The badge from the Brand kit (Settings), the avatar one of her own photos; AI backgrounds stay on by default.
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=brand`);
     // A member with no kit yet saves the starter kit under a name of their own, with the badge on it.
     if (!(await page.locator('[data-testid="brand-form"] input[name="name"]').inputValue()).trim()) await page.fill('[data-testid="brand-form"] input[name="name"]', "Maya's kit");
     await page.fill('[data-testid="brand-graphic-name"]', "Maya Torres");
@@ -583,7 +583,7 @@ async function main() {
       const nomediaPosts = ((await (await fetch(`http://localhost:${ghlPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_nomedia", Version: "2021-07-28" } })).json()) as { posts: { summary: string }[] }).posts;
       if (sent || heldRow.externalStatus !== "failed" || heldRow.externalError !== ADD_PERMISSION || nomediaPosts.some((p) => p.summary === "No permission yet.")) throw new Error(`without medias.write the channel is held with Add one permission, nothing posted: ${JSON.stringify({ sent, status: heldRow.externalStatus, error: heldRow.externalError })}`);
       if (!(await db.query.socialConnections.findFirst({ where: eq(schema.socialConnections.userId, maya.id) }))!.mediaScopeMissingAt) throw new Error("the connection remembers the missing permission");
-      await page.goto(`${base}/settings`);
+      await page.goto(`${base}/settings?tab=connections`);
       await page.locator('[data-testid="ghl-add-permission"]').waitFor({ timeout: 15000 });
       await page.goto(`${base}/content/${heldRow.contentItemId}/repurpose`);
       await page.locator('[data-testid="failed-banner"]', { hasText: "Add one permission" }).waitFor({ timeout: 15000 });

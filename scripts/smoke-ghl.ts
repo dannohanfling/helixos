@@ -105,7 +105,7 @@ async function main() {
     await page.waitForURL(/\/today/);
     // Open to every member from the start (H-226): no "isn't open yet", the Connect steps on Settings and on Connect your tools,
     // and no switch for the coach to find on Integrations.
-    for (const where of ["/settings", "/connect-tools"]) {
+    for (const where of ["/settings?tab=connections", "/connect-tools"]) {
       await page.goto(`${base}${where}`);
       if (await page.locator('[data-testid="ghl-not-open"]').count()) throw new Error(`${where}: a client should never read "isn't open yet"`);
       if (!(await page.locator('[data-testid="ghl-howto"]').count())) throw new Error(`${where}: a client with no connection sees the Connect steps`);
@@ -125,7 +125,7 @@ async function main() {
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     // Rev 850: Danno's words, laid out like the AI key card and open from the start: the numbered steps, the list with Copy the
     // list, and the key and Location ID beside them.
     await expectText(page, "Connect your own GoHighLevel once.", "Danno's words for the GoHighLevel step");
@@ -206,7 +206,7 @@ async function main() {
     await page.reload();
     await expectOutcome(page, "fb_page", "failed", "a fixable refusal is a failure, not a hand-pasted channel", "Add your GHL user ID on Settings → Publishing");
     if ((await plannerPosts()).length) throw new Error("nothing is sent to the planner without a user id");
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await expectText(page, "nothing publishes until you pick one", "Settings says the user id is missing");
     await expectText(page, "0/5 channels will auto-publish", "readiness is nothing without the user id");
     // A user id GoHighLevel refuses: a 422 on the post, named as the user id where the post is, never as the location; the connection stays green
@@ -230,7 +230,7 @@ async function main() {
     const failedBanner = page.locator('[data-testid="failed-banner"]').first();
     await failedBanner.waitFor({ timeout: 15000 });
     if (!(await failedBanner.innerText()).includes("didn't send") || /\(4\d\d\)/.test(await failedBanner.innerText())) throw new Error(`the banner says which channel didn't send, with no status code: ${await failedBanner.innerText()}`);
-    if ((await failedBanner.locator('[data-testid="failed-fix"]').getAttribute("href")) !== "/settings#publishing") throw new Error("Fix it goes to Publishing for a refused user id");
+    if ((await failedBanner.locator('[data-testid="failed-fix"]').getAttribute("href")) !== "/settings?tab=connections#publishing") throw new Error("Fix it goes to Publishing for a refused user id");
     await page.goto(`${base}/content`);
     await page.locator('[data-testid="failed-banner"]').first().waitFor({ timeout: 15000 });
     await page.goto(`${base}/today`);
@@ -238,7 +238,7 @@ async function main() {
     const todayBanner = page.locator('[data-testid="failed-banner"]', { hasText: "GHL with a refused user id" }).first();
     await todayBanner.waitFor({ timeout: 15000 }).catch(() => { throw new Error("Today's banner names the post"); });
     console.log("✓ a failed channel shows as a plain banner with Fix it on the post, the board and Today");
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     if (await page.locator('[data-testid="ghl-error"]').count()) throw new Error("a post's failure does not paint the connection red");
     await expectText(page, "6 connected pages and profiles", "still connected after a refused post");
     await saveConnection(page, "loc_maya", "", "JD8kLxeYM3FqbWLQXC4p");

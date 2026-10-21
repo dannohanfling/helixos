@@ -337,7 +337,7 @@ async function main() {
       await db.insert(schema.memberReports).values({ id: twin, workspaceId: ws, userId: maya.id, kind: "issue", severity: "orange", description: "The same button is still broken on my phone." });
       await logout(page);
       await login(page, "As the coach");
-      await page.goto(`${base}/settings`);
+      await page.goto(`${base}/settings?tab=coach`);
       must((await page.locator('[data-testid="auto-done"]').count()) === 1 && !(await page.locator('[data-testid="auto-done"]').isChecked()), "Settings has the auto-send switch, off by default");
       await page.goto(`${base}/coach/reports?tab=new`);
       const card = page.locator(`#r-${issue.id}`);

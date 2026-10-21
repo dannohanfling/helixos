@@ -49,7 +49,7 @@ export async function disconnectAppAction(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   const app = await db.query.connectedApps.findFirst({ where: and(eq(schema.connectedApps.id, id), eq(schema.connectedApps.workspaceId, workspaceId), eq(schema.connectedApps.userId, userId), isNull(schema.connectedApps.revokedAt)) });
   if (app) await revokeApp(app.id);
-  redirect("/settings?apps=disconnected#connected-apps");
+  redirect("/settings?tab=connections&apps=disconnected#connected-apps");
 }
 
 /** The coach's workspace switch (rev 247, B5): whether clients may connect apps at all. Off cuts their existing connections too. */
@@ -58,5 +58,5 @@ export async function setConnectedAppsOpenAction(formData: FormData): Promise<vo
   const on = str(formData, "connectedAppsOpen") === "on";
   await db.update(schema.workspaces).set({ connectedAppsOpen: on }).where(eq(schema.workspaces.id, coach.workspace.id));
   refresh();
-  redirect(`/settings?apps=${on ? "open" : "closed"}#connected-apps`);
+  redirect(`/settings?tab=connections&apps=${on ? "open" : "closed"}#connected-apps`);
 }

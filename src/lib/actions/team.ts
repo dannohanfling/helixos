@@ -23,14 +23,14 @@ import { inviteExpiry, readCap } from "@/lib/engine/team";
 export async function createTeamInviteAction(formData: FormData): Promise<void> {
   const { v } = await ctx({ whileSwitched: "refuse", reason: TEAM_IS_THEIRS });
   const seats = await seatsLeft(v.membership);
-  if (seats.left <= 0) redirect("/settings?team=full#team");
+  if (seats.left <= 0) redirect("/settings?tab=brand&team=full#team");
   const label = str(formData, "label").slice(0, 80) || null;
   const code = inviteCode(24);
   await db.insert(schema.teamInvites).values({ id: newId(), workspaceId: v.workspace.id, ownerMembershipId: v.membership.id, userId: v.user.id, createdBy: v.actor.id, codeHash: hashSecret(code), label, expiresAt: inviteExpiry() });
   // The link is shown on the next Settings render and nowhere else: a short cookie carries it there, then it is gone.
   (await cookies()).set(TEAM_INVITE_COOKIE, code, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 120, path: "/settings" });
   refresh();
-  redirect("/settings?team=invited#team");
+  redirect("/settings?tab=brand&team=invited#team");
 }
 
 /** The owner cancels an invite that hasn't been used: the link stops working at once. */
@@ -42,7 +42,7 @@ export async function revokeTeamInviteAction(formData: FormData): Promise<void> 
     .set({ revokedAt: nowIso() })
     .where(and(eq(schema.teamInvites.id, id), eq(schema.teamInvites.workspaceId, workspaceId), eq(schema.teamInvites.ownerMembershipId, v.membership.id)));
   refresh();
-  redirect("/settings?team=revoked#team");
+  redirect("/settings?tab=brand&team=revoked#team");
 }
 
 /** The owner removes a team member: their access ends on their next request. The row stays for the log. */
@@ -50,11 +50,11 @@ export async function removeTeamMemberAction(formData: FormData): Promise<void> 
   const { v, workspaceId } = await ctx({ whileSwitched: "refuse", reason: TEAM_IS_THEIRS });
   const id = str(formData, "teamMemberId");
   const tm = await db.query.teamMembers.findFirst({ where: and(eq(schema.teamMembers.id, id), eq(schema.teamMembers.workspaceId, workspaceId), eq(schema.teamMembers.ownerMembershipId, v.membership.id)) });
-  if (!tm || tm.removedAt) redirect("/settings#team");
+  if (!tm || tm.removedAt) redirect("/settings?tab=brand#team");
   await db.update(schema.teamMembers).set({ removedAt: nowIso(), removedBy: v.actor.id }).where(eq(schema.teamMembers.id, tm.id));
   await logTeamEvent({ workspaceId, ownerMembershipId: tm.ownerMembershipId, userId: tm.userId, teamMemberId: tm.id, teamUserId: tm.teamUserId, kind: "removed", action: `Removed by ${v.actor.name}` });
   refresh();
-  redirect("/settings?team=removed#team");
+  redirect("/settings?tab=brand&team=removed#team");
 }
 
 /** The coach removes one of a client's team members from the client page (Danno's answer 3). */

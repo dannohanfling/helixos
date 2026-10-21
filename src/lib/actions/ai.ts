@@ -65,7 +65,7 @@ export async function removeAiKeyAction(): Promise<void> {
   const { workspaceId, userId } = await ctx();
   await db.delete(schema.aiCredentials).where(and(eq(schema.aiCredentials.workspaceId, workspaceId), eq(schema.aiCredentials.userId, userId)));
   refresh();
-  redirect(deletedTo("/settings", "key"));
+  redirect(deletedTo("/settings?tab=connections#ai", "key"));
 }
 
 /** Coach: the workspace-wide daily cap on AI calls per member. */

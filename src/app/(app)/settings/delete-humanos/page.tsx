@@ -44,7 +44,7 @@ export default async function DeleteHumanosPage({ searchParams }: { searchParams
                   <SubmitButton className="btn btn-danger" pendingText="Deleting…" data-testid="delete-humanos-submit">
                     Delete my HumanOS data
                   </SubmitButton>
-                  <Link href="/settings#account" className="text-sm underline">
+                  <Link href="/settings?tab=data#account" className="text-sm underline">
                     Keep it
                   </Link>
                 </div>

@@ -10,7 +10,7 @@ export type ShipState = "done" | "ready" | "held";
 export type ShipFix = { href: string; label: string };
 export type ShipStep = { key: ShipStepKey; label: string; state: ShipState; why: string | null; fix?: ShipFix };
 const FIX_GHL: ShipFix = { href: "/connect-tools#publishing", label: "Connect GoHighLevel" };
-const FIX_PUBLISHING: ShipFix = { href: "/settings#publishing", label: "Fix it on Settings" };
+const FIX_PUBLISHING: ShipFix = { href: "/settings?tab=connections#publishing", label: "Fix it on Settings" };
 const FIX_CL: ShipFix = { href: "/connect-tools#community-loyalty", label: "Connect Community Loyalty" };
 export const SHIP_CHANNELS = ["fb_page", "instagram"] as const;
 

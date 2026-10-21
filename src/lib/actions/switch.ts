@@ -83,5 +83,5 @@ export async function setCoachCanWorkAction(formData: FormData): Promise<void> {
     await db.update(schema.memberships).set({ coachCanWork: on }).where(and(eq(schema.memberships.id, v.membership.id), eq(schema.memberships.workspaceId, v.workspace.id)));
     await logSync({ workspaceId: v.workspace.id, userId: v.user.id, provider: "account", direction: "in", event: on ? "coach_work.on" : "coach_work.off", payload: { at: nowIso() }, status: "sent", note: `Let my coach work in my HelixOS: ${on ? "on" : "off"}` });
   }
-  redirect(`/settings?coachWork=${on ? "on" : "off"}#your-coach`);
+  redirect(`/settings?tab=data&coachWork=${on ? "on" : "off"}#your-coach`);
 }

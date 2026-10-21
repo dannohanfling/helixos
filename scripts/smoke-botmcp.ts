@@ -87,11 +87,11 @@ async function main() {
 
     // 1. Settings: the booking fields and the key, shown once.
     await login(page, "As a client");
-    await page.goto(`${base}/settings#your-bot`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/settings?tab=bot#your-bot`, { waitUntil: "networkidle" });
     await page.locator('[data-testid="booking-url"]').fill("http://example.com/book");
     await press(page, 'form:has([data-testid="booking-url"]) button[type="submit"]');
     must((await page.locator('[data-testid="bot-facts-error"]').innerText()).includes("https://"), "a booking link that isn't https:// is refused");
-    await page.goto(`${base}/settings#your-bot`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/settings?tab=bot#your-bot`, { waitUntil: "networkidle" });
     await page.locator('[data-testid="booking-url"]').fill("https://example.com/book-maya");
     await page.locator('[data-testid="booking-expect"]').fill("A 30-minute call to map your next 90 days. Bring your numbers.");
     await press(page, 'form:has([data-testid="booking-url"]) button[type="submit"]');
@@ -103,7 +103,7 @@ async function main() {
     must(/^hxb_[A-Za-z0-9_-]{43}$/.test(key), `a key is shown once: ${key.slice(0, 8)}…`);
     must((await page.locator('[data-testid="bot-url"]').innerText()).endsWith("/api/bot-mcp"), "the address to paste");
     await press(page, '[data-testid="bot-key-hide"]');
-    await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/settings?tab=bot`, { waitUntil: "networkidle" });
     must(!(await page.content()).includes(key) && (await page.locator('[data-testid="bot-key-state"]').innerText()) === `key ····${key.slice(-4)}`, "after I've saved it: only the last four");
     const stored = await db.query.botKeys.findFirst({ where: and(eq(schema.botKeys.userId, maya.id)) });
     must(stored && stored.tokenHash !== key && !JSON.stringify(stored).includes(key), "stored as a hash only");
@@ -179,7 +179,7 @@ async function main() {
     // Another member's key never touches hers.
     await logout(page);
     await login(page, "As the coach");
-    await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/settings?tab=bot`, { waitUntil: "networkidle" });
     await press(page, '[data-testid="bot-key-make"]');
     const coachKey = (await page.locator('[data-testid="bot-key"]').innerText()).trim();
     await press(page, '[data-testid="bot-key-hide"]');

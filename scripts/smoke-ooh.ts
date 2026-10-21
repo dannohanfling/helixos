@@ -73,7 +73,7 @@ async function main() {
     const owner = await browser.newPage();
     watch(owner);
     await login(owner, "As a client");
-    await owner.goto(`${base}/settings`);
+    await owner.goto(`${base}/settings?tab=brand`);
     await owner.locator('[data-testid="team-invite-form"]').waitFor({ timeout: 20000 });
     await owner.fill('[data-testid="team-invite-form"] input[name="label"]', "Sam, our VA");
     await submit(owner, '[data-testid="team-invite"]');
@@ -342,7 +342,7 @@ async function main() {
     console.log("✓ Office Hours by level: Accelerator off with the one plain line and history kept, the team follows the owner, the coach's switch both ways and Reset to level, a level change honours an override, earned access opens then expires, the coach always gets in, every change logged");
 
     // ── 6. Maya removes Sam: the request stays, Sam reads as a former team member. ──
-    await owner.goto(`${base}/settings`);
+    await owner.goto(`${base}/settings?tab=brand`);
     await owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" }).locator('[data-testid="team-remove"]').click();
     await submit(owner, '[data-testid="confirm-delete-yes"]:visible');
     must((await db.query.teamMembers.findFirst({ where: eq(schema.teamMembers.id, samRow.id) }))!.removedAt, "Sam is removed");

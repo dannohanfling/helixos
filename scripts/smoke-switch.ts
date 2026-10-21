@@ -79,7 +79,7 @@ async function main() {
 
     // ── 1. The client's own setting: off for someone who joined, nothing changed by the coach yet. ──
     await login(page, "As a client");
-    await page.goto(`${base}/settings#your-coach`);
+    await page.goto(`${base}/settings?tab=data#your-coach`);
     if ((await page.locator('[data-testid="coach-work"]').getAttribute("data-on")) !== "0") throw new Error("Let my coach work starts off for a client who joined");
     if (!(await page.locator('[data-testid="your-coach"], #your-coach').first().innerText()).includes("hasn't changed anything"))
       throw new Error("the client sees their coach hasn't changed anything");
@@ -153,7 +153,7 @@ async function main() {
 
     // ── 3. The client allows Work; the coach works. ──
     await login(page, "As a client");
-    await page.goto(`${base}/settings#your-coach`);
+    await page.goto(`${base}/settings?tab=data#your-coach`);
     // Settings streams in after navigation; a tick before it settles is reset when the form re-renders (cold server).
     await page.waitForLoadState("networkidle");
     await page.locator('[data-testid="coach-work-toggle"]').check();
@@ -265,7 +265,7 @@ async function main() {
 
     // ── 4. The client sees the changes. ──
     await login(page, "As a client");
-    await page.goto(`${base}/settings#your-coach`);
+    await page.goto(`${base}/settings?tab=data#your-coach`);
     const seen = await page.locator('[data-testid="coach-changes"]').innerText();
     if (!seen.includes("Updated offer") || !seen.includes("Walk offer") || !seen.includes(`by ${coach.name} (coach)`)) throw new Error(`the client sees what their coach changed: ${seen}`);
     await logout(page);

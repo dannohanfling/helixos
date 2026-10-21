@@ -115,7 +115,7 @@ async function main() {
     console.log("✓ (2b) reinstate: access, reminders and counts all restored");
 
     // The coach invite link carries its warning on Settings.
-    await coach.goto(`${base}/settings`);
+    await coach.goto(`${base}/settings?tab=coach`);
     if (!/becomes a coach/i.test(await coach.locator('[data-testid="coach-code-warning"]').innerText())) throw new Error("the coach invite link warns that anyone with it becomes a coach");
     console.log("✓ the coach invite link carries its 'anyone with this link becomes a coach' warning");
 

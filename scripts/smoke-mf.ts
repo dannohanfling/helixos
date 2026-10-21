@@ -132,7 +132,7 @@ async function main() {
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, m.id) }))!.mfEnabled, "the coach turned it on for her");
     await logout(page);
     await login(page, "As a client");
-    await page.goto(`${base}/settings#magic-funnel`);
+    await page.goto(`${base}/settings?tab=programs#magic-funnel`);
     await page.fill('[data-testid="mf-domains"]', "https://Go.Example.com/register\nnot a domain");
     await press(page, '[data-testid="mf-domains-save"]');
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, m.id) }))!.mfDomains.join() === "go.example.com", "the host alone is kept");

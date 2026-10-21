@@ -22,7 +22,7 @@ export function AiPromise({ enabled, children, needs }: { enabled: boolean; chil
       ) : (
         <>
           ✨ With AI needs your own Anthropic or OpenAI key.{" "}
-          <Link href="/settings#ai" className="underline">
+          <Link href="/settings?tab=connections#ai" className="underline">
             Connect it in Settings
           </Link>
           .
