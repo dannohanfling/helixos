@@ -1,6 +1,7 @@
 import type { Viewer } from "@/lib/auth";
 import { intentionsDueFor } from "@/lib/queries/intentions";
 import { agentsOnFor, inboxCount } from "@/lib/handoff";
+import { waitingByMenu } from "@/lib/claude-drafts";
 import { WHATS_NEW } from "@/content/whats-new";
 import { unseenCount } from "@/lib/engine/whats-new";
 import { hasVisibleRecordings, newRecordings } from "@/lib/recordings";
@@ -41,8 +42,10 @@ export async function navBadges(viewer: Viewer): Promise<NavCounts> {
   const memberView = viewer.role === "client" && !viewer.switchedInto && !viewer.team;
   const agentsOn = memberView ? await agentsOnFor({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : false;
   const memberInboxNew = agentsOn ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
+  // Claude's drafts waiting (H-184): an amber dot on the menu item that holds one. Never a team member's.
+  const drafts = viewer.team ? {} : await waitingByMenu({ workspaceId: viewer.workspace.id, userId: viewer.user.id });
   return {
-    badges: { "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, [VERIFY_HREF]: verifyWaiting, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew },
+    badges: { "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, [VERIFY_HREF]: verifyWaiting, "/coach/inbox": inboxNew, "/forum/inbox": memberInboxNew, ...Object.fromEntries(Object.entries(drafts).map(([href, n]) => [`draft:${href}`, n])) },
     recordingsEnabled,
     agentsOn,
   };

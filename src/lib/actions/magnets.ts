@@ -18,6 +18,7 @@ import { citableEvidence } from "@/lib/queries/evidence";
 import { deleteObject, putPublicMagnet, recordPublicMagnet } from "@/lib/storage";
 import { renderMagnetPdf } from "@/lib/pdf";
 import { draftAvatarBrief } from "@/lib/avatars";
+import { markDraftEdited } from "@/lib/claude-drafts";
 
 const typeOf = (raw: string): MagnetType => (MAGNET_TYPES as readonly string[]).includes(raw) ? (raw as MagnetType) : "checklist";
 
@@ -70,7 +71,7 @@ export async function createMagnetAction(formData: FormData): Promise<void> {
 }
 
 export async function updateMagnetAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx();
   const m = await own(str(formData, "id"), userId);
   const keyword = keywordOf(str(formData, "keyword")) || m.keyword;
   const clash = await keywordClash(workspaceId, keyword, m.id);
@@ -96,6 +97,9 @@ export async function updateMagnetAction(formData: FormData): Promise<void> {
       updatedAt: nowIso(),
     })
     .where(eq(schema.leadMagnets.id, m.id));
+  // Saved from the form opened with Claude's draft in it (H-184): that draft is settled as edited.
+  const draftId = str(formData, "draftId");
+  if (draftId) await markDraftEdited({ workspaceId, userId }, draftId, m.id, { name: v.actor.name, connector: false });
   refresh();
   redirect(`/magnets/${m.id}?saved=1`);
 }

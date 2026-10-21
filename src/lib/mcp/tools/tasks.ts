@@ -54,7 +54,7 @@ export const tasksAdd = defineTool({
     title: z.string().min(1).max(300).describe("What the task is, in the member's words"),
     notes: z.string().max(2000).optional().describe("Any detail to keep with it"),
     due: z.string().optional().describe("YYYY-MM-DD, or 'today'; today when left out"),
-    category: z.enum(TASK_CATEGORIES).optional().describe("sales (the default), content, community, system, admin or fulfillment"),
+    category: z.enum(TASK_CATEGORIES).optional().describe("sales (the default), content, community, system, admin, fulfillment, or personal (the member's own life; no business points)"),
     urgency: z.enum(TASK_URGENCIES).optional().describe("top3, high, medium (the default) or low"),
     repeat_every_days: z.number().int().min(1).max(365).optional().describe("Repeats this many days after each tick"),
   },

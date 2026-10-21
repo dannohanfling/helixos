@@ -28,3 +28,18 @@ describe("report tools on the connector (H-591)", () => {
     expect(toolsFor(["forum"], { agentToken: false, viewer: coach }).map((t) => t.name).filter((n) => REPORT_TOOLS.includes(n))).toEqual([]);
   });
 });
+
+describe("report_done_draft (H-202)", () => {
+  const listed = (caller?: Parameters<typeof toolsFor>[1]) => toolsFor(["inbox"], caller).some((t) => t.name === "report_done_draft");
+  it("is listed for the coach's own agents: an agent token, or the coach's connection tied to an agent", () => {
+    expect(listed({ agentToken: true, agentId: "a-1", viewer: coach })).toBe(true);
+    expect(listed({ agentToken: false, agentId: "a-1", viewer: coach })).toBe(true);
+  });
+  it("is hidden from a connection with no agent, a member's agents, a switched coach and a team member", () => {
+    expect(listed({ agentToken: false, agentId: null, viewer: coach })).toBe(false);
+    expect(listed({ agentToken: true, agentId: "a-1", viewer: { ...coach, role: "client" } })).toBe(false);
+    expect(listed({ agentToken: true, agentId: "a-1", viewer: { ...coach, switchedInto: { id: "m" } as never } })).toBe(false);
+    expect(listed({ agentToken: true, agentId: "a-1", viewer: { ...coach, team: { id: "t" } as never } })).toBe(false);
+    expect(listed()).toBe(false);
+  });
+});

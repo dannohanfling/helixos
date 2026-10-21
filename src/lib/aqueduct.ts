@@ -14,17 +14,18 @@ type Member = { workspaceId: string; userId: string };
 export async function countsFor(m: Member, from: string, to: string): Promise<Counts> {
   const mine = <T extends { workspaceId: unknown; userId: unknown }>(t: T) => and(eq(t.workspaceId as never, m.workspaceId), eq(t.userId as never, m.userId));
   const [logs, posted, everPosted, clients] = await Promise.all([
-    db.query.dailyLogs.findMany({ where: and(mine(schema.dailyLogs), gte(schema.dailyLogs.date, from), lte(schema.dailyLogs.date, to)), columns: { posts: true, dmsStarted: true, conversations: true, callsBooked: true, callsHeld: true, offersMade: true } }),
+    db.query.dailyLogs.findMany({ where: and(mine(schema.dailyLogs), gte(schema.dailyLogs.date, from), lte(schema.dailyLogs.date, to)), columns: { posts: true, dmsStarted: true, conversations: true, callsBooked: true, callsHeld: true, offersMade: true, outreachMessages: true } }),
     db.query.contentItems.findMany({ where: and(mine(schema.contentItems), eq(schema.contentItems.status, "posted")), columns: { postedAt: true, postAt: true, engagements: true } }),
     db.query.contentItems.findFirst({ where: and(mine(schema.contentItems), eq(schema.contentItems.status, "posted")), columns: { id: true } }),
     db.query.clientRecords.findMany({ where: mine(schema.clientRecords), columns: { createdAt: true } }),
   ]);
-  const sum = (k: "posts" | "dmsStarted" | "conversations" | "callsBooked" | "callsHeld" | "offersMade") => logs.reduce((n, l) => n + (l[k] ?? 0), 0);
+  const sum = (k: "posts" | "dmsStarted" | "conversations" | "callsBooked" | "callsHeld" | "offersMade" | "outreachMessages") => logs.reduce((n, l) => n + (l[k] ?? 0), 0);
   const day = (s: string | null | undefined) => (s ?? "").slice(0, 10);
   const inWindow = (s: string | null | undefined) => day(s) >= from && day(s) <= to;
   // Comments: the engagements typed on posts that went out in the window; no posted content ever means no count yet.
   const comments = everPosted ? posted.filter((p) => inWindow(p.postedAt ?? p.postAt)).reduce((n, p) => n + (p.engagements ?? 0), 0) : null;
-  return [sum("posts"), comments, sum("dmsStarted"), sum("conversations"), sum("callsBooked"), sum("callsHeld"), sum("offersMade"), clients.filter((c) => inWindow(c.createdAt)).length];
+  // Docket #9 (H-195): outreach messages from the close (any app) count as DMs started.
+  return [sum("posts"), comments, sum("dmsStarted") + sum("outreachMessages"), sum("conversations"), sum("callsBooked"), sum("callsHeld"), sum("offersMade"), clients.filter((c) => inWindow(c.createdAt)).length];
 }
 
 export type AqueductRow = { stage: string; now: number | null; before: number | null; rate: number | null; wasRate: number | null; step: number | null; leak: boolean };

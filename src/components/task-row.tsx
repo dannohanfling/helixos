@@ -8,7 +8,7 @@ import { addDays, formatDate, relativeDay } from "@/lib/dates";
 import { originLabel } from "@/lib/engine/notes";
 import type { TaskOrigin } from "@/lib/queries/tasks";
 
-const CATEGORY_ICON: Record<string, string> = { sales: "💬", content: "✍️", community: "👥", system: "⚙️", admin: "🗂️", fulfillment: "🤝" };
+const CATEGORY_ICON: Record<string, string> = { sales: "💬", content: "✍️", community: "👥", system: "⚙️", admin: "🗂️", fulfillment: "🤝", personal: "🌿" };
 
 /**
  * One task. Ticking it, starring it, moving it and deleting it all answer on the tap: the row updates at once, every
@@ -79,14 +79,29 @@ export function TaskRow({ task, today, compact = false, showCategory = true, ori
           <button className="btn btn-ghost btn-xs task-control" type="button" disabled={pending} aria-busy={pending} title="Move to tomorrow" aria-label="Move to tomorrow" onClick={() => run({}, () => rescheduleTaskAction(fd({ dueDate: addDays(today, 1) })))}>
             ↷<span className="task-control-label">Tomorrow</span>
           </button>
-          <ConfirmDelete
-            className="btn btn-ghost btn-xs task-control"
-            disabled={pending}
-            title="Delete"
-            what={`"${task.title}"`}
-            label={<>✕<span className="task-control-label">Delete</span></>}
-            onConfirm={() => run({}, () => deleteTaskAction(fd({ from: window.location.pathname })))}
-          />
+          {task.source === "intention" ? (
+            // On this week's intention too (H-198): ask whether it goes from both or only from Tasks.
+            <ConfirmDelete
+              className="btn btn-ghost btn-xs task-control"
+              disabled={pending}
+              title="Delete"
+              what={`"${task.title}"`}
+              yes="Delete from both"
+              undo="It's also on this week's intention. Delete it from both, or only from Tasks and keep its words on the intention."
+              label={<>✕<span className="task-control-label">Delete</span></>}
+              onConfirm={() => run({}, () => deleteTaskAction(fd({ from: window.location.pathname, intention: "both" })))}
+              alt={{ label: "Only from Tasks", testId: "confirm-delete-tasks-only", onConfirm: () => run({}, () => deleteTaskAction(fd({ from: window.location.pathname, intention: "keep" }))) }}
+            />
+          ) : (
+            <ConfirmDelete
+              className="btn btn-ghost btn-xs task-control"
+              disabled={pending}
+              title="Delete"
+              what={`"${task.title}"`}
+              label={<>✕<span className="task-control-label">Delete</span></>}
+              onConfirm={() => run({}, () => deleteTaskAction(fd({ from: window.location.pathname })))}
+            />
+          )}
         </div>
       ) : null}
     </div>

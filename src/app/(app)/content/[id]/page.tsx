@@ -14,13 +14,16 @@ import { CopyButton } from "@/components/copy-button";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { ItemGone } from "@/components/item-gone";
+import { ClaudeDraftCard, ClaudeDraftHistory, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { areaRow, changesFor, pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   return ownTitle(async (v) => (await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)), columns: { title: true } }))?.title, "Content");
 }
 
-export default async function ContentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gate?: string; status?: string }> }) {
+export default async function ContentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gate?: string; status?: string; draft?: string; draftNote?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const sp = await searchParams;
@@ -29,6 +32,17 @@ export default async function ContentDetailPage({ params, searchParams }: { para
   const fullText = [item.hook, item.body, item.cta].filter(Boolean).join("\n\n");
   // The status gate: this post, when its AI draft has not been read. Shown only after a status change to scheduled or posted asked for it.
   const gate = gateFor([{ name: item.title, origin: item.origin }]);
+  // Claude's draft of this post (H-184): the one waiting, the one being edited in the form below, and what happened to drafts here.
+  const me = { workspaceId: v.workspace.id, userId: v.user.id };
+  const [waiting, changes, view] = await Promise.all([pendingDrafts(me, "content", item.id), changesFor(me, "content", item.id), areaRow(me, "content", item.id)]);
+  const draft = waiting[0] ?? null;
+  const editing = draft && sp.draft === draft.id && !v.team ? draft : null;
+  const red = draft && !editing ? await redLinesFor(me, draft) : [];
+  const f = (editing?.fields ?? {}) as Record<string, string | undefined>;
+  const shown: typeof item = editing
+    ? { ...item, ...Object.fromEntries(["title", "hook", "body", "cta", "contentType", "platform"].filter((k) => f[k] !== undefined).map((k) => [k, f[k]])), ...(f.suggestedDate ? { postAt: `${f.suggestedDate}T${item.postAt?.slice(11, 16) || "09:00"}:00` } : {}), ...(f.pillar ? { notes: [`Pillar: ${f.pillar}`, (item.notes ?? "").replace(/^Pillar: .+$/m, "").trim()].filter(Boolean).join("\n") } : {}) }
+    : item;
+  const here = `/content/${item.id}`;
   return (
     <>
       <PageHeader
@@ -63,10 +77,26 @@ export default async function ContentDetailPage({ params, searchParams }: { para
           <GateBlock gate={gate} reviewHref={`/content/${item.id}`} action={setContentStatusAction} fields={{ id: item.id, status: sp.status }} />
         </div>
       ) : null}
+      {sp.draftNote ? <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[sp.draftNote] ?? sp.draftNote}</p> : null}
+      {editing ? (
+        <p className="mb-4 rounded-lg border border-accent bg-accent-soft/40 p-3 text-sm" data-testid="claude-draft-editing">
+          The form below is filled with Claude&apos;s draft. Change what you like, then save; the draft is settled as edited.{" "}
+          <Link href={here} className="underline">Back to the draft</Link>
+        </p>
+      ) : draft && !v.team ? (
+        <div className="mb-4">
+          <ClaudeDraftCard draft={draft} rows={rowsFor("content", view, draft.fields)} red={red} tz={v.tz} editHref={`${here}?draft=${draft.id}`} back={here} />
+        </div>
+      ) : null}
       <Card>
         {isUnreviewed(item.origin) ? <UnreviewedMark action={acceptContentAction} fields={{ id: item.id }} className="mb-3" /> : null}
-        <ContentForm item={item} today={v.today} />
+        <ContentForm key={editing ? `draft-${editing.id}` : "saved"} item={shown} today={v.today} draftId={editing?.id} />
       </Card>
+      {v.team ? null : (
+        <div className="mt-4">
+          <ClaudeDraftHistory rows={changes} tz={v.tz} back={here} />
+        </div>
+      )}
     </>
   );
 }

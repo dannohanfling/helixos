@@ -11,6 +11,7 @@ import { repairsUsed, streakFor } from "@/lib/queries/daily";
 import { CLOSE_EXTRA, CLOSE_MONEY, CLOSE_NUMBERS, CLOSE_TEXT, closeDay, lockIn, upsertLog, type Close } from "@/lib/daily-core";
 import { brokenStreak, countsDay } from "@/lib/engine/streak";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { addTask, toggleTask } from "@/lib/tasks-core";
 import { redirect } from "next/navigation";
 import { readMoney } from "@/lib/engine/money";
 import { closeKpisOf, ownKpi, putKpiValue } from "@/lib/queries/kpi";
@@ -98,4 +99,14 @@ export async function removeTodayTaskAction(id: string): Promise<{ ok: boolean }
   const { v, workspaceId, userId } = await ctx();
   await db.delete(schema.tasks).where(and(eq(schema.tasks.id, id), eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), ne(schema.tasks.status, "done"), eq(schema.tasks.dueDate, v.today), sql`${schema.tasks.focusDate} is null`, sql`date(${schema.tasks.createdAt}) >= date(${v.today}, '-1 day')`));
   return { ok: true };
+}
+
+/** "Did something else? Add it" on Today (docket #9, H-195): a win that wasn't on the list becomes a task done today, with its points. */
+export async function logWinAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Today's wins are {first}'s own to log." });
+  const title = str(formData, "title").slice(0, 300);
+  if (!title) return;
+  const made = await addTask(v, { title, urgency: "medium", dueDate: v.today });
+  if (made && made.task.status !== "done") await toggleTask(v, made.task);
+  refresh();
 }

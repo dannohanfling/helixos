@@ -9,6 +9,10 @@ import { SCREENSHOT_MAX_BYTES, readReport, reportScreenshotKey, sniffImage } fro
 import { proofStorageConfigured, putReportObject } from "@/lib/proof-storage";
 import { redactUrls } from "@/lib/engine/storage-policy";
 import { ctx, refresh, str } from "@/lib/action-helpers";
+import { addReceipt, childrenFollow, followUp, mergeReports, rootReport, sendReply, unmergeReport } from "@/lib/report-replies";
+import { coachFirstName } from "@/lib/queries/reports";
+import { REPLY_STATUSES } from "@/lib/engine/report-status";
+import { redirect } from "next/navigation";
 
 export type SendResult = { ok: true; screenshot: "kept" | "none" | "not-stored" } | { ok: false; error: string; field?: string };
 
@@ -43,6 +47,8 @@ export async function sendReportAction(formData: FormData): Promise<SendResult> 
     }
   }
   await db.insert(schema.memberReports).values({ id, workspaceId, userId, ...read.value, screenshotKey: shot?.key ?? null, screenshotUrl: shot?.url ?? null, screenshotType: shot?.type ?? null });
+  // The instant receipt (H-202): on the report at once, never emailed.
+  await addReceipt({ workspaceId, userId }, id, await coachFirstName(workspaceId));
   refresh();
   return { ok: true, screenshot };
 }
@@ -53,11 +59,65 @@ export async function markReportAction(formData: FormData): Promise<void> {
   const workspaceId = v.workspace.id;
   const id = str(formData, "reportId");
   const what = str(formData, "mark");
-  const r = await db.query.memberReports.findFirst({ where: and(eq(schema.memberReports.id, id), eq(schema.memberReports.workspaceId, workspaceId)) });
+  const r = await rootReport(workspaceId, id);
   if (!r) return;
+  // A quiet mark, with no message (H-202 keeps it beside the replies): the status follows it.
   const set =
-    what === "seen" ? { seenAt: r.seenAt ? null : nowIso() } : what === "done" ? { doneAt: r.doneAt ? null : nowIso(), seenAt: r.seenAt ?? nowIso() } : null;
+    what === "seen"
+      ? { seenAt: r.seenAt ? null : nowIso(), status: r.seenAt ? ("new" as const) : ("seen" as const) }
+      : what === "done"
+        ? { doneAt: r.doneAt ? null : nowIso(), seenAt: r.seenAt ?? nowIso(), status: r.doneAt ? ("seen" as const) : ("done" as const) }
+        : null;
   if (!set) return;
   await db.update(schema.memberReports).set(set).where(and(eq(schema.memberReports.id, r.id), eq(schema.memberReports.workspaceId, workspaceId)));
+  await childrenFollow(workspaceId, r.id, set.status);
   refresh();
+}
+
+const backTo = (formData: FormData) => `/coach/reports${str(formData, "tab") ? `?tab=${encodeURIComponent(str(formData, "tab"))}` : ""}`;
+const withParam = (back: string, q: string) => `${back}${back.includes("?") ? "&" : "?"}${q}`;
+
+/** Merge (H-202): the ticked reports of the same member go under this one, and one reply answers them all. */
+export async function mergeReportsAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const id = str(formData, "reportId");
+  const ids = formData.getAll("ids").map((x) => String(x));
+  const out = await mergeReports(v.workspace.id, id, ids);
+  refresh();
+  const back = backTo(formData);
+  redirect(out.ok ? withParam(back, `merged=${id}#r-${id}`) : withParam(back, `replyError=${encodeURIComponent(out.error)}&report=${id}#r-${id}`));
+}
+
+/** Take a merged report back out (H-202): it stands on its own again. */
+export async function unmergeReportAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const id = str(formData, "reportId");
+  await unmergeReport(v.workspace.id, id);
+  refresh();
+  redirect(`${backTo(formData)}#r-${id}`);
+}
+
+/**
+ * The coach's reply with a status (H-202): the words as edited, sent with Send, logged on the report; Done and Not now refused
+ * until their blank is filled. Only a report of the coach's own workspace.
+ */
+export async function sendReplyAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const id = str(formData, "reportId");
+  const status = REPLY_STATUSES.find((s) => s === str(formData, "status"));
+  const back = `/coach/reports${str(formData, "tab") ? `?tab=${encodeURIComponent(str(formData, "tab"))}` : ""}`;
+  if (!status) redirect(`${back}#r-${id}`);
+  const out = await sendReply({ workspaceId: v.workspace.id, userId: v.user.id, name: v.user.name }, id, status, String(formData.get("message") ?? ""), str(formData, "topic") || null);
+  refresh();
+  const join = back.includes("?") ? "&" : "?";
+  redirect(out.ok ? `${back}${join}replied=${id}#r-${id}` : `${back}${join}replyError=${encodeURIComponent(out.error)}&report=${id}#r-${id}`);
+}
+
+/** A member's follow-up on their own report (H-202): it goes back to New for the coach. Refused while a coach is switched in. */
+export async function followUpAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "A follow-up is {first}'s own to send." });
+  const id = str(formData, "reportId");
+  const out = await followUp({ workspaceId, userId }, id, String(formData.get("text") ?? ""));
+  refresh();
+  redirect(out.ok ? `/reports?followed=${id}#r-${id}` : `/reports?error=${encodeURIComponent(out.error)}&report=${id}#r-${id}`);
 }

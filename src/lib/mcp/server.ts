@@ -15,7 +15,7 @@ import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
 import { APP_VERSION } from "@/lib/version";
 import { authenticateBearer, issuer, type Grant } from "@/lib/mcp/oauth";
-import { gateFor, isCoachOwn, toolsFor, type ToolDef } from "@/lib/mcp/registry";
+import { gateFor, isCoachAgent, isCoachOwn, toolsFor, type ToolDef } from "@/lib/mcp/registry";
 import { isAgentOwnScope, notSwitchedRefusal, SEND_SCOPES, SEND_TOOLS, sendRefusal, viewOnlyRefusal } from "@/lib/engine/agent-clients";
 import { recordAgentChange } from "@/lib/agent-clients";
 import "@/lib/mcp/tools";
@@ -45,7 +45,7 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
   let images: { data: string; mimeType: string }[] = [];
   try {
     const gate = def.scope ? gateFor(def.scope) : undefined;
-    if (def.coachOnly && !isCoachOwn(grant)) {
+    if ((def.coachOnly && !isCoachOwn(grant)) || (def.coachAgent && !isCoachAgent(grant))) {
       // Never listed for this caller; called by name anyway, it answers as a tool that isn't there.
       ok = false;
       error = "coach-only";
