@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DAILY_CAP, DEFAULT_PREFS, PUSH_TYPES, dueDaily, isQuiet, mayPush, pushCopy, shouldAsk, wants, type DailyState, type PushType } from "@/lib/engine/push";
+import { DAILY_CAP, DEFAULT_PREFS, PUSH_TYPES, callTimeLabel, dueCallStep, dueDaily, isQuiet, mayPush, pushCopy, shouldAsk, wants, type DailyState, type PushType } from "@/lib/engine/push";
 
 const day = (over: Partial<DailyState> = {}): DailyState => ({ hour: 8, today: "2026-10-19", morningHour: 8, eveningHour: 17, lockedIn: false, closed: false, activeToday: false, streak: 0, ...over });
 
@@ -83,5 +83,42 @@ describe("push notifications (H-767, H-771)", () => {
     expect(shouldAsk({ closes: 7, askedCount: 1, answer: "not_now" })).toBe(true);
     expect(shouldAsk({ closes: 20, askedCount: 2, answer: "not_now" })).toBe(false);
     expect(shouldAsk({ closes: 20, askedCount: 1, answer: "yes" })).toBe(false);
+  });
+});
+
+describe("live call reminders (H-771)", () => {
+  const start = "2026-10-20T17:00:00.000Z"; // 10 AM in Los Angeles
+  const member = (hour: number, today = "2026-10-20") => ({ today, hour, callDate: "2026-10-20" });
+  const at = (iso: string) => new Date(iso);
+  it("the morning of the call, from 8 AM, only when the call is more than an hour away", () => {
+    expect(dueCallStep(start, at("2026-10-20T15:05:00.000Z"), member(8))).toBe("morning");
+    expect(dueCallStep(start, at("2026-10-20T14:05:00.000Z"), member(7))).toBeNull();
+    expect(dueCallStep(start, at("2026-10-20T16:05:00.000Z"), member(9))).toBeNull();
+    expect(dueCallStep(start, at("2026-10-19T15:05:00.000Z"), member(8, "2026-10-19"))).toBeNull();
+  });
+  it("15 minutes before, in the run that lands 15 to 5 minutes out", () => {
+    expect(dueCallStep(start, at("2026-10-20T16:45:00.000Z"), member(9))).toBe("soon");
+    expect(dueCallStep(start, at("2026-10-20T16:54:00.000Z"), member(9))).toBe("soon");
+    expect(dueCallStep(start, at("2026-10-20T16:56:00.000Z"), member(9))).toBeNull();
+    expect(dueCallStep(start, at("2026-10-20T16:40:00.000Z"), member(9))).toBeNull();
+  });
+  it("We're live in the first 10 minutes, then nothing", () => {
+    expect(dueCallStep(start, at("2026-10-20T17:00:00.000Z"), member(10))).toBe("live");
+    expect(dueCallStep(start, at("2026-10-20T17:09:00.000Z"), member(10))).toBe("live");
+    expect(dueCallStep(start, at("2026-10-20T17:11:00.000Z"), member(10))).toBeNull();
+  });
+  it("the words: the time in the member's zone, plain, no exclamation marks", () => {
+    expect(callTimeLabel(start, "America/Los_Angeles")).toBe("10 AM");
+    expect(callTimeLabel("2026-10-20T17:30:00.000Z", "America/New_York")).toBe("1:30 PM");
+    expect(pushCopy("call", { time: "10 AM" }).body).toBe("Live call today at 10 AM. Bring one question.");
+    expect(pushCopy("call", { step: "soon" }).body).toBe("We start in 15 minutes. Tap to join.");
+    expect(pushCopy("call", { step: "live" }).body).toBe("We're live now. Tap to join.");
+    for (const s of ["morning", "soon", "live"] as const) expect(pushCopy("call", { step: s, time: "10 AM" }).body).not.toMatch(/!|—/);
+  });
+  it("call reminders sit outside the daily cap, but the switch and quiet hours still hold", () => {
+    const prefs = { enabled: true, types: {}, quietStart: 21, quietEnd: 7 };
+    expect(mayPush("call", 10, prefs, ["morning", "evening", "streak", "call"])).toEqual({ ok: true });
+    expect(mayPush("call", 22, prefs, [])).toMatchObject({ ok: false, why: "quiet hours" });
+    expect(mayPush("call", 10, { ...prefs, types: { call: false } }, [])).toMatchObject({ ok: false });
   });
 });

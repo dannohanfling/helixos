@@ -22,7 +22,7 @@ export type PushType =
 
 /** Each type, in the order Settings lists it, with its default and an example line for Settings. */
 export const PUSH_TYPES: { type: PushType; label: string; example: string; defaultOn: boolean; ready: boolean }[] = [
-  { type: "call", label: "Live call reminders", example: "We start in 15 minutes. Tap to join.", defaultOn: true, ready: false },
+  { type: "call", label: "Live call reminders", example: "We start in 15 minutes. Tap to join.", defaultOn: true, ready: true },
   { type: "morning", label: "Morning lock-in", example: "Your three moves for today are ready.", defaultOn: true, ready: true },
   { type: "evening", label: "Evening close", example: "Close out the day. Your +20 is waiting.", defaultOn: true, ready: true },
   { type: "streak", label: "Streak waiting on you", example: "Your 12-day streak is waiting on you.", defaultOn: true, ready: true },
@@ -139,6 +139,34 @@ export function dueDaily(s: DailyState): { type: PushType; key: string; streak?:
     out.push({ type: "streak", key: s.today, streak: s.streak });
   }
   return out;
+}
+
+/** The three live call reminders (H-771): the morning of the call, 15 minutes before, and the moment it goes live. */
+export type CallStep = "morning" | "soon" | "live";
+/** The morning reminder goes from 8 AM in the member's own zone, and only for a call more than an hour away. */
+export const CALL_MORNING_HOUR = 8;
+/** "We start in 15 minutes" goes in the cron run that lands 15 to 5 minutes before; "We're live" in the first 10 minutes. */
+export const CALL_SOON_MINUTES = 15;
+const CALL_SOON_LATEST = 5;
+const CALL_LIVE_MINUTES = 10;
+
+/**
+ * Which call reminder is due now for one call, if any. `memberToday` and `memberHour` are the member's own date and hour;
+ * `callDate` is the call's date in the member's zone. The three windows never overlap, and each send is recorded once per
+ * (member, call start, step), so a cron run every 5 minutes sends each step at most once.
+ */
+export function dueCallStep(startIso: string, now: Date, member: { today: string; hour: number; callDate: string }): CallStep | null {
+  const min = (Date.parse(startIso) - now.getTime()) / 60_000;
+  if (min <= 0 && min > -CALL_LIVE_MINUTES) return "live";
+  if (min <= CALL_SOON_MINUTES && min > CALL_SOON_LATEST) return "soon";
+  if (min > 60 && member.callDate === member.today && inWindow(member.hour, CALL_MORNING_HOUR)) return "morning";
+  return null;
+}
+
+/** A call's start as the member reads it: "10 AM" on the hour, "10:30 AM" otherwise, in their own zone. */
+export function callTimeLabel(startIso: string, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date(startIso));
+  return parts.replace(":00 ", " ");
 }
 
 /**
