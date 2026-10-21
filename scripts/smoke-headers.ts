@@ -136,7 +136,8 @@ async function main() {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/more`, { waitUntil: "networkidle" });
     // H-164 §10: on More every group but Daily starts shut, so open the shut ones first; on a menu with nothing shut this is a no-op.
-    for (const t of await page.locator('main [data-testid="more-group"][data-open="false"] [data-testid="more-group-toggle"]').all()) await t.click();
+    const shut = page.locator('main [data-testid="more-group"][data-open="false"] [data-testid="more-group-toggle"]');
+    for (let i = 0; i < 12 && (await shut.count()); i++) await shut.first().click(); // each click shrinks the shut set, so always the first
     const soon = page.locator('main [data-testid="nav-coming-soon"]');
     if ((await soon.count()) !== 1) throw new Error(`one Coming soon item on More: ${await soon.count()}`);
     for (let i = 0; i < 1; i++) {
