@@ -133,7 +133,7 @@
 .fo-panel { border-top: 1px solid var(--fo-line); padding-top: 28px; }
 .fo-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 8px; }
 .fo-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fo-muted); min-width: 0; }
-.fo-form input, .fo-form select { min-height: 44px; border-radius: 10px; border: 1px solid var(--fo-line); background: var(--fo-stone); color: var(--fo-cream); padding: 0 12px; font: inherit; font-size: 15px; min-width: 0; }
+.fo-form input, .fo-form select { min-height: 44px; border-radius: 10px; border: 1px solid var(--fo-line); background: var(--fo-stone); color: var(--fo-cream); padding: 0 12px; font: inherit; font-size: 16px; min-width: 0; }
 .fo-formrow { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .fo-err { color: #f5b0a0; font-size: 13px; }
 .fo-ok { color: var(--fo-done); font-size: 13px; }

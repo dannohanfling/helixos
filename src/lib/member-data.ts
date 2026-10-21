@@ -182,6 +182,10 @@ export const MEMBER_TABLES = {
   report_messages: schema.reportMessages,
   // Rev 444: a form's unsent draft, kept so it follows the member to another device.
   form_drafts: schema.formDrafts,
+  // The HelixOS apps (H-877): the member's phones with the app, and their notification choices. Erased with the account, as
+  // /delete-account promises ("push notification tokens"); the token itself is stripped from the export.
+  push_devices: schema.pushDevices,
+  push_prefs: schema.pushPrefs,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
@@ -212,6 +216,8 @@ export const CHILD_TABLES = [
   // Block a member (H-745): the blocks this member made hang off their membership. The blocks made against them go with them
   // too (src/lib/erase.ts, by blocked_membership_id), so a block never outlives either side.
   { label: "member_blocks", table: schema.memberBlocks, fk: "blockerMembershipId", parent: "membership" },
+  // Which pushes were sent (H-877): type, occasion and time only, never the words; they go with the membership.
+  { label: "push_sends", table: schema.pushSends, fk: "membershipId", parent: "membership" },
   { label: "handoff_deliveries", table: schema.handoffDeliveries, fk: "messageId", parent: "handoff_messages" },
   // A leaderboard's earlier addresses (H-109): slugs only, no member data of their own; they go with the feed row.
   { label: "leaderboard_slug_aliases", table: schema.leaderboardSlugAliases, fk: "feedId", parent: "leaderboard_feeds" },
@@ -290,6 +296,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["pointsCheckSealed", "passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "clRungsWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl", "graphicPublicToken", "headshotUrl", "headshotDisplayUrl", "webhookHash"]);
+export const STRIP_COLUMNS = new Set(["token", "pointsCheckSealed", "passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "clRungsWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl", "graphicPublicToken", "headshotUrl", "headshotDisplayUrl", "webhookHash"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

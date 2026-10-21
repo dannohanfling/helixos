@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "c510fcbe-8d0d-4a11-b811-4b20cf5b461e",
-  "prevId": "1af64219-c9f1-4a98-aa14-715641f5ef1b",
+  "prevId": "8ba1a7db-ac72-46af-8749-7e45e892f69f",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",

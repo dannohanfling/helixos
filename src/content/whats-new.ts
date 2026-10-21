@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 329,
+    n: 333,
     date: "2026-10-19",
     title: "A shorter menu, in five groups",
     lines: [
@@ -21,6 +21,43 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "New members see each tool once their My Helix reaches it, with a line on Today when one opens. Everyone already here keeps every tool. Settings → Your menu has \"Show all tools\" to see them all at any time.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 332,
+    date: "2026-10-19",
+    title: "Your evening reminder now comes at 7 PM",
+    lines: ["The evening reminder to close out your day now comes at 7 PM in your own time zone, unless you'd already picked a different hour. Change it any time in Settings."],
+    audience: "everyone",
+  },
+  {
+    n: 331,
+    date: "2026-10-19",
+    title: "HelixOS on your phone's home screen",
+    lines: [
+      "On your phone, Today now offers to add HelixOS to your home screen. It then opens straight to Today, full screen, like any other app. Tap Done or Not now and it won't ask again on that phone.",
+      "If your connection drops, HelixOS shows a calm offline screen instead of an error, and comes back by itself when you're online again.",
+      "HelixOS has a new icon, the Evolve Omega medallion, on your home screen and in your browser tab. On newer iPhones the top and bottom bars also sit clear of the notch and the home bar.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 330,
+    date: "2026-10-19",
+    title: "The HelixOS app is on its way",
+    lines: [
+      "HelixOS is coming to iPhone and Android as an app. Get the app sits in your menu and in Settings → Account, marked Coming soon for now.",
+      "Once it's ready, Get the app shows the steps for your phone, and it leaves your menu once you have the app.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 329,
+    date: "2026-10-21",
+    title: "Preview the Aqueduct's repair moment",
+    lines: [
+      "Coaches: under your own Aqueduct, Preview the repair plays the moment an arch is mended, with sample numbers and the card marked Preview. It saves nothing and never counts as a repair. Members never see it.",
+    ],
+    audience: "coach",
   },
   {
     n: 328,

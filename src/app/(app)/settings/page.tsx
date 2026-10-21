@@ -72,12 +72,16 @@ import { changesFor, pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
 import { rowsFor } from "@/lib/engine/claude-drafts";
 import { CallsSettingsCard } from "@/components/calls-settings";
 import { callsWithSkips } from "@/lib/calls";
+import { AppRow } from "@/components/pwa/app-row";
+import { appLinks, appLinksOn } from "@/lib/app-links";
+import { hasAppFor } from "@/lib/queries/app-devices";
 
 export const metadata = { title: "Settings" };
 
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string; botDraft?: string; draftNote?: string }> }) {
   const v = await requireViewer({ team: "allow" });
+  const appHas = v.team ? null : await hasAppFor(v.membership.id);
   // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
   const ownMedia = v.switchedInto ? [] : await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), columns: { id: true, caption: true, kind: true }, orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 96 });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
@@ -269,6 +273,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {/* Account (H-331): the pages the app stores point at, the export, and the two deletions a member can run alone. */}
         <Card id="account" className="min-w-0" title="Account">
           <ul className="space-y-2 text-sm" data-testid="account-links">
+            {/* The HelixOS app (H-655): Get the app, Coming soon, or which phone has it. Not for a team member. */}
+            {v.team ? null : <AppRow hasApp={appHas} linksOn={appLinksOn(appLinks())} />}
             <li>
               <Link href="/privacy" className="underline">Privacy Policy</Link> · <Link href="/terms" className="underline">Terms of Service</Link> · <Link href="/support" className="underline">Support</Link>
             </li>

@@ -55,6 +55,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The store apps (H-877) have their own packages and checks.
+    "mobile/**",
   ]),
 ]);
 

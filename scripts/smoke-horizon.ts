@@ -119,9 +119,9 @@ async function main() {
     // Magic funnel sits in Get leads, which starts shut (H-1010): open it on More first.
     const leadsCard = page.locator('[data-testid="more-group"][data-group="Get leads"]');
     if ((await leadsCard.getAttribute("data-open")) !== "true") await leadsCard.locator('[data-testid="more-group-toggle"]').click();
-    const soon = page.locator('main [data-testid="nav-coming-soon"]');
-    await soon.first().waitFor({ timeout: 10000 });
-    must((await soon.count()) === 1 && (await soon.first().getAttribute("data-href")) === "/magic-funnel", "Magic funnel is the one Coming soon item on More");
+    // Get the app (H-731) is Coming soon too until a store link is set; it isn't a horizon item, so it isn't counted here.
+    const soon = page.locator('main [data-testid="nav-coming-soon"]:not([data-href="/get-the-app"])');
+    must((await soon.count()) === 1 && (await soon.first().getAttribute("data-href")) === "/magic-funnel", "Magic funnel is the one horizon Coming soon item on More");
     await page.setViewportSize({ width: 1280, height: 900 });
     console.log("✓ Magic funnel reads Coming soon while its item is on Next up");
 

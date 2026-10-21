@@ -23,7 +23,7 @@ import { MemberAvatar } from "@/components/member-avatar";
 import { StreakPill } from "@/components/streak-flame/streak-pill";
 import type { FlameState } from "@/lib/engine/streak-flame";
 
-export function AppShell({ viewer, chatOn = false, points, flame = null, flameAfterWelcome = false, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, agentsOn = false, coachFirst = null, choices = 1, shippedKeys = [], children }: { viewer: Viewer; /** The coach's chat is set up for this person (H-693): its menu item shows; the chat itself is on /ask only. */ chatOn?: boolean; points: number; /** The streak flame (H-558): null for a team member, whose streak is the owner's. */ flame?: FlameState | null; /** The surge waits for the daily welcome or the first arrival to close. */ flameAfterWelcome?: boolean; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; /** The Agent inbox in the menu (H-727). */ agentsOn?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
+export function AppShell({ viewer, chatOn = false, points, flame = null, flameAfterWelcome = false, badges = {}, recordingsEnabled = false, loyaltyOn = false, oohOn = false, agentsOn = false, coachFirst = null, appLinks = false, hasApp = false, choices = 1, shippedKeys = [], children }: { viewer: Viewer; /** The coach's chat is set up for this person (H-693): its menu item shows; the chat itself is on /ask only. */ chatOn?: boolean; points: number; /** The streak flame (H-558): null for a team member, whose streak is the owner's. */ flame?: FlameState | null; /** The surge waits for the daily welcome or the first arrival to close. */ flameAfterWelcome?: boolean; badges?: Record<string, number>; recordingsEnabled?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. */ oohOn?: boolean; /** The Agent inbox in the menu (H-727). */ agentsOn?: boolean; coachFirst?: string | null; /** Get the app (H-655): a store link is set, and whether this member has the app. */ appLinks?: boolean; hasApp?: boolean; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; /** The horizon's shipped menu keys (H-385), for the menu's Coming soon entries. */ shippedKeys?: string[]; children: ReactNode }) {
   const tier = tierProgress(points, viewer.membership.rankKeptLevel);
   const team = Boolean(viewer.team);
   // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
@@ -31,7 +31,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
   const who = team ? viewer.actor : viewer.user;
   // Tools open as a client reaches them (H-164 §12): the highest phase whose pages show, or null for every page.
   const toolsPhase = toolsPhaseOf({ role: viewer.role, team, showAllTools: viewer.membership.showAllTools, toolsPhase: viewer.membership.toolsPhase });
-  const groups = visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst, toolsPhase }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys);
+  const groups = visibleGroups({ role: viewer.role, passEnabled: viewer.membership.passEnabled, bodyEnabled: viewer.membership.bodyEnabled, recordingsEnabled, team, colosseumOn: viewer.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, coachFirst, appLinks, hasApp, toolsPhase }, viewer.workspace.platformLinks, viewer.membership.passCommunityUrl, shippedKeys);
   // The More tab's total (H-844): every count on an item this person's menu shows, the same numbers as the sidebar and More.
   const more = moreTab(badges, groups.flatMap((g) => g.items.filter((n) => !n.external && !n.comingSoon).map((n) => n.href)));
   return (
@@ -63,7 +63,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
           <AppLogo size={40} />
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 [aside[data-rail=true]_&]:px-1">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} chatOn={chatOn} agentsOn={agentsOn} coachFirst={coachFirst} toolsPhase={toolsPhase} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} colosseumOn={viewer.workspace.colosseumOn} loyaltyOn={loyaltyOn} oohOn={oohOn} chatOn={chatOn} agentsOn={agentsOn} coachFirst={coachFirst} appLinks={appLinks} hasApp={hasApp} toolsPhase={toolsPhase} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} shippedKeys={shippedKeys} />
         </div>
         {/* The sidebar's controls (H-499): fold and Collapse all, at the bottom left, open or folded. */}
         <SidebarFoot labels={groups.map((g) => g.label)} />
@@ -145,7 +145,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
         <PinToViewport edge="top">
         {/* Fits a 360px phone (Danno, 12 Oct): the name hides below 400px, points go compact ("12.3K pts"), and nothing in
             the row may push it wider than the screen. */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-bg/90 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur min-[400px]:gap-3 min-[400px]:px-4 md:hidden" data-testid="mobile-header">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-bg/90 py-2.5 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur min-[400px]:gap-3 min-[400px]:pl-[max(1rem,env(safe-area-inset-left))] min-[400px]:pr-[max(1rem,env(safe-area-inset-right))] md:hidden" data-testid="mobile-header">
           <Link href="/today" className="flex shrink-0 items-center gap-2 text-sm font-bold" aria-label="HelixOS, Today">
             <AppLogo size={40} />
             <span className="hidden min-[400px]:inline">HelixOS</span>
@@ -159,11 +159,11 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
                 </span>
               </>
             )}
-            <Link href="/settings" className="shrink-0 text-lg" aria-label="Settings" data-testid="header-avatar">
+            <Link href="/settings" className="-mx-2 flex h-11 w-11 shrink-0 items-center justify-center text-lg" aria-label="Settings" data-testid="header-avatar">
               {team ? who.avatarEmoji : <MemberAvatar membershipId={viewer.membership.id} hasPhoto={Boolean(viewer.membership.headshotDisplayUrl)} emoji={who.avatarEmoji} size={28} version={viewer.membership.headshotUpdatedAt} name={who.name} />}
             </Link>
             <form action={logoutAction} className="shrink-0">
-              <SubmitButton className="text-ink-3 hover:text-ink" aria-label="Log out" data-testid="logout-header" pendingText="Logging out…">
+              <SubmitButton className="flex min-h-11 items-center px-1 text-ink-3 hover:text-ink" aria-label="Log out" data-testid="logout-header" pendingText="Logging out…">
                 Log out
               </SubmitButton>
             </form>

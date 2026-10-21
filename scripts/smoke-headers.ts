@@ -46,7 +46,7 @@ function routedPages(dir: string, prefix = ""): string[] {
   return out.sort();
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
-const PAGES_CLIENT = ["/today", "/ask", "/forum/inbox", "/my-helix", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/calls", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/forum", "/offers", "/drafts", "/avatars", "/pathway", "/courses", "/recordings", "/reports", "/doctrine", "/glossary", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/colosseum", "/aqueduct", "/loyalty", "/more", "/settings", "/settings/delete-account", "/settings/delete-humanos", "/whats-new", "/whats-new/horizon"];
+const PAGES_CLIENT = ["/today", "/ask", "/forum/inbox", "/my-helix", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/calls", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/forum", "/offers", "/drafts", "/avatars", "/pathway", "/courses", "/recordings", "/reports", "/doctrine", "/glossary", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/colosseum", "/aqueduct", "/loyalty", "/more", "/get-the-app", "/settings", "/settings/delete-account", "/settings/delete-humanos", "/settings/notifications", "/whats-new", "/whats-new/horizon"];
 const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/helix", "/coach/setup", "/coach/headshots", "/coach/late-closes", "/coach/teaching", "/coach/frameworks", "/coach/bot-features", "/coach/backfill", "/coach/office-hours", "/coach/board", "/coach/board-seats", "/coach/recordings", "/coach/recordings/rules", "/coach/reports", "/coach/glossary", "/coach/horizon", "/coach/inbox", "/coach/agents", "/coach/loyalty-health", "/coach/partners", "/hermes/calendars", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
@@ -130,7 +130,8 @@ async function main() {
   await visit(PAGES_CLIENT.slice(0, half));
   await fresh();
   await visit(PAGES_CLIENT.slice(half));
-  // Coming soon (rev 816): one greyed item on More (the Colosseum, My Helix and the Aqueduct went live), none a link, each disabled for screen readers and at least 44px tall;
+  // Coming soon (rev 816): two greyed items on More, the Magic funnel and Get the app until a store link is set (H-731; the Colosseum,
+  // My Helix and the Aqueduct went live), none a link, each disabled for screen readers and at least 44px tall;
   // a tap shows the subtitle and goes nowhere.
   {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -139,8 +140,8 @@ async function main() {
     const shut = page.locator('main [data-testid="more-group"][data-open="false"] [data-testid="more-group-toggle"]');
     for (let i = 0; i < 12 && (await shut.count()); i++) await shut.first().click(); // each click shrinks the shut set, so always the first
     const soon = page.locator('main [data-testid="nav-coming-soon"]');
-    if ((await soon.count()) !== 1) throw new Error(`one Coming soon item on More: ${await soon.count()}`);
-    for (let i = 0; i < 1; i++) {
+    if ((await soon.count()) !== 2 || (await soon.filter({ hasText: "Get the app" }).count()) !== 1) throw new Error(`two Coming soon items on More, Get the app one of them: ${await soon.count()}`);
+    for (let i = 0; i < 2; i++) {
       const it = soon.nth(i);
       const box = await it.boundingBox();
       if ((await it.getAttribute("aria-disabled")) !== "true" || (await it.evaluate("(el) => el.closest('a') !== null")) || !box || box.height < 44 || box.x + box.width > 390.5) throw new Error(`a Coming soon item is a link, isn't marked disabled, or is too small or too wide: ${await it.innerText()}`);
@@ -148,7 +149,7 @@ async function main() {
     const here = page.url();
     await soon.filter({ hasText: "Magic funnel" }).click({ force: true }); // aria-disabled: Playwright waits for "enabled", a finger doesn't
     if (!(await soon.filter({ hasText: "Magic funnel" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== here) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
-    console.log("✓ Coming soon: one greyed item on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
+    console.log("✓ Coming soon: two greyed items on More (Magic funnel, Get the app), none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
   }
   // interact a little so client-side handlers run under the policy
   await page.goto(`${base}/content/compose`, { waitUntil: "networkidle" });
