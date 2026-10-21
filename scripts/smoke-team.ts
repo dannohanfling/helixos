@@ -324,6 +324,10 @@ async function main() {
     must(!(await sam.locator('[data-testid="leaderboard-state"], [data-testid="leaderboard-hidden"]').count()), "a team member's Settings has no leaderboard card or hide list");
 
     // ── 5. Isolation: Jordan's records read as missing. ──
+    // The closed-page sweep and the open pages above compile most of the app, and the dev server now reaches the container's
+    // 13 GB here (21 Oct: next-server killed at 12.9 GB on GET /conversations/<id>, three gates running). A fresh server, as
+    // before sections 7 and 8; the sessions live in the database, so every signed-in browser and request context carries on.
+    if (base === "http://localhost:3000") execSync("scripts/dev-server.sh fresh", { stdio: "inherit" });
     const rnd = randomUUID();
     for (const [pattern, bId] of [
       ["/content/", jordanContent.id],
