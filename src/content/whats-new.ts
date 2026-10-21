@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 336,
+    n: 337,
     date: "2026-10-19",
     title: "A shorter menu, in five groups",
     lines: [
@@ -21,6 +21,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "New members see each tool once their My Helix reaches it, with a line on Today when one opens. Everyone already here keeps every tool. Settings → Your menu has \"Show all tools\" to see them all at any time.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 336,
+    date: "2026-10-21",
+    title: "The Inbox clears what is already done",
+    lines: [
+      "A row on Waiting on you settles itself when any post says its pull request merged, when the Ready it names was decided or replaced, or when the post it names was superseded, not only on a decision. The newest asks sit first. (H-1554)",
+    ],
+    audience: "coach",
   },
   {
     n: 335,
