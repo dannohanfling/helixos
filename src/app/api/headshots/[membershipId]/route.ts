@@ -3,12 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { apiViewer } from "@/lib/auth";
 import { readProofObject } from "@/lib/proof-storage";
+import { blockedFor } from "@/lib/blocks";
 
 /**
  * A member's profile photo (client headshots, Danno 8 Oct): the 512 square by default, ?size=original for the original. Only
  * the member themself, or a coach of the same workspace (not while switched into another client), may read it. A missing
  * photo, another member's and a membership that does not exist all read the same: one sentence, one status. Private, never
- * cached by a CDN, never a public address; a profile photo is not consent to publish it.
+ * cached by a CDN, never a public address; a profile photo is not consent to publish it. A member the viewer blocked (H-745)
+ * reads the same "No photo here." to the viewer: a block is the viewer's, so a switched-in coach still sees it.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ membershipId: string }> }) {
   const notHere = () => new NextResponse("No photo here.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
@@ -19,6 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ memb
   // The Colosseum (rev 699 §6): a member who turned on "Show my photo in the Colosseum" is seen by the whole workspace, the display size only.
   const allowed = m && (m.userId === v.user.id || (v.role === "coach" && !v.switchedInto) || m.arenaPhoto);
   if (!m || !allowed) return notHere();
+  if (m.userId !== v.user.id && (await blockedFor(v)).memberships.has(membershipId)) return notHere();
   const original = new URL(request.url).searchParams.get("size") === "original";
   const url = original ? m.headshotUrl : m.headshotDisplayUrl;
   if (!url) return notHere();

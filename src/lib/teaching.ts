@@ -4,6 +4,7 @@ import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { TAKE, ftsQuery, rank, readLibrary, readStoryBank, searchWords, type StoryItem, type TeachingEntry } from "@/lib/engine/teaching";
+import { frameworkMaterial } from "@/lib/frameworks";
 
 /**
  * Danno's teaching library and story bank on the server (rev 615 plan, rev 618 answers): the upload's import (re-runs update,
@@ -66,15 +67,15 @@ async function importStories(workspaceId: string, userId: string, text: string):
   return counts;
 }
 
-export type Material = { teaching: (TeachingEntry & { id: string })[]; stories: (StoryItem & { id: string })[] };
+export type Material = { teaching: (TeachingEntry & { id: string })[]; stories: (StoryItem & { id: string })[]; frameworks: schema.FrameworkRow[] };
 
 /**
  * What the writer is given for one ladder of the coach's own: the best 12 library entries and 8 ready stories for its words,
  * never a price, never a story that isn't ready, the ones used in the last 10 ladders behind the fresh ones.
  */
-export async function materialFor(userId: string, input: { topic: string; formatName: string; target?: string | null; source?: string | null }): Promise<Material> {
+export async function materialFor(userId: string, input: { topic: string; formatName: string; target?: string | null; source?: string | null }, workspaceId?: string): Promise<Material> {
   const words = searchWords(input);
-  if (!words.length) return { teaching: [], stories: [] };
+  if (!words.length) return { teaching: [], stories: [], frameworks: [] };
   const q = ftsQuery(words);
   const recent = await db.query.ladders.findMany({ where: eq(schema.ladders.userId, userId), orderBy: desc(schema.ladders.createdAt), limit: 10, columns: { id: true } });
   const used = recent.length ? await db.query.ladderMaterial.findMany({ where: and(eq(schema.ladderMaterial.userId, userId), inArray(schema.ladderMaterial.ladderId, recent.map((l) => l.id)), eq(schema.ladderMaterial.used, true)), columns: { itemId: true } }) : [];
@@ -87,12 +88,18 @@ export async function materialFor(userId: string, input: { topic: string; format
   const sById = new Map(sRows.map((r) => [r.id, r]));
   const teaching = rank(tHits.flatMap((h) => (tById.has(h.entry_id) ? [{ item: { ...tById.get(h.entry_id)!, key: h.entry_id, goodFor: null }, score: h.score }] : [])), { formatName: input.formatName, usedRecently: usedIds, take: TAKE.teaching });
   const stories = rank(sHits.flatMap((h) => (sById.has(h.item_id) ? [{ item: { ...sById.get(h.item_id)!, key: h.item_id }, score: h.score }] : [])), { formatName: input.formatName, usedRecently: usedIds, take: TAKE.stories });
-  return { teaching: teaching as unknown as Material["teaching"], stories: stories as unknown as Material["stories"] };
+  // The published frameworks (H-1270): the workspace's own, so only when the caller says which.
+  const frameworks = workspaceId ? await frameworkMaterial(workspaceId, words, usedIds) : [];
+  return { teaching: teaching as unknown as Material["teaching"], stories: stories as unknown as Material["stories"], frameworks };
 }
 
-export type Offered = { kind: "teaching" | "story"; itemId: string; tag: string };
-/** The ids the writer saw, T1… for library answers and S1… for stories, in the order the block lists them. */
-export const offeredOf = (m: Material): Offered[] => [...m.teaching.map((t, i) => ({ kind: "teaching" as const, itemId: t.id, tag: `T${i + 1}` })), ...m.stories.map((s, i) => ({ kind: "story" as const, itemId: s.id, tag: `S${i + 1}` }))];
+export type Offered = { kind: "teaching" | "story" | "framework"; itemId: string; tag: string };
+/** The ids the writer saw, T1… for library answers, S1… for stories and F1… for frameworks, in the order the block lists them. */
+export const offeredOf = (m: Material): Offered[] => [
+  ...m.teaching.map((t, i) => ({ kind: "teaching" as const, itemId: t.id, tag: `T${i + 1}` })),
+  ...m.stories.map((s, i) => ({ kind: "story" as const, itemId: s.id, tag: `S${i + 1}` })),
+  ...m.frameworks.map((f, i) => ({ kind: "framework" as const, itemId: f.id, tag: `F${i + 1}` })),
+];
 
 /** What one ladder was given and which of it the writer said it used. A rewrite replaces the ladder's rows. */
 export async function recordMaterial(workspaceId: string, userId: string, ladderId: string, offered: Offered[], used: string[]): Promise<void> {
@@ -102,22 +109,28 @@ export async function recordMaterial(workspaceId: string, userId: string, ladder
   await db.insert(schema.ladderMaterial).values(offered.map((o) => ({ id: newId(), workspaceId, userId, ladderId, kind: o.kind, itemId: o.itemId, tag: o.tag, used: named.has(o.tag) })));
 }
 
-export type MaterialLine = { tag: string; kind: "teaching" | "story"; type: string; title: string; firstLine: string; status: string | null; fathomUrl: string | null; source: string | null };
+export type MaterialLine = { tag: string; kind: "teaching" | "story" | "framework"; type: string; title: string; firstLine: string; status: string | null; fathomUrl: string | null; source: string | null };
 /** The Material used panel: each item the writer named, with where it came from. Items deleted since are left out. */
 export async function materialUsedFor(userId: string, ladderId: string): Promise<MaterialLine[]> {
   const rows = await db.query.ladderMaterial.findMany({ where: and(eq(schema.ladderMaterial.ladderId, ladderId), eq(schema.ladderMaterial.userId, userId), eq(schema.ladderMaterial.used, true)) });
   if (!rows.length) return [];
   const tIds = rows.filter((r) => r.kind === "teaching").map((r) => r.itemId);
   const sIds = rows.filter((r) => r.kind === "story").map((r) => r.itemId);
-  const [ts, ss] = await Promise.all([
+  const fIds = rows.filter((r) => r.kind === "framework").map((r) => r.itemId);
+  const [ts, ss, fs] = await Promise.all([
     tIds.length ? db.query.teachingEntries.findMany({ where: and(eq(schema.teachingEntries.userId, userId), inArray(schema.teachingEntries.id, tIds)) }) : [],
     sIds.length ? db.query.storyItems.findMany({ where: and(eq(schema.storyItems.userId, userId), inArray(schema.storyItems.id, sIds)) }) : [],
+    fIds.length ? db.query.frameworks.findMany({ where: and(inArray(schema.frameworks.workspaceId, [...new Set(rows.map((r) => r.workspaceId))]), inArray(schema.frameworks.id, fIds)) }) : [],
   ]);
   const first = (x: string) => x.split("\n").find((l) => l.trim())?.trim().slice(0, 160) ?? "";
   return rows.flatMap((r): MaterialLine[] => {
     if (r.kind === "teaching") {
       const t = ts.find((x) => x.id === r.itemId);
       return t ? [{ tag: r.tag, kind: "teaching", type: "Answer", title: t.question, firstLine: first(t.answer), status: null, fathomUrl: null, source: [t.file, [t.topic, t.taughtOn, t.callType].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || null }] : [];
+    }
+    if (r.kind === "framework") {
+      const f = fs.find((x) => x.id === r.itemId);
+      return f ? [{ tag: r.tag, kind: "framework", type: "Framework", title: f.name, firstLine: first(f.idea), status: null, fathomUrl: f.fathomUrl, source: [f.sourceCall, f.sourceDate].filter(Boolean).join(", ") || null }] : [];
     }
     const s = ss.find((x) => x.id === r.itemId);
     return s ? [{ tag: r.tag, kind: "story", type: s.type, title: s.title, firstLine: first(s.what), status: s.status, fathomUrl: s.fathomUrl, source: [s.sourceCall, s.sourceDate].filter(Boolean).join(", ") || null }] : [];

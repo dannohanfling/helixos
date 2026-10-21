@@ -168,7 +168,15 @@ export function readRule(type: string, value: string, tierNames: string[]): Unlo
 }
 
 /** What HelixOS knows of a member, for the rules: the behaviors it sees (or the coach toggled), their points and tier. */
-export type MemberFacts = { behaviors: Set<Behavior>; points: number; tierName: string; tierMin: (name: string) => number | null };
+export type MemberFacts = {
+  behaviors: Set<Behavior>;
+  points: number;
+  tierName: string;
+  tierMin: (name: string) => number | null;
+  /** The rank the member holds, kept ranks included (H-1088), and a rank name's level: a tier rule is met by the rank held. */
+  heldLevel?: number;
+  levelOf?: (name: string) => number | null;
+};
 
 /** Whether a rule is met, and the line a locked card shows. Points are a threshold reached, never spent. */
 export function unlockState(rule: UnlockRule, facts: MemberFacts): { unlocked: boolean; line: string; progress: number | null } {
@@ -181,8 +189,9 @@ export function unlockState(rule: UnlockRule, facts: MemberFacts): { unlocked: b
     }
     case "tier": {
       const min = facts.tierMin(rule.value);
-      const got = min !== null && facts.points >= min;
-      return { unlocked: got, line: `reach ${rule.value} tier`, progress: min ? Math.min(100, Math.round((facts.points / min) * 100)) : null };
+      const level = facts.levelOf?.(rule.value) ?? null;
+      const got = (min !== null && facts.points >= min) || (level !== null && (facts.heldLevel ?? 0) >= level);
+      return { unlocked: got, line: `reach ${rule.value} tier`, progress: got ? 100 : min ? Math.min(100, Math.round((facts.points / min) * 100)) : null };
     }
     case "points": {
       const need = Number(rule.value) || 0;

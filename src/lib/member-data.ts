@@ -29,6 +29,8 @@ export const MEMBER_TABLES = {
   daily_logs: schema.dailyLogs,
   weekly_intentions: schema.weeklyIntentions,
   colosseum_wins: schema.colosseumWins,
+  /** Applause the member gave on others' wins (H-1171). Applause on their own wins goes with the win (src/lib/erase.ts). */
+  win_applause: schema.winApplause,
   helix_ticks: schema.helixTicks,
   setup_ticks: schema.setupTicks,
   monthly_intentions: schema.monthlyIntentions,
@@ -82,6 +84,8 @@ export const MEMBER_TABLES = {
   webinar_history: schema.webinarHistory,
   client_records: schema.clientRecords,
   proofs: schema.proofs,
+  // Approve selected (H-1394): the member's own batches, so Undo the last batch has its record.
+  proof_batches: schema.proofBatches,
   groups: schema.groups,
   targets: schema.targets,
   sync_events: schema.syncEvents,
@@ -168,7 +172,8 @@ export const MEMBER_TABLES = {
   recording_steps: schema.recordingSteps,
   // Rev 498: when the member first saw a published recording (opened it, or pressed Watch in Fathom).
   recording_views: schema.recordingViews,
-  // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row).
+  // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row). A
+  // Content report about the member (H-745, target_user_id) is erased with them too (src/lib/erase.ts), never exported to them.
   member_reports: schema.memberReports,
   // H-202: everything said on the member's reports (the receipt, the coach's replies, their follow-ups).
   report_messages: schema.reportMessages,
@@ -199,6 +204,11 @@ export const CHILD_TABLES = [
   { label: "ladder_material", table: schema.ladderMaterial, fk: "ladderId", parent: "ladders" },
   { label: "coach_notes", table: schema.coachNotes, fk: "membershipId", parent: "membership" },
   { label: "bot_approvals", table: schema.botApprovals, fk: "membershipId", parent: "membership" },
+  // An agent working in this member's HelixOS (H-1385): the coach's grants for them, theirs to see and gone with them.
+  { label: "agent_client_grants", table: schema.agentClientGrants, fk: "clientMembershipId", parent: "membership" },
+  // Block a member (H-745): the blocks this member made hang off their membership. The blocks made against them go with them
+  // too (src/lib/erase.ts, by blocked_membership_id), so a block never outlives either side.
+  { label: "member_blocks", table: schema.memberBlocks, fk: "blockerMembershipId", parent: "membership" },
   { label: "handoff_deliveries", table: schema.handoffDeliveries, fk: "messageId", parent: "handoff_messages" },
   // A leaderboard's earlier addresses (H-109): slugs only, no member data of their own; they go with the feed row.
   { label: "leaderboard_slug_aliases", table: schema.leaderboardSlugAliases, fk: "feedId", parent: "leaderboard_feeds" },
@@ -237,6 +247,16 @@ export const WORKSPACE_TABLES = {
   glossary_entries: schema.glossaryEntries,
   // On the horizon (H-385): the coach's list of what is shipped, being built, next and explored; no member's own.
   horizon_items: schema.horizonItems,
+  // The weekly calls (H-828): the coach's schedule, read by every member at their level; no member's own.
+  program_calls: schema.programCalls,
+  // Danno's frameworks (H-1262): the coach's reviewed library, published to every member; no member's own.
+  frameworks: schema.frameworks,
+  // The Partner Program (H-1361): the coach's own records, by workspace.
+  partner_restaurants: schema.partnerRestaurants,
+  partner_touches: schema.partnerTouches,
+  partner_payments: schema.partnerPayments,
+  partner_payout_lines: schema.partnerPayoutLines,
+  partner_files: schema.partnerFiles,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */
@@ -254,6 +274,7 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
   cert_modules: "the shared certification modules",
   cert_deliverables: "the shared certification deliverables; a member's own work is in certification_submissions",
   lessons: "a workspace course's lessons, which go with the course",
+  program_call_skips: "a weekly call's dates with no call, which go with the call (and the call with the workspace)",
   evidence_shared: "the shared evidence library, published for every member, with no owner",
   rate_limits: "throttle counters keyed by address and window, holding no content",
   deletion_audits: "the record that a deletion happened: kept by design, with no content",

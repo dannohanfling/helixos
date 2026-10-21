@@ -6,8 +6,9 @@
  * retracts and the ripples fade (0.5 to 1.8 s); the channel after the leak widens (1.2 s, in the scene); the picture crossfades
  * to the next state (1.6 s, in the scene); the step tag turns from amber "leaking here" to green "repaired" (1.4 to 2.1 s); the
  * card rises (3 s). Amber and green only. With reduced motion only the end state is drawn: the green tag and the card.
+ * Falling water is a sheet with streaks, and a splash where it lands (H-966).
  */
-import { FALLS, LEAK_TAG, STEP_TAG_AT } from "@/lib/engine/aqueduct";
+import { FALL_STREAKS, FALLS, fallSheet, LEAK_TAG, STEP_TAG_AT } from "@/lib/engine/aqueduct";
 import { AQUEDUCT_FOUNTAIN } from "@/lib/engine/ambience";
 import { repairLine, type Repair } from "@/lib/engine/aqueduct-repair";
 import type { SceneLook } from "@/lib/engine/board-view";
@@ -38,11 +39,10 @@ export function AqueductRepairLayer({ repair, look, quiet, water }: { repair: Re
   return (
     <g data-testid="aqueduct-repair-moment" data-step={repair.step}>
       <g className="aq-rep-leak">
-        <line x1={f[0]} y1={f[1]} x2={f[0]} y2={f[2]} stroke={water} strokeOpacity={0.85} strokeWidth={5} strokeLinecap="round" strokeDasharray="9 15" className="aq-falling" />
+        <FallingSheet f={f} color={water} />
       </g>
       <g className="aq-rep-ripples">
-        <ellipse cx={f[3]} cy={f[4]} rx={f[5]} ry={f[6]} fill="none" stroke={water} strokeOpacity={0.8} strokeWidth={3} className="aq-ripple" />
-        <ellipse cx={f[3]} cy={f[4]} rx={f[5]} ry={f[6]} fill="none" stroke={water} strokeOpacity={0.8} strokeWidth={3} className="aq-ripple aq-ripple-2" />
+        <Splash f={f} color={water} />
       </g>
       <g className="aq-rep-burst" data-testid="aqueduct-burst">
         <circle cx={f[0]} cy={f[1]} r={26} fill="#F0CF86" fillOpacity={0.55} />
@@ -62,15 +62,72 @@ export function AqueductRepairLayer({ repair, look, quiet, water }: { repair: Re
   );
 }
 
+/** The scene's shared gradients: the falling sheet (bright under the lip, thinning as it falls) and the soft mist. */
+export function WaterDefs() {
+  return (
+    <>
+      <linearGradient id="aq-sheet" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#FFFFFF" stopOpacity={0.6} />
+        <stop offset="1" stopColor="#FFFFFF" stopOpacity={0.2} />
+      </linearGradient>
+      <radialGradient id="aq-mistg">
+        <stop offset="0" stopColor="#FFFFFF" stopOpacity={0.6} />
+        <stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+      </radialGradient>
+    </>
+  );
+}
+
+/** Falling water (H-966): the sheet, widening as it falls and swaying a little, with streaks falling through it. */
+export function FallingSheet({ f, color }: { f: number[]; color: string }) {
+  const [x, top, bottom] = f;
+  return (
+    <g className="aq-sway" data-testid="aqueduct-fall-sheet">
+      <path d={fallSheet(x, top, bottom)} fill="url(#aq-sheet)" />
+      {FALL_STREAKS.map((s, i) => (
+        <line key={i} x1={x + s.dx * 0.4} y1={top} x2={x + s.dx} y2={bottom} stroke={color} strokeOpacity={0.75} strokeWidth={s.w} strokeLinecap="round" strokeDasharray={s.array} className="aq-drop" style={{ "--s": `${s.seconds}s` } as React.CSSProperties} data-testid="aqueduct-fall-streak" />
+      ))}
+    </g>
+  );
+}
+
+/** Where it lands: a mist that swells and fades, a few drops of spray, and two ripples. */
+export function Splash({ f, color }: { f: number[]; color: string }) {
+  const [, , , cx, cy, rx, ry] = f;
+  const drops = [
+    [-8, -4, 2.4, 0],
+    [7, -6, 2, 0.35],
+    [-2, -9, 1.8, 0.7],
+    [11, -3, 2, 1.05],
+  ];
+  return (
+    <g data-testid="aqueduct-splash">
+      <ellipse cx={cx} cy={cy - ry * 0.4} rx={rx * 0.8} ry={ry * 1.4} fill="url(#aq-mistg)" className="aq-mist" data-testid="aqueduct-mist" />
+      <g fill={color}>
+        {drops.map(([dx, dy, r, dl], i) => (
+          <circle key={i} cx={cx + dx} cy={cy + dy} r={r} className="aq-spray" style={{ animationDelay: `${dl}s` }} />
+        ))}
+      </g>
+      <g className="aq-ripples">
+        <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke={color} strokeOpacity={0.8} strokeWidth={3} className="aq-ripple" />
+        <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke={color} strokeOpacity={0.8} strokeWidth={3} className="aq-ripple aq-ripple-2" />
+      </g>
+    </g>
+  );
+}
+
 /** The full fountain, while nothing leaks: streaks over the painted waterfall, a mist pulse, the spray and its ripple. */
-export function AqueductFountain({ look, className = "" }: { look: SceneLook; className?: string }) {
+export function AqueductFountain({ look, className = "", style }: { look: SceneLook; className?: string; style?: React.CSSProperties }) {
   const f = AQUEDUCT_FOUNTAIN[look];
   return (
-    <g className={`aq-fountain ${className}`} data-testid="aqueduct-fountain">
-      {f.streaks.map((s, i) => (
-        <path key={i} d={s.d} className="aq-wf" style={{ animationDelay: `${s.dl}s` }} />
-      ))}
-      <ellipse cx={f.mist.cx} cy={f.mist.cy} rx={f.mist.rx} ry={f.mist.ry} fill="#FFFFFF" fillOpacity={0.35} className="aq-mist" />
+    <g className={`aq-fountain ${className}`} style={style} data-testid="aqueduct-fountain">
+      <g className="aq-sway">
+        <path d={f.sheet} fill="url(#aq-sheet)" fillOpacity={0.55} data-testid="aqueduct-fountain-sheet" />
+        {f.streaks.map((s, i) => (
+          <path key={i} d={s.d} className="aq-wf" style={{ animationDelay: `${s.dl}s`, strokeWidth: s.w, "--s": `${s.s}s` } as React.CSSProperties} />
+        ))}
+      </g>
+      <ellipse cx={f.mist.cx} cy={f.mist.cy} rx={f.mist.rx} ry={f.mist.ry * 1.4} fill="url(#aq-mistg)" className="aq-mist" />
       <g fill="#FFFFFF">
         {f.spray.map((d, i) => (
           <circle key={i} cx={d.cx} cy={d.cy} r={d.r} className="aq-spray" style={{ animationDelay: `${d.dl}s` }} />

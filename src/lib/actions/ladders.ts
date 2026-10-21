@@ -16,7 +16,7 @@ import { pushSocialPost } from "@/lib/integrations";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { generateBackground, graphicStep, makeGraphic, ownImage } from "@/lib/graphic";
-import { headlineChoices } from "@/lib/engine/graphic";
+import { headlineChoices, OWN_HEADLINE } from "@/lib/engine/graphic";
 import { blockersFor, createLadder, ensureLadderItem, generate, magnetFor, shipLadder } from "@/lib/ladder-core";
 
 async function assertPublishable(l: schema.Ladder): Promise<void> {
@@ -270,8 +270,15 @@ export async function makeGraphicAction(formData: FormData): Promise<void> {
   const photo = photoId ? await ownImage(m, photoId) : null;
   if (photoId && !photo) redirect(`${back}?graphic=${encodeURIComponent("That photo isn't in your Images. Pick another.")}#graphic`);
   const choices = headlineChoices(l.headline, l.altHeadlines);
-  const headline = choices.find((h) => h === str(formData, "headline").trim()) ?? choices[0] ?? "";
+  const picked = str(formData, "headline").trim();
+  const ownText = str(formData, "ownHeadline").trim().replace(/\s+/g, " ");
+  // Write my own… (H-1358): the written headline joins the alternates, so the checklist reads it and the select offers it next time.
+  const headline = picked === OWN_HEADLINE && ownText ? ownText : (choices.find((h) => h === picked) ?? choices[0] ?? "");
   if (!headline.trim()) redirect(`${back}?graphic=${encodeURIComponent("Write the headline first.")}#graphic`);
+  if (picked === OWN_HEADLINE && ownText && !choices.includes(ownText)) {
+    l.altHeadlines = [...l.altHeadlines, ownText];
+    await db.update(schema.ladders).set({ altHeadlines: l.altHeadlines }).where(eq(schema.ladders.id, l.id));
+  }
   const r = await makeGraphic(m, l, { photoImageId: photo?.id ?? null, headline, strongFade: str(formData, "strongFade") === "1", aiBackground: str(formData, "aiBackground") === "1" });
   refresh();
   redirect(r.ok ? `${back}?graphic=made#graphic` : `${back}?graphic=${encodeURIComponent(r.error)}#graphic`);

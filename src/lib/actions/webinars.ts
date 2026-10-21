@@ -125,7 +125,7 @@ export async function updateWebinarBeliefsAction(formData: FormData): Promise<vo
 }
 
 export async function updateSectionAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx({ team: "allow" });
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   await own(id, userId);
@@ -150,6 +150,7 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
     })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
+  await settleDraft(formData, { workspaceId, userId }, id, v.actor.name);
   refresh();
   const next = str(formData, "next");
   // The saved section is named, so its draft is let go though the page moves on to the next one.

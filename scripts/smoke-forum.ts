@@ -148,6 +148,16 @@ async function main() {
         const outer = await page.locator('[data-testid="forum-outer-agent"]').count();
         must(filled === 12 && outer === 2 && (await page.locator('[data-testid="forum-plate"]').count()) === 13, `fourteen agents: twelve plots and two in the Outer districts at ${width}: ${filled} + ${outer}`);
         must((await page.locator('[data-testid="forum-photo-day"]').evaluate((i) => (i as HTMLImageElement).naturalWidth)) === 1680, "the forum photo loads");
+        // Golden hour, filmed (H-1253): the plaza's loop plays over the photo, started by the page, exactly over it, and never takes a tap.
+        if ((await page.locator('[data-testid="forum-map"]').getAttribute("data-look")) === "day") {
+          must((await page.locator('[data-testid="forum-map"]').getAttribute("data-loop")) === "1", `the Forum lists its golden-hour loop at ${width}`);
+          await page.waitForFunction(() => document.querySelector('[data-testid="forum-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
+          const lp = await page.locator('[data-testid="forum-loop"]').evaluate((v: HTMLVideoElement) => ({ src: v.currentSrc, paused: v.paused, opacity: getComputedStyle(v).opacity, auto: v.autoplay, pe: getComputedStyle(v).pointerEvents }));
+          must(/\/forum\/forum-day-loop\.(mp4|webm)\?v=\d+$/.test(lp.src) && !lp.paused && lp.opacity === "1" && !lp.auto && lp.pe === "none", `the plaza's loop plays over the photo at ${width}: ${JSON.stringify(lp)}`);
+          const lb = (await page.locator('[data-testid="forum-loop"]').boundingBox())!;
+          const pb = (await page.locator('[data-testid="forum-photo-day"]').boundingBox())!;
+          must(Math.abs(lb.x - pb.x) < 1 && Math.abs(lb.width - pb.width) < 1 && Math.abs(lb.height - pb.height) < 1, `the loop sits exactly over the photo at ${width}`);
+        }
         const boxes = await page.locator('[data-testid="forum-plate"] rect').evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((b) => ({ l: b.left, r: b.right, t: b.top, b: b.bottom })));
         for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
           const a = boxes[i];

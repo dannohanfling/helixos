@@ -7,15 +7,24 @@ import { CONNECTOR_LABEL, historyLine, undoOpen, type DraftRow } from "@/lib/eng
 import type { WebinarHistoryRow } from "@/db/schema";
 
 /**
- * Claude's draft of one step (H-181), beside what the webinar says now: each field it sets, now and draft, then Approve, Edit
- * and Discard. Stacked on a phone, side by side from a tablet up.
+ * Claude's draft of one step (H-181), or of one section's script or slides (PR 2), beside what the webinar says now: each field
+ * it sets, now and draft, then Approve, Edit and Discard. Stacked on a phone, side by side from a tablet up.
  */
-export function WebinarDraftPanel({ webinarId, step, draftId, rows, notes, written, tz, editHref }: { webinarId: string; step: string; draftId: string; rows: DraftRow[]; notes: string[]; written: string; tz: string; editHref: string }) {
+export function WebinarDraftPanel({ webinarId, step, sectionKey = "", sectionName, draftId, rows, notes, written, tz, editHref }: { webinarId: string; step: string; sectionKey?: string; sectionName?: string; draftId: string; rows: DraftRow[]; notes: string[]; written: string; tz: string; editHref: string }) {
+  const hidden = (
+    <>
+      <input type="hidden" name="webinarId" value={webinarId} />
+      <input type="hidden" name="step" value={step} />
+      <input type="hidden" name="draftId" value={draftId} />
+      {sectionKey ? <input type="hidden" name="section" value={sectionKey} /> : null}
+    </>
+  );
   return (
-    <Card title="✨ Claude's draft" className="border-accent/40" id="claude-draft">
-      <div data-testid={`claude-draft-${step}`}>
+    <Card title={`✨ Claude's ${step === "deck" ? "slides" : "draft"}${sectionName ? `: ${sectionName}` : ""}`} className="border-accent/40" id="claude-draft">
+      <div data-testid={`claude-draft-${step}`} data-section={sectionKey}>
         <p className="mb-3 text-sm text-ink-2">
           Written {formatDateTime(written, tz)} by {CONNECTOR_LABEL}. Nothing in your webinar has changed. Approve puts it in, Edit opens the form with it filled in, Discard drops it.
+          {step === "deck" ? " Each slide's line becomes one of this section's key points; its notes become the script only if the section has none yet." : ""}
         </p>
         <div className="space-y-3">
           {rows.map((r) => (
@@ -43,9 +52,7 @@ export function WebinarDraftPanel({ webinarId, step, draftId, rows, notes, writt
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <form action={approveWebinarDraftAction}>
-            <input type="hidden" name="webinarId" value={webinarId} />
-            <input type="hidden" name="step" value={step} />
-            <input type="hidden" name="draftId" value={draftId} />
+            {hidden}
             <SubmitButton className="btn btn-accent" pendingText="Approving…" data-testid="draft-approve">
               Approve
             </SubmitButton>
@@ -54,9 +61,7 @@ export function WebinarDraftPanel({ webinarId, step, draftId, rows, notes, writt
             Edit
           </Link>
           <form action={discardWebinarDraftAction}>
-            <input type="hidden" name="webinarId" value={webinarId} />
-            <input type="hidden" name="step" value={step} />
-            <input type="hidden" name="draftId" value={draftId} />
+            {hidden}
             <SubmitButton className="btn btn-ghost" pendingText="Discarding…" data-testid="draft-discard">
               Discard
             </SubmitButton>

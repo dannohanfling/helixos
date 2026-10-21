@@ -3,10 +3,12 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { sendReplyAction } from "@/lib/actions/reports";
+import { hideWinAction } from "@/lib/actions/colosseum";
 import { REPORT_STATUSES, type ReportStatus } from "@/db/schema";
 import { REPLY_STATUSES, STATUS_WORDS, firstName, replyText, topicOf } from "@/lib/engine/report-status";
 import { countsByStatus, withMessages } from "@/lib/report-replies";
 import { KIND_SHORT, SEVERITY_LABEL } from "@/lib/engine/reports";
+import { REASON_LABEL, reasonOf } from "@/lib/engine/blocks";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Card, PageHeader, Tabs } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -19,7 +21,8 @@ const DOT: Record<string, string> = { red: "bg-danger", orange: "bg-warn", green
  * The coach's inbox for "I have an issue or a suggestion" (rev 432 items 2 and 3): newest first, each with who sent it, the
  * page, the colour, the words, the screenshot, and for an Ask Danno answer the question, the answer and whether they want to
  * talk. H-202: one tab per status (New first, oldest or newest first); each status is a reply in Danno's words, edited and sent
- * with Send, and everything said on the report is logged under it.
+ * with Send, and everything said on the report is logged under it. A Content report (H-745), from Report on a win or a member
+ * in the Colosseum, shows the reason, the win's words and who wrote it, with Hide this win (for everyone, undoable).
  */
 export default async function CoachReportsPage({ searchParams }: { searchParams: Promise<{ tab?: string; sort?: string; replied?: string; replyError?: string; report?: string }> }) {
   const v = await requireCoach();
@@ -33,7 +36,12 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
   ]);
   const counts = countsByStatus(all);
   const threads = await withMessages(v.workspace.id, rows);
-  const users = rows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(rows.map((r) => r.userId))]) }) : [];
+  // A Content report's win, and the names of everyone involved: senders and the members reported.
+  const winIds = rows.filter((r) => r.kind === "content" && r.targetKind === "win" && r.targetId).map((r) => r.targetId!);
+  const winRows = winIds.length ? await db.query.colosseumWins.findMany({ where: and(eq(schema.colosseumWins.workspaceId, v.workspace.id), inArray(schema.colosseumWins.id, winIds)) }) : [];
+  const winOf = new Map(winRows.map((w) => [w.id, w]));
+  const people = [...new Set([...rows.map((r) => r.userId), ...rows.map((r) => r.targetUserId).filter((x): x is string => Boolean(x))])];
+  const users = people.length ? await db.query.users.findMany({ where: inArray(schema.users.id, people) }) : [];
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
   // Rev 843: each report in the sender's own zone, labelled ("1:32 PM EDT"), never the workspace's unlabelled.
   const senders = rows.length ? await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), inArray(schema.memberships.userId, [...new Set(rows.map((r) => r.userId))])), columns: { userId: true, timezone: true } }) : [];
@@ -55,10 +63,12 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
                 <div data-testid="report-row" data-kind={r.kind} data-severity={r.severity} data-seen={r.seenAt ? "1" : "0"} data-done={r.doneAt ? "1" : "0"} data-status={r.status}>
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className={`inline-block h-2.5 w-2.5 rounded-full ${DOT[r.severity]}`} aria-label={SEVERITY_LABEL[r.severity]} title={SEVERITY_LABEL[r.severity]} />
+                    {r.kind === "content" ? <span className="text-xs text-ink-3">Reported by</span> : null}
                     <span className="font-semibold" data-testid="report-from">{nameOf.get(r.userId) ?? "A member"}</span>
-                    <Badge tone={r.kind === "suggestion" ? "good" : r.kind === "ask_danno" ? "accent" : "warn"}>{KIND_SHORT[r.kind]}</Badge>
-                    <span className="text-xs text-ink-3">{SEVERITY_LABEL[r.severity]}</span>
+                    <Badge tone={r.kind === "suggestion" ? "good" : r.kind === "ask_danno" ? "accent" : r.kind === "content" ? "danger" : "warn"}>{KIND_SHORT[r.kind]}</Badge>
+                    <span className="text-xs text-ink-3" data-testid="report-reason">{r.kind === "content" ? REASON_LABEL[reasonOf(r.severity)] : SEVERITY_LABEL[r.severity]}</span>
                     <Badge tone={r.status === "new" ? "danger" : r.status === "done" ? "good" : r.status === "not_now" ? "neutral" : "accent"}>{STATUS_WORDS[r.status]}</Badge>
+                    {r.handledAt ? <Badge tone="good">handled</Badge> : null}
                     {r.talkToCoach ? <Badge tone="warn">wants to talk</Badge> : null}
                     <span className="ml-auto text-xs text-ink-3">{formatDateTime(r.createdAt, tzOf.get(r.userId) ?? v.tz, { zone: true })}</span>
                   </div>
@@ -75,7 +85,8 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
                       </div>
                     </dl>
                   ) : null}
-                  {r.description ? <p className="mt-2 whitespace-pre-line break-words text-sm" data-testid="report-description-text">{r.description}</p> : null}
+                  {r.kind === "content" ? <ContentTarget r={r} win={r.targetId ? winOf.get(r.targetId) : undefined} nameOf={nameOf} /> : null}
+                  {r.description ? <p className="mt-2 whitespace-pre-line break-words text-sm" data-testid="report-description-text">{r.kind === "content" ? <span className="font-medium">Their note: </span> : null}{r.description}</p> : null}
                   {r.screenshotUrl ? (
                     <a href={`/api/reports/${r.id}/screenshot`} target="_blank" rel="noreferrer" className="mt-2 inline-block">
                       {/* eslint-disable-next-line @next/next/no-img-element -- a private screenshot served by the app's own route */}
@@ -129,5 +140,41 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
         <p className="mt-4 text-sm text-ink-2" data-testid="reports-empty">{tab === "new" ? "Nothing new. Members send these from “I have an issue or a suggestion” in their menu." : `Nothing in ${STATUS_WORDS[tab]}.`}</p>
       )}
     </>
+  );
+}
+
+/** What a Content report is about: the win's words and who wrote it, with Hide this win (and its undo); or the member reported. */
+function ContentTarget({ r, win, nameOf }: { r: schema.MemberReport; win: schema.ColosseumWin | undefined; nameOf: Map<string, string> }) {
+  const author = r.targetUserId ? (nameOf.get(r.targetUserId) ?? "A former member") : "A member";
+  if (r.targetKind === "member") {
+    return (
+      <p className="mt-2 text-sm" data-testid="report-target">
+        <span className="font-medium">Member reported: </span>
+        {author}
+      </p>
+    );
+  }
+  if (!win) {
+    return (
+      <p className="mt-2 text-sm text-ink-2" data-testid="report-target">
+        A win by {author}. It has since been taken down.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 rounded-lg border p-2 text-sm" data-testid="report-target">
+      <p className="text-xs text-ink-3">
+        A {win.kind} win by <span className="font-medium text-ink">{author}</span>
+        {win.hiddenAt ? " · hidden for everyone" : ""}
+      </p>
+      <p className="mt-1 whitespace-pre-line break-words" data-testid="report-win-text">{win.text}</p>
+      <form action={hideWinAction} className="mt-2">
+        <input type="hidden" name="winId" value={win.id} />
+        <input type="hidden" name="hidden" value={win.hiddenAt ? "0" : "1"} />
+        <SubmitButton className="btn btn-soft btn-xs" data-testid={win.hiddenAt ? "report-unhide-win" : "report-hide-win"} pendingText="Saving…">
+          {win.hiddenAt ? "Show this win again" : "Hide this win"}
+        </SubmitButton>
+      </form>
+    </div>
   );
 }

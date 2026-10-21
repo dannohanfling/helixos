@@ -2,19 +2,21 @@
 
 /**
  * The scene (rev 711 §3 and §4): the picture for the leak and the look, and one SVG in its coordinates (viewBox 0 0 1680 944)
- * on top: the water along the channel, each segment as wide as its stage's count, with moving dashes; the leak's waterfall
- * with two ripples in the pool, matched to the one painted in; the stage pills and the step tags (hidden under 760px, the
+ * on top: the water along the channel, each segment as wide as its stage's count (H-966: a see-through body with ripple bands,
+ * streaks and sparkles running over it, and a front that fills the channel when the scene opens); the leak's waterfall, a
+ * sheet with falling streaks and a splash in the pool, matched to the one painted in; the stage pills and the step tags (hidden under 760px, the
  * table carries the numbers). Pause is remembered; reduced motion stops everything; the tab hidden pauses it. A picture that
  * fails to load hides itself.
  */
 import { useEffect, useRef, useState } from "react";
 import { setAqueductPausedAction } from "@/lib/actions/aqueduct";
 import { setSceneLookAction } from "@/lib/actions/scene";
-import { DASH, FALLS, LEAK_TAG, PICTURE, pct, pictureFor, SEGMENTS, STAGE_TAG_AT, STAGES, STEP_TAG_AT, WATER, waterWidth, type Counts, type Leak } from "@/lib/engine/aqueduct";
+import { BODY, CHANNEL, CHANNEL_LENGTH, FALLS, FILL_SECONDS, FLOW, flowWidth, frontReaches, LEAK_TAG, loopFor, PICTURE, pct, pictureFor, SEGMENTS, STAGE_TAG_AT, STAGES, STEP_TAG_AT, WATER, waterWidth, type Counts, type Leak } from "@/lib/engine/aqueduct";
 import type { SceneLook } from "@/lib/engine/board-view";
 import type { Repair } from "@/lib/engine/aqueduct-repair";
-import { AqueductFountain, AqueductRepairCard, AqueductRepairLayer } from "@/components/aqueduct-repair";
+import { AqueductFountain, AqueductRepairCard, AqueductRepairLayer, FallingSheet, Splash, WaterDefs } from "@/components/aqueduct-repair";
 import { useQuiet } from "@/components/scene-life";
+import { LoopOverPhoto } from "@/components/loop-over-photo";
 
 type StepRate = { step: number; label: string; rate: number | null; leak: boolean };
 
@@ -30,6 +32,13 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
   const fall = leak ? FALLS[look][leak.step] : null;
   // The repair moment (H-637 PR 2): the old leak's picture under the current one while it plays; the card until closed.
   const quiet = useQuiet();
+  // The channel fills when the scene opens (H-966): not under a repair (it has its own moment), not when the water was left
+  // paused, never under reduced motion. Once the front is through, the mask goes.
+  const [filling, setFilling] = useState(!initialPaused && !repair);
+  // A picture with a filmed loop (H-1180) plays it over the photo instead of the drawn water and fountain, which sat beside the
+  // painted water rather than on it. A repair keeps the drawing: its moment is drawn on that water.
+  const loop = repair ? null : loopFor(picture);
+  const fill = filling && !quiet && !loop;
   const [card, setCard] = useState(Boolean(repair));
   const oldPicture = repair ? pictureFor(look, { step: repair.step, nowRate: 0, wasRate: 0, drop: 0 }) : null;
   const stamped = useRef(false);
@@ -72,7 +81,7 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
   return (
     <div className="aq-wrap">
       <div className="aq-stage">
-        <div className={`aq-scene aq-${look}${still ? " aq-still" : ""}${repair && !quiet ? ` aq-rep${hidden ? " aq-rep-wait" : ""}` : ""}`} data-testid="aqueduct-scene" data-look={look} data-paused={still ? "1" : "0"} data-picture={picture}>
+        <div className={`aq-scene aq-${look}${still ? " aq-still" : ""}${repair && !quiet ? ` aq-rep${hidden ? " aq-rep-wait" : ""}` : ""}`} data-testid="aqueduct-scene" data-look={look} data-paused={still ? "1" : "0"} data-picture={picture} data-loop={loop ? "1" : "0"}>
           {oldPicture && !quiet && !broken.has(oldPicture) ? (
             <picture>
               <source srcSet={`${oldPicture}.avif`} type="image/avif" />
@@ -87,31 +96,61 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
               <img ref={photo} className="aq-bg aq-bg-now" src={`${picture}.jpg`} alt="" width={PICTURE.width} height={PICTURE.height} decoding="async" onError={() => setBroken((b) => new Set(b).add(picture))} data-testid="aqueduct-photo" />
             </picture>
           )}
+          {loop && !broken.has(picture) ? <LoopOverPhoto mp4={loop.mp4} webm={loop.webm} held={still} className="aq-bg aq-loop" testId="aqueduct-loop" /> : null}
           {/* The other look, fetched quietly so the toggle swaps without a wait. */}
           <link rel="prefetch" as="image" href={`${pictureFor(look === "day" ? "night" : "day", leak)}.webp`} />
           <svg className="aq-svg" viewBox={`0 0 ${PICTURE.width} ${PICTURE.height}`} preserveAspectRatio="none" aria-hidden="true" focusable="false">
-            <g className="aq-water" style={{ mixBlendMode: water.blend }}>
+            <defs>
+              <WaterDefs />
+              {fill ? (
+                <mask id="aq-front" maskUnits="userSpaceOnUse" x={0} y={0} width={PICTURE.width} height={PICTURE.height}>
+                  <path d={CHANNEL} fill="none" stroke="#FFFFFF" strokeWidth={44} strokeDasharray={`${CHANNEL_LENGTH} ${CHANNEL_LENGTH}`} className="aq-front" style={{ "--len": CHANNEL_LENGTH, "--fill": `${FILL_SECONDS}s` } as React.CSSProperties} onAnimationEnd={() => setFilling(false)} />
+                </mask>
+              ) : null}
+            </defs>
+            {loop ? null : (
+            <g className="aq-water" style={{ mixBlendMode: water.blend }} mask={fill ? "url(#aq-front)" : undefined} data-testid="aqueduct-water" data-filling={fill ? "1" : "0"}>
               {SEGMENTS.map((seg) => {
                 const w = waterWidth(now[seg.stage], now[1]);
-                const dw = Math.max(1, w * DASH.fraction);
-                // After a repaired arch the channel widens to its own width (H-637 PR 2).
+                // After a repaired arch the channel widens to its own width (H-637 PR 2): every layer from 60% of its width.
                 const widen = repair && seg.stage >= repair.step + 2 ? " aq-widen" : "";
+                const grow = (width: number): Record<string, number> => (widen ? { "--w0": width * 0.6, "--w1": width } : {});
+                const core = Math.round(w * BODY.core * 100) / 100;
                 return (
                   <g key={seg.key} data-testid="aqueduct-segment" data-width={w}>
-                    <path d={seg.d} fill="none" stroke={water.glow} strokeOpacity={water.glowAlpha} strokeWidth={w} strokeLinecap="round" className={`aq-glow${widen}`} style={widen ? ({ "--w0": w * 0.6, "--w1": w } as React.CSSProperties) : undefined} />
-                    <path d={seg.d} fill="none" stroke={water.dash} strokeOpacity={water.dashAlpha} strokeWidth={dw} strokeLinecap="round" strokeDasharray={DASH.array} className={`aq-dash${widen}`} style={widen ? ({ "--w0": dw * 0.6, "--w1": dw } as React.CSSProperties) : undefined} />
+                    <path d={seg.d} fill="none" stroke={water.edge} strokeOpacity={water.edgeAlpha} strokeWidth={w} strokeLinecap="round" className={`aq-body${widen}`} style={grow(w) as React.CSSProperties} />
+                    <path d={seg.d} fill="none" stroke={water.deep} strokeOpacity={water.deepAlpha} strokeWidth={core} strokeLinecap="round" className={`aq-body aq-core${widen}`} style={grow(core) as React.CSSProperties} />
+                    {FLOW.map((layer) => {
+                      const lw = flowWidth(layer, w);
+                      return (
+                        <path
+                          key={layer.key}
+                          d={seg.d}
+                          transform={layer.lane ? `translate(0 ${Math.round(layer.lane * w * 100) / 100})` : undefined}
+                          fill="none"
+                          stroke={water.dash}
+                          strokeOpacity={layer.alpha}
+                          strokeWidth={lw}
+                          strokeLinecap="round"
+                          strokeDasharray={layer.array}
+                          className={`aq-run aq-${layer.key}${widen}`}
+                          style={{ "--s": `${layer.seconds}s`, ...grow(lw) } as React.CSSProperties}
+                          data-flow={layer.key}
+                        />
+                      );
+                    })}
                   </g>
                 );
               })}
             </g>
+            )}
             {fall ? (
-              <g className={`aq-fall${repair ? " aq-rep-new" : ""}`} data-testid="aqueduct-fall" data-step={leak!.step} data-x={fall[0]}>
-                <line x1={fall[0]} y1={fall[1]} x2={fall[0]} y2={fall[2]} stroke={water.dash} strokeOpacity={0.85} strokeWidth={5} strokeLinecap="round" strokeDasharray="9 15" className="aq-falling" />
-                <ellipse cx={fall[3]} cy={fall[4]} rx={fall[5]} ry={fall[6]} fill="none" stroke={water.dash} strokeOpacity={0.8} strokeWidth={3} className="aq-ripple" />
-                <ellipse cx={fall[3]} cy={fall[4]} rx={fall[5]} ry={fall[6]} fill="none" stroke={water.dash} strokeOpacity={0.8} strokeWidth={3} className="aq-ripple aq-ripple-2" />
+              <g className={`aq-fall${repair ? " aq-rep-new" : ""}${fill ? " aq-after" : ""}`} style={fill ? ({ "--at": `${frontReaches(fall[0])}s` } as React.CSSProperties) : undefined} data-testid="aqueduct-fall" data-step={leak!.step} data-x={fall[0]}>
+                <FallingSheet f={fall} color={water.dash} />
+                <Splash f={fall} color={water.dash} />
               </g>
             ) : null}
-            {leak ? null : <AqueductFountain look={look} className={repair ? "aq-rep-new" : ""} />}
+            {leak || loop ? null : <AqueductFountain look={look} className={repair ? "aq-rep-new" : fill ? "aq-after" : ""} style={fill ? ({ "--at": `${frontReaches(1528)}s` } as React.CSSProperties) : undefined} />}
             <g className="aq-tags">
               {STAGE_TAG_AT.map(([x, y], i) => pill(x, y, `${now[i] === null || now[i] === undefined ? "—" : now[i]!.toLocaleString()} · ${STAGES[i]}`, "stage", `aqueduct-stage-${i}`, true))}
               {STEP_TAG_AT.map(([x, y], b) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cappedDpr, flameLabel, flameStateOf, flameTier, flameUniforms, nextTierLine, surgeDue, surgeEnvelope, SURGE_SECONDS, tierName } from "@/lib/engine/streak-flame";
+import { CLOSE_HREF, flameClip, flameLabel, flameStateOf, flameTier, nextTierLine, sheetAction, surgeDue, surgeEnvelope, surgeLook, SURGE_SECONDS, tierName } from "@/lib/engine/streak-flame";
 
 const base = { running: 12, asOf: "2026-10-17", today: "2026-10-17", hour: 10, active: new Set(["2026-10-16", "2026-10-17"]), closed: new Set(["2026-10-16"]), seenOn: "2026-10-17" };
 
@@ -36,6 +36,18 @@ describe("streak flame (H-558)", () => {
     expect(flameStateOf({ ...base, hour: 1, asOf: "2026-10-16", closed: new Set(["2026-10-16"]) }).waiting).toBe(false);
   });
 
+  it("the sheet's button goes to the close while the day waits, named for the day (H-927)", () => {
+    const evening = flameStateOf({ ...base, hour: 20 });
+    expect(evening).toMatchObject({ waiting: true, late: false });
+    expect(sheetAction(evening)).toEqual({ label: "Close the day", href: "/today#close" });
+    const lateNight = flameStateOf({ ...base, hour: 1, asOf: "2026-10-16", closed: new Set() });
+    expect(lateNight).toMatchObject({ waiting: true, late: true });
+    expect(sheetAction(lateNight)).toEqual({ label: "Close yesterday", href: CLOSE_HREF });
+    // Nothing waiting: no button to the close, and yesterday closed isn't late.
+    expect(sheetAction(flameStateOf({ ...base, hour: 10 }))).toBeNull();
+    expect(flameStateOf({ ...base, hour: 1, asOf: "2026-10-16", closed: new Set(["2026-10-16"]) })).toMatchObject({ waiting: false, late: false });
+  });
+
   it("after a missed day: a fresh Ember at Day 1", () => {
     expect(flameStateOf({ ...base, running: 0 })).toMatchObject({ days: 1, tier: "ember" });
     expect(flameStateOf({ ...base, running: 1 })).toMatchObject({ days: 1, tier: "ember" });
@@ -62,18 +74,20 @@ describe("streak flame (H-558)", () => {
     expect(surgeEnvelope(0.5)).toBeGreaterThan(surgeEnvelope(2));
   });
 
-  it("uniforms: about 30% taller and hotter at the peak, bar width 1.7 with no sparks, the waiting ember never swells", () => {
-    const calm = flameUniforms("torch", 0, "stage");
-    expect(calm).toEqual({ uH: 0.84, uHeat: 1, uGold: 0, uSparks: 1, uW: 1 });
-    const swell = flameUniforms("ember", 1, "stage");
-    expect(swell.uH).toBeCloseTo(0.52 * 1.32);
-    expect(swell.uHeat).toBeCloseTo(0.85 * 1.35);
-    expect(flameUniforms("gold", 1, "stage").uH).toBe(1);
-    expect(flameUniforms("gold", 0, "bar")).toMatchObject({ uSparks: 0, uW: 1.7, uGold: 1 });
-    expect(flameUniforms("risk", 1, "bar")).toEqual(flameUniforms("risk", 0, "bar"));
+  it("each look plays its own filmed loop: the pill in the bar, the stage in the sheet, the still for reduced motion (H-952)", () => {
+    expect(flameClip("torch", "bar")).toEqual({ mp4: "/streak/streak-torch-pill.mp4?v=2", webm: "/streak/streak-torch-pill.webm?v=2", poster: "/streak/streak-torch-still.jpg?v=2", still: "/streak/streak-torch-still.jpg?v=2", rate: 1, dim: 0 });
+    expect(flameClip("gold", "stage")).toMatchObject({ mp4: "/streak/streak-gold-stage.mp4?v=2", webm: "/streak/streak-gold-stage.webm?v=2" });
+    // Waiting on you: the Ember loop under a 40% dark layer at 0.7x speed.
+    expect(flameClip("risk", "bar")).toMatchObject({ mp4: "/streak/streak-ember-pill.mp4?v=2", rate: 0.7, dim: 0.4 });
   });
-
-  it("caps the device pixel ratio at 2", () => {
-    expect([undefined, 1, 1.5, 2, 3].map(cappedDpr)).toEqual([1, 1, 1.5, 2, 2]);
+  it("gives a phone the light copies, MP4 only, with first-frame posters (H-1063)", () => {
+    expect(flameClip("gold", "bar", true)).toEqual({ mp4: "/streak/streak-gold-pill-m.mp4?v=2", webm: null, poster: "/streak/streak-gold-pill-m-poster.jpg?v=2", still: "/streak/streak-gold-still.jpg?v=2", rate: 1, dim: 0 });
+    expect(flameClip("risk", "stage", true)).toMatchObject({ mp4: "/streak/streak-ember-stage-m.mp4?v=2", poster: "/streak/streak-ember-stage-m-poster.jpg?v=2", dim: 0.4 });
+  });
+  it("swells the surge with a glow layer, never on the waiting ember", () => {
+    expect(surgeLook("torch", 0)).toEqual({ scale: 1, glow: 0 });
+    expect(surgeLook("ember", 1)).toEqual({ scale: 1.3, glow: 1 });
+    expect(surgeLook("gold", 2).scale).toBe(1.3);
+    expect(surgeLook("risk", 1)).toEqual(surgeLook("risk", 0));
   });
 });

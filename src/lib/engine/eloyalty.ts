@@ -34,7 +34,7 @@ export const ELOYALTY_CALLS: Record<CallKey, CallSpec> = {
   customerEvents: { generation: "v3", method: "GET", needs: "customerId", note: "GET /api/public/admin/customers/{id}/events: the read that makes a retry safe" },
   pushNotification: { generation: "v1", method: "PUT", needs: "passTypeId+serial", note: "PUT /api/external/v1/passes/{passTypeId}/{serial}/values/Push_Notification { value }" },
   passField: { generation: "v1", method: "PUT", needs: "passTypeId+serial", note: "PUT /api/external/v1/passes/{passTypeId}/{serial}/values/{Field} { value }; never the field Points" },
-  createPass: { generation: "v1", method: "POST", needs: "templateId", note: "POST /api/external/v1/templates/{templateId}/pass { Email, First_Name, Last_Name, Id, MEMBER_ID (the template's own placeholder, H-923) }; the response carries customerId, serialNumber, passTypeIdentifier" },
+  createPass: { generation: "v1", method: "POST", needs: "templateId", note: "POST /api/external/v1/templates/{templateId}/pass { Email, First_Name, Last_Name, MEMBER_ID }: only the template's own placeholders (H-798), or eLoyalty refuses with a 400, does not match any template placeholder (H-1235); the response carries customerId, serialNumber, passTypeIdentifier" },
 };
 
 export type Addressed = { ok: true; generation: Generation; method: CallSpec["method"]; path: string; body?: Record<string, unknown> } | { ok: false; missing: "customerId" | "serial" | "passTypeId" | "templateId" };
@@ -62,7 +62,7 @@ export function address(call: CallKey, id: PassIdentity, args: Args = {}): Addre
   if (spec.needs === "templateId") {
     const t = (args.templateId ?? "").trim();
     if (!t) return { ok: false, missing: "templateId" };
-    return { ok: true, generation: "v1", method: "POST", path: `/api/external/v1/templates/${enc(t)}/pass`, body: { Email: args.email ?? "", First_Name: args.firstName ?? "", Last_Name: args.lastName ?? "", Id: args.externalId ?? "", MEMBER_ID: args.externalId ?? "" } };
+    return { ok: true, generation: "v1", method: "POST", path: `/api/external/v1/templates/${enc(t)}/pass`, body: { Email: args.email ?? "", First_Name: args.firstName ?? "", Last_Name: args.lastName ?? "", MEMBER_ID: args.externalId ?? "" } };
   }
   const p = (id.passTypeId ?? "").trim();
   const s = (id.serial ?? "").trim();

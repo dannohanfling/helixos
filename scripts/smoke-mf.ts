@@ -288,7 +288,13 @@ async function main() {
     const html = await (await page.request.get(mfPage)).text();
     must(html.includes('data-testid="hm-landing"') && html.includes('data-copy="default"'), "the default-copy page is in the server's HTML, before any script runs");
     await page.locator('[data-testid="mf-preview-page"] [data-testid="hm-landing"]').waitFor({ timeout: 20000 });
-    const paintMs = await page.evaluate(() => Math.round(performance.now() - (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming).responseEnd));
+    // The browser's own first paint against the response's end (H-1256): what the member sees, not how long the walk took to
+    // fetch the HTML again and find the landing before asking. Falls back to the DOM being ready where paint timing is missing.
+    const paintMs = await page.evaluate(() => {
+      const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
+      const fcp = performance.getEntriesByType("paint").find((e) => e.name === "first-contentful-paint");
+      return Math.round((fcp ? fcp.startTime : nav.domContentLoadedEventEnd) - nav.responseEnd);
+    });
     must(paintMs < 1000, `the default page shows under a second after the response: ${paintMs} ms`);
     const seatForm = page.locator('[data-testid="mf-preview-page"] [data-testid="hm-form"]');
     must((await seatForm.count()) === 1 && !(await seatForm.getAttribute("action")), "the page's form is there and inert in the preview");

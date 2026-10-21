@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { sendReportAction, type SendResult } from "@/lib/actions/reports";
-import { KIND_LABEL, SCREENSHOT_MAX_BYTES, SEVERITY_LABEL } from "@/lib/engine/reports";
-import { MEMBER_REPORT_KINDS, REPORT_SEVERITIES, type MemberReportKind } from "@/db/schema";
+import { FORM_REPORT_KINDS, KIND_LABEL, SCREENSHOT_MAX_BYTES, SEVERITY_LABEL } from "@/lib/engine/reports";
+import { REPORT_SEVERITIES, type MemberReportKind } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { FilePicker } from "@/components/file-picker";
 
@@ -173,7 +174,7 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
             <input type="hidden" name="page" value={pathname ?? ""} />
             <fieldset className="space-y-1 text-sm">
               <legend className="font-medium">What is it?</legend>
-              {MEMBER_REPORT_KINDS.map((k) => (
+              {FORM_REPORT_KINDS.map((k) => (
                 <label key={k} className="flex items-center gap-2">
                   <input type="radio" name="kind" value={k} checked={kind === k} onChange={() => setKind(k)} data-testid={`report-kind-${k}`} /> {KIND_LABEL[k]}
                 </label>
@@ -254,6 +255,12 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
               {shotError ? <p className="text-xs text-danger">{shotError}</p> : null}
             </div>
             <p className="text-xs text-ink-3">The page you&apos;re on goes with it: {pathname}</p>
+            <p className="text-xs text-ink-3">
+              Need a person?{" "}
+              <Link href="/support" className="underline" data-testid="report-support">
+                Help and support
+              </Link>
+            </p>
             {result && !result.ok ? (
               <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="report-error">
                 {result.error}

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { Viewer } from "@/lib/auth";
-import { arenaFor, seatsOf, standingsOf } from "@/lib/colosseum";
+import { arenaFor, seatsOf, shortName, standingsOf } from "@/lib/colosseum";
+import { blockedFor } from "@/lib/blocks";
 import { arenaLook, TAB_WORDS, TABS, TIER_RING, type Tab } from "@/lib/engine/colosseum";
 import { TIERS } from "@/lib/engine/tiers";
 import { ColosseumArena } from "@/components/colosseum-arena";
 import { ShareWin, WinList } from "@/components/colosseum-bits";
+import { ModerateMenu } from "@/components/colosseum-moderate";
 import "@/components/colosseum.css";
 
 export type ColosseumParams = { section?: string; tier?: string; kind?: string };
@@ -23,7 +25,15 @@ export function colosseumHref(section: Tab | "arena" = "arena", extra: Record<st
  */
 export async function ColosseumView({ v, sp }: { v: Viewer; sp: ColosseumParams }) {
   const tab: Tab = (TABS as readonly string[]).includes(sp.section ?? "") ? (sp.section as Tab) : "arena";
-  const a = await arenaFor(v, v.today);
+  // The viewer's blocks and reported wins (H-745), one read for every list on the page; none while a coach is switched in.
+  const a = await arenaFor(v, v.today, await blockedFor(v));
+  // Block and Report are a member's own: not a coach's, and never while a coach is switched into a member.
+  const moderate = v.role === "client" && !v.switchedInto && !v.team;
+  // Applause (H-1171): a member or the coach in their own account; never while switched in or on a team.
+  const canApplaud = !v.switchedInto && !v.team;
+  // Each member's latest win for their card: the wins come newest first.
+  const latestWins: Record<string, (typeof a.wins)[number]> = {};
+  for (const w of a.wins) if (w.authorId && !latestWins[w.authorId]) latestWins[w.authorId] = w;
   const { rings, champs } = seatsOf(a);
   const look = arenaLook(v.membership.sceneLook, v.hour);
   // Standings filtered to a tier, or to a ring ("+N more" on the arena).
@@ -41,7 +51,7 @@ export async function ColosseumView({ v, sp }: { v: Viewer; sp: ColosseumParams 
         <h1 className="co-title">The Colosseum</h1>
         <p className="co-sub">Where the work gets seen. The closer to the arena, the higher the rank.</p>
       </header>
-      <ColosseumArena rings={rings} champs={champs} more={a.more} initialLook={look} initialPaused={you.paused} ownLook={!v.switchedInto} cheerWeek={v.switchedInto ? null : a.week.monday} />
+      <ColosseumArena rings={rings} champs={champs} more={a.more} initialLook={look} initialPaused={you.paused} ownLook={!v.switchedInto} cheerWeek={v.switchedInto ? null : a.week.monday} moderate={moderate} latestWins={latestWins} canApplaud={canApplaud} />
       <section className="co-seat" aria-label="Your seat in the stands" data-testid="your-seat">
         <p className="co-eyebrow">Your seat in the stands</p>
         <p className="co-rankword">{you.tier}</p>
@@ -71,7 +81,7 @@ export async function ColosseumView({ v, sp }: { v: Viewer; sp: ColosseumParams 
               <h2 className="co-h2">Wins from the stands</h2>
               <Link href={colosseumHref("wins")}>All wins</Link>
             </div>
-            <WinList wins={a.wins.slice(0, 3)} tz={v.tz} />
+            <WinList wins={a.wins.slice(0, 3)} tz={v.tz} moderate={moderate} applaud={canApplaud} />
           </section>
         </div>
       ) : null}
@@ -91,14 +101,15 @@ export async function ColosseumView({ v, sp }: { v: Viewer; sp: ColosseumParams 
           </p>
           <ol className="co-list" data-testid="standings">
             {rows.map((r, i) => (
-              <li key={r.userId} className={`co-item${r.isYou ? " co-mine" : ""}`} data-testid="standing">
+              <li key={r.userId} className={`co-item${r.isYou ? " co-mine" : ""}`} data-testid="standing" data-veiled={r.veiled ? "1" : undefined}>
                 <span className="co-pos">{i + 1}</span>
                 <span className="co-name">
-                  {r.name.split(" ")[0]} {r.name.split(" ").slice(1).map((w) => `${w[0]}.`).join(" ")}
+                  {shortName(r.name)}
                   <span className="co-rank">{r.tier}</span>
                 </span>
                 <span className="co-pts">{r.points.toLocaleString()}</span>
                 <span className="co-chg">+{r.week.toLocaleString()}</span>
+                {moderate && !r.isYou && !r.veiled ? <ModerateMenu target={{ kind: "member", id: r.membershipId, membershipId: r.membershipId, name: shortName(r.name), coach: Boolean(r.coach) }} /> : null}
               </li>
             ))}
             {!rows.length ? <li className="co-quiet">Nobody here yet.</li> : null}
@@ -116,7 +127,7 @@ export async function ColosseumView({ v, sp }: { v: Viewer; sp: ColosseumParams 
             </span>
           </div>
           {v.switchedInto ? null : <ShareWin />}
-          <WinList wins={wins} tz={v.tz} removable />
+          <WinList wins={wins} tz={v.tz} removable moderate={moderate} applaud={canApplaud} />
         </section>
       ) : null}
       {tab === "challenges" ? (
