@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 335,
+    date: "2026-10-21",
+    title: "A Scene motion switch in Settings",
+    lines: [
+      "Settings, Sounds and motion: turn Scene motion off and the Colosseum, the Aqueduct, the Forum and the Council Chamber stay still, with no flames, water, birds, circling arena or speaking clips. Celebrations stay still too, the same as when your device asks for reduced motion. It is on by default and only you can change it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 334,
     date: "2026-10-21",
     title: "The streak flame without its box",

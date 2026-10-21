@@ -41,7 +41,7 @@ import { appUrl as appBase } from "@/lib/branded-email";
 import { MoneyInput } from "@/components/money-input";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 import { setHumanosAction } from "@/lib/actions/body";
-import { setSoundsOnAction } from "@/lib/actions/scene";
+import { setSoundsOnAction, setSceneMotionAction } from "@/lib/actions/scene";
 import { linkedChats } from "@/lib/chat";
 import { setChatProgressShareAction, unlinkChatAction } from "@/lib/actions/chat";
 import { CHANNEL_LABELS } from "@/lib/engine/chat";
@@ -330,7 +330,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </Card>
         )}
         {v.team ? null : (
-          <Card id="sounds" className="min-w-0" title="Sounds">
+          <Card id="sounds" className="min-w-0" title="Sounds and motion">
             {/* The living scenes' sounds (H-400): one switch for the crowd, the applause and the fire, on by default, the member's own. */}
             {v.switchedInto ? (
               <p className="text-sm text-ink-3" data-testid="sounds-theirs">{v.membership.soundsOn ? "On." : "Off."} The client sets this.</p>
@@ -343,6 +343,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </form>
             )}
             <p className="mt-2 text-xs text-ink-3">Nothing plays until you have tapped or typed on the page, and nothing plays when your device asks for reduced motion.</p>
+            {/* Scene motion (Roma Vivit 2 PR 6, H-1060): off draws every living scene still, as reduced motion does. The member's own. */}
+            <div className="mt-4 border-t border-line pt-4">
+              <p className="text-sm font-medium">Scene motion</p>
+              {v.switchedInto ? (
+                <p className="text-sm text-ink-3" data-testid="scene-motion-theirs">{v.membership.sceneMotion ? "On." : "Off."} The client sets this.</p>
+              ) : (
+                <form action={setSceneMotionAction} className="flex flex-wrap items-center gap-2 text-sm">
+                  <label className="flex min-h-[44px] items-center gap-2">
+                    <input type="checkbox" name="sceneMotion" defaultChecked={v.membership.sceneMotion} data-testid="scene-motion-on" /> Let the scenes move: the flames, the water, the birds and the circling arena
+                  </label>
+                  <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="scene-motion-save">Save</SubmitButton>
+                </form>
+              )}
+              <p className="mt-2 text-xs text-ink-3">Off, every scene stays still, the same as when your device asks for reduced motion.</p>
+            </div>
           </Card>
         )}
         {v.role === "client" ? (

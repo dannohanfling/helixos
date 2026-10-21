@@ -7,14 +7,37 @@
 import { useSyncExternalStore } from "react";
 
 const MOTION = "(prefers-reduced-motion: reduce)";
-const subscribeMotion = (cb: () => void) => {
+/**
+ * The member's own "Scene motion" switch (Roma Vivit 2 PR 6, H-1060): off draws every scene still, exactly as when the device
+ * asks for reduced motion. The layout primes it before the scenes render (SceneMotionConfig), so the first client render already
+ * knows it.
+ */
+let motionOn = true;
+const motionSubs = new Set<() => void>();
+/** Sets the switch without telling anyone: for the first render, before any scene reads it. */
+export function primeSceneMotion(on: boolean): void {
+  motionOn = on;
+}
+/** Sets the switch and lets every scene know. */
+export function setSceneMotion(on: boolean): void {
+  if (motionOn === on) return;
+  motionOn = on;
+  motionSubs.forEach((cb) => cb());
+}
+/** Calls back when the device setting or the member's switch changes. */
+export const onStillChange = (cb: () => void) => {
   const q = window.matchMedia(MOTION);
   q.addEventListener("change", cb);
-  return () => q.removeEventListener("change", cb);
+  motionSubs.add(cb);
+  return () => {
+    q.removeEventListener("change", cb);
+    motionSubs.delete(cb);
+  };
 };
-const readMotion = () => window.matchMedia(MOTION).matches;
-/** True when the member asked for reduced motion; false on the server and until hydration. */
-export const useQuiet = (): boolean => useSyncExternalStore(subscribeMotion, readMotion, () => false);
+/** True when the scenes should keep still: the device asks for reduced motion, or the member turned Scene motion off. */
+export const keepStill = () => !motionOn || window.matchMedia(MOTION).matches;
+/** keepStill as a hook; false on the server and until hydration. */
+export const useQuiet = (): boolean => useSyncExternalStore(onStillChange, keepStill, () => false);
 
 const subscribeHidden = (cb: () => void) => {
   document.addEventListener("visibilitychange", cb);

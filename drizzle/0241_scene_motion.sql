@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `scene_motion` integer DEFAULT true NOT NULL;

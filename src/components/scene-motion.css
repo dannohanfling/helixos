@@ -1,0 +1,14 @@
+/*
+ * Scene motion off (Roma Vivit 2 PR 6, H-1060): the same stillness the scenes' own stylesheets give a device that asks for
+ * reduced motion, applied when the member turns Scene motion off in Settings. Each rule mirrors one reduced-motion rule; keep
+ * them in step. The JavaScript motion reads the same switch through useQuiet() and keepStill().
+ */
+html[data-scene-motion="off"] .co-champ { animation: none; }
+html[data-scene-motion="off"] :is(.aq-run, .aq-drop, .aq-sway, .aq-spark, .aq-after, .aq-ripple) { animation: none; }
+html[data-scene-motion="off"] :is(.br-seat.br-speaking .br-glow, .br-seat.br-speaking .br-eq i, .br-seat.br-speaking .br-live, .br-rise) { animation: none; }
+html[data-scene-motion="off"] .br-seat.br-speaking .br-live { opacity: 0; }
+html[data-scene-motion="off"] :is(.br-live, .br-glow, .br-shade, .br-plate, .br-minute) { transition: none; }
+html[data-scene-motion="off"] .fo-bld.fo-working .fo-halo { animation: none; }
+html[data-scene-motion="off"] .fo-photo { transition: none; }
+html[data-scene-motion="off"] :is(.aq-stage *, .aq-repcard) { animation: none !important; }
+html[data-scene-motion="off"] :is(.amb, .amb *) { animation: none !important; }

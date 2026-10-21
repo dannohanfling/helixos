@@ -149,6 +149,8 @@ export const memberships = sqliteTable(
     tzPromptSeenAt: text("tz_prompt_seen_at"),
     /** The living scenes' sounds (H-400): the crowd, the applause and the fire loop; one switch, on by default, the member's own. */
     soundsOn: integer("sounds_on", { mode: "boolean" }).notNull().default(true),
+    /** "Scene motion" (Roma Vivit 2 PR 6, H-1060): off draws every living scene still, as reduced motion does; on by default, the member's own. */
+    sceneMotion: integer("scene_motion", { mode: "boolean" }).notNull().default(true),
     /** Team access (H-413): the newest Office Hours request a team member booked for this owner, until the owner opens Office Hours. */
     oohNotice: text("ooh_notice", { mode: "json" }).$type<{ teamUserId: string; friday: string; requestId: string; at: string }>(),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
