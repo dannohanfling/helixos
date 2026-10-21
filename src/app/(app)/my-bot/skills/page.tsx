@@ -4,7 +4,8 @@ import { requireViewer } from "@/lib/auth";
 import { featuresFor, unlockedCount, type FeatureView } from "@/lib/bot-features";
 import { BOT_FEATURES } from "@/lib/engine/bot-features";
 import { CheckIcon, Chip, FeatureIcon, LockIcon } from "@/components/bot-feature-icon";
-import "./bot-features.css";
+import { MyBotTabs } from "@/components/my-bot-tabs";
+import "../../bot-features/bot-features.css";
 
 export const metadata: Metadata = { title: "Bot Features" };
 
@@ -51,6 +52,7 @@ export default async function BotFeaturesPage() {
   return (
     <div className="bf-page" data-testid="bot-features">
       <div className="bf-inner">
+        <MyBotTabs current="skills" team={Boolean(v.team)} />
         <header className="bf-head">
           <div>
             <div className="bf-eyebrow">YOUR BOT</div>

@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ key: stri
 export default async function BotFeaturePage({ params, searchParams }: { params: Promise<{ key: string }>; searchParams: Promise<{ sent?: string; error?: string; field?: string; [k: string]: string | undefined }> }) {
   const v = await requireViewer({ team: "allow" });
   const feature = featureOf((await params).key);
-  if (!feature) return <ItemGone what="This feature" href="/bot-features" list="Bot Features" />;
+  if (!feature) return <ItemGone what="This feature" href="/my-bot/skills" list="Bot Features" />;
   const sp = await searchParams;
   const view = (await featuresFor(v.membership)).find((x) => x.feature.key === feature.key)!;
   const viewOnly = Boolean(v.team) || Boolean(v.switchedInto);
@@ -31,7 +31,7 @@ export default async function BotFeaturePage({ params, searchParams }: { params:
   return (
     <div className="bf-page">
       <div className={`bf-detail ${view.state}`} data-testid="bf-detail" data-state={view.state}>
-        <Link href="/bot-features" className="bf-back">
+        <Link href="/my-bot/skills" className="bf-back">
           ‹ Bot Features
         </Link>
         <div className="bf-top">

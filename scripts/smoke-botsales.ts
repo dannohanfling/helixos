@@ -163,7 +163,7 @@ async function main() {
     await page.goto(`${base}/brain`);
     const preview = page.locator('[data-testid="bot-preview"]');
     await preview.waitFor({ timeout: 20000 });
-    if ((await page.locator("h1").innerText()).trim() !== "Your bot") throw new Error("the page is called Your bot");
+    if ((await page.locator("h1").innerText()).trim() !== "My bot") throw new Error("the page is called My bot (H-164 slice 2c)");
     await page.fill('[data-testid="bot-price-answer"]', COACH.priceAnswer);
     await page.locator('[data-testid="bot-default-path"]').selectOption(COACH.defaultPath);
     await page.fill('[data-testid="bot-call-minutes"]', String(COACH.callMinutes));

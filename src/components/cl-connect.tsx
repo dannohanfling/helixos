@@ -17,7 +17,7 @@ const OK_NOTICE: Record<string, string> = { ok: "Connected. HelixOS made one tin
  * and check, Remove key, then the agent (a pick from the bot's own list, the FAQ agent by default), the member's contact ID with
  * its format checked, and the FAQ field. The key is never rendered again. Served on Settings and on Connect your tools.
  */
-export function ClConnect({ connected, m, agents, notice, back, tz }: { connected: boolean; m: Pick<Membership, "clConnectedAt" | "clAgentNs" | "clUserNs" | "faqBotField">; agents: { ns: string; name: string }[]; notice: string | null; back: "/settings" | "/connect-tools"; tz: string }) {
+export function ClConnect({ connected, m, agents, notice, back, tz }: { connected: boolean; m: Pick<Membership, "clConnectedAt" | "clAgentNs" | "clUserNs" | "faqBotField">; agents: { ns: string; name: string }[]; notice: string | null; back: "/settings" | "/connect-tools" | "/my-bot/connection"; tz: string }) {
   const good = notice && OK_NOTICE[notice];
   const bad = notice && !good ? (CL_NOTICE[notice] ?? null) : null;
   return (

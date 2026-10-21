@@ -91,8 +91,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "My bot",
     items: [
-      { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent", phase: 7 },
-      { href: "/bot-features", label: "Bot Features", icon: "🔓", team: true, line: "New skills for your bot", phase: 7 },
+      { href: "/my-bot", label: "Your bot", icon: "🧠", line: "What it says, and its connection", phase: 7 },
+      { href: "/my-bot/skills", label: "Bot Features", icon: "🔓", team: true, line: "New skills for your bot", phase: 7 },
     ],
   },
   {

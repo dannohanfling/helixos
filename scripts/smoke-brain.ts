@@ -85,6 +85,23 @@ async function main() {
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
 
+    // ── My bot as one page (H-164 §15): three tabs; the old addresses land on their tab. ──
+    await page.goto(`${base}/brain?imported=0`);
+    await page.waitForURL(/\/my-bot\?imported=0$/);
+    const tabs = page.locator('[data-testid="my-bot-tabs"] a');
+    if ((await tabs.allInnerTexts()).map((t) => t.trim()).join("|") !== "What it says|Skills|Connection") throw new Error(`My bot's tabs: ${(await tabs.allInnerTexts()).join("|")}`);
+    await page.goto(`${base}/bot-features`);
+    await page.waitForURL(/\/my-bot\/skills$/);
+    await page.locator('[data-testid="bf-grid"]').waitFor({ timeout: 20000 });
+    await page.click('[data-testid="my-bot-tabs"] a:has-text("Connection")');
+    await page.waitForURL(/\/my-bot\/connection$/);
+    await page.locator('#community-loyalty').waitFor({ timeout: 20000 });
+    if (!(await page.locator('[data-testid="bot-agent-status"]').count())) throw new Error("the Connection tab says whether the bot's agent reads what is sent");
+    if (await page.locator('#community-loyalty input[name="clKey"][value]:not([value=""])').count()) throw new Error("a saved key is never shown");
+    const active = await page.locator('[data-testid="side-nav"] a[aria-current="page"]').getAttribute("href");
+    if (active !== "/my-bot") throw new Error(`on Connection the menu marks Your bot, got ${active}`);
+    console.log("✓ My bot: What it says, Skills, Connection; /brain and /bot-features land on their tab; the key never shown");
+
     // ── Step 1: a file in the template's format imports as N entries, N counted from the fixture. ──
     const fixtureText = readFileSync(FIXTURE, "utf8");
     const N = countEntries(fixtureText);

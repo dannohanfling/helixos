@@ -15,8 +15,9 @@ import { essenceFor } from "@/lib/queries/essence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import type { FaqEntry } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
+import { MyBotTabs } from "@/components/my-bot-tabs";
 
-export const metadata = { title: "Your bot" };
+export const metadata = { title: "My bot" };
 
 const s = (v: unknown): string => (typeof v === "string" ? v : Array.isArray(v) ? v.map(String).join(", ") : "");
 
@@ -67,7 +68,8 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title="Your bot" subtitle="Everything your bot is sent, in plain language, and the one place it is sent from. Nothing reaches Community Loyalty without your approval here." />
+      <PageHeader title="My bot" subtitle="Everything your bot is sent, in plain language, and the one place it is sent from. Nothing reaches Community Loyalty without your approval here." />
+      <MyBotTabs current="says" />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" data-testid="brain-error" role="alert">{sp.error}</p>
       ) : null}

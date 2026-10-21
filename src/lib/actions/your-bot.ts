@@ -16,8 +16,8 @@ import type { BotExampleRow, BotStoryRow } from "@/db/schema";
 async function botOwner(v: Awaited<ReturnType<typeof ctx>>["v"], formData: FormData) {
   const membershipId = str(formData, "membershipId") || v.membership.id;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, v.workspace.id)) });
-  if (!m || (m.userId !== v.user.id && v.role !== "coach")) redirect("/brain");
-  const back = m.userId === v.user.id ? "/brain" : `/coach/${m.id}/bot`;
+  if (!m || (m.userId !== v.user.id && v.role !== "coach")) redirect("/my-bot");
+  const back = m.userId === v.user.id ? "/my-bot" : `/coach/${m.id}/bot`;
   return { m, back };
 }
 
