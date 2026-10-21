@@ -119,7 +119,7 @@ async function main() {
 
     // ── Maya's Settings names the agent; the coach's page lists the switch in. ──
     await login(page, "As a client");
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=data`);
     const line = page.locator('[data-testid="coach-change-agent"]').first();
     await line.waitFor({ timeout: 20000 });
     must((await line.innerText()).includes(`${NAME} (${coach.name.split(" ")[0]}'s agent)`), `Changes by your coach names the agent: ${await line.innerText()}`);
