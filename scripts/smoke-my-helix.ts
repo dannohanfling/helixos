@@ -148,7 +148,13 @@ async function main() {
     const first = page.locator('[data-testid="coach-helix-rung"][data-key="p0-superpower"]');
     await first.locator('[data-testid="rung-label"]').fill("Your superpower, named");
     await submit(page, '[data-testid="coach-helix-rung"][data-key="p0-superpower"] [data-testid="rung-save"]');
-    must((await db.query.helixRungs.findFirst({ where: eq(schema.helixRungs.key, "p0-superpower") }))!.label === "Your superpower, named", "the coach's edit is saved");
+    // The save's own write can land after another POST on the page (H-991): wait for the row, up to ten seconds.
+    let saved = "";
+    for (let i = 0; i < 40 && saved !== "Your superpower, named"; i++) {
+      saved = (await db.query.helixRungs.findFirst({ where: eq(schema.helixRungs.key, "p0-superpower") }))!.label;
+      if (saved !== "Your superpower, named") await page.waitForTimeout(250);
+    }
+    must(saved === "Your superpower, named", `the coach's edit is saved: ${saved}`);
     await db.update(schema.helixRungs).set({ label: "Your superpower" }).where(eq(schema.helixRungs.key, "p0-superpower"));
     await db.delete(schema.coachChanges).where(eq(schema.coachChanges.userId, maya.id));
     await page.goto(`${base}/coach/${mm.id}`, { waitUntil: "networkidle" });

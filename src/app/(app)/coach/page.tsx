@@ -16,7 +16,7 @@ import { money, rollup } from "@/lib/engine/ai-usage";
 import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
 import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVIDENCE_GLOBAL_BUDGET, lastDays, quotaState, utcDay } from "@/lib/engine/evidence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
-import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
+import { TIER_ICONS, rankOf } from "@/lib/engine/tiers";
 import { activeDaysOf, runningStreak, streakDayOf } from "@/lib/engine/streak";
 import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
@@ -29,6 +29,7 @@ import { MonthAnswers } from "@/components/month-card";
 import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { openClaims } from "@/lib/queries/rewards";
+import { submissionsWaiting } from "@/lib/queries/submissions";
 import { setFeatureOnAction } from "@/lib/actions/bot-features";
 import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
 import { PointsCheck } from "@/components/leaderboard/points-check";
@@ -48,7 +49,7 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string }> }) {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const claimsShown = sp.claims === "done" ? "done" : "open";
@@ -64,14 +65,16 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const removedUsers = removedMembers.length ? await db.query.users.findMany({ where: inArray(schema.users.id, removedMembers.map((m) => m.userId)) }) : [];
   const removedNameOf = new Map(removedUsers.map((u) => [u.id, u.name]));
   const userIds = members.map((m) => m.userId);
-  const [users, logs, points, verified, submitted, library] = await Promise.all([
+  const [users, logs, points, verified, waiting, library] = await Promise.all([
     userIds.length ? db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [],
     userIds.length ? db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.workspaceId, wsId), inArray(schema.dailyLogs.userId, userIds)) }) : [],
     userIds.length ? db.select({ userId: schema.pointsLedger.userId, points: schema.pointsLedger.points, type: schema.pointsLedger.type, refId: schema.pointsLedger.refId, adjustedBy: schema.pointsLedger.adjustedBy, createdAt: schema.pointsLedger.createdAt }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, wsId), inArray(schema.pointsLedger.userId, userIds))) : [],
     userIds.length ? db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), inArray(schema.pathwayProgress.userId, userIds), eq(schema.pathwayProgress.status, "verified")) }) : [],
-    db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), eq(schema.pathwayProgress.status, "submitted")), orderBy: desc(schema.pathwayProgress.submittedAt) }),
+    // The same read as the menu's "Submissions to verify" count (H-1280): clients still here, Pathway hand-ins and certification deliverables.
+    submissionsWaiting(wsId),
     db.query.libraryTasks.findMany(),
   ]);
+  const submitted = waiting.pathway;
   const monthStart = `${v.today.slice(0, 7)}-01`;
   // Each client's own brand kit (rev 568): starter, in progress, or set, read once for the roster.
   const kitOf = await kitsByMember(wsId);
@@ -128,7 +131,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
         m,
         u,
         pts,
-        tier: tierFor(pts),
+        // The kept rank (H-1088): the roster never shows a rank the member has dropped from.
+        tier: rankOf(m, pts),
         streak: runningStreak(active, streakDayOf(active, ctoday, hourInTz(ctz)), m.workDays),
         lastActive,
         daysSilent,
@@ -187,7 +191,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <span hidden data-page-wide />
-      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex flex-wrap gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/late-closes" className="btn btn-ghost btn-sm" data-testid="coach-late-link">Late close-outs</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/coach/teaching" className="btn btn-ghost btn-sm" data-testid="coach-teaching-link">Teaching library</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
+      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${waiting.total} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex flex-wrap gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/late-closes" className="btn btn-ghost btn-sm" data-testid="coach-late-link">Late close-outs</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/hermes/calendars" className="btn btn-ghost btn-sm" data-testid="coach-calendars-link">Booking calendars</Link><Link href="/coach/teaching" className="btn btn-ghost btn-sm" data-testid="coach-teaching-link">Teaching library</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
       <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">Your bot →</Link>}>
         <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
         <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">
@@ -312,7 +316,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
             ) : null}
           </p>
         ) : null}
-        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt) }} /> : null}
+        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt), addressed: Boolean(v.membership.eoPassSerial && v.membership.eoPassTypeId), lastMessageAt: v.membership.eoPassLastPushAt }} passMessage={sp.passMessage} /> : null}
         <Card className="mb-4" title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href={allOpen ? "/coach" : "/coach?connections=open"} className="underline" data-testid="connections-all">{allOpen ? "Close all" : "Open all"}</Link><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
         {rows.length ? (
             <ul className="divide-y">
@@ -416,7 +420,13 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
           </Card>
         ) : null}
         <div className="contents">
-          <Card title="Verify submissions" action={<Badge tone="accent">{submitted.length}</Badge>}>
+          <Card id="verify" title="Verify submissions" action={<span data-testid="verify-count"><Badge tone="accent">{submitted.length}</Badge></span>}>
+            {waiting.certs.length ? (
+              // Certification hand-ins are scored on their own page (H-1280): say they wait, and point there.
+              <p className="mb-3 text-sm" data-testid="verify-certs-line">
+                {waiting.certs.length} certification hand-in{waiting.certs.length === 1 ? "" : "s"} to score · <Link href="/certification" className="underline">Certification →</Link>
+              </p>
+            ) : null}
             {submitted.length ? (
               <ul className="space-y-3">
                 {submitted.map((s) => {

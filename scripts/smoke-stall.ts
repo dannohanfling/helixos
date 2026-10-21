@@ -152,6 +152,8 @@ async function main() {
     await openEdit("Architectus");
     await submit(page, `[data-forum-card="${poller.a.id}"] [data-testid="forum-mute"]`);
     must((await fresh(poller.a.id)).stallMuted && !(await fresh(poller.a.id)).stalledAt, "Don't watch this agent mutes it and ends the stall");
+    // The card redraws after the mute (H-991): wait for the Paused chip to go before counting it.
+    await card("Architectus").locator('[data-testid="forum-paused"]').waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
     must((await card("Architectus").locator('[data-testid="forum-paused"]').count()) === 0, "the card is no longer Paused");
     must((await watchForum(O, new Date())).flagged === 0 && !(await fresh(poller.a.id)).stalledAt, "a muted agent is never flagged");
     await openEdit("Architectus");

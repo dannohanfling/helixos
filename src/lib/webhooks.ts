@@ -115,6 +115,16 @@ export async function handleInbound(provider: Provider, request: Request): Promi
       note = ok ? `Awarded ${pts} points` : "Nothing awarded";
     }
   } else if (provider === "gohighlevel") {
+    // The Partner Program (H-1361 PR B): GHL's Custom Webhook sends gnc.order_paid and gnc.onboarding_submitted; the log keeps the
+    // ids and the business, never the owner's contact.
+    if (/^gnc\./.test(event)) {
+      const { gncLogPayload, handleGncEvent } = await import("@/lib/partner-ghl");
+      const r = await handleGncEvent(integ.workspaceId, event, body);
+      const said = r ? r.note : "Not a Partner Program event";
+      await logSync({ workspaceId: integ.workspaceId, userId: null, provider, direction: "in", event, payload: gncLogPayload(body), status: r?.ok ? "received" : "skipped", note: said });
+      await db.update(schema.integrations).set({ lastSyncAt: nowIso() }).where(eq(schema.integrations.id, integ.id));
+      return NextResponse.json(r?.ok ? { ok: true, note: said, restaurantId: r.restaurantId } : { ok: false, note: said }, { status: r && !r.ok ? 400 : 200 });
+    }
     // The Magic funnel (rev 837's answer): GoHighLevel's "Form submitted → Webhook" workflow sends the form's mf_code. That is
     // the person registering; nothing else of the form is kept, and the log holds only the code's start.
     const mfCode = s(body.mf_code ?? body.mf ?? (body.customData as Body | undefined)?.mf_code ?? (body.contact as Body | undefined)?.mf_code);

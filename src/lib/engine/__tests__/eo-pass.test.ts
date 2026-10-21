@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { createFailureWords, passNames, passOffer, refusalReason, safePassUrl } from "../eo-pass";
 import { address } from "../eloyalty";
 
+// The placeholders on the live Evolve Omega template (H-798, H-817).
+const EVOLVE_OMEGA_PLACEHOLDERS = ["First_Name", "Last_Name", "Email", "MEMBER_ID", "Push_Notification", "Points", "Tier", "Current_Offer"];
+
 /** The Evolve Omega pass (H-622): who may get one, the names it carries, and the only links kept. */
 describe("the Evolve Omega pass", () => {
   const ready = { ready: true, issuePasses: false };
@@ -51,6 +54,8 @@ describe("a refused pass says why (H-923)", () => {
   });
   it("sends the template's own MEMBER_ID with the pass, the same as Id", () => {
     const a = address("createPass", {}, { templateId: "t1", email: "e@x.test", firstName: "A", lastName: "B", externalId: "m1" });
-    expect(a.ok && a.body).toEqual({ Email: "e@x.test", First_Name: "A", Last_Name: "B", Id: "m1", MEMBER_ID: "m1" });
+    // Only the Evolve Omega template's placeholders (H-798): an unknown field such as Id is refused with a 400 (H-1235).
+    expect(a.ok && a.body).toEqual({ Email: "e@x.test", First_Name: "A", Last_Name: "B", MEMBER_ID: "m1" });
+    expect(Object.keys(a.ok ? (a.body as object) : {}).every((k) => EVOLVE_OMEGA_PLACEHOLDERS.includes(k))).toBe(true);
   });
 });

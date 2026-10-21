@@ -1,8 +1,9 @@
 "use server";
 
 /**
- * The Handoff inbox (rev 769): the owner's own actions, signed in. Agent tokens (made, shown once, revoked), tying a connection
- * to an agent, the approval-email switch and check-ins stay the coach's (requireCoach). The owner's answers, notes, writing to
+ * The Handoff inbox (rev 769): the owner's own actions, signed in. Agent tokens (made, shown once, revoked) are any member's on
+ * their own Forum since H-727 PR 2; tying a connection to an agent, the approval-email switch and check-ins stay the coach's
+ * (requireCoach). The owner's answers, notes, writing to
  * an agent, Hold, Release and Superseded, and the only door to a decision (Approve, Change or Decline, on the inbox and on The
  * Forum) are any member's on their own inbox (H-727), through ctx(). Each acts only on the signed-in member's own inbox. A
  * coach switched into a client, and a team member, are turned away from both.
@@ -26,19 +27,24 @@ export type HandoffFormState = { error?: string; ok?: string; token?: string; ag
  */
 const OWN_INBOX = { whileSwitched: "refuse", reason: "{first}'s agent inbox is theirs alone: only {first} decides there." } as const;
 
+/**
+ * Connect this agent (H-727 PR 2): any member makes their own agent's token, on their own Forum (the coach's are on Coach →
+ * Agents). Through the inbox's gate, so a coach switched into a client and a team member are turned away; the token is bound
+ * to the signed-in member and carries The Forum and the inbox only.
+ */
 export async function makeAgentTokenAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
-  const coach = await requireCoach();
+  const { v, workspaceId, userId } = await ctx(OWN_INBOX);
   const agentId = str(formData, "agentId");
-  const token = await makeAgentToken({ workspaceId: coach.workspace.id, userId: coach.user.id, membershipId: coach.membership.id }, agentId);
+  const token = await makeAgentToken({ workspaceId, userId, membershipId: v.membership.id }, agentId);
   refresh();
   if (!token) return { error: "That agent isn't on your Forum." };
-  const agent = await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, coach.workspace.id), eq(schema.forumAgents.userId, coach.user.id), eq(schema.forumAgents.id, agentId)), columns: { name: true } });
+  const agent = await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, workspaceId), eq(schema.forumAgents.userId, userId), eq(schema.forumAgents.id, agentId)), columns: { name: true } });
   return { token, agent: agent?.name, ok: "Copy it now: it won't be shown again." };
 }
 
 export async function revokeAgentTokenAction(formData: FormData): Promise<void> {
-  const coach = await requireCoach();
-  await revokeAgentTokens({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "agentId"));
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  await revokeAgentTokens({ workspaceId, userId }, str(formData, "agentId"));
   refresh();
 }
 

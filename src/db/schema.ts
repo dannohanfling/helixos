@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-hours";
-import { MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
+import { FRAMEWORK_STATUSES, MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
 import { BOT_FEATURE_KEYS, REQUEST_STATES, UNLOCK_TYPES, type Behavior } from "@/lib/engine/bot-features";
 import type { HorizonArea, HorizonStatus } from "@/lib/engine/horizon";
+import type { CorrectionRecord } from "@/lib/engine/proof-bank";
 import { EMPTY_DEFAULTS, type MfAgendaItem, type MfDefaults, type MfObjection, type MfPillar, type MfPitch, type MfProfile, type MfUrgency } from "@/lib/engine/magic-funnel";
 
 const id = () => text("id").primaryKey();
@@ -49,6 +50,9 @@ export const workspaces = sqliteTable("workspaces", {
   oohWeekday: integer("ooh_weekday").notNull().default(5),
   oohStart: text("ooh_start"),
   oohMinutes: integer("ooh_minutes").notNull().default(60),
+  /** The weekly calls (H-820, plan H-828): the shared join link every call without its own uses, and its passcode. Coach-edited under Settings → Calls. */
+  callsLink: text("calls_link"),
+  callsPasscode: text("calls_passcode"),
   /** The Start Here orientation (H-270 §1, S1a): the coach's welcome video, a link HelixOS plays itself (mp4, webm) or opens (a Recordings share link). Null shows "Coming soon". */
   startHereVideo: text("start_here_video"),
   /** Recordings' publishing rules (rev 491): series names and time slots, coach-edited. Null keeps the defaults in recording-rules.ts. */
@@ -113,6 +117,8 @@ export const memberships = sqliteTable(
     arenaPhoto: integer("arena_photo", { mode: "boolean" }).notNull().default(false),
     arenaHidden: integer("arena_hidden", { mode: "boolean" }).notNull().default(false),
     arenaPaused: integer("arena_paused", { mode: "boolean" }).notNull().default(false),
+    /** When the member last closed "N people applauded your win" on Today (H-1171); null until the first one. */
+    applauseSeenAt: text("applause_seen_at"),
     /** My Helix (rev 707): "Pause the helix", remembered; and the rungs the member has already seen lit, so the once-glow never repeats. */
     helixPaused: integer("helix_paused", { mode: "boolean" }).notNull().default(false),
     helixSeen: text("helix_seen", { mode: "json" }).$type<string[]>().notNull().default([]),
@@ -195,6 +201,8 @@ export const memberships = sqliteTable(
     eoPassInstalledAt: text("eo_pass_installed_at"),
     /** The points sync (H-867): the Level last written to the pass, and the invitations already sent (each goes once). */
     eoLevelSent: text("eo_level_sent"),
+    /** The Tier last written to the pass (H-1098): the kept rank, so each change is written once. */
+    eoTierSent: text("eo_tier_sent"),
     eoOffersSent: text("eo_offers_sent", { mode: "json" }).$type<string[]>().notNull().default([]),
     eoPassLastPushAt: text("eo_pass_last_push_at"),
     /** The coach's Community Loyalty inbound webhook for the Rung Dripper: the URL is the credential (no auth on it), sealed at rest, never rendered, never logged. */
@@ -290,6 +298,13 @@ export const memberships = sqliteTable(
     aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
     /** Highest tier level the member has seen the celebration for. Null until first seen: then stamped silently. */
     celebratedTierLevel: integer("celebrated_tier_level"),
+    /** The highest rank whose relic clip the member has seen (H-934): the catch-up plays once for a rank reached before the clips. */
+    rankClipSeenLevel: integer("rank_clip_seen_level"),
+    /**
+     * The highest rank this member has ever held (H-1088): backfilled once from the old thresholds, raised whenever points take
+     * them past it, never lowered. Their rank is the higher of this and the rank their points earn under the current table.
+     */
+    rankKeptLevel: integer("rank_kept_level"),
     /** The newest What's new entry (its `n`, src/content/whats-new.ts) this member has opened the page since: the menu dot. */
     whatsNewSeen: integer("whats_new_seen"),
     /** The member's own timezone. Null means the workspace's. "Today", reminder hours and streak boundaries all follow it. */
@@ -665,6 +680,56 @@ export const officeHoursRequests = sqliteTable(
   (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday), uniqueIndex("office_hours_requests_airtable").on(t.workspaceId, t.airtableId)],
 );
 export type OfficeHoursRequest = typeof officeHoursRequests.$inferSelect;
+
+/* ───────────────────────── The weekly calls (H-820, plan H-828) ───────────────────────── */
+/** Who a scheduled call is for, the program audiences Recordings uses: Accelerator and up, or Academy and up. */
+export const CALL_AUDIENCES = ["accelerator_academy", "academy"] as const;
+export type CallAudience = (typeof CALL_AUDIENCES)[number];
+/**
+ * One weekly call on the program's schedule (H-820, plan H-828), the coach's to edit under Settings → Calls: a weekday and a
+ * start in the call's own zone, so a 10:00 Pacific call stays at 10:00 Pacific across a clock change and each member reads it
+ * in theirs. A blank link means the workspace's shared link (`workspaces.calls_link`). Office Hours is not one of these.
+ */
+export const programCalls = sqliteTable(
+  "program_calls",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    name: text("name").notNull(),
+    /** 0 Sunday to 6 Saturday, in the call's zone. */
+    weekday: integer("weekday").notNull(),
+    /** "HH:MM", 24-hour, the call's wall time in its zone. */
+    start: text("start").notNull(),
+    minutes: integer("minutes").notNull().default(60),
+    timezone: text("timezone").notNull().default("America/Los_Angeles"),
+    audience: text("audience", { enum: CALL_AUDIENCES }).notNull().default("academy"),
+    link: text("link"),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    sort: integer("sort").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("program_calls_ws").on(t.workspaceId, t.sort)],
+);
+export type ProgramCall = typeof programCalls.$inferSelect;
+
+/** A date one call doesn't happen ("No call on Thu 27 Nov"): the call's own local date in its zone. */
+export const programCallSkips = sqliteTable(
+  "program_call_skips",
+  {
+    id: id(),
+    callId: text("call_id")
+      .notNull()
+      .references(() => programCalls.id, { onDelete: "cascade" }),
+    /** "YYYY-MM-DD", the call's local date in its zone. */
+    date: text("date").notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("program_call_skips_call_date").on(t.callId, t.date)],
+);
+export type ProgramCallSkip = typeof programCallSkips.$inferSelect;
 
 /* ───────────────────────── Monthly intention (handoff rev 129) ───────────────────────── */
 export const monthlyIntentions = sqliteTable(
@@ -2097,6 +2162,26 @@ export const proofs = sqliteTable(
   (t) => [index("proofs_user").on(t.userId, t.status), uniqueIndex("proofs_airtable").on(t.userId, t.airtableId)],
 );
 
+/**
+ * Approve selected (H-1394): one batch per press, the proofs it approved, so "Undo the last batch" can put them back for
+ * 24 hours. A proof approved on its own page is not in a batch. Undone once; the rows stay as the record.
+ */
+export const proofBatches = sqliteTable(
+  "proof_batches",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    proofIds: text("proof_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The drafts the list corrected before approving (H-1414), with the fields as they were: Undo puts them back. */
+    corrections: text("corrections", { mode: "json" }).$type<CorrectionRecord[]>().notNull().default([]),
+    approvedAt: text("approved_at").notNull().default(sql`(datetime('now'))`),
+    undoneAt: text("undone_at"),
+  },
+  (t) => [index("proof_batches_user").on(t.userId, t.approvedAt)],
+);
+export type ProofBatch = typeof proofBatches.$inferSelect;
+
 export const GROUP_KINDS = ["own", "member", "prospect"] as const;
 
 export const groups = sqliteTable(
@@ -2382,7 +2467,7 @@ export type FathomWorkspaceConnection = typeof fathomWorkspaceConnections.$infer
 /* ───────────────────────── Issues and suggestions (rev 432, items 2 to 4) ───────────────────────── */
 
 /** An issue (something broken), a suggestion (an idea), or an Ask Danno answer that was wrong or out of date. */
-export const MEMBER_REPORT_KINDS = ["issue", "suggestion", "ask_danno"] as const;
+export const MEMBER_REPORT_KINDS = ["issue", "suggestion", "ask_danno", "content"] as const;
 export type MemberReportKind = (typeof MEMBER_REPORT_KINDS)[number];
 /** Red blocks the member, orange annoys them, green is an idea. */
 export const REPORT_SEVERITIES = ["red", "orange", "green"] as const;
@@ -2436,6 +2521,15 @@ export const memberReports = sqliteTable(
     screenshotType: text("screenshot_type"),
     seenAt: text("seen_at"),
     doneAt: text("done_at"),
+    /**
+     * A Content report (H-745): what was reported, a Colosseum win or a member (their membership id), and whose it is. The reason
+     * (spam, harassment or hurtful, something else) is the severity: red, orange, green. Null on every other kind.
+     */
+    targetKind: text("target_kind", { enum: ["win", "member"] }),
+    targetId: text("target_id"),
+    targetUserId: text("target_user_id"),
+    /** When the coach acted on a Content report (Hide this win): the reporter's Settings → Your reports then reads "Handled". */
+    handledAt: text("handled_at"),
     createdAt: createdAt(),
   },
   (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId)],
@@ -2759,11 +2853,49 @@ export const colosseumWins = sqliteTable(
     userId: text("user_id").notNull(),
     kind: text("kind", { enum: ["business", "community"] }).notNull(),
     text: text("text").notNull(),
+    /** Hidden for everyone by the coach from a Content report (H-745), and who did it; clearing both is the undo. The author isn't told. */
+    hiddenAt: text("hidden_at"),
+    hiddenBy: text("hidden_by"),
     createdAt: createdAt(),
   },
   (t) => [index("colosseum_wins_workspace").on(t.workspaceId, t.createdAt)],
 );
 export type ColosseumWin = typeof colosseumWins.$inferSelect;
+
+/**
+ * Applause on a shared win (H-1171, plan H-1177): one per person per win, never on your own. The points are in the ledger
+ * (src/lib/applause.ts); this row is who applauded, for the count and the list.
+ */
+export const winApplause = sqliteTable(
+  "win_applause",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    winId: text("win_id").notNull(),
+    userId: text("user_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("win_applause_once").on(t.winId, t.userId), index("win_applause_win").on(t.workspaceId, t.winId)],
+);
+export type WinApplause = typeof winApplause.$inferSelect;
+
+/**
+ * Block a member (H-745, App Store guideline 1.2): the blocker no longer sees the blocked member's wins, name or photo in the
+ * Colosseum, its standings or the Rewards leaderboard. One row per pair, both sides by membership id. The blocked member is never
+ * told. Erased with either member (src/lib/erase.ts).
+ */
+export const memberBlocks = sqliteTable(
+  "member_blocks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    blockerMembershipId: text("blocker_membership_id").notNull(),
+    blockedMembershipId: text("blocked_membership_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("member_blocks_pair").on(t.blockerMembershipId, t.blockedMembershipId), index("member_blocks_blocked").on(t.blockedMembershipId)],
+);
+export type MemberBlock = typeof memberBlocks.$inferSelect;
 
 /**
  * A login-email change (H-47): the new address holds the link (sha256 of the token only), 24 hours, single use; the change
@@ -3135,6 +3267,206 @@ export const storyItems = sqliteTable(
 );
 export type StoryItemRow = typeof storyItems.$inferSelect;
 
+/**
+ * Danno's frameworks (H-1262, plan H-1270): the how beside Doctrine's why, imported by the coach from the reviewed Framework
+ * Library and published one by one. The coach's workspace's own: members see published ones, the ladder writer too (the
+ * coach's own ladders only). One row a slug; a re-import updates in place. A price anywhere holds it as a draft.
+ */
+export const frameworks = sqliteTable(
+  "frameworks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    pillar: text("pillar"),
+    rank: text("rank"),
+    idea: text("idea").notNull(),
+    steps: text("steps", { mode: "json" }).$type<string[]>().notNull().default([]),
+    whenToUse: text("when_to_use"),
+    mistakes: text("mistakes"),
+    story: text("story"),
+    exactWords: text("exact_words"),
+    sourceCall: text("source_call"),
+    sourceDate: text("source_date"),
+    fathomUrl: text("fathom_url"),
+    contentAngles: text("content_angles"),
+    borrowedFrom: text("borrowed_from"),
+    evolution: text("evolution"),
+    rawStatus: text("raw_status"),
+    status: text("status", { enum: FRAMEWORK_STATUSES }).notNull().default("draft"),
+    hasPrice: integer("has_price", { mode: "boolean" }).notNull().default(false),
+    digest: text("digest").notNull(),
+    publishedAt: text("published_at"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("frameworks_workspace_slug").on(t.workspaceId, t.slug), index("frameworks_workspace_status").on(t.workspaceId, t.status)],
+);
+export type FrameworkRow = typeof frameworks.$inferSelect;
+
+/** The Partner Program (H-1307, plan H-1361): the fixed lists live in src/lib/engine/partner.ts, the columns stay plain text. */
+export const PARTNER_PAYMENT_STATUSES = ["paid", "refunded", "chargeback", "failed"] as const;
+export const PARTNER_PAYOUT_KINDS = ["monthly", "setup", "yearly_installment", "adjustment"] as const;
+
+/**
+ * A restaurant in the Grub N Chill Partner Program (H-1307, plan H-1361): the pipeline record, its dates, its numbers and the
+ * onboarding answers. `ownerContact` is a person's details: never in a log, a list or the Forum, only on an explicit read.
+ * Logo, photos and a menu file are rows in `files`, linked by `partnerFiles`.
+ */
+export const partnerRestaurants = sqliteTable(
+  "partner_restaurants",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    business: text("business").notNull(),
+    type: text("type").notNull().default("restaurant"),
+    city: text("city"),
+    source: text("source"),
+    referredBy: text("referred_by"),
+    stage: text("stage").notNull().default("talking"),
+    plan: text("plan"),
+    foundingPartner: integer("founding_partner", { mode: "boolean" }).notNull().default(false),
+    firstContactAt: text("first_contact_at"),
+    demoAt: text("demo_at"),
+    signedAt: text("signed_at"),
+    paidAt: text("paid_at"),
+    formCompleteAt: text("form_complete_at"),
+    handedToWalletpushAt: text("handed_to_walletpush_at"),
+    liveAt: text("live_at"),
+    featuredInGroupAt: text("featured_in_group_at"),
+    cancelledAt: text("cancelled_at"),
+    setupApprovedAt: text("setup_approved_at"),
+    walletpushStatus: text("walletpush_status").notNull().default("not handed"),
+    walletpushNote: text("walletpush_note"),
+    googleReviewsAtStart: integer("google_reviews_at_start"),
+    googleRatingAtStart: real("google_rating_at_start"),
+    passHolders: integer("pass_holders"),
+    reviewsGained: integer("reviews_gained"),
+    conciergeChats: integer("concierge_chats"),
+    resultsAsOf: text("results_as_of"),
+    risk: text("risk").notNull().default("none"),
+    cancelReason: text("cancel_reason"),
+    nextStep: text("next_step"),
+    nextStepDate: text("next_step_date"),
+    notes: text("notes"),
+    address: text("address"),
+    businessPhone: text("business_phone"),
+    website: text("website"),
+    facebookPage: text("facebook_page"),
+    instagram: text("instagram"),
+    ownerContact: text("owner_contact"),
+    brandColors: text("brand_colors"),
+    hours: text("hours"),
+    menuLink: text("menu_link"),
+    googleBusinessProfile: text("google_business_profile"),
+    reservationLink: text("reservation_link"),
+    reward: text("reward"),
+    welcomeReward: text("welcome_reward"),
+    conciergeVoice: text("concierge_voice"),
+    topCustomerQuestions: text("top_customer_questions"),
+    restaurantContactForMessages: text("restaurant_contact_for_messages"),
+    termsAcceptedAt: text("terms_accepted_at"),
+    featureConsent: integer("feature_consent", { mode: "boolean" }).notNull().default(false),
+    directoryCard: text("directory_card"),
+    /** Fields a webhook sent that have no column yet (PR B): kept, never dropped silently. */
+    extra: text("extra", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_restaurants_workspace_stage").on(t.workspaceId, t.stage), index("partner_restaurants_workspace_business").on(t.workspaceId, t.business)],
+);
+export type PartnerRestaurant = typeof partnerRestaurants.$inferSelect;
+
+/** A touch with a restaurant: who, how, what was said, what is next. */
+export const partnerTouches = sqliteTable(
+  "partner_touches",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    who: text("who").notNull(),
+    channel: text("channel").notNull(),
+    firstConversation: integer("first_conversation", { mode: "boolean" }).notNull().default(false),
+    note: text("note"),
+    nextStep: text("next_step"),
+    nextStepDate: text("next_step_date"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_touches_restaurant").on(t.restaurantId, t.date)],
+);
+export type PartnerTouch = typeof partnerTouches.$inferSelect;
+
+/** A payment a restaurant made (or that failed, was refunded or charged back). `month` is YYYY-MM, the statement month. */
+export const partnerPayments = sqliteTable(
+  "partner_payments",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    plan: text("plan").notNull(),
+    amount: real("amount").notNull(),
+    tax: real("tax").notNull().default(0),
+    feesDeducted: real("fees_deducted").notNull().default(0),
+    promo: integer("promo", { mode: "boolean" }).notNull().default(false),
+    status: text("status", { enum: PARTNER_PAYMENT_STATUSES }).notNull().default("paid"),
+    processor: text("processor"),
+    month: text("month").notNull(),
+    /** The processor's or webhook's own id, so the same payment never lands twice. */
+    externalId: text("external_id"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_payments_restaurant_month").on(t.restaurantId, t.month), uniqueIndex("partner_payments_external").on(t.workspaceId, t.externalId)],
+);
+export type PartnerPayment = typeof partnerPayments.$inferSelect;
+
+/** One line of a month's statement to the fulfillment partner: built by partner_payouts_build, approved by Danno, never paid from here. */
+export const partnerPayoutLines = sqliteTable(
+  "partner_payout_lines",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    month: text("month").notNull(),
+    kind: text("kind", { enum: PARTNER_PAYOUT_KINDS }).notNull(),
+    amount: real("amount").notNull(),
+    /** For a yearly installment, which of the 12; for a monthly or setup line, the payment it came from. */
+    paymentId: text("payment_id"),
+    installment: integer("installment"),
+    note: text("note"),
+    approvedByDannoAt: text("approved_by_danno_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_payout_lines_workspace_month").on(t.workspaceId, t.month), index("partner_payout_lines_restaurant").on(t.restaurantId, t.month)],
+);
+export type PartnerPayoutLine = typeof partnerPayoutLines.$inferSelect;
+
+/** A file (logo, photo, menu) of a restaurant: a row in `files`, named by its role. */
+export const partnerFiles = sqliteTable(
+  "partner_files",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => partnerRestaurants.id, { onDelete: "cascade" }),
+    fileId: text("file_id").notNull(),
+    role: text("role").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("partner_files_restaurant").on(t.restaurantId, t.role)],
+);
+export type PartnerFile = typeof partnerFiles.$inferSelect;
+
 /** What a ladder was given from the library and story bank, and which the writer said it used: the Material used panel and the "not in the last 10 ladders" rule. */
 export const ladderMaterial = sqliteTable(
   "ladder_material",
@@ -3477,7 +3809,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "webinars:write", "essence", "forum", "inbox", "body", "partner", "clients"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {
@@ -3527,6 +3859,8 @@ export const connectedApps = sqliteTable(
      * connector, which can't send a token) or made with an agent token. Null for an ordinary connection: no inbox tools.
      */
     agentId: text("agent_id"),
+    /** An agent token switched into a client's HelixOS (H-1385): the client's membership, while the coach's grant for that agent stands. */
+    switchedMembershipId: text("switched_membership_id"),
     createdAt: createdAt(),
   },
   (t) => [index("connected_apps_member").on(t.workspaceId, t.userId)],
@@ -4254,6 +4588,8 @@ export const coachChanges = sqliteTable(
     /** The client whose HelixOS it was: theirs, so it is in their export and goes with deletion on request. */
     userId: text("user_id").notNull(),
     coachUserId: text("coach_user_id").notNull(),
+    /** The coach's agent that made the change or switched (H-1385), when it was an agent on its token and not the coach themselves. */
+    agentId: text("agent_id"),
     kind: text("kind", { enum: ["switch_in", "switch_out", "change"] }).notNull(),
     mode: text("mode", { enum: ["view", "work"] }).notNull(),
     /** What was done, in plain words ("Saved an offer"). */
@@ -4266,6 +4602,26 @@ export const coachChanges = sqliteTable(
   (t) => [index("coach_changes_client").on(t.clientMembershipId, t.createdAt)],
 );
 export type CoachChange = typeof coachChanges.$inferSelect;
+
+/**
+ * An agent working in a client's HelixOS (H-1385): the coach's grant, per client and per agent, off by default. Revoked
+ * rows stay as the record; a live grant has no revokedAt. The agent's token switches in only while one stands, and only
+ * while the client's own "Let my coach work in my HelixOS" is on does it work rather than view.
+ */
+export const agentClientGrants = sqliteTable(
+  "agent_client_grants",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    coachUserId: text("coach_user_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    clientMembershipId: text("client_membership_id").notNull(),
+    grantedAt: text("granted_at").notNull().default(sql`(datetime('now'))`),
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [index("agent_client_grants_client").on(t.clientMembershipId, t.agentId), index("agent_client_grants_agent").on(t.agentId)],
+);
+export type AgentClientGrant = typeof agentClientGrants.$inferSelect;
 
 /**
  * Team access (Danno, 6 Oct): a person a member invited into their HelixOS, with their own login. A row here is not a

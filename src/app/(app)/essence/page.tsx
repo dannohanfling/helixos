@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { saveEssenceSectionAction } from "@/lib/actions/essence";
-import { BRAND_CAP, BRAND_SECTION, ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, placeholderFor, completion, brandChars, coreChars, essenceForAi, roughTokens, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
+import { BRAND_CAP, BRAND_SECTION, ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, MAX_OUTCOMES, placeholderFor, completion, brandChars, coreChars, essenceForAi, roughTokens, sectionByKey, sectionFilled, type Outcome, type Story } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { houseRuleSeed } from "@/lib/engine/bot-fields";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
@@ -138,6 +138,29 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
                     </Field>
                   ) : null}
                   <p className="text-xs text-ink-3">A row with nothing in it is dropped on save.</p>
+                </div>
+              ) : f.kind === "outcomes" ? (
+                <div key={f.key} className="space-y-3" data-testid="outcomes">
+                  {help(f.key) ? <p className="text-xs text-ink-3">{help(f.key)}</p> : null}
+                  {(() => {
+                    const rows = (values[f.key] as Outcome[] | undefined) ?? [];
+                    // The saved rows, then two empty ones to add to (one when near the most it takes).
+                    const blanks = Math.max(0, Math.min(2, MAX_OUTCOMES - rows.length));
+                    return [...rows, ...Array.from({ length: blanks }, () => ({ name: "", line: "", audience: "" }))].map((o, i) => (
+                      <div key={i} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_2fr_1fr]" data-testid="outcome-row">
+                        <Field label="Name">
+                          <input className="field" name="outcome_name" defaultValue={o.name} maxLength={80} placeholder={i === 0 && !rows.length ? "Clarity" : undefined} data-testid="outcome-name" />
+                        </Field>
+                        <Field label="What changes for them">
+                          <textarea className="field" name="outcome_line" defaultValue={o.line} rows={2} placeholder={i === 0 && !rows.length ? placeholderFor(current.key, f.key) : undefined} data-testid="outcome-line" />
+                        </Field>
+                        <Field label="For (optional)">
+                          <input className="field" name="outcome_audience" defaultValue={o.audience} maxLength={80} placeholder="e.g. clients" data-testid="outcome-audience" />
+                        </Field>
+                      </div>
+                    ));
+                  })()}
+                  <p className="text-xs text-ink-3">Save to add more rows, up to {MAX_OUTCOMES}. A row with nothing in it is dropped on save; the order here is the order the AI reads.</p>
                 </div>
               ) : f.kind === "list" ? (
                 <Field key={f.key} label={f.label} hint={help(f.key) ?? "One per line."}>

@@ -128,3 +128,27 @@ describe("the GoHighLevel contact id a sign-up comes with (H-51)", () => {
     for (const bad of ["", "short", "a".repeat(41), "has space 123", "x@y.com", "../etc", 42, null, undefined, {}]) expect(cleanGhlContactId(bad)).toBeNull();
   });
 });
+
+describe("Funnel 1 at /start (H-674, H-721, H-841)", () => {
+  it("names no price and no figure but the approved audience line", async () => {
+    const f = await import("@/lib/hermes/funnel");
+    const copy = f.funnelCopy();
+    expect(copy).not.toMatch(/[$€£]|\/\s?mo\b|per month|a month\b|\bUSD\b/i);
+    const figures = copy.replace(f.AUDIENCE_LINE, "").match(/\d[\d,.]*/g) ?? [];
+    // Allowed: the 30-day guarantee (twice), the year in the footer, and nothing else.
+    expect(figures.sort()).toEqual(["2026", "30", "30"]);
+    expect(copy).toContain("About 101,000 people");
+  });
+  it("has one call to action, to the existing checkout, and no call page", async () => {
+    const f = await import("@/lib/hermes/funnel");
+    expect(f.CHECKOUT_URL).toBe("https://evolveomega.com/partner");
+    expect(f.funnelCopy()).not.toMatch(/15-minute call|Book a/i);
+  });
+  it("turns the Pixel on only for a real pixel id", async () => {
+    const { funnelPixelId } = await import("@/lib/hermes/funnel");
+    expect(funnelPixelId(undefined)).toBeNull();
+    expect(funnelPixelId("")).toBeNull();
+    expect(funnelPixelId("not-a-pixel")).toBeNull();
+    expect(funnelPixelId(" 1234567890123456 ")).toBe("1234567890123456");
+  });
+});
