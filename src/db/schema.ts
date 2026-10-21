@@ -25,6 +25,8 @@ export const workspaces = sqliteTable("workspaces", {
   timezone: text("timezone").notNull().default("America/Los_Angeles"),
   /** "Connected apps open to clients" (MCP, rev 247 B5): whether clients may connect Claude to their HelixOS. On by default; coaches always may. */
   connectedAppsOpen: integer("connected_apps_open", { mode: "boolean" }).notNull().default(true),
+  /** "Send Done messages automatically after merge" (H-202): an agent's Done draft goes at once instead of waiting for Send. Off. */
+  autoDoneAfterMerge: integer("auto_done_after_merge", { mode: "boolean" }).notNull().default(false),
   /** The Colosseum (rev 699): off until the coach turns it on for the workspace. */
   colosseumOn: integer("colosseum_on", { mode: "boolean" }).notNull().default(false),
   clientInviteCode: text("client_invite_code").notNull().unique(),
@@ -2596,6 +2598,12 @@ export const memberReports = sqliteTable(
     status: text("status", { enum: REPORT_STATUSES }).notNull().default("new"),
     /** The 3 to 6 words a reply calls it ("the GoHighLevel connection"); the coach's to edit. Null reads it from the words. */
     topic: text("topic"),
+    /** Merged into another report of the same member (H-202): it sits under that one, and one reply answers both. */
+    parentId: text("parent_id"),
+    /** An agent's Done note, written after its fix merged (H-202): an amber draft until the coach presses Send. */
+    doneDraft: text("done_draft"),
+    doneDraftBy: text("done_draft_by"),
+    doneDraftAt: text("done_draft_at"),
     /**
      * A Content report (H-745): what was reported, a Colosseum win or a member (their membership id), and whose it is. The reason
      * (spam, harassment or hurtful, something else) is the severity: red, orange, green. Null on every other kind.
@@ -2607,7 +2615,7 @@ export const memberReports = sqliteTable(
     handledAt: text("handled_at"),
     createdAt: createdAt(),
   },
-  (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId)],
+  (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId), index("member_reports_parent").on(t.parentId)],
 );
 export type MemberReport = typeof memberReports.$inferSelect;
 
@@ -2631,6 +2639,8 @@ export const reportMessages = sqliteTable(
     body: text("body").notNull(),
     /** Whether an email went (only a status reply, and only while the member's Emails from HelixOS is on). */
     emailed: integer("emailed", { mode: "boolean" }).notNull().default(false),
+    /** The agent that drafted a Done sent on its own after merge (H-202), by name; null when the coach wrote and sent it. */
+    draftedBy: text("drafted_by"),
     /** When the member saw it on My reports; a status reply unread shows a line on their Today. */
     readAt: text("read_at"),
     createdAt: createdAt(),

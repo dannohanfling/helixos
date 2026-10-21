@@ -47,6 +47,8 @@ const must = (ok: unknown, msg: string) => {
   if (!ok) throw new Error(msg);
 };
 
+const DRAFT = "Done: the broken button is fixed. It now saves on the first tap. Thanks for flagging it!";
+
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, desc, eq } = await import("drizzle-orm");
@@ -281,6 +283,18 @@ async function main() {
         must((await listed(member.token)).length === 0, "a client's connection never lists them");
         r = await call(member.token, "report_read", { id: issue.id });
         must(r.isError && /not found/i.test(r.text) && !r.images.length, `a client's connection calling one by name: not found (${r.text})`);
+        // H-202: the coach's own agents write a Done draft; a member's connection never sees the tool.
+        const draftTool = async (token: string) => ((await rpc(token, "tools/list")).result?.tools ?? []).some((t) => t.name === "report_done_draft");
+        must((await draftTool(agentToken)) && (await draftTool(own.token)), "the coach's agent token, and the connection tied to an agent, list report_done_draft");
+        must(!(await draftTool(member.token)), "a client's connection never lists report_done_draft");
+        r = await call(member.token, "report_done_draft", { id: issue.id, text: DRAFT });
+        must(r.isError && /not found/i.test(r.text), `a client's connection calling it by name: not found (${r.text})`);
+        r = await call(agentToken, "report_done_draft", { id: issue.id, text: "Done: the button is fixed. [how it was fixed, one line]. Thanks!" });
+        must(r.isError && /how it was fixed/.test(r.text), `a draft with its blank still in is refused (${r.text})`);
+        r = await call(agentToken, "report_done_draft", { id: issue.id, text: DRAFT });
+        must(!r.isError && r.data?.sent === false, `the agent's Done draft is saved, not sent (${r.text})`);
+        const drafted = (await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }))!;
+        must(drafted.doneDraft === DRAFT && drafted.doneDraftBy === agentRow.name && drafted.status !== "done", "on the report as a draft by that agent; nothing sent");
         console.log("✓ the connector: listed under new with the sender's first name and member id, read with the screenshot byte for byte, marked Seen (gone from new, still open); hidden from an agent token and a client, not found by name");
       } finally {
         await revokeAgentTokens(O, agentRow.id).catch(() => undefined);
@@ -315,6 +329,42 @@ async function main() {
     must(over <= 1, `My reports: nothing scrolls sideways at 390 (${over}px over)`);
     await page.setViewportSize({ width: 1440, height: 950 });
     console.log("✓ the member: a Today line, the reply on My reports, a follow-up on the same report sends it back to New");
+
+    // ── 9. Merge and the agent's Done draft (H-202): the same member's second report goes under the first, the amber draft
+    // fills Done, and one Send answers both; the member hears it once and sees both under one report. ──
+    {
+      const twin = newId();
+      await db.insert(schema.memberReports).values({ id: twin, workspaceId: ws, userId: maya.id, kind: "issue", severity: "orange", description: "The same button is still broken on my phone." });
+      await logout(page);
+      await login(page, "As the coach");
+      await page.goto(`${base}/settings`);
+      must((await page.locator('[data-testid="auto-done"]').count()) === 1 && !(await page.locator('[data-testid="auto-done"]').isChecked()), "Settings has the auto-send switch, off by default");
+      await page.goto(`${base}/coach/reports?tab=new`);
+      const card = page.locator(`#r-${issue.id}`);
+      await card.waitFor({ timeout: 20000 });
+      must((await card.locator('[data-testid="done-draft"]').innerText()).includes(DRAFT), "the agent's Done draft shows on the report");
+      await card.locator('[data-testid="report-merge"] > summary').click();
+      await card.locator(`[data-testid="merge-pick"][value="${twin}"]`).check();
+      await submit(page, `#r-${issue.id} [data-testid="merge-send"]`);
+      must((await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, twin) }))!.parentId === issue.id, "the second report sits under the first");
+      await page.goto(`${base}/coach/reports?tab=new`);
+      await card.waitFor({ timeout: 20000 });
+      must((await card.locator('[data-testid="report-row"]').getAttribute("data-merged")) === "1" && !(await page.locator(`#r-${twin}`).count()), "listed once, with the merged one under it");
+      must((await card.locator('[data-testid="reply-done"] [data-testid="reply-message"]').inputValue()) === DRAFT, "Done opens with the draft in it");
+      const before = (await db.query.reportMessages.findMany({ where: eq(schema.reportMessages.workspaceId, ws) })).filter((m) => m.kind === "status").length;
+      await submit(page, `#r-${issue.id} [data-testid="reply-done"] [data-testid="reply-send"]`);
+      const [top, under] = await Promise.all([db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, issue.id) }), db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, twin) })]);
+      must(top!.status === "done" && under!.status === "done" && top!.doneDraft === null, "one Send: both Done, and the draft is gone");
+      const sent = (await db.query.reportMessages.findMany({ where: eq(schema.reportMessages.workspaceId, ws) })).filter((m) => m.kind === "status");
+      must(sent.length === before + 1 && sent.some((m) => m.reportId === issue.id && m.status === "done" && m.body === DRAFT), "the member hears it once");
+      await logout(page);
+      await login(page, "As a client");
+      await page.goto(`${base}/reports`);
+      const merged = page.locator(`#r-${issue.id} [data-testid="my-report-merged"]`);
+      await merged.waitFor({ timeout: 20000 });
+      must((await merged.innerText()).includes("still broken on my phone") && !(await page.locator(`#r-${twin}`).count()), "My reports shows both under one");
+      console.log("✓ merge and drafts: the second report under the first, the agent's draft fills Done, one Send answers both, the member sees one report");
+    }
 
     console.log("\nsmoke-reports: all checks passed");
   } finally {

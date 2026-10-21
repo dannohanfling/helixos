@@ -25,7 +25,7 @@ export default async function MyReportsPage({ searchParams }: { searchParams: Pr
       <PageHeader title="My reports" subtitle="What you sent, where it stands, and every reply." />
       {threads.length ? (
         <ul className="space-y-3" data-testid="my-reports">
-          {threads.map(({ report: r, messages }) => (
+          {threads.map(({ report: r, messages, merged }) => (
             <li key={r.id} id={`r-${r.id}`} className="scroll-mt-4">
               <Card>
                 <div data-testid="my-report" data-status={r.status}>
@@ -36,6 +36,19 @@ export default async function MyReportsPage({ searchParams }: { searchParams: Pr
                     <span className="ml-auto text-xs text-ink-3">{formatDateTime(r.createdAt, v.tz)}</span>
                   </div>
                   {r.description ? <p className="mt-2 whitespace-pre-line break-words text-sm text-ink-2">{r.description}</p> : null}
+                  {/* H-202: the ones merged into this report; one reply here answers them all. */}
+                  {merged.length ? (
+                    <div className="mt-2 text-sm" data-testid="my-report-merged">
+                      <p className="text-xs text-ink-3">Also in this report, so one reply covers them all:</p>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-ink-2">
+                        {merged.map((c) => (
+                          <li key={c.id} className="whitespace-pre-line break-words">
+                            {c.description || c.question || topicOf(c)} <span className="text-xs text-ink-3">· {formatDateTime(c.createdAt, v.tz)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {messages.length ? (
                     <ol className="mt-3 space-y-2 border-l-2 pl-3 text-sm" data-testid="my-report-log">
                       {messages.map((x) => (

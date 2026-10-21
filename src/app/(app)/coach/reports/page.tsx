@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { sendReplyAction } from "@/lib/actions/reports";
+import { mergeReportsAction, sendReplyAction, unmergeReportAction } from "@/lib/actions/reports";
 import { hideWinAction } from "@/lib/actions/colosseum";
 import { REPORT_STATUSES, type ReportStatus } from "@/db/schema";
 import { REPLY_STATUSES, STATUS_WORDS, firstName, replyText, topicOf } from "@/lib/engine/report-status";
@@ -21,18 +21,20 @@ const DOT: Record<string, string> = { red: "bg-danger", orange: "bg-warn", green
  * The coach's inbox for "I have an issue or a suggestion" (rev 432 items 2 and 3): newest first, each with who sent it, the
  * page, the colour, the words, the screenshot, and for an Ask Danno answer the question, the answer and whether they want to
  * talk. H-202: one tab per status (New first, oldest or newest first); each status is a reply in Danno's words, edited and sent
- * with Send, and everything said on the report is logged under it. A Content report (H-745), from Report on a win or a member
- * in the Colosseum, shows the reason, the win's words and who wrote it, with Hide this win (for everyone, undoable).
+ * with Send, and everything said on the report is logged under it. One member's reports on the same thing can be merged under
+ * one, so one reply answers them all; an agent's Done draft waits on the report, in amber, until the coach presses Send. A
+ * Content report (H-745), from Report on a win or a member in the Colosseum, shows the reason, the win's words and who wrote
+ * it, with Hide this win (for everyone, undoable).
  */
-export default async function CoachReportsPage({ searchParams }: { searchParams: Promise<{ tab?: string; sort?: string; replied?: string; replyError?: string; report?: string }> }) {
+export default async function CoachReportsPage({ searchParams }: { searchParams: Promise<{ tab?: string; sort?: string; replied?: string; replyError?: string; report?: string; merged?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   // H-202: one tab per status, New first; the older Open and Done addresses still land somewhere sensible.
   const tab: ReportStatus = REPORT_STATUSES.find((s) => s === sp.tab) ?? (sp.tab === "done" ? "done" : "new");
   const oldest = sp.sort === "oldest";
   const [rows, all] = await Promise.all([
-    db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, v.workspace.id), eq(schema.memberReports.status, tab)), orderBy: oldest ? asc(schema.memberReports.createdAt) : desc(schema.memberReports.createdAt), limit: 200 }),
-    db.query.memberReports.findMany({ where: eq(schema.memberReports.workspaceId, v.workspace.id), columns: { status: true } }),
+    db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, v.workspace.id), eq(schema.memberReports.status, tab), isNull(schema.memberReports.parentId)), orderBy: oldest ? asc(schema.memberReports.createdAt) : desc(schema.memberReports.createdAt), limit: 200 }),
+    db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, v.workspace.id), isNull(schema.memberReports.parentId)), columns: { status: true } }),
   ]);
   const counts = countsByStatus(all);
   const threads = await withMessages(v.workspace.id, rows);
@@ -46,6 +48,10 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
   // Rev 843: each report in the sender's own zone, labelled ("1:32 PM EDT"), never the workspace's unlabelled.
   const senders = rows.length ? await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), inArray(schema.memberships.userId, [...new Set(rows.map((r) => r.userId))])), columns: { userId: true, timezone: true } }) : [];
   const tzOf = new Map(senders.map((m) => [m.userId, m.timezone ?? v.tz]));
+  // H-202 merge: the same member's other reports on top, in any status, to tick into this one.
+  const theirs = rows.length
+    ? await db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, v.workspace.id), inArray(schema.memberReports.userId, [...new Set(rows.map((r) => r.userId))]), isNull(schema.memberReports.parentId)), orderBy: desc(schema.memberReports.createdAt), limit: 500 })
+    : [];
   const href = (t: string, sort = oldest ? "oldest" : "") => `/coach/reports?tab=${t}${sort ? `&sort=${sort}` : ""}`;
   return (
     <>
@@ -57,10 +63,10 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
       </p>
       {rows.length ? (
         <ul className="mt-4 space-y-3" data-testid="reports-list">
-          {threads.map(({ report: r, messages }) => (
+          {threads.map(({ report: r, messages, merged }) => (
             <li key={r.id} id={`r-${r.id}`}>
               <Card>
-                <div data-testid="report-row" data-kind={r.kind} data-severity={r.severity} data-seen={r.seenAt ? "1" : "0"} data-done={r.doneAt ? "1" : "0"} data-status={r.status}>
+                <div data-testid="report-row" data-kind={r.kind} data-severity={r.severity} data-seen={r.seenAt ? "1" : "0"} data-done={r.doneAt ? "1" : "0"} data-status={r.status} data-merged={merged.length}>
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className={`inline-block h-2.5 w-2.5 rounded-full ${DOT[r.severity]}`} aria-label={SEVERITY_LABEL[r.severity]} title={SEVERITY_LABEL[r.severity]} />
                     {r.kind === "content" ? <span className="text-xs text-ink-3">Reported by</span> : null}
@@ -93,13 +99,33 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
                       <img src={`/api/reports/${r.id}/screenshot`} alt={`Screenshot from ${nameOf.get(r.userId) ?? "a member"}`} className="max-h-48 rounded-lg border" data-testid="report-screenshot-img" />
                     </a>
                   ) : null}
+                  {merged.length ? (
+                    <div className="mt-3 rounded-lg border p-2 text-sm" data-testid="report-merged">
+                      <p className="text-xs font-medium text-ink-3">Merged here ({merged.length}): one reply answers them all</p>
+                      <ul className="mt-1 space-y-1">
+                        {merged.map((c) => (
+                          <li key={c.id} className="flex flex-wrap items-start gap-2" data-testid="report-merged-item">
+                            <span className="text-xs text-ink-3">{formatDateTime(c.createdAt, tzOf.get(r.userId) ?? v.tz)}</span>
+                            <span className="min-w-0 flex-1 whitespace-pre-line break-words">{c.description || c.question || topicOf(c)}</span>
+                            <form action={unmergeReportAction}>
+                              <input type="hidden" name="reportId" value={c.id} />
+                              <input type="hidden" name="tab" value={tab} />
+                              <SubmitButton className="btn btn-ghost btn-xs" pendingText="…" data-testid="report-unmerge">
+                                Take it out
+                              </SubmitButton>
+                            </form>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {/* What was said on it (H-202): the receipt, each reply with its status, the member's follow-ups. Who, when, what. */}
                   {messages.length ? (
                     <ol className="mt-3 space-y-1 border-l-2 pl-3 text-sm" data-testid="report-log">
                       {messages.map((x) => (
                         <li key={x.id} data-testid="report-log-line" data-kind={x.kind}>
                           <span className="text-xs text-ink-3">
-                            {x.kind === "receipt" ? "Receipt" : x.kind === "followup" ? `${nameOf.get(r.userId)?.split(" ")[0] ?? "They"} followed up` : `${STATUS_WORDS[x.status ?? "seen"]}${x.emailed ? " · emailed" : ""}`} · {formatDateTime(x.createdAt, v.tz)}
+                            {x.kind === "receipt" ? "Receipt" : x.kind === "followup" ? `${nameOf.get(r.userId)?.split(" ")[0] ?? "They"} followed up` : `${STATUS_WORDS[x.status ?? "seen"]}${x.draftedBy ? ` · drafted by ${x.draftedBy}` : ""}${x.emailed ? " · emailed" : ""}`} · {formatDateTime(x.createdAt, v.tz)}
                           </span>
                           <span className="block whitespace-pre-line break-words">{x.body}</span>
                         </li>
@@ -108,9 +134,16 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
                   ) : null}
                   {sp.report === r.id && sp.replyError ? <p className="mt-2 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="reply-error">{sp.replyError}</p> : null}
                   {sp.replied === r.id ? <p className="mt-2 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="reply-sent">Sent.</p> : null}
+                  {sp.merged === r.id ? <p className="mt-2 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="merge-done">Merged. One reply here answers them all.</p> : null}
+                  {r.doneDraft ? (
+                    <p className="mt-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="done-draft">
+                      <span className="block text-xs font-medium">Done draft from {r.doneDraftBy ?? "an agent"}{r.doneDraftAt ? ` · ${formatDateTime(r.doneDraftAt, v.tz)}` : ""}: it goes when you press Send under Done.</span>
+                      <span className="block whitespace-pre-line break-words">{r.doneDraft}</span>
+                    </p>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap items-start gap-2" data-testid="report-replies">
                     {REPLY_STATUSES.map((s) => (
-                      <details key={s} className="w-full rounded-lg border sm:w-auto" data-testid={`reply-${s}`}>
+                      <details key={s} className={`w-full rounded-lg border sm:w-auto ${s === "done" && r.doneDraft ? "border-warn bg-warn-soft" : ""}`} open={s === "done" && Boolean(r.doneDraft)} data-testid={`reply-${s}`}>
                         <summary className="cursor-pointer px-3 py-1.5 text-sm font-medium">{STATUS_WORDS[s]}</summary>
                         <form action={sendReplyAction} className="space-y-2 p-3 sm:w-[28rem]">
                           <input type="hidden" name="reportId" value={r.id} />
@@ -122,7 +155,7 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
                           </label>
                           <label className="block text-xs">
                             <span className="label">To {nameOf.get(r.userId)?.split(" ")[0] ?? "the member"}</span>
-                            <textarea className="field min-h-24" name="message" defaultValue={replyText(s, { first: firstName(nameOf.get(r.userId)), topic: topicOf(r) })} data-testid="reply-message" />
+                            <textarea className="field min-h-24" name="message" defaultValue={s === "done" && r.doneDraft ? r.doneDraft : replyText(s, { first: firstName(nameOf.get(r.userId)), topic: topicOf(r) })} data-testid="reply-message" />
                           </label>
                           <SubmitButton className="btn btn-primary btn-sm" pendingText="Sending…" data-testid="reply-send">
                             Send
@@ -131,6 +164,32 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
                       </details>
                     ))}
                   </div>
+                  {(() => {
+                    const others = theirs.filter((o) => o.userId === r.userId && o.id !== r.id);
+                    if (!others.length) return null;
+                    return (
+                      <details className="mt-3 text-sm" data-testid="report-merge">
+                        <summary className="cursor-pointer text-xs font-medium text-ink-2">Merge {nameOf.get(r.userId)?.split(" ")[0] ?? "their"}&apos;s other reports into this one</summary>
+                        <form action={mergeReportsAction} className="mt-2 space-y-1">
+                          <input type="hidden" name="reportId" value={r.id} />
+                          <input type="hidden" name="tab" value={tab} />
+                          {others.map((o) => (
+                            <label key={o.id} className="flex items-start gap-2">
+                              <input type="checkbox" name="ids" value={o.id} className="mt-1" data-testid="merge-pick" />
+                              <span className="min-w-0 flex-1">
+                                <span className="break-words">{topicOf(o)}</span>{" "}
+                                <span className="text-xs text-ink-3">· {STATUS_WORDS[o.status]} · {formatDateTime(o.createdAt, tzOf.get(r.userId) ?? v.tz)}</span>
+                              </span>
+                            </label>
+                          ))}
+                          <p className="text-xs text-ink-3">They sit under this one and take its status; one reply answers them all, and the member hears it once.</p>
+                          <SubmitButton className="btn btn-soft btn-sm" pendingText="Merging…" data-testid="merge-send">
+                            Merge
+                          </SubmitButton>
+                        </form>
+                      </details>
+                    );
+                  })()}
                 </div>
               </Card>
             </li>
