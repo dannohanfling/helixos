@@ -20,6 +20,13 @@ async function login(page: Page, who: "As a client" | "As the coach") {
   await page.click(`button:has-text("${who}")`);
   await page.waitForURL(/\/today/);
 }
+// Open a coach row's details only when shut: a summary click on an open row would shut it and hide its buttons (the row's
+// open state survives a server-action refresh, so the row the walk opened for Down may still be open when it ships it).
+async function openRow(page: Page, id: string) {
+  const details = page.locator(`[data-testid="horizon-coach-item"][data-item="${id}"] details`).first();
+  if ((await details.getAttribute("open")) === null) await details.locator("summary").click();
+  await details.locator("button").first().waitFor({ state: "visible", timeout: 20000 });
+}
 async function submit(page: Page, selector: string) {
   await page.locator(selector).first().waitFor({ timeout: 20000 });
   await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(selector).first().click()]);
@@ -140,20 +147,19 @@ async function main() {
     await page.goto(`${base}/whats-new/horizon`);
     await page.locator(`[data-testid="horizon-item"][data-item="${added.id}"]`).waitFor({ timeout: 20000 });
     // Hide it: gone for members.
-    const addedRow = coach.locator(`[data-testid="horizon-coach-item"][data-item="${added.id}"]`);
-    await addedRow.locator("summary").click();
+    await openRow(coach, added.id);
     await submit(coach, `[data-testid="horizon-coach-item"][data-item="${added.id}"] [data-testid="horizon-hide"]`);
     await page.reload();
     await page.locator('[data-testid="horizon-board"]').waitFor({ timeout: 20000 });
     must((await page.locator(`[data-testid="horizon-item"][data-item="${added.id}"]`).count()) === 0, "a hidden item shows nowhere for members");
     // Reorder: the first Next up item moves down one.
     const nextBefore = items.filter((i) => i.status === "next").sort((a, b) => a.sort - b.sort);
-    await coach.locator(`[data-testid="horizon-coach-item"][data-item="${nextBefore[0].id}"] summary`).click();
+    await openRow(coach, nextBefore[0].id);
     await submit(coach, `[data-testid="horizon-coach-item"][data-item="${nextBefore[0].id}"] [data-testid="horizon-down"]`);
     const nextAfter = (await db.query.horizonItems.findMany({ where: and(eq(schema.horizonItems.workspaceId, ws), eq(schema.horizonItems.status, "next")) })).sort((a, b) => a.sort - b.sort);
     must(nextAfter[1].id === nextBefore[0].id && nextAfter[0].id === nextBefore[1].id, "Down swaps the first two Next up items");
     // Ship Magic funnel.
-    await mfRow.locator("summary").click();
+    await openRow(coach, mf.id);
     await submit(coach, `[data-testid="horizon-coach-item"][data-item="${mf.id}"] [data-testid="horizon-move"][data-to="shipped"]`);
     const shipped = (await db.query.horizonItems.findFirst({ where: eq(schema.horizonItems.id, mf.id) }))!;
     must(shipped.status === "shipped" && shipped.shippedAt, "moving to Just shipped stamps shippedAt");
@@ -179,7 +185,7 @@ async function main() {
     must((await mfCard.locator('[data-testid="horizon-want"]').count()) === 0, "a shipped item has no Want this");
     // Back to Next up: Coming soon returns.
     await coach.goto(`${base}/coach/horizon`);
-    await mfRow.locator("summary").click();
+    await openRow(coach, mf.id);
     await submit(coach, `[data-testid="horizon-coach-item"][data-item="${mf.id}"] [data-testid="horizon-move"][data-to="next"]`);
     await page.goto(`${base}/today`);
     await page.locator("h1").first().waitFor({ timeout: 20000 });
