@@ -149,6 +149,16 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                 <Field label="Named mechanism" hint="Capital letters. Yours.">
                   <input className="field" name="mechanismName" defaultValue={shown.mechanismName ?? ""} placeholder="The 12-Minute Tuesday System" />
                 </Field>
+                {/* Docket #10 (H-195): where an offer's tier is set. Blank reads it from the price, as before. */}
+                <Field label="Tier" hint="Freebie, Starter, Core or Premium. Leave it on the price and HelixOS works it out from what you charge.">
+                  <select className="field" name="ladderTier" defaultValue={offer.ladderTier ?? ""} data-testid="offer-tier">
+                    <option value="">Read from the price</option>
+                    <option value="freebie">Freebie</option>
+                    <option value="starter">Starter</option>
+                    <option value="core">Core</option>
+                    <option value="premium">Premium</option>
+                  </select>
+                </Field>
                 <Field label="Container">
                   <select className="field" name="container" defaultValue={shown.container} required data-testid="offer-container">
                     <option value="">Choose one</option>

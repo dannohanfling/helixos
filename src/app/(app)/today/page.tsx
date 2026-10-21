@@ -3,7 +3,7 @@ import { connectionFor } from "@/lib/ghl";
 import { connectProgress } from "@/lib/engine/connect-copy";
 import { clTokenSet } from "@/lib/community-loyalty";
 import { requireViewer } from "@/lib/auth";
-import { eveningCloseAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
+import { eveningCloseAction, logWinAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
 import { streakRecountSeenAction } from "@/lib/actions/streak";
 import type { TodayActivity } from "@/lib/queries/daily";
 import type { DailyLog } from "@/db/schema";
@@ -51,6 +51,7 @@ import { WorkoutReadCard } from "@/components/body/workout-read";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
+import { unreadReplies } from "@/lib/report-replies";
 import { openClaims } from "@/lib/queries/rewards";
 import { recentlyOn, waitingFeatures } from "@/lib/bot-features";
 import { checkinsDue } from "@/lib/board-steps";
@@ -133,6 +134,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     callsBetween(v.workspace.id, callsNow, new Date(callsNow.getTime() + 24 * 3_600_000), { role: v.role, programTier: v.membership.programTier }),
   ]);
   const tData = tick();
+  // H-202: a reply on one of the member's reports they haven't seen, as one line to My reports. Never while switched in.
+  const replies = !v.switchedInto && !v.team ? await unreadReplies({ workspaceId: v.workspace.id, userId: v.user.id }) : null;
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
   // Claude's drafts waiting for this member's Approve (H-184), the webinar wizard's included: one line, to the list.
@@ -201,6 +204,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     <>
       {replay ? <FirstArrival card={replay} /> : null}
       {closeScene ? <EveningClose scene={closeScene} /> : null}
+      {replies?.count ? (
+        <Link href={`/reports#r-${replies.reportId}`} className="mb-4 block rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-report-reply">
+          {replies.count === 1 ? "A reply on your report" : `${replies.count} replies on your reports`}: see it in My reports →
+        </Link>
+      ) : null}
       {coachNew && (coachNew[0] || coachNew[1] || coachNew[2] || coachNew[3]) ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="coach-new">
           {coachNew[0] ? (
@@ -568,6 +576,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
           {/* Today's board */}
           <Card title="Also on your plate" action={<NewTaskForm today={v.today} />}>
+            {/* Docket #9 (H-195): a win that wasn't on the list, logged as a task done today. */}
+            {v.switchedInto || v.team ? null : (
+              <form action={logWinAction} className="mb-3 flex gap-2" data-testid="log-win">
+                <input className="field min-w-0 flex-1 py-1 text-sm" name="title" placeholder="Did something else? Add it" maxLength={300} required aria-label="Something else you did today" data-testid="log-win-title" />
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Adding…" data-testid="log-win-add">
+                  Add
+                </SubmitButton>
+              </form>
+            )}
             {boardTasks.length ? (
               <div className="-mx-2 divide-y">
                 {boardTasks.map((t) => (
@@ -939,6 +956,16 @@ function CloseForm({ log, activity, owner, today, error, closeKpis }: { log: Dai
         {n("newLeads", "New leads", "Opt-ins, hand-raises")}
         {n("cashCollected", "Cash collected ($)", "Adds to your goal")}
       </div>
+      {/* Docket #9 (H-195): wins that weren't on the list. Outreach in any app counts toward DMs started on the Aqueduct. */}
+      <details className="rounded-lg border p-3" open={Boolean(log && (log.outreachMessages || log.scriptsWritten || log.videosRecorded || log.videosPosted))} data-testid="close-also">
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">Also today (optional)</summary>
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {n("outreachMessages", "Outreach messages", "Any app, WhatsApp too")}
+          {n("scriptsWritten", "Scripts written", "Calls, videos, posts")}
+          {n("videosRecorded", "Videos recorded", "Recorded today")}
+          {n("videosPosted", "Videos posted", "Count them in Posts too")}
+        </div>
+      </details>
       {closeKpis.length ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="close-kpis">
           {closeKpis.map((k) => (

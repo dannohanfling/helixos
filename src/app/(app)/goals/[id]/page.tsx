@@ -16,6 +16,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { db, schema } from "@/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { ItemGone } from "@/components/item-gone";
+import { weeksUnder } from "@/lib/intention-chain";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -34,6 +35,7 @@ export default async function PlanRecordPage({ params, searchParams }: { params:
   const r = await ownRecord(m, id);
   if (!r || r.archivedAt) return <ItemGone what="This record" href="/goals" list="your Business goals" />;
   const { records, links, tasks, reads, logs, values } = await planData(m, v.today);
+  const weeks = r.kind === "initiative" ? await weeksUnder(m, r.id) : [];
   const byId = new Map(records.map((x) => [x.id, x]));
   const { down, up } = linksOf(r.id, links);
   const parents = up.map((l) => byId.get(l.fromId)).filter((x): x is NonNullable<typeof x> => Boolean(x) && !x!.archivedAt);
@@ -239,6 +241,27 @@ export default async function PlanRecordPage({ params, searchParams }: { params:
             </Card>
           ) : null}
           {r.kind === "initiative" ? null : <KpiCard recordId={r.id} reads={reads} logs={logs} values={values} today={v.today} error={sp.kpiError} />}
+          {/* The intention chain (H-198): the weeks that roll up under this initiative, each with its tasks done. */}
+          {r.kind === "initiative" ? (
+            <Card title="Weeks under this initiative" action={<Link className="text-xs underline" href="/intentions#chain">Your chain →</Link>}>
+              {weeks.length ? (
+                <ul className="divide-y text-sm" data-testid="initiative-weeks">
+                  {weeks.map((w) => (
+                    <li key={w.id} className="flex flex-wrap items-baseline justify-between gap-2 py-1.5" data-testid="initiative-week">
+                      <span>
+                        Week of {formatDate(w.weekOf)} · <b>{w.word}</b>
+                      </span>
+                      <span className="text-ink-3">
+                        {w.done} of {w.total} tasks done
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-ink-2" data-testid="initiative-no-weeks">No week is linked to this initiative yet. Link one from <Link className="underline" href="/intentions#chain">Intentions</Link>.</p>
+              )}
+            </Card>
+          ) : null}
           {tasks.length ? null : null}
         </div>
       </div>

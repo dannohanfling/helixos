@@ -67,7 +67,7 @@ defineTool({
     const state = (input.state as ReportState | undefined) ?? "new";
     const limit = listLimit(input.limit as number | undefined);
     const where: SQL[] = [eq(schema.memberReports.workspaceId, v.workspace.id)];
-    if (state === "new") where.push(isNull(schema.memberReports.seenAt));
+    if (state === "new") where.push(eq(schema.memberReports.status, "new"));
     if (state === "open") where.push(isNull(schema.memberReports.doneAt));
     const rows = await db.query.memberReports.findMany({ where: and(...where), orderBy: [desc(schema.memberReports.createdAt), desc(schema.memberReports.id)], limit });
     const senders = await sendersOf(v, rows.map((r) => r.userId));
@@ -131,7 +131,8 @@ defineTool({
     const r = await reportOf(v, input.id);
     if (!r) throw new Error(NOT_FOUND);
     const seenAt = r.seenAt ?? nowIso();
-    if (!r.seenAt) await db.update(schema.memberReports).set({ seenAt }).where(and(eq(schema.memberReports.id, r.id), eq(schema.memberReports.workspaceId, v.workspace.id)));
+    // A quiet Seen, with no message to the member (H-202): a New report becomes Seen; any later status stays.
+    if (!r.seenAt) await db.update(schema.memberReports).set({ seenAt, ...(r.status === "new" ? { status: "seen" as const } : {}) }).where(and(eq(schema.memberReports.id, r.id), eq(schema.memberReports.workspaceId, v.workspace.id)));
     return { text: r.seenAt ? "It was already Seen." : "Marked Seen.", data: { id: r.id, seenAt, doneAt: r.doneAt } };
   },
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `weekly_intentions` ADD `initiative_id` text;

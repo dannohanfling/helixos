@@ -141,7 +141,7 @@
     "order": 5,
     "label": "Customer journey mapped",
     "signal": "pathway:2",
-    "href": "/offers"
+    "href": "/pathway"
   },
   {
     "key": "p2-diagnostics",

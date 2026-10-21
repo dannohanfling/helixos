@@ -43,6 +43,8 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       mechanismName: opt(formData, "mechanismName"),
       pathSteps: steps,
       container: OFFER_CONTAINERS.find((c) => c === str(formData, "container")) ?? "",
+      // The tier (docket #10): only a form that carries the picker changes it.
+      ...(formData.has("ladderTier") ? { ladderTier: (["freebie", "starter", "core", "premium"] as const).find((t) => t === str(formData, "ladderTier")) ?? null } : {}),
       currency: CURRENCIES.find((c) => c === str(formData, "currency").toUpperCase()) ?? "USD",
       length: opt(formData, "length"),
       price: money(formData, "price", (e) => `/offers/${id}?error=${encodeURIComponent(e)}&field=price`) ?? 0,

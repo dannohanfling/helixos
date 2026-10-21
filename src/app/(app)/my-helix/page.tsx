@@ -15,7 +15,7 @@ export default async function MyHelixPage() {
   return (
     <div className="hx-page" data-testid="my-helix">
       <MyHelix
-        rungs={h.rungs.map((r) => ({ key: r.key, phase: r.phase, label: r.label, done: r.done, tick: r.tick, ticked: r.ticked, href: r.href, words: r.words }))}
+        rungs={h.rungs.map((r) => ({ key: r.key, phase: r.phase, label: r.label, done: r.done, tick: r.tick, ticked: r.ticked, href: r.href, words: r.words, note: r.note, reason: r.reason }))}
         phases={h.phases.map((p) => ({ n: p.n, name: p.name, main: p.main, dark: p.dark, done: p.done, total: p.rungs.length }))}
         next={h.next ? { key: h.next.key, label: h.next.label, phase: h.next.phase, href: h.next.href } : null}
         built={h.built}
