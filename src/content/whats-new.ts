@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 322,
+    date: "2026-10-19",
+    title: "Your week adds up: the intention chain",
+    lines: [
+      "On Intentions, \"Your chain\" shows how this week adds up: the initiative it moves, this month's intention, this week's, its tasks done, and the key results moved. Each step is a tap.",
+      "Link your week to an initiative in Business goals, and each key result to one of yours there. On Friday, the number you write for a linked key result is logged on it, dated that day.",
+      "Tick a week's task right on the week card, and deleting one in Tasks asks whether to take it off your intention too.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 321,
     date: "2026-10-19",
     title: "Personal tasks, wins that weren't on the list, and offer tiers you set",

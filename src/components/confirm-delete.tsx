@@ -9,7 +9,7 @@ import { SubmitButton } from "./submit-button";
  * the dialog's own Delete is the form's submit, so the hidden fields beside it travel as before. Escape, the backdrop's cancel
  * and Cancel all close it with nothing sent. Focus goes to Cancel when it opens, so Enter never deletes by accident.
  */
-export function ConfirmDelete({ what, undo = "This can't be undone.", label = "Delete", verb = "Delete", className = "btn btn-ghost btn-sm", testId, title, disabled, onConfirm }: { what: string; undo?: string; label?: ReactNode; verb?: string; className?: string; testId?: string; title?: string; disabled?: boolean; /** Outside a form (a row that runs its action from the client), Delete calls this instead of submitting. */ onConfirm?: () => void }) {
+export function ConfirmDelete({ what, undo = "This can't be undone.", label = "Delete", verb = "Delete", className = "btn btn-ghost btn-sm", testId, title, disabled, onConfirm, alt, yes }: { what: string; undo?: string; label?: ReactNode; verb?: string; className?: string; testId?: string; title?: string; disabled?: boolean; /** Outside a form (a row that runs its action from the client), Delete calls this instead of submitting. */ onConfirm?: () => void; alt?: { label: string; testId?: string; onConfirm: () => void }; yes?: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   return (
@@ -38,6 +38,20 @@ export function ConfirmDelete({ what, undo = "This can't be undone.", label = "D
           <button ref={cancel} type="button" className="btn btn-soft btn-sm" data-testid="confirm-delete-cancel" onClick={() => dialog.current?.close()}>
             Cancel
           </button>
+          {alt ? (
+            // A second way out (H-198): e.g. "Only from Tasks" beside "Delete from both".
+            <button
+              type="button"
+              className="btn btn-soft btn-sm"
+              data-testid={alt.testId ?? "confirm-delete-alt"}
+              onClick={() => {
+                dialog.current?.close();
+                alt.onConfirm();
+              }}
+            >
+              {alt.label}
+            </button>
+          ) : null}
           {onConfirm ? (
             <button
               type="button"
@@ -48,7 +62,7 @@ export function ConfirmDelete({ what, undo = "This can't be undone.", label = "D
                 onConfirm();
               }}
             >
-              {verb}
+              {yes ?? verb}
             </button>
           ) : (
             // The form's own submit: disabled from the press and saying so ("Deleting…") until the page comes back.
