@@ -1,11 +1,13 @@
 import { TIERS } from "@/lib/engine/tiers";
 import { addDays, formatDate } from "@/lib/dates";
+import { isAccessReward } from "@/lib/engine/claim-next-step";
 
 /**
  * Earn Your Way: what a reward or prize needs before a client can take it, and what happens to the caps.
  *
  * A claim is an instant unlock. Points come off at once and the client gets the booking link for that specific reward;
- * taking the next step is theirs. So nothing here is claimable without a link, and the caps count across the whole
+ * taking the next step is theirs. So nothing here is claimable without a link (save the two 30-day access rewards, which
+ * the coach opens by hand), and the caps count across the whole
  * workspace because they protect the coach's calendar, not any one client's allowance.
  */
 
@@ -156,7 +158,9 @@ export function claimability(item: CatalogueItem, c: { points: number; tierLevel
   const pointsMet = c.points >= item.minPoints;
   // No link yet: the client who has met tier and points must not read the same words as one who has not. The ledger
   // knows the threshold was crossed, so the badge says so; the button still never appears without a link.
-  if (!item.bookingUrl) return tierMet && pointsMet ? { ok: false, reason: "earned-soon", message: EARNED_SOON } : { ok: false, reason: "opening-soon", message: OPENING_SOON };
+  // The two 30-day access rewards are the coach's to open by hand (H-1586, H-1596 A): claimable with no link, every other rule
+  // still applies, and the member's row says who acts next.
+  if (!item.bookingUrl && !isAccessReward(item.name)) return tierMet && pointsMet ? { ok: false, reason: "earned-soon", message: EARNED_SOON } : { ok: false, reason: "opening-soon", message: OPENING_SOON };
   if (!tierMet) return { ok: false, reason: "tier", message: `Unlocks at ${item.tierRequired}` };
   if (!pointsMet) return { ok: false, reason: "points", message: `${(item.minPoints - c.points).toLocaleString()} more points` };
   const cap = capStatus(item, c.claimDates, c.today, c.mode);
