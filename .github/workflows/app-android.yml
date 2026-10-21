@@ -22,7 +22,8 @@ permissions:
 
 jobs:
   bundle:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to a new image on 19 Oct and its SDK setup stalled on licence prompts (H-1595).
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
       HELIXOS_APP_URL: ${{ inputs.app_url }}
@@ -30,16 +31,21 @@ jobs:
       HELIXOS_VERSION_NAME: "1.0"
       HAS_PLAY_KEY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      # The image's own Android SDK: accept every licence without a prompt, then add what the app compiles against.
+      - name: Android SDK
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" > /dev/null
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -54,13 +60,13 @@ jobs:
           KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 }}
           GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
         run: |
-          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.p12"
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > mobile/android/app/google-services.json; fi
 
       - name: Build the signed bundle
         working-directory: mobile/android
         env:
-          HELIXOS_UPLOAD_KEYSTORE: ${{ runner.temp }}/upload.jks
+          HELIXOS_UPLOAD_KEYSTORE: ${{ runner.temp }}/upload.p12
           HELIXOS_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           HELIXOS_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
           HELIXOS_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
@@ -84,4 +90,4 @@ jobs:
 
       - name: Remove the keys
         if: always()
-        run: rm -f "$RUNNER_TEMP/upload.jks" mobile/android/app/google-services.json
+        run: rm -f "$RUNNER_TEMP/upload.p12" mobile/android/app/google-services.json

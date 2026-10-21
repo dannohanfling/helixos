@@ -6,6 +6,7 @@ import { Badge, Card, PageHeader, Progress } from "@/components/ui";
 import { ClaimButton } from "@/components/claim-button";
 import { TIERS, TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { SOME_RUNGS_NOT_OPEN, catalogue, claimability, requirementText, type CatalogueItem, type Claimability } from "@/lib/engine/rewards";
+import { WAITING_ON_COACH, waitingLine } from "@/lib/engine/claim-next-step";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import { leaderboard, recentLedger, totalPoints } from "@/lib/queries/points";
 import { claimDatesByName } from "@/lib/queries/rewards";
@@ -196,7 +197,7 @@ function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdi
                   {claim.bookingOpenedAt ? "Booking link ↗" : "Book your slot ↗"}
                 </a>
               ) : (
-                <span>· next step opening soon</span>
+                <span className="badge" data-testid="claim-waiting">{WAITING_ON_COACH}</span>
               )}
             </>
           ) : verdict.ok ? (
@@ -209,6 +210,7 @@ function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdi
         </span>
       </div>
       {claim && claim.status !== "fulfilled" && item.bookingUrl && !claim.bookingOpenedAt ? <p className="mt-2 text-xs text-ink-2">Your points are spent and the slot is yours to book. Nobody books it for you.</p> : null}
+      {claim && claim.status !== "fulfilled" && !item.bookingUrl ? <p className="mt-2 text-xs text-ink-2" data-testid="claim-waiting-line">{waitingLine(item.name)}</p> : null}
     </li>
   );
 }

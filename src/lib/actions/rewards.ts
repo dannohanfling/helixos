@@ -8,6 +8,7 @@ import { totalPoints } from "@/lib/queries/points";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { requireCoach } from "@/lib/auth";
 import { catalogue, claimability } from "@/lib/engine/rewards";
+import { claimToast } from "@/lib/engine/claim-next-step";
 import { rankOf } from "@/lib/engine/tiers";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import { claimDatesByName } from "@/lib/queries/rewards";
@@ -39,7 +40,8 @@ export async function claimRewardAction(_prev: ClaimState, formData: FormData): 
     await db.insert(schema.pointsLedger).values({ id: newId(), workspaceId, userId, type: "redeem", points: -item.cost, reason: `Claimed: ${item.name}` });
   }
   refresh();
-  return { ok: item.cost ? `Claimed. ${item.cost.toLocaleString()} points spent. Your booking link is ready.` : "Claimed. Your booking link is ready." };
+  // The booking link only when there is one; a reward with no link is the coach's to deliver (H-1586).
+  return { ok: claimToast(item.cost, Boolean(item.bookingUrl)) };
 }
 
 /**
