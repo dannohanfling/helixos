@@ -22,6 +22,7 @@ import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { simplePath } from "@/lib/engine/pathway";
 import { pillarSummary } from "@/lib/engine/pillars";
 import { catalogue } from "@/lib/engine/rewards";
+import { COACH_DELIVERS } from "@/lib/engine/claim-next-step";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import { totalPoints } from "@/lib/queries/points";
 import { logsBetween, streakFor } from "@/lib/queries/daily";
@@ -752,7 +753,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
               <ul className="divide-y text-sm" data-testid="client-claims">
                 {claims.map((c) => {
                   const link = linkOf.get(c.rewardName);
-                  const booking = c.bookedAt ? `booked for ${when(c.bookedAt)}` : !link ? "no next step set yet" : c.bookingOpenedAt ? `opened the booking link ${when(c.bookingOpenedAt)}` : "hasn't opened the booking link yet";
+                  const booking = c.bookedAt ? `booked for ${when(c.bookedAt)}` : !link ? COACH_DELIVERS : c.bookingOpenedAt ? `opened the booking link ${when(c.bookingOpenedAt)}` : "hasn't opened the booking link yet";
                   return (
                     <li key={c.id} className="py-2">
                       <div className="flex items-center justify-between gap-2">

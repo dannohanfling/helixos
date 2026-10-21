@@ -30,6 +30,7 @@ import { MonthAnswers } from "@/components/month-card";
 import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { openClaims } from "@/lib/queries/rewards";
+import { COACH_DELIVERS, overdueNoLinkClaims } from "@/lib/engine/claim-next-step";
 import { submissionsWaiting } from "@/lib/queries/submissions";
 import { setFeatureOnAction } from "@/lib/actions/bot-features";
 import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
@@ -99,6 +100,9 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const featuresWaiting = featureRows.filter((r) => r.state === "requested");
   const featuresOn = featureRows.filter((r) => r.state === "on").slice(0, 8);
   const linkOf = new Map(catalogue(rewards, prizes, loadRewardsConfig()).map((i) => [i.name, i.bookingUrl]));
+  // Rewards with no link are delivered by hand (H-1586): a line at the top once one has waited over a day.
+  const openRows = claimsShown === "open" ? claimRows : await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, wsId), eq(schema.rewardClaims.status, "requested")), columns: { rewardName: true, createdAt: true } });
+  const claimsOverdue = overdueNoLinkClaims(openRows, (n) => linkOf.get(n), new Date());
   const [aiCreds, aiRows] = await Promise.all([
     db.query.aiCredentials.findMany({ where: eq(schema.aiCredentials.workspaceId, wsId) }),
     db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.workspaceId, wsId), gte(schema.aiUsage.createdAt, monthStart)) }),
@@ -206,6 +210,11 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     <>
       <span hidden data-page-wide />
       <PageHeader title="Coach view" subtitle={`${members.length} clients · ${waiting.total} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex flex-wrap gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/late-closes" className="btn btn-ghost btn-sm" data-testid="coach-late-link">Late close-outs</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/hermes/calendars" className="btn btn-ghost btn-sm" data-testid="coach-calendars-link">Booking calendars</Link><Link href="/coach/teaching" className="btn btn-ghost btn-sm" data-testid="coach-teaching-link">Teaching library</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
+      {claimsOverdue ? (
+        <Link href="/coach?claims=open#claims" className="mb-4 block rounded-lg bg-warn-soft px-3 py-2 text-sm font-medium hover:underline" data-testid="claims-overdue">
+          {claimsOverdue} reward claim{claimsOverdue === 1 ? "" : "s"} waiting on you over a day →
+        </Link>
+      ) : null}
       <Card className="mb-4" title="My bot" action={<Link href="/my-bot" className="text-xs underline">Your bot →</Link>}>
         <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
         <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">
@@ -618,7 +627,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                 {claimRows.map((c) => {
                   const u = userById.get(c.userId);
                   const link = linkOf.get(c.rewardName);
-                  const booking = c.bookedAt ? `booked for ${formatDateTime(c.bookedAt, v.tz)}` : !link ? "no next step set yet" : c.bookingOpenedAt ? `opened the booking link ${formatDateTime(c.bookingOpenedAt, v.tz)}` : "hasn't opened the booking link yet";
+                  const booking = c.bookedAt ? `booked for ${formatDateTime(c.bookedAt, v.tz)}` : !link ? COACH_DELIVERS : c.bookingOpenedAt ? `opened the booking link ${formatDateTime(c.bookingOpenedAt, v.tz)}` : "hasn't opened the booking link yet";
                   return (
                     <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid="claim-row">
                       <Link href={`/coach/${members.find((mm) => mm.userId === c.userId)?.id ?? ""}`} className="font-medium hover:underline">

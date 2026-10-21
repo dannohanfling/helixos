@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 341,
+    date: "2026-10-21",
+    title: "Claim your 30 days of Academy or Elite, and see who opens it",
+    lines: [
+      "Once you reach Sentinel, 30 Days Access to Evolve Omega Academy has a Claim button; at Centurion, so does 30 Days Access to Evolve Omega Elite. They cost no points.",
+      "After you claim, the reward says Waiting on your coach: your coach opens your 30 days by hand, and it shows Done ✓ here once it's open.",
+      "Any claimed reward without a booking link now says the same, instead of a booking link that isn't there.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 340,
     date: "2026-10-21",
     title: "Your client list says who needs you",
