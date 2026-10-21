@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * Docket PR 2, the quick wins (H-195, plan H-216), on a real database of its own: a Personal task is done with no points and
  * no ledger row while a business task still scores; "Did something else" is a task done today; a tier set on an offer counts
  * on My Helix, beside the price-read ladder; a hand tick keeps its one line; outreach messages from the close count as DMs
- * started on the Aqueduct. And migration 0216 comes after everything before it.
+ * started on the Aqueduct. And migration 0230 comes after everything before it.
  */
 const dir = mkdtempSync(path.join(tmpdir(), "hx-docket-qw-"));
 process.env.DATABASE_URL = `file:${path.join(dir, "test.db")}`;
@@ -95,13 +95,13 @@ describe("outreach in the close (docket #9)", () => {
   });
 });
 
-describe("migration 0216", () => {
+describe("migration 0230", () => {
   it("comes after every migration before it in the journal, by number and by time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
-    const at = journal.entries.findIndex((e) => e.tag === "0216_docket_quick_wins");
+    const at = journal.entries.findIndex((e) => e.tag === "0230_docket_quick_wins");
     expect(at).toBeGreaterThan(0);
     for (const e of journal.entries.slice(0, at)) {
-      expect(e.tag < "0216").toBe(true);
+      expect(e.tag < "0230").toBe(true);
       expect(e.when).toBeLessThan(journal.entries[at]!.when);
     }
   });
