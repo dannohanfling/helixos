@@ -870,7 +870,8 @@ export const communityShares = sqliteTable(
  * A key result as set and as checked on Friday (rev 158): `actual` is "how many did you get", against the number in the text;
  * `kept` marks one saved as written though it reads like a task, for the coach.
  */
-export type IntentionKeyResult = { text: string; done: boolean | null; actual?: number | null; kept?: boolean };
+/** `krId` (H-198): the member's own key result in Business goals this one counts toward; its Friday number is logged there. */
+export type IntentionKeyResult = { text: string; done: boolean | null; actual?: number | null; kept?: boolean; krId?: string | null };
 export type IntentionTask = { title: string; taskId: string | null };
 export const weeklyIntentions = sqliteTable(
   "weekly_intentions",
@@ -890,6 +891,8 @@ export const weeklyIntentions = sqliteTable(
     tasks: text("tasks", { mode: "json" }).$type<IntentionTask[]>().notNull().default([]),
     /** When the key results were marked done or not; null until then. */
     reviewedAt: text("reviewed_at"),
+    /** The intention chain (H-198): the member's initiative in Business goals this week rolls up under; null until they link it. */
+    initiativeId: text("initiative_id"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
     createdAt: createdAt(),
   },

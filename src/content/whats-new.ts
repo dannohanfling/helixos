@@ -12,13 +12,24 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 322,
+    n: 323,
     date: "2026-10-19",
     title: "Hear back on what you report",
     lines: [
       "When you send \"I have an issue or a suggestion\", you'll see \"Got it, Danno will see this soon\" straight away.",
       "Danno's replies come to you as each report moves: seen, being worked on, done and how, or not now and why. A line on Today points to them, and an email follows if your emails are on.",
       "My reports, from the same button, lists everything you've sent with its replies, and you can add a follow-up to the same report.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 322,
+    date: "2026-10-19",
+    title: "Your week adds up: the intention chain",
+    lines: [
+      "On Intentions, \"Your chain\" shows how this week adds up: the initiative it moves, this month's intention, this week's, its tasks done, and the key results moved. Each step is a tap.",
+      "Link your week to an initiative in Business goals, and each key result to one of yours there. On Friday, the number you write for a linked key result is logged on it, dated that day.",
+      "Tick a week's task right on the week card, and deleting one in Tasks asks whether to take it off your intention too.",
     ],
     audience: "everyone",
   },
