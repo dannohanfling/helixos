@@ -178,6 +178,21 @@ async function main() {
     if (!/^🎟️ Pass: (on|off)$/.test(passLabel) || !(await mayaRow.locator('[data-testid="pass-toggle"]').getAttribute("title"))?.includes("wallet pass")) throw new Error(`the pass says it is the pass: "${passLabel}"`);
     await db.update(schema.memberships).set({ programTier: mm.programTier }).where(eq(schema.memberships.id, mm.id));
     console.log(`✓ tier: saved on change to ${nextTier} with the green, the pass untouched; read in full; Level and Tier columns; "${passLabel}" with its line`);
+    // Who needs you (H-164 §17): a question waiting puts the flag on the client's row, and the row first among real clients.
+    if (!heads.some((h) => /^needs you$/i.test(h.trim())) || !heads.some((h) => /^stage$/i.test(h.trim()))) throw new Error(`Needs you and Stage columns: ${heads.join(" | ")}`);
+    const { newId } = await import("@/lib/ids");
+    const askId = newId();
+    await db.insert(schema.memberReports).values({ id: askId, workspaceId: mm.workspaceId, userId: mm.userId, kind: "ask_danno", severity: "green" });
+    await page.goto(`${base}/coach`);
+    const mayaFlag = page.locator(`[data-testid="roster-flag"][data-member="${mm.id}"]`);
+    await mayaFlag.waitFor({ state: "attached", timeout: 15000 });
+    if ((await mayaFlag.getAttribute("data-flag")) !== "question" || !(await mayaFlag.innerText()).includes("A question waiting")) throw new Error(`Maya's row says a question is waiting, got ${await mayaFlag.getAttribute("data-flag")}`);
+    const flags = await page.locator('[data-testid="roster-flag"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-flag") ?? ""));
+    const mayaAt = await page.locator('[data-testid="roster-flag"]').evaluateAll((els, id) => els.findIndex((e) => e.getAttribute("data-member") === id), mm.id);
+    if (flags.slice(0, mayaAt).some((f) => f !== "question")) throw new Error(`clients with a question waiting come first on the list: ${flags.join(",")}`);
+    if (!/^\d+ of \d+$/.test((await page.locator(`[data-testid="roster-stage"][data-member="${mm.id}"]`).innerText()).trim())) throw new Error("the Stage column reads n of N");
+    await db.delete(schema.memberReports).where(eq(schema.memberReports.id, askId));
+    console.log("✓ who needs you: a question waiting flags the row and puts it first; the stage reads n of N");
     // The Coach view's layout (rev 844): Clients at full width, nothing wrapped a letter a line, rows short, the page short with
     // every client's connections closed; at 1024 the table scrolls inside its card; on a phone nothing is wider than the screen.
     for (const width of [1920, 1440, 1024, 390]) {

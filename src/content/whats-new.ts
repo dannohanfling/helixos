@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 340,
+    date: "2026-10-21",
+    title: "Your client list says who needs you",
+    lines: [
+      "Coach → Clients has two new columns: Needs you, with the one thing most worth your time (a question waiting, no lock-in in 7 days, or a bot not connected), and Stage, where each client is on the Pathway.",
+      "Clients who need you sort to the top, a question waiting first. Test accounts stay at the bottom.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 339,
     date: "2026-10-19",
     title: "My bot is one page, with three tabs",
