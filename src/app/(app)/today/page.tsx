@@ -51,6 +51,7 @@ import { WorkoutReadCard } from "@/components/body/workout-read";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
+import { unreadReplies } from "@/lib/report-replies";
 import { openClaims } from "@/lib/queries/rewards";
 import { recentlyOn, waitingFeatures } from "@/lib/bot-features";
 import { checkinsDue } from "@/lib/board-steps";
@@ -132,6 +133,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     callsBetween(v.workspace.id, callsNow, new Date(callsNow.getTime() + 24 * 3_600_000), { role: v.role, programTier: v.membership.programTier }),
   ]);
   const tData = tick();
+  // H-202: a reply on one of the member's reports they haven't seen, as one line to My reports. Never while switched in.
+  const replies = !v.switchedInto && !v.team ? await unreadReplies({ workspaceId: v.workspace.id, userId: v.user.id }) : null;
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
   // Applause on the member's wins (H-1171): one quiet line, grouped, until they close it; only where the Colosseum is on.
@@ -198,6 +201,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     <>
       {replay ? <FirstArrival card={replay} /> : null}
       {closeScene ? <EveningClose scene={closeScene} /> : null}
+      {replies?.count ? (
+        <Link href={`/reports#r-${replies.reportId}`} className="mb-4 block rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-report-reply">
+          {replies.count === 1 ? "A reply on your report" : `${replies.count} replies on your reports`}: see it in My reports →
+        </Link>
+      ) : null}
       {coachNew && (coachNew[0] || coachNew[1] || coachNew[2] || coachNew[3]) ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="coach-new">
           {coachNew[0] ? (

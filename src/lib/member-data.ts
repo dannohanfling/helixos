@@ -175,6 +175,8 @@ export const MEMBER_TABLES = {
   // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row). A
   // Content report about the member (H-745, target_user_id) is erased with them too (src/lib/erase.ts), never exported to them.
   member_reports: schema.memberReports,
+  // H-202: everything said on the member's reports (the receipt, the coach's replies, their follow-ups).
+  report_messages: schema.reportMessages,
   // Rev 444: a form's unsent draft, kept so it follows the member to another device.
   form_drafts: schema.formDrafts,
 } as const;

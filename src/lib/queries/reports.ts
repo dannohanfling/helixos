@@ -1,5 +1,5 @@
 /** The reads behind the issue button, the coach's inbox and the monthly feedback count (rev 432, items 2 to 4). */
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newFeedbackCount } from "@/lib/engine/reports";
 
@@ -10,9 +10,9 @@ export async function coachFirstName(workspaceId: string): Promise<string> {
   return u?.name.split(" ")[0] || "your coach";
 }
 
-/** Reports the coach hasn't opened yet. */
+/** Reports still New (H-202: the menu badge counts New only; a follow-up makes one New again). */
 export async function unseenReports(workspaceId: string): Promise<number> {
-  return (await db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, workspaceId), isNull(schema.memberReports.seenAt)), columns: { id: true } })).length;
+  return (await db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, workspaceId), eq(schema.memberReports.status, "new")), columns: { id: true } })).length;
 }
 
 /** Monthly feedback sent or changed since this coach last opened Monthly feedback. */

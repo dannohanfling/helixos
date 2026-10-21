@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 323,
+    date: "2026-10-19",
+    title: "Hear back on what you report",
+    lines: [
+      "When you send \"I have an issue or a suggestion\", you'll see \"Got it, Danno will see this soon\" straight away.",
+      "Danno's replies come to you as each report moves: seen, being worked on, done and how, or not now and why. A line on Today points to them, and an email follows if your emails are on.",
+      "My reports, from the same button, lists everything you've sent with its replies, and you can add a follow-up to the same report.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 322,
     date: "2026-10-19",
     title: "Your week adds up: the intention chain",
