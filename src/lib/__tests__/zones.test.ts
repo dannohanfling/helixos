@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * Times in each member's own zone (H-457, PR 2), on a real database of its own: a member who never had a zone gets their
  * browser's once, and from then on the viewer (which "today", the streak and the points day all read) is in that zone; a zone
  * already chosen, a coach switched in and a team member are never written over; Got it marks the line seen. And migration
- * 0236 adds the column, marking seen everyone who already has a zone.
+ * 0239 adds the column, marking seen everyone who already has a zone.
  */
 const dir = mkdtempSync(path.join(tmpdir(), "hx-zones-"));
 process.env.DATABASE_URL = `file:${path.join(dir, "test.db")}`;
@@ -80,12 +80,12 @@ const read = (f: string) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
-describe("migration 0236: when the one-time zone line was seen", () => {
+describe("migration 0239: when the one-time zone line was seen", () => {
   it("adds one nullable column and marks seen only the members who already have a zone", async () => {
     const c = createClient({ url: ":memory:" });
     await c.execute("CREATE TABLE memberships (id text PRIMARY KEY, timezone text)");
     await c.execute("INSERT INTO memberships (id, timezone) VALUES ('a', 'Australia/Sydney'), ('b', NULL)");
-    for (const s of read("0236_tz_prompt_seen.sql")) await c.execute(s);
+    for (const s of read("0239_tz_prompt_seen.sql")) await c.execute(s);
     const rows = (await c.execute("SELECT id, tz_prompt_seen_at FROM memberships ORDER BY id")).rows;
     expect(rows[0]!.tz_prompt_seen_at).toBeTruthy();
     expect(rows[1]!.tz_prompt_seen_at).toBeNull();
@@ -94,10 +94,10 @@ describe("migration 0236: when the one-time zone line was seen", () => {
 
   it("comes after every migration before it in the journal, by number and by time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
-    const at = journal.entries.findIndex((e) => e.tag === "0236_tz_prompt_seen");
+    const at = journal.entries.findIndex((e) => e.tag === "0239_tz_prompt_seen");
     expect(at).toBeGreaterThan(0);
     for (const e of journal.entries.slice(0, at)) {
-      expect(e.tag < "0236").toBe(true);
+      expect(e.tag < "0239").toBe(true);
       expect(e.when).toBeLessThan(journal.entries[at]!.when);
     }
   });
