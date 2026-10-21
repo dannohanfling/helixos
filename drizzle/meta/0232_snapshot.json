@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4000dd4f-ed72-4b47-89ec-3180c2d9ba7a",
-  "prevId": "36c0cd41-52bf-4edf-b758-f29b7ce80414",
+  "id": "de9de82a-cb9f-4835-afa9-f8df0083a255",
+  "prevId": "0ef51718-913d-44a2-84b6-ce68692b3c5a",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -22941,6 +22941,13 @@
         },
         "reviewed_at": {
           "name": "reviewed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "initiative_id": {
+          "name": "initiative_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
