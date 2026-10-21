@@ -3,7 +3,9 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
-import { NAV_GROUPS, navVisible, withCoachName, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
+import { NAV_GROUPS, navVisible, withAppLinks, withCoachName, withColosseum, withHorizon, withPlatformLinks } from "@/components/nav-groups";
+import { appLinks, appLinksOn } from "@/lib/app-links";
+import { hasAppFor } from "@/lib/queries/app-devices";
 import { chatWidgetProps } from "@/lib/chat";
 import { horizonShell } from "@/lib/horizon";
 import { oohAccessFor } from "@/lib/office-hours-access";
@@ -30,7 +32,9 @@ export default async function MorePage() {
   const { shippedKeys } = await horizonShell(v);
   const oohOn = (await oohAccessFor(v)).open;
   const chatOn = (await chatWidgetProps(v)) !== null;
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn })) }))
+  // Get the app (H-655): the same rule as the side menu's.
+  const hasApp = v.team ? false : Boolean(await hasAppFor(v.membership.id));
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withAppLinks(withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl), shippedKeys), v.workspace.colosseumOn), { role: v.role, coachFirst }), appLinksOn(appLinks())).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn, oohOn, chatOn, agentsOn, hasApp })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length);
   return (
@@ -51,7 +55,7 @@ export default async function MorePage() {
                   <RowText label={n.label} line={<>{n.line} <span aria-label="opens in a new tab">↗</span></>} />
                 </a>
               ) : (
-                <Link key={n.href} href={n.href} className={ROW}>
+                <Link key={n.href} href={n.href} className={ROW} data-app-off={n.appOffOnly || undefined}>
                   <span className="w-6 shrink-0 text-center text-lg">{n.icon}</span>
                   {badges[n.href] ? (
                     // Every item with a count shows it, as on the sidebar; What's new keeps its dot.

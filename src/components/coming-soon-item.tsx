@@ -19,6 +19,7 @@ export function ComingSoonItem({ item, row = false }: { item: NavItem; row?: boo
       className={`group flex min-h-11 w-full min-w-0 cursor-default items-center gap-3 rounded-lg text-left text-ink-3 ${row ? "px-2 py-2.5 text-sm" : "px-3 py-1.5 text-sm font-medium"}`}
       data-testid="nav-coming-soon"
       data-href={item.href}
+      data-app-off={item.appOffOnly || undefined}
     >
       <span className={`shrink-0 text-center opacity-60 grayscale ${row ? "w-6 text-lg" : "w-5 text-base"}`} aria-hidden>
         {item.icon}

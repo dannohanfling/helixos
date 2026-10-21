@@ -48,6 +48,10 @@ export function NativeBridge() {
 
   useEffect(() => {
     const c = cap();
+    // Get the app (H-655) hides on a phone already running HelixOS as an app: the store app, or the home-screen icon. The menu
+    // items carry data-app-off, and globals.css hides them under this mark.
+    const home = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (c || home) document.documentElement.dataset.installed = c ? "native" : "home";
     if (!c) return;
     const push = c.Plugins.PushNotifications;
     const listeners: Promise<Listener>[] = [];
