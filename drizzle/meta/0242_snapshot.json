@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "943ea162-c65c-4e0d-81be-adcd2a1a48ee",
-  "prevId": "8ba1a7db-ac72-46af-8749-7e45e892f69f",
+  "id": "6cf7b211-e455-4cfb-adb1-d14217750ed9",
+  "prevId": "38f6cad3-3ac7-4a9b-b689-e6dda9f0e889",
   "tables": {
     "agent_auth_failures": {
       "name": "agent_auth_failures",
@@ -14978,6 +14978,14 @@
         },
         "sounds_on": {
           "name": "sounds_on",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "scene_motion": {
+          "name": "scene_motion",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
