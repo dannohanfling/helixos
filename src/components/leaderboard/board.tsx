@@ -1,5 +1,6 @@
 import type { PageMember, PageModel } from "@/lib/engine/leaderboard";
 import { BELOW_FIRST_TIER, fmt } from "@/lib/engine/leaderboard";
+import { LocalTime } from "@/components/local-time";
 
 /**
  * The Kindness Koin leaderboard (H-28), rendered on the server from the page model: the 9 Oct design's markup, class for
@@ -50,7 +51,13 @@ export function Board({ model, unit }: { model: PageModel; unit?: string }) {
           </a>
         ) : null}
         <p className="l-updated" id="ckl-updated">
-          {model.updatedLabel}
+          {model.updatedAt ? (
+            <>
+              Live · updated <LocalTime iso={model.updatedAt} fallback={model.updatedLabel.replace(/^Live · updated /, "")} />
+            </>
+          ) : (
+            model.updatedLabel
+          )}
         </p>
         <div id="ckl-sample">{model.source.kind === "sample" ? <div className="l-sample">SAMPLE DATA · REPLACE WITH THE EXPORT</div> : null}</div>
 

@@ -5,7 +5,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { addHorizonItemAction, moveHorizonItemAction, reorderHorizonItemAction, saveHorizonItemAction, setHorizonHiddenAction } from "@/lib/actions/horizon";
 import { horizonForCoach, type CoachHorizonItem } from "@/lib/horizon";
 import { HORIZON_AREAS, HORIZON_LISTS, HORIZON_MENU_KEYS, SHIPPED_DAYS, shippedShows } from "@/lib/engine/horizon";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 
 export const metadata = { title: "On the horizon" };
 
@@ -93,7 +93,7 @@ export default async function CoachHorizonPage({ searchParams }: { searchParams:
                           {i.fromFeedback ? <span className="badge">asked for</span> : null}
                           {i.menuKey ? <span className="badge">menu: {i.menuKey}</span> : null}
                           {i.hidden ? <span className="badge">hidden</span> : null}
-                          {i.status === "shipped" && i.shippedAt ? <span className="text-xs text-ink-3">shipped {formatDate(i.shippedAt.slice(0, 10))}{shippedShows(i, now) ? "" : " · off the page"}</span> : null}
+                          {i.status === "shipped" && i.shippedAt ? <span className="text-xs text-ink-3">shipped {stampDate(i.shippedAt, coach.tz)}{shippedShows(i, now) ? "" : " · off the page"}</span> : null}
                           <span className="ml-auto text-xs text-ink-2" data-testid="horizon-wants" data-n={i.wants}>
                             {i.wants} want{i.wants === 1 ? "s" : ""} this{i.names.length ? `: ${i.names.join(", ")}` : ""}
                           </span>

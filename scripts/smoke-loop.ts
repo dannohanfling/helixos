@@ -50,10 +50,13 @@ async function main() {
   const { hourInTz } = await import("@/lib/dates");
   if (hourInTz("America/Los_Angeles") < LATE_CLOSE_UNTIL_HOUR) await db.update(schema.memberships).set({ timezone: "Europe/London" }).where(eq(schema.memberships.userId, maya.id));
 
+  const mayaTz0 = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))?.timezone || "America/Los_Angeles";
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
-    const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+    // Maya's browser sits in her own zone (H-457): a member with no zone takes the browser's once, and the harness's own zone
+    // is the container's UTC, inside the late close-out window after midnight UTC, which would make the close yesterday's.
+    const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: mayaTz0 })).newPage();
     page.on("response", (r) => {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
@@ -227,12 +230,12 @@ async function main() {
 
     // Member timezone
     await page.goto(`${base}/settings`);
-    await page.selectOption('select[name="timezone"]', "America/New_York");
-    await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
+    await page.fill('[data-testid="zone-picker"]', "America/New_York");
+    await submit(page, 'form:has([data-testid="zone-picker"]) button:has-text("Save")');
     const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
     if (m?.timezone !== "America/New_York") throw new Error(`member timezone not saved: ${m?.timezone}`);
-    await page.selectOption('select[name="timezone"]', "America/Los_Angeles");
-    await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
+    await page.fill('[data-testid="zone-picker"]', "America/Los_Angeles");
+    await submit(page, 'form:has([data-testid="zone-picker"]) button:has-text("Save")');
     console.log("✓ member timezone saved and restored");
 
     // Late close-outs (rev 731, Danno's answers at rev 746). Maya goes to a timezone where it is 01:00 now, with yesterday open:

@@ -1,4 +1,5 @@
 import type { schema } from "@/db";
+import { formatDateTime } from "@/lib/dates";
 import { FilePicker } from "@/components/file-picker";
 import { IdReportButton } from "@/components/leaderboard/id-report-button";
 import { SubmitButton } from "@/components/submit-button";
@@ -13,9 +14,9 @@ import { readPointsCheck } from "@/lib/points-check";
  * the difference, the last change eLoyalty recorded and the suggested number with its reason. Coach only; nothing here
  * writes to either system.
  */
-export function PointsCheck({ feed, error }: { feed: schema.LeaderboardFeed; error?: string }) {
+export function PointsCheck({ feed, error, tz }: { feed: schema.LeaderboardFeed; error?: string; tz: string }) {
   const snap = readPointsCheck(feed);
-  const when = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" }) + " UTC";
+  const when = (iso: string) => formatDateTime(iso, tz, { zone: true });
   return (
     <details className="basis-full mt-1" id={`leaderboard-${feed.id}`} open={Boolean(snap) || Boolean(error)} data-testid="points-check">
       <summary className="cursor-pointer text-ink-3">Points check{snap ? ` · ${when(snap.at)}` : ""}</summary>

@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { reviewCertAction, submitCertAction } from "@/lib/actions/courses";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Certification" };
@@ -53,7 +53,7 @@ export default async function CertificationPage() {
                       <span className="font-medium">{userName.get(s.userId) ?? "Member"}</span> · {d?.name}
                       <span className="ml-2 text-xs text-ink-3">pass at {d?.passThreshold}</span>
                     </div>
-                    <span className="text-xs text-ink-3">{formatDate(s.createdAt.slice(0, 10))}</span>
+                    <span className="text-xs text-ink-3">{stampDate(s.createdAt, v.tz)}</span>
                   </div>
                   {s.url ? <a href={s.url} target="_blank" rel="noreferrer" className="text-sm underline">Open evidence ↗</a> : null}
                   {s.notes ? <p className="mt-1 text-sm text-ink-2">{s.notes}</p> : null}

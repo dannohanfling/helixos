@@ -10,7 +10,7 @@ import { FailedBanner, OutcomeHeadline, OutcomeRows } from "@/components/channel
 import { nowFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
 import { refreshStale } from "@/lib/planner-status";
 import { outcomesForItem } from "@/lib/queries/outcomes";
-import { addDays, formatDate, rangeDays, startOfWeek } from "@/lib/dates";
+import { addDays, formatDate, rangeDays, startOfWeek, stampDate, dayOf } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { ClaudeDraftCard, DRAFT_NOTES } from "@/components/claude-draft-card";
 import { pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
@@ -92,7 +92,7 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
   for (const item of items) outcomesByItem.set(item.id, await outcomesForItem(v, item, allVariants, now));
   const posted = items.filter((i) => i.status === "posted").sort((a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? ""));
   const pipeline = items.filter((i) => i.status !== "posted");
-  const thisWeek = posted.filter((i) => (i.postedAt ?? "").slice(0, 10) >= startOfWeek(v.today)).length;
+  const thisWeek = posted.filter((i) => (i.postedAt ? dayOf(i.postedAt, v.tz) : "") >= startOfWeek(v.today)).length;
   const tabs = [
     { key: "board", label: "Board", href: "/content", count: pipeline.length },
     { key: "calendar", label: "Calendar", href: "/content?view=calendar" },
@@ -209,7 +209,7 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
                         {i.hasCta ? <Badge tone="accent">CTA</Badge> : null}
                       </td>
                       <td className="py-2 pr-3 text-ink-2">{i.platform}</td>
-                      <td className="py-2 pr-3 text-ink-2">{i.postedAt ? formatDate(i.postedAt.slice(0, 10)) : "—"}</td>
+                      <td className="py-2 pr-3 text-ink-2">{i.postedAt ? stampDate(i.postedAt, v.tz) : "—"}</td>
                       <td className="py-2 pr-3 text-right">{i.engagements}</td>
                       <td className="py-2 pr-3 text-right">{i.views.toLocaleString()}</td>
                       <td className="py-2 text-right">{i.leads}</td>

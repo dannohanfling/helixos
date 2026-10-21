@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { completeCurriculumDayAction, submitPathwayTaskAction } from "@/lib/actions/pathway";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 import { FIELD_TASKS, OPEN_LIMIT, SECTION_TASKS, sectionCountLine, simplePath, roadLine, stageRelation } from "@/lib/engine/pathway";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
@@ -263,7 +263,7 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 </div>
               ) : null}
               {statusOf(selected.key) === "verified" ? (
-                <p className="mt-4 text-sm text-good">✓ Verified {selectedProg?.verifiedAt ? formatDate(selectedProg.verifiedAt.slice(0, 10)) : ""}. Points are yours.</p>
+                <p className="mt-4 text-sm text-good">✓ Verified {selectedProg?.verifiedAt ? stampDate(selectedProg.verifiedAt, v.tz) : ""}. Points are yours.</p>
               ) : statusOf(selected.key) === "submitted" ? (
                 <div className="mt-4 rounded-lg bg-surface-2 p-3 text-sm">
                   <p className="font-medium">Submitted. Your coach will review it.</p>

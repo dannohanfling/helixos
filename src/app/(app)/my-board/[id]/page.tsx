@@ -9,7 +9,7 @@ import { Boardroom } from "@/components/boardroom";
 import { councilClipFiles } from "@/lib/board-clips";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 import "../boardroom.css";
 import { ItemGone } from "@/components/item-gone";
 
@@ -55,7 +55,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
               <input type="hidden" name="on" value={d.sharedAt ? "0" : "1"} />
               {d.sharedAt ? (
                 <span className="br-goldtext" data-testid="board-shared">
-                  Shared with your coach on {formatDate(d.sharedAt.slice(0, 10))}
+                  Shared with your coach on {stampDate(d.sharedAt, v.tz)}
                 </span>
               ) : (
                 <span className="br-quiet">Private to you.</span>
@@ -186,7 +186,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             <ul className="br-quiet" style={{ listStyle: "none", margin: "16px 0 0", padding: 0, fontSize: 13 }} data-testid="board-checkins">
               {checkins.map((c) => (
                 <li key={c.at}>
-                  Checked in {formatDate(c.at.slice(0, 10))}: {(["done", "stuck", "dropped"] as const).map((st) => `${c.steps.filter((x) => x.state === st).length} ${st}`).join(", ")}
+                  Checked in {stampDate(c.at, v.tz)}: {(["done", "stuck", "dropped"] as const).map((st) => `${c.steps.filter((x) => x.state === st).length} ${st}`).join(", ")}
                 </li>
               ))}
             </ul>
@@ -205,7 +205,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
                       {x.question}
                     </span>{" "}
                     <span className="br-quiet" style={{ fontSize: 13 }}>
-                      {formatDate(x.createdAt.slice(0, 10))}
+                      {stampDate(x.createdAt, v.tz)}
                     </span>
                   </summary>
                   <p className="br-goldtext">The Board recommended: {x.answer!.recommendation}</p>

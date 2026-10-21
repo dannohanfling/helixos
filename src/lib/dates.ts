@@ -1,4 +1,7 @@
-/** All app dates are ISO `YYYY-MM-DD` strings in the workspace timezone. */
+/**
+ * All app dates are ISO `YYYY-MM-DD` strings in the viewer's own zone (their Settings time zone, H-457). Stored instants are UTC
+ * ("2026-10-12 19:32:00" from SQLite, or ISO with a Z); `dayOf`, `stampDate` and `whenWords` show them on the viewer's own day.
+ */
 
 export function todayInTz(tz: string, now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
@@ -64,6 +67,40 @@ export function instantOf(stamp: string): Date {
 /** "Oct 12, 1:32 PM" in the zone given; `zone` adds its short name ("1:32 PM EDT", rev 843) so a time never reads as the reader's own by mistake. */
 export function formatDateTime(iso: string, tz: string, opts: { zone?: boolean } = {}): string {
   return new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(opts.zone ? { timeZoneName: "short" } : {}) }).format(instantOf(iso));
+}
+
+/**
+ * The viewer's calendar day of a stored stamp (H-457): a UTC instant read in `tz`, so a 7 PM Pacific post on the 12th is the
+ * 13th in Sydney and the 12th in Los Angeles. A bare day ("2026-10-12") is already a day and passes through, as does
+ * anything unreadable (its first ten characters). Never `stamp.slice(0, 10)`: that is the UTC day.
+ */
+export function dayOf(stamp: string, tz: string): string {
+  const t = stamp.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const d = instantOf(t);
+  if (Number.isNaN(d.getTime())) return t.slice(0, 10);
+  try {
+    return todayInTz(tz, d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+}
+
+/** "Oct 12" for a stored stamp, on the viewer's own day (H-457). */
+export function stampDate(stamp: string, tz: string, opts?: Intl.DateTimeFormatOptions): string {
+  return formatDate(dayOf(stamp, tz), opts);
+}
+
+/**
+ * A stored instant as the brief writes it (H-457): "Fri 18 Oct, 11:00 AM", plus the zone's short name when `zone` is set
+ * ("Fri 18 Oct, 11:00 AM AEDT"), for the first time a page shows a time.
+ */
+export function whenWords(stamp: string | Date, tz: string, opts: { zone?: boolean } = {}): string {
+  const at = typeof stamp === "string" ? instantOf(stamp) : stamp;
+  if (Number.isNaN(at.getTime())) return "";
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).formatToParts(at).map((x) => [x.type, x.value]));
+  const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(at);
+  return `${p.weekday} ${p.day} ${p.month}, ${time}${opts.zone ? ` ${zoneName(tz, at)}` : ""}`;
 }
 
 export function relativeDay(d: string, today: string): string {

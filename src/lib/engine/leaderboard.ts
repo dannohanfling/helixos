@@ -410,6 +410,8 @@ export type PageModel = {
   podium: PageMember[];
   rewards: (Reward & { canRedeem: number | null })[];
   updatedLabel: string;
+  /** The live board's instant (H-457), so the page can show it in the reader's own zone; null for an export or the sample. */
+  updatedAt: string | null;
 };
 
 /** The design's sample people (invented), shown marked Sample until an export or a live key is in. */
@@ -465,6 +467,7 @@ export function pageModel(rows: readonly ExportRow[], config: PageConfig, source
     podium: members.slice(0, 3),
     rewards,
     updatedLabel,
+    updatedAt: source.kind === "live" && source.at ? source.at : null,
   };
 }
 

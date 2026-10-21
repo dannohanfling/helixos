@@ -5,7 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { BarChart, Sparkline, StreakCalendar } from "@/components/charts";
 import { Badge, Card, Disclosure, PageHeader, Progress } from "@/components/ui";
 import { setTargetsAction } from "@/lib/actions/targets";
-import { addDays, formatDate, isWeekday, rangeDays, startOfWeek } from "@/lib/dates";
+import { addDays, formatDate, isWeekday, rangeDays, startOfWeek, dayOf } from "@/lib/dates";
 import { logsBetween } from "@/lib/queries/daily";
 import { TARGET_METRICS, daysInMonth, monthOf, monthProgress } from "@/lib/engine/targets";
 import { PILLARS, lastMonths, pillarSummary } from "@/lib/engine/pillars";
@@ -72,7 +72,7 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
     return { monday, rows };
   });
   const chartData = weekly.map((w) => ({ label: formatDate(w.monday, { month: "numeric", day: "numeric" }), value: sum(w.rows, metric), sub: `week of ${formatDate(w.monday)}` }));
-  const pointsByWeek = weeks.map((monday) => ledger.filter((p) => p.createdAt.slice(0, 10) >= monday && p.createdAt.slice(0, 10) <= addDays(monday, 6)).reduce((a, p) => a + p.points, 0));
+  const pointsByWeek = weeks.map((monday) => ledger.filter((p) => dayOf(p.createdAt, v.tz) >= monday && dayOf(p.createdAt, v.tz) <= addDays(monday, 6)).reduce((a, p) => a + p.points, 0));
 
   // Streak calendar (last 12 weeks, weekdays only)
   const byDate = new Map(logs.map((l) => [l.date, l]));

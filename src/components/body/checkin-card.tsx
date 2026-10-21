@@ -1,14 +1,14 @@
 import { deleteCheckinAction, sendCheckinAction } from "@/lib/actions/body";
 import { SubmitButton } from "@/components/submit-button";
 import { Card } from "@/components/ui";
-import { formatDate } from "@/lib/dates";
+import { formatDate, stampDate } from "@/lib/dates";
 import type { BodyCheckin } from "@/db/schema";
 
 /**
  * "Send this week to your coach" (B9b): the week's numbers as lines plus one note, sent even with sharing off. What was sent shows
  * as sent, with Delete; sending again replaces it. Never a food, a note from a day, a photo or the health log.
  */
-export function CheckinCard({ monday, sent, justSent, lines }: { monday: string; sent: BodyCheckin | null; justSent: boolean; lines: string[] }) {
+export function CheckinCard({ tz, monday, sent, justSent, lines }: { tz: string; monday: string; sent: BodyCheckin | null; justSent: boolean; lines: string[] }) {
   return (
     <Card className="mb-4" title="Send this week to your coach" id="checkin">
       <p className="mb-2 text-xs text-ink-3">Only these numbers and your note go, as a snapshot, whether or not your coach can see your days. Delete takes it back for them too.</p>
@@ -20,7 +20,7 @@ export function CheckinCard({ monday, sent, justSent, lines }: { monday: string;
       {sent ? (
         <div className="mb-3 rounded-lg border p-3 text-sm" data-testid="checkin-sent" data-monday={sent.monday}>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-ink-3">Sent {formatDate(sent.sentAt.slice(0, 10), { month: "short", day: "numeric" })} for the week of {formatDate(sent.monday, { month: "short", day: "numeric" })}</span>
+            <span className="text-xs text-ink-3">Sent {stampDate(sent.sentAt, tz, { month: "short", day: "numeric" })} for the week of {formatDate(sent.monday, { month: "short", day: "numeric" })}</span>
             <form action={deleteCheckinAction}>
               <input type="hidden" name="id" value={sent.id} />
               <SubmitButton className="btn btn-ghost btn-xs text-ink-3 hover:text-danger" pendingText="…" data-testid="checkin-delete">

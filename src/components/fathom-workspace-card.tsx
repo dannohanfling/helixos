@@ -16,7 +16,7 @@ import { SubmitButton } from "@/components/submit-button";
  */
 export async function FathomWorkspaceCard({ v, notice, synced }: { v: Viewer; notice?: string; synced?: string }) {
   const conn = await workspaceFathom(v.workspace.id);
-  const tz = v.workspace.timezone;
+  const tz = v.tz;
   const message =
     notice === "nokey" ? "Paste the key to connect." : notice === "notconnected" ? "Connect Fathom first." : notice === "badkey" ? "The stored key can't be read any more. Paste it again." : notice?.startsWith("webhook:") ? notice.slice("webhook:".length) : conn?.lastError ?? null;
   const good = notice === "removed" ? "Fathom disconnected. The recordings already here stay." : notice === "webhook-on" ? "Webhook registered: Fathom will send each new recording here." : notice === "webhook-off" ? "Webhook removed." : null;
