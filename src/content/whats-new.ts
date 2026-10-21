@@ -12,12 +12,29 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 318,
+    n: 319,
     date: "2026-10-21",
     title: "Proof Bank: the list fits again, a status filter, Approve selected",
     lines: [
       "The Proof Bank list fits the page again (a long one-liner used to push every badge off-screen), with a Draft / Permission given / Approved filter and counts, and Show 250 more so a big bank stays light.",
       "Approve selected: tick drafts (or select the clean ones from a list file), tick the permission statement once for the batch, and Approve; each proof is recorded as if approved on its own page. Undo the last batch for 24 hours.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 318,
+    date: "2026-10-21",
+    title: "The Partner Program has its own place",
+    lines: ["Coaches: the Partner Program sits under People: restaurants, touches, payments and the monthly statement, with tools for your agents."],
+    audience: "coach",
+  },
+  {
+    n: 317,
+    date: "2026-10-21",
+    title: "Ladders: prompts aren't testimonials, and your own headline",
+    lines: [
+      'A writing prompt like Try: "…" no longer trips the testimonial check; when a real one is quoted, the note says which part holds it.',
+      "Make the graphic now takes a headline you write yourself, and Edit headlines takes you to the field.",
     ],
     audience: "everyone",
   },

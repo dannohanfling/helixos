@@ -122,6 +122,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },
       { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },
       { href: "/coach/import", label: "Import from Airtable", icon: "📥", coachOnly: true, hint: "a client's base into HelixOS" },
+      // The Partner Program (H-1307, plan H-1361): the coach's restaurants, touches, payments and the monthly statement.
+      { href: "/coach/partners", label: "Partner Program", icon: "🍽️", coachOnly: true, hint: "restaurants, touches, payouts" },
     ],
   },
   {

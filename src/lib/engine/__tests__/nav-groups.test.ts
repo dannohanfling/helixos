@@ -15,7 +15,7 @@ describe("the menu: subtitles and the coach's three groups", () => {
   });
   it("the coach's links sit in People, Agents and Your content; a client sees none of them", () => {
     const hrefs = (g: string) => NAV_GROUPS.find((x) => x.label === g)!.items.map((i) => i.href);
-    expect(hrefs("People")).toEqual(["/coach", "/coach#verify", "/coach/office-hours", "/hermes/calendars", "/coach/community", "/coach/move", "/coach/import"]);
+    expect(hrefs("People")).toEqual(["/coach", "/coach#verify", "/coach/office-hours", "/hermes/calendars", "/coach/community", "/coach/move", "/coach/import", "/coach/partners"]);
     // Submissions to verify (H-1280, plan H-1296): coach only, right after Clients, never lit as a page of its own (Clients is).
     const verify = NAV.find((n) => n.href === VERIFY_HREF)!;
     expect(verify).toMatchObject({ label: "Submissions to verify", coachOnly: true, hint: "clients' work to approve" });

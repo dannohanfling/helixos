@@ -307,7 +307,7 @@ async function main() {
     if (viewport) await page.setViewportSize(viewport);
     console.log("✓ the photo preview: the thumbnail follows the dropdown before saving, No photo shows the swatch, See all sets it, a private 320×400 JPEG, fits 390");
     const headlines = await page.locator('[data-testid="graphic-headline"] option').allInnerTexts();
-    if (headlines.length !== 2 || !headlines[1].startsWith("Alternate")) throw new Error(`the headline and its alternate are offered: ${headlines.join(" | ")}`);
+    if (headlines.length !== 3 || !headlines[1].startsWith("Alternate") || headlines[2] !== "Write my own…") throw new Error(`the headline, its alternate and Write my own are offered: ${headlines.join(" | ")}`);
     if (!(await page.locator('[data-testid="graphic-none"]').count())) throw new Error("no graphic yet");
     await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
     await page.locator('[data-testid="graphic-made"]').waitFor({ timeout: 20000 });
@@ -350,6 +350,29 @@ async function main() {
     await page.locator('[data-testid="library-image-caption"]').first().waitFor({ timeout: 20000 });
     const captions = await page.locator('[data-testid="library-image-caption"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
     if (captions.length !== 2 || !captions.some((c) => c.startsWith("FIVE MISTAKES THAT ENDED EVERY DIET"))) throw new Error(`the graphics are in Images under their headlines: ${captions.join(" | ")}`);
+    // Write my own… (H-1358): the written headline makes the graphic, joins the alternates, and Edit headlines points at the field.
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="graphic-current"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="graphic-own-headline"]').count()) !== 0) throw new Error("the own-headline field waits for Write my own");
+    if ((await page.locator('[data-testid="graphic-edit-headlines"]').getAttribute("href")) !== "#headline") throw new Error("Edit headlines points at the headline field");
+    await page.selectOption('[data-testid="graphic-headline"]', "__own__");
+    const ownHeadline = "I STOPPED CHASING LEADS / AND THEY (gold: STARTED CHASING ME)";
+    await page.fill('[data-testid="graphic-own-headline"]', ownHeadline);
+    await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
+    demoRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+    if (demoRow.graphicOptions?.headline !== ownHeadline || !demoRow.altHeadlines.includes(ownHeadline)) throw new Error(`the written headline makes the graphic and joins the alternates: ${JSON.stringify({ options: demoRow.graphicOptions, alts: demoRow.altHeadlines })}`);
+    const ownOptions = await page.locator('[data-testid="graphic-headline"] option').allInnerTexts();
+    if (ownOptions.length !== 4 || !ownOptions[2].endsWith(ownHeadline)) throw new Error(`the written headline is offered next time: ${ownOptions.join(" | ")}`);
+    if ((await graphicsNow()) !== graphicsAfterFirst + 2) throw new Error("the own-headline graphic is a third file in Images");
+    // Back to the alternate for the composer steps below, which expect it as the post's picture. A fresh load first: the
+    // address already says graphic=made, so the wait below would otherwise return before the make.
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="graphic-current"]').waitFor({ timeout: 20000 });
+    await page.selectOption('[data-testid="graphic-headline"]', { index: 1 });
+    await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
+    demoRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+    if (demoRow.graphicOptions?.headline !== demoRow.altHeadlines[0] || (await graphicsNow()) !== graphicsAfterFirst + 3) throw new Error("the alternate makes the graphic again, a fourth file");
+    console.log("✓ Write my own…: the headline written in the field makes the graphic, joins the alternates and is offered next time; Edit headlines points at the field");
     // A gold marker written in place of its words keeps them, in gold, in the page's preview (9 Oct).
     const savedHeadline = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!.headline;
     await db.update(schema.ladders).set({ headline: "HOW TO TURN A FULL ROOM / INTO (gold: BOOKED CALLS)" }).where(eq(schema.ladders.id, demoId));
