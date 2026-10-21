@@ -14,7 +14,7 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `menuKey` (H-385): the On the horizon item that drives this entry. It reads as Coming soon until that item has shipped
  * (`withHorizon` below), then becomes a normal link; the coach moves the item, no deploy needed.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; agentsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; oohOnly?: boolean; chatOnly?: boolean; agentsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; menuKey?: string; hint?: string; line?: string; /** Get the app (H-655): gone once the member has the app; Coming soon until a link is set (withAppLinks). */ appOffOnly?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
 
 /** Where "Submissions to verify" opens (H-1280): the Coach view, scrolled to its Verify submissions card. */
@@ -39,6 +39,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays", team: true, oohOnly: true },
       // The coach's chat on its own page (H-693, plan H-700): only where the chat is set up, named for the coach (withCoachName).
       { href: "/ask", label: "Ask your coach", icon: "💭", line: "chat with your coach", chatOnly: true },
+      // Get the app (H-655, H-731): every member's, not a team member's; Coming soon until a store link is set, gone once they have it.
+      { href: "/get-the-app", label: "Get the app", icon: "📱", line: "HelixOS on your iPhone or Android", appOffOnly: true },
     ],
   },
   {
@@ -175,6 +177,11 @@ export function withHorizon(items: NavItem[], shippedKeys: readonly string[]): N
   return items.map((n) => (n.menuKey ? { ...n, comingSoon: !shippedKeys.includes(n.menuKey) } : n));
 }
 
+/** Get the app (H-731): Coming soon until Danno sets a store link (src/lib/app-links.ts), then a normal link. */
+export function withAppLinks(items: NavItem[], on: boolean): NavItem[] {
+  return items.map((n) => (n.appOffOnly ? { ...n, comingSoon: !on } : n));
+}
+
 /** The arena's address: the Rewards page's Colosseum tab (colosseumHref() with no section gives the same). */
 export const COLOSSEUM_HREF = "/rewards?tab=colosseum";
 
@@ -202,17 +209,18 @@ export function navActive(pathname: string, href: string): boolean {
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean; /** The coach's chat is set up and on for this person (H-693): never for a team member or while switched in. */ chatOn?: boolean; /** H-727: an agent of their own on the Forum, or anything in their agent inbox (agentsOnFor). */ agentsOn?: boolean; /** The coach's first name, for a client's "Ask Danno". */ coachFirst?: string | null };
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean; /** Office Hours by level (H-470): the account has it today. The coach always does. */ oohOn?: boolean; /** The coach's chat is set up and on for this person (H-693): never for a team member or while switched in. */ chatOn?: boolean; /** H-727: an agent of their own on the Forum, or anything in their agent inbox (agentsOnFor). */ agentsOn?: boolean; /** The coach's first name, for a client's "Ask Danno". */ coachFirst?: string | null; /** H-655: a store link is set (Get the app is a link, not Coming soon). */ appLinks?: boolean; /** H-655: one of their phones opened the app in the last 30 days. */ hasApp?: boolean };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
   (!n.loyaltyOnly || Boolean(m.loyaltyOn)) &&
   (!n.oohOnly || m.role === "coach" || Boolean(m.oohOn)) &&
   (!n.chatOnly || Boolean(m.chatOn)) &&
   (!n.agentsOnly || Boolean(m.agentsOn)) &&
+  (!n.appOffOnly || !m.hasApp) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 
 
 /** The groups this member sees, each with only its visible items; a group with none isn't drawn at all (HumanOS without Body). */
 export function visibleGroups(m: NavMember, links: PlatformLinks = {}, ownCommunity: string | null = null, shippedKeys: readonly string[] = []) {
-  return NAV_GROUPS.map((g) => ({ ...g, items: withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, links, ownCommunity), shippedKeys), Boolean(m.colosseumOn)), m).filter((n) => navVisible(n, m)) })).filter((g) => g.items.length);
+  return NAV_GROUPS.map((g) => ({ ...g, items: withAppLinks(withCoachName(withColosseum(withHorizon(withPlatformLinks(g.items, links, ownCommunity), shippedKeys), Boolean(m.colosseumOn)), m), Boolean(m.appLinks)).filter((n) => navVisible(n, m)) })).filter((g) => g.items.length);
 }

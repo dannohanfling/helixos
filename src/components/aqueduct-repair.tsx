@@ -142,11 +142,16 @@ export function AqueductFountain({ look, className = "", style }: { look: SceneL
 export function AqueductRepairCard({ repair, onClose }: { repair: Repair; onClose: () => void }) {
   return (
     <div className="aq-repcard" role="status" data-testid="aqueduct-repair-card">
-      <p className="aq-repcard-eb">Arch repaired</p>
+      <p className="aq-repcard-eb">{repair.preview ? <span data-testid="aqueduct-preview-tag">Preview · </span> : null}Arch repaired</p>
       <p className="aq-repcard-tt">Your water is flowing again.</p>
       <p className="aq-repcard-tl" data-testid="aqueduct-repair-line">
         {repairLine(repair)}
       </p>
+      {repair.preview ? (
+        <p className="aq-repcard-tl" data-testid="aqueduct-preview-note">
+          Sample numbers, only for you. Nothing was saved.
+        </p>
+      ) : null}
       <div className="aq-repcard-act">
         <a href="#aqueduct-table" className="btn btn-primary btn-sm">
           See what changed

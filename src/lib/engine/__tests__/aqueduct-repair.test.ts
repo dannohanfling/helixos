@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { leakOf, type Counts } from "../aqueduct";
-import { nextSeen, readSeen, repairFor, repairLine, seenChanged, type RepairSeen } from "../aqueduct-repair";
+import { nextSeen, previewRepair, readSeen, repairFor, repairLine, seenChanged, type RepairSeen } from "../aqueduct-repair";
 
 // Stages: posts, comments, DMs, conversations, calls booked, calls held, offers, clients. Step 1 is DMs → conversations.
 const steady: Counts = [10, 100, 50, 25, 10, 8, 4, 2];
@@ -105,5 +105,26 @@ describe("the Aqueduct's repair moment (H-637 PR 2)", () => {
     expect(readSeen({ step: 1.5, period: 30 })).toBeNull();
     expect(readSeen({ step: 1, period: 30, rate: "x" })).toEqual({ step: 1, rate: null, period: 30, date: "" });
     expect(readSeen({ step: -1, rate: null, period: 7, date: today })).toEqual({ step: -1, rate: null, period: 7, date: today });
+  });
+});
+
+describe("the coach's preview (Roma Vivit 2 PR 5)", () => {
+  it("repairs the arch leaking now, from its rate now up to its usual rate, into a full fountain", () => {
+    const r = previewRepair({ step: 2, nowRate: 0.21, wasRate: 0.4, drop: 19 });
+    expect(r).toMatchObject({ step: 2, wasPct: 21, nowPct: 40, full: true, preview: true });
+    expect(repairLine(r)).toContain("back to 40%, up from 21%");
+  });
+  it("always shows at least ten points of repair, and never more than 100%", () => {
+    expect(previewRepair({ step: 0, nowRate: 0.5, wasRate: 0.52, drop: 2 }).nowPct).toBe(60);
+    expect(previewRepair({ step: 0, nowRate: 0.95, wasRate: 0.96, drop: 1 }).nowPct).toBe(100);
+  });
+  it("with nothing leaking, plays the second arch with sample numbers", () => {
+    expect(previewRepair(null)).toMatchObject({ step: 1, wasPct: 18, nowPct: 34, full: true, preview: true });
+  });
+  it("a real repair is never a preview", () => {
+    const seen = open(null, dmLeak).next;
+    const healed = open(seen, steady);
+    expect(healed.repair?.step).toBe(1);
+    expect(healed.repair?.preview).toBeUndefined();
   });
 });

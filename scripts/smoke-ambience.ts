@@ -50,6 +50,8 @@ async function main() {
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
   const ws = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mm.workspaceId) }))!;
+  const coachU = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+  const coachM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, coachU.id) }))!;
   const { aqueductFor } = await import("@/lib/aqueduct");
   const { stepRate } = await import("@/lib/engine/aqueduct");
   const { repairLine } = await import("@/lib/engine/aqueduct-repair");
@@ -273,6 +275,46 @@ async function main() {
     }
     await page2.close();
     console.log("✓ Aqueduct: the fountain (by day once the repair is seen, the filmed loop) at 390, 1024 and 1440 in both looks, nothing sideways; the card under the picture on a phone");
+
+    // ── The coach's repair preview (Roma Vivit 2 PR 5): on their own Aqueduct only, and it writes nothing. ──
+    await page.goto(`${base}/aqueduct`, { waitUntil: "networkidle" });
+    await page.locator('[data-testid="aqueduct-scene"]').waitFor();
+    must((await page.locator('[data-testid="aqueduct-preview"]').count()) === 0, "a client never sees Preview the repair");
+    await page.goto(`${base}/aqueduct?preview=repair`, { waitUntil: "networkidle" });
+    must((await page.locator('[data-testid="aqueduct-preview-tag"]').count()) === 0 && (await page.locator('[data-testid="aqueduct-preview"], [data-testid="aqueduct-preview-end"]').count()) === 0, "a client asking for the preview by address gets none");
+    const coachCtx = await browser.newContext({ viewport: { width: 390, height: 900 } });
+    const cp = await coachCtx.newPage();
+    cp.on("response", (res) => {
+      if (res.status() >= 500) failures.push(`${res.status()} ${res.url()}`);
+    });
+    const stamps: string[] = [];
+    cp.on("request", (rq) => {
+      if (rq.url().includes("/api/aqueduct/seen")) stamps.push(rq.url());
+    });
+    await cp.goto(`${base}/login`);
+    await cp.click('button:has-text("As the coach")');
+    await cp.waitForURL((u) => !u.pathname.startsWith("/login"));
+    await cp.goto(`${base}/aqueduct`, { waitUntil: "networkidle" });
+    const link = cp.locator('[data-testid="aqueduct-preview"]');
+    must((await link.count()) === 1, "the coach sees Preview the repair under their own Aqueduct");
+    must((await link.boundingBox())!.height >= 44, "the preview link is a full tap target");
+    const markerBefore = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.aqueductRepairSeen;
+    stamps.length = 0;
+    await link.click();
+    await cp.waitForURL(/preview=repair/);
+    await cp.locator('[data-testid="aqueduct-repair-card"]').waitFor({ timeout: 10000 });
+    must((await cp.locator('[data-testid="aqueduct-preview-tag"]').count()) === 1 && (await cp.locator('[data-testid="aqueduct-preview-note"]').count()) === 1, "the card says Preview and that nothing was saved");
+    must((await cp.locator('[data-testid="aqueduct-repair-moment"]').count()) === 1, "the repair moment plays");
+    await cp.waitForTimeout(4000);
+    await cp.screenshot({ path: "screenshots/ambience-aqueduct-preview-390.png" });
+    const sideways = await cp.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    must(sideways <= 0, `the preview at 390: nothing scrolls sideways (${sideways}px)`);
+    const markerAfter = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.aqueductRepairSeen;
+    must(stamps.length === 0 && JSON.stringify(markerAfter) === JSON.stringify(markerBefore), `the preview writes nothing: ${stamps.length} stamps, marker ${JSON.stringify(markerBefore)} → ${JSON.stringify(markerAfter)}`);
+    await cp.locator('[data-testid="aqueduct-preview-end"]').click();
+    await cp.waitForURL((u) => u.pathname === "/aqueduct" && !u.search.includes("preview"));
+    await coachCtx.close();
+    console.log("✓ Repair preview: the coach plays it from their own Aqueduct, labelled Preview, writing nothing; a client never sees it");
 
     // ── The Forum (PR 3). ──
     const fo = await ctx.newPage();

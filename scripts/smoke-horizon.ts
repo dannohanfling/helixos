@@ -116,8 +116,9 @@ async function main() {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/more`);
     await page.locator("main").waitFor({ timeout: 20000 });
-    const soon = page.locator('main [data-testid="nav-coming-soon"]');
-    must((await soon.count()) === 1 && (await soon.first().getAttribute("data-href")) === "/magic-funnel", "Magic funnel is the one Coming soon item on More");
+    // Get the app (H-731) is Coming soon too until a store link is set; it isn't a horizon item, so it isn't counted here.
+    const soon = page.locator('main [data-testid="nav-coming-soon"]:not([data-href="/get-the-app"])');
+    must((await soon.count()) === 1 && (await soon.first().getAttribute("data-href")) === "/magic-funnel", "Magic funnel is the one horizon Coming soon item on More");
     await page.setViewportSize({ width: 1280, height: 900 });
     console.log("✓ Magic funnel reads Coming soon while its item is on Next up");
 

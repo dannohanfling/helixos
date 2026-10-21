@@ -46,7 +46,8 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
   // the leak moved. The server reads the leak again itself; nothing is sent from here.
   useEffect(() => {
     // document.hidden too: on the first commit the hidden state hasn't caught up with a tab that opened hidden.
-    if (stamped.current || (!stamp && !repair) || (repair && (hidden || document.hidden))) return;
+    // A coach's preview (Roma Vivit 2 PR 5) writes nothing.
+    if (stamped.current || repair?.preview || (!stamp && !repair) || (repair && (hidden || document.hidden))) return;
     stamped.current = true;
     void fetch("/api/aqueduct/seen", { method: "POST", keepalive: true }).catch(() => undefined);
   }, [stamp, repair, hidden]);

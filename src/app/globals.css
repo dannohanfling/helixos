@@ -491,3 +491,8 @@ aside[data-rail="false"] .rail-only {
 html:not([data-chat-here]) [data-helix-chat] {
   display: none !important;
 }
+
+/* Get the app (H-655): gone on a phone already running HelixOS as an app (marked by NativeBridge). */
+html[data-installed] [data-app-off] {
+  display: none !important;
+}

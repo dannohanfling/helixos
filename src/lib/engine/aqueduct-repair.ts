@@ -26,6 +26,8 @@ export type Repair = {
   nowPct: number;
   /** No leak left anywhere: the fountain is full. */
   full: boolean;
+  /** The coach's own preview (Roma Vivit 2 PR 5): sample numbers, and it never stamps the marker. */
+  preview?: boolean;
 };
 
 const pctOf = (r: number) => Math.round(r * 100);
@@ -58,6 +60,18 @@ export function nextSeen(seen: RepairSeen | null, leak: Leak | null, period: num
 /** Whether the stored marker needs writing: a first visit, a new leak, a healed one, or a period switch. */
 export function seenChanged(seen: RepairSeen | null, next: RepairSeen): boolean {
   return !seen || seen.step !== next.step || seen.period !== next.period;
+}
+
+/**
+ * The coach's preview of the moment (Roma Vivit 2 PR 5, plan H-1060): the arch leaking now, or the second arch when nothing
+ * leaks, plays as repaired into a full fountain. The numbers are a sample, not a reading: the leak's rate now, up to its usual
+ * rate (at least ten points higher); with no leak, 18% up to 34%. It is never a repair and never moves the marker.
+ */
+export function previewRepair(leak: Leak | null): Repair {
+  const step = leak ? leak.step : 1;
+  const wasPct = leak ? pctOf(leak.nowRate) : 18;
+  const nowPct = leak ? Math.min(100, Math.max(pctOf(leak.wasRate), wasPct + 10)) : 34;
+  return { step, from: STAGES[step + 1], to: STAGES[step + 2], label: STEP_LABELS[step], wasPct, nowPct, full: true, preview: true };
 }
 
 /** The card's line under "Your water is flowing again." */
