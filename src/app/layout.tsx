@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { APP_DESCRIPTION } from "@/lib/brand";
+import { NativeBridge } from "@/components/pwa/native-bridge";
+import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 
 export const metadata: Metadata = {
   title: { default: "HelixOS", template: "%s · HelixOS" },
@@ -27,7 +29,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <RegisterServiceWorker />
+        {/* The store apps (H-877): does nothing on the website. */}
+        <NativeBridge />
+      </body>
     </html>
   );
 }

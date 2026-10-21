@@ -56,3 +56,8 @@
 @media (prefers-reduced-motion: reduce) {
   .aq-stage *, .aq-repcard { animation: none !important; }
 }
+
+/* The coach's "Preview the repair" (Roma Vivit 2 PR 5): a quiet line under their own Aqueduct, the link a full tap target. */
+.aq-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 10px 0 0; font-size: 14px; }
+.aq-preview a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: underline; }
+.aq-preview .aq-quiet { margin: 0; }

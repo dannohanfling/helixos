@@ -26,6 +26,8 @@ import { choicesFor } from "@/lib/team";
 import { horizonShell } from "@/lib/horizon";
 import { HorizonNotice } from "@/components/horizon-notice";
 import { flameStateOf } from "@/lib/engine/streak-flame";
+import { appLinks, appLinksOn } from "@/lib/app-links";
+import { hasAppFor } from "@/lib/queries/app-devices";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
@@ -54,6 +56,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
   // Office Hours by program level (H-470): the menu item is there only while the account has it.
   const oohOn = (await oohAccessFor(viewer)).open;
+  // Get the app (H-655): Coming soon until a store link is set; gone once one of this member's phones opened the app. Not for a team member.
+  const hasApp = viewer.team ? false : Boolean(await hasAppFor(viewer.membership.id));
   // The Daily welcome (H-312): once a day on first open, over whatever page they opened; never on /coach, never switched in.
   const pathNow = (await headers()).get("x-helixos-path") ?? "";
   // The first arrival (H-472): once per person on their first open, instead of the daily welcome, which starts the next day.
@@ -71,7 +75,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     ? null
     : flameStateOf({ running: flameStreak.running, asOf: flameStreak.asOf, today: viewer.today, hour: viewer.hour, active: flameStreak.activity.active, closed: flameStreak.closed, seenOn: viewer.switchedInto ? flameStreak.asOf : viewer.membership.streakSurgeSeenOn });
   return (
-    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival || catchUpPlays)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={badges}>
+    <AppShell viewer={viewer} chatOn={chat !== null} points={points} flame={flame} flameAfterWelcome={Boolean(welcome || arrival || catchUpPlays)} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} oohOn={oohOn} agentsOn={agentsOn} coachFirst={coachFirst} appLinks={appLinksOn(appLinks())} hasApp={hasApp} choices={choices.length} shippedKeys={horizon.shippedKeys} badges={badges}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {/* Times in the member's own zone (H-457): the one-time line at the top of the page, once the welcome is out of the way. */}
         {zoneNoticeDue(viewer) && !welcome && !arrival ? <ZoneNotice saved={viewer.membership.timezone} workspaceTz={viewer.workspace.timezone} savedText={viewer.membership.timezone ? zoneNoticeText(viewer.membership.timezone, zoneName(viewer.membership.timezone), false) : null} workspaceText={zoneNoticeText(viewer.workspace.timezone, zoneName(viewer.workspace.timezone), true)} /> : null}

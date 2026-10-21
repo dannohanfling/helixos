@@ -1,0 +1,69 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "com.evolveomega.helixos"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.evolveomega.helixos"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // Each CI build passes its own number (the GitHub run number) so every upload to Play is higher than the last.
+        versionCode((System.getenv("HELIXOS_VERSION_CODE") ?: "1").toInteger())
+        versionName(System.getenv("HELIXOS_VERSION_NAME") ?: "1.0")
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    // The upload key comes from the build's environment (GitHub secrets set by Danno), never from the repo (H-626 §3).
+    // Google re-signs with the app signing key it holds (Play App Signing).
+    def uploadKeystore = System.getenv("HELIXOS_UPLOAD_KEYSTORE")
+    signingConfigs {
+        release {
+            if (uploadKeystore) {
+                storeFile file(uploadKeystore)
+                storePassword System.getenv("HELIXOS_UPLOAD_STORE_PASSWORD")
+                keyAlias System.getenv("HELIXOS_UPLOAD_KEY_ALIAS") ?: "upload"
+                keyPassword System.getenv("HELIXOS_UPLOAD_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (uploadKeystore) signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

@@ -101,7 +101,7 @@ export const memberships = sqliteTable(
      */
     emailsEnabled: integer("emails_enabled", { mode: "boolean" }).notNull().default(true),
     reminderHour: integer("reminder_hour").notNull().default(8),
-    eveningReminderHour: integer("evening_reminder_hour").notNull().default(17),
+    eveningReminderHour: integer("evening_reminder_hour").notNull().default(19),
     leaderboardOptIn: integer("leaderboard_opt_in", { mode: "boolean" }).notNull().default(true),
     /** The Monday scoreboard email (rev 639): on unless the member turns it off; the Emails switch above still overrides it. */
     scoreboardEmail: integer("scoreboard_email", { mode: "boolean" }).notNull().default(true),
@@ -5381,3 +5381,72 @@ export const horizonWants = sqliteTable(
   (t) => [uniqueIndex("horizon_wants_member_item").on(t.workspaceId, t.userId, t.itemId), index("horizon_wants_item").on(t.itemId)],
 );
 export type HorizonWant = typeof horizonWants.$inferSelect;
+
+/**
+ * The HelixOS apps' devices (H-626 Phase 2, plan H-877). The store app records itself on first open and on each open after
+ * (Get the app, H-655, hides once one was opened in the last 30 days). `token` stays empty until the member says yes to
+ * notifications; iPhone tokens are Apple's (sent through APNs), Android tokens are Firebase's. Erased with the account.
+ */
+export const pushDevices = sqliteTable(
+  "push_devices",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    userId: text("user_id").notNull(),
+    platform: text("platform", { enum: ["ios", "android"] }).notNull(),
+    /** The app's own install id, so a reinstall or a new token updates the same row. */
+    installId: text("install_id").notNull(),
+    token: text("token"),
+    appVersion: text("app_version"),
+    createdAt: createdAt(),
+    lastSeenAt: text("last_seen_at").notNull().default(sql`(datetime('now'))`),
+    /** Apple or Google said the token is gone (uninstalled, or notifications switched off in the phone's settings). */
+    disabledAt: text("disabled_at"),
+  },
+  (t) => [uniqueIndex("push_devices_install").on(t.membershipId, t.installId), index("push_devices_member").on(t.membershipId, t.lastSeenAt)],
+);
+export type PushDevice = typeof pushDevices.$inferSelect;
+
+/**
+ * A member's notification choices (H-767): the main switch, one switch per type (only the ones changed from their default
+ * are stored), quiet hours in their own time zone, and where the permission card stands. One row per membership, made when
+ * first needed. The lock-in and close times are the membership's reminder_hour and evening_reminder_hour.
+ */
+export const pushPrefs = sqliteTable("push_prefs", {
+  id: id(),
+  membershipId: text("membership_id").notNull().unique(),
+  workspaceId: text("workspace_id").notNull(),
+  userId: text("user_id").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  types: text("types", { mode: "json" }).$type<Record<string, boolean>>().notNull().default(sql`'{}'`),
+  quietStart: integer("quiet_start").notNull().default(21),
+  quietEnd: integer("quiet_end").notNull().default(7),
+  /** The HelixOS card that asks first (H-767): how many times it has been shown, and the member's last answer. */
+  askedCount: integer("asked_count").notNull().default(0),
+  askedAt: text("asked_at"),
+  answer: text("answer", { enum: ["yes", "not_now"] }),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+export type PushPrefs = typeof pushPrefs.$inferSelect;
+
+/**
+ * Every push sent (H-767): what enforces the daily cap of 3, one of each type a day, and once per call reminder step.
+ * `key` names the occasion ("2026-10-19" for a daily one, a call occurrence and step for a call). Kept 30 days.
+ * Never holds the message text, so nothing a member wrote or logged sits here.
+ */
+export const pushSends = sqliteTable(
+  "push_sends",
+  {
+    id: id(),
+    membershipId: text("membership_id").notNull(),
+    userId: text("user_id").notNull(),
+    type: text("type").notNull(),
+    key: text("key").notNull(),
+    sentAt: text("sent_at").notNull().default(sql`(datetime('now'))`),
+    /** How many devices took it; 0 means none was reachable. */
+    delivered: integer("delivered").notNull().default(0),
+  },
+  (t) => [uniqueIndex("push_sends_once").on(t.membershipId, t.type, t.key), index("push_sends_day").on(t.membershipId, t.sentAt)],
+);
+export type PushSend = typeof pushSends.$inferSelect;
