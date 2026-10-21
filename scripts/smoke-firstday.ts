@@ -89,9 +89,14 @@ async function main() {
     }
     if (/\$0 \/ \$5,000/.test(body)) throw new Error("the $0 / $5,000 goal bar is shown on day one");
     await expectText(page, "Set your one goal", "goal prompt instead of bar");
+    // H-164 §14: Next on your pathway lives on My Helix now, not Today.
+    if (await page.locator('[data-testid="pathway-next"]').count()) throw new Error("Next on your pathway moved off Today");
+    await page.goto(`${base}/my-helix`);
     const nextStep = page.locator('[data-testid="pathway-next"]');
     if ((await nextStep.innerText()).trim() !== "Write your Big Promise") throw new Error(`a new client's first pathway step should be the Big Promise, got "${await nextStep.innerText()}"`);
     if ((await nextStep.getAttribute("href")) !== "/settings#you") throw new Error("the Big Promise task should open Settings");
+    if (!(await page.locator('[data-testid="brand-kit-nudge"]').count())) throw new Error("a new client's My Helix nudges the brand kit");
+    await page.goto(`${base}/today`);
     const exercise = await page.locator('[data-testid="exercise-link"]').first().getAttribute("href");
     if (!exercise) throw new Error("the 30-day build card has no way into the exercise");
     if (!(await page.locator('[data-testid="nav-progress"]').count())) throw new Error("no navigation progress bar in the shell");
@@ -131,7 +136,7 @@ async function main() {
     await page.fill('[data-testid="audience-field"]', "Nutrition coaches with a Facebook group");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('form:has([data-testid="audience-field"]) button:has-text("Save")')]);
     await page.waitForLoadState("networkidle");
-    await page.goto(`${base}/today`);
+    await page.goto(`${base}/my-helix`);
     if ((await page.locator('[data-testid="pathway-next"]').innerText()).trim() !== "Set your 90-day revenue goal") throw new Error(`after promise and audience the next step should be the goal, got "${await page.locator('[data-testid="pathway-next"]').innerText()}"`);
     await page.goto(`${base}/settings`);
     await page.fill('#goal input[name="target"]', "5000");

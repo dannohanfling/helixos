@@ -18,20 +18,23 @@ export async function repairsUsed(workspaceId: string, userId: string, month: st
   return rows.length;
 }
 
-export type TodayActivity = { dmsStarted: number; conversations: number; posts: number; newLeads: number };
+export type TodayActivity = { dmsStarted: number; conversations: number; posts: number; newLeads: number; callsBooked: number };
 
 /**
- * What the app already saw the member do today, to pre-fill the close: contacts started, replies logged, content marked posted.
+ * What the app already saw the member do today, to pre-fill the close: contacts started, replies logged, content marked posted,
+ * calls booked.
  * Timestamps are UTC while "today" is the member's day, so this is a starting point the member corrects, not a verdict.
  */
 export async function todayActivity(workspaceId: string, userId: string, today: string): Promise<TodayActivity> {
-  const [started, replied, created, posted] = await Promise.all([
+  const [started, replied, created, posted, booked] = await Promise.all([
     db.select({ id: schema.contacts.id }).from(schema.contacts).where(and(eq(schema.contacts.workspaceId, workspaceId), eq(schema.contacts.userId, userId), like(schema.contacts.lastOutboundAt, `${today}%`))),
     db.select({ id: schema.contacts.id }).from(schema.contacts).where(and(eq(schema.contacts.workspaceId, workspaceId), eq(schema.contacts.userId, userId), like(schema.contacts.lastInboundAt, `${today}%`))),
     db.select({ id: schema.contacts.id }).from(schema.contacts).where(and(eq(schema.contacts.workspaceId, workspaceId), eq(schema.contacts.userId, userId), like(schema.contacts.createdAt, `${today}%`))),
     db.select({ id: schema.contentItems.id }).from(schema.contentItems).where(and(eq(schema.contentItems.workspaceId, workspaceId), eq(schema.contentItems.userId, userId), like(schema.contentItems.postedAt, `${today}%`))),
+    // Calls booked today (H-164 §16): GoHighLevel's appointment webhook stamps the contact's "booked on".
+    db.select({ id: schema.contacts.id }).from(schema.contacts).where(and(eq(schema.contacts.workspaceId, workspaceId), eq(schema.contacts.userId, userId), like(schema.contacts.callBookedAt, `${today}%`))),
   ]);
-  return { dmsStarted: Math.max(started.length, created.length), conversations: replied.length, posts: posted.length, newLeads: created.length };
+  return { dmsStarted: Math.max(started.length, created.length), conversations: replied.length, posts: posted.length, newLeads: created.length, callsBooked: booked.length };
 }
 
 /**

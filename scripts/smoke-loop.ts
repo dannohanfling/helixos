@@ -195,7 +195,14 @@ async function main() {
     });
     const dmsPrefill = await page.locator('input[name="dmsStarted"]').inputValue();
     if (Number(dmsPrefill) < 1) throw new Error(`dmsStarted should be pre-filled, got ${dmsPrefill}`);
-    console.log(`✓ close pre-filled (DMs started = ${dmsPrefill})`);
+    // H-164 §16: what HelixOS saw is a check above the win line, and the boxes fold away until a correction.
+    const checkLines = await page.locator('[data-testid="close-check-line"]').allInnerTexts();
+    if (!checkLines.some((l) => /DMs? started/.test(l))) throw new Error(`the close's check names the DMs started, got ${JSON.stringify(checkLines)}`);
+    const numbers = page.locator('[data-testid="close-numbers"]');
+    if (await numbers.evaluate((d) => (d as HTMLDetailsElement).open)) throw new Error("with a check to confirm, the number boxes start folded");
+    if (!(await page.locator('[data-testid="close-win"]').isVisible())) throw new Error("the win line shows beside the check");
+    await numbers.locator("summary").click();
+    console.log(`✓ close pre-filled (DMs started = ${dmsPrefill}): a check plus the win line, the boxes folded`);
 
     // First close, then an edit that adds a booked call and cash: +25 points and the goal moves by the cash delta
     await page.fill('input[name="callsBooked"]', "0");

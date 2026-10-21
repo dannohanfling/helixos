@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 338,
+    date: "2026-10-19",
+    title: "A calmer Today, and a close that's a check plus your win",
+    lines: [
+      "Today is three parts: your next best action, your Top 3, then one Then list with everything else by when it's due: overdue first, then today's tasks, posts and conversations, then the week ahead.",
+      "Next on your pathway and Set your brand kit moved to My Helix, beside your progress. Your goal sits under your level.",
+      "Close the day starts from what HelixOS already saw: DMs started, replies, posts and calls booked show as a check. Add your win line and close; the boxes are one tap away if a number needs fixing.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 337,
     date: "2026-10-19",
     title: "A shorter menu, in five groups",
