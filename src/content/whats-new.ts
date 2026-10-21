@@ -12,13 +12,24 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 321,
+    n: 322,
     date: "2026-10-19",
     title: "Hear back on what you report",
     lines: [
       "When you send \"I have an issue or a suggestion\", you'll see \"Got it, Danno will see this soon\" straight away.",
       "Danno's replies come to you as each report moves: seen, being worked on, done and how, or not now and why. A line on Today points to them, and an email follows if your emails are on.",
       "My reports, from the same button, lists everything you've sent with its replies, and you can add a follow-up to the same report.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 321,
+    date: "2026-10-19",
+    title: "Personal tasks, wins that weren't on the list, and offer tiers you set",
+    lines: [
+      "Tasks have a Personal area: for your own life, with no points and kept out of your business numbers.",
+      "On Today, \"Did something else? Add it\" logs a win that wasn't on your list. Close the day has \"Also today\": outreach messages from any app (WhatsApp too), scripts written, videos recorded and videos posted. Outreach counts toward DMs started on the Aqueduct.",
+      "On an offer you can set its tier (Freebie, Starter, Core or Premium) for My Helix. Customer journey mapped leads to your Pathway, and when you tick a rung yourself you can add one line on how you did it.",
     ],
     audience: "everyone",
   },

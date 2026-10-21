@@ -14,7 +14,7 @@ import { MoneyInput } from "@/components/money-input";
 
 export const metadata = { title: "Numbers" };
 
-type Metric = "dmsStarted" | "conversations" | "callsBooked" | "callsHeld" | "posts" | "newLeads" | "cashCollected";
+type Metric = "dmsStarted" | "conversations" | "callsBooked" | "callsHeld" | "posts" | "newLeads" | "cashCollected" | "outreachMessages" | "scriptsWritten" | "videosRecorded" | "videosPosted";
 const METRICS: { key: Metric; label: string; money?: boolean }[] = [
   { key: "dmsStarted", label: "DMs started" },
   { key: "conversations", label: "Conversations" },
@@ -23,6 +23,11 @@ const METRICS: { key: Metric; label: string; money?: boolean }[] = [
   { key: "posts", label: "Posts" },
   { key: "newLeads", label: "New leads" },
   { key: "cashCollected", label: "Cash collected", money: true },
+  // Docket #9 (H-195): the wins that weren't on the list, counted in the close.
+  { key: "outreachMessages", label: "Outreach messages" },
+  { key: "scriptsWritten", label: "Scripts written" },
+  { key: "videosRecorded", label: "Videos recorded" },
+  { key: "videosPosted", label: "Videos posted" },
 ];
 
 export default async function NumbersPage({ searchParams }: { searchParams: Promise<{ metric?: string; week?: string; targetsError?: string; field?: string }> }) {
