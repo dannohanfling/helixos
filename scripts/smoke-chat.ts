@@ -269,7 +269,7 @@ async function main() {
     if (!(await page.locator('[data-testid="link-chat-error"]').count())) throw new Error("a failed post shows its reason");
     if (hits.length) throw new Error("nothing recorded while the webhook was down");
     await submit(page, '[data-testid="link-chat-confirm"]');
-    await page.waitForURL(/\/settings\?chat=linked/);
+    await page.waitForURL(/\/settings\?tab=connections&chat=linked/);
     const link = hits.find((h) => h.event === "link");
     if (!link || link.body.email !== "client@demo.helixos.app" || link.body.user_ns !== "walk-ns-1" || link.body.channel !== "messenger" || link.body.name !== client.name) throw new Error(`the bot got link with the member's own email: ${JSON.stringify(link)}`);
     if (Object.keys(link.body).sort().join(",") !== "at,channel,email,event,name,user_ns") throw new Error(`link carries only what was promised: ${Object.keys(link.body)}`);
@@ -300,7 +300,7 @@ async function main() {
     // ── 5. Unlink. ──
     await page.goto(`${base}/settings?tab=connections#linked-chats`);
     await submit(page, '[data-testid="chat-unlink"]');
-    await page.waitForURL(/\/settings\?chat=unlinked/);
+    await page.waitForURL(/\/settings\?tab=connections&chat=unlinked/);
     const un = hits.find((h) => h.event === "unlink");
     if (!un || un.body.user_ns !== "walk-ns-1" || un.body.email !== "client@demo.helixos.app") throw new Error(`the bot got unlink: ${JSON.stringify(un)}`);
     if (!(await page.locator('[data-testid="linked-chats-empty"]').count())) throw new Error("the list is empty after unlink");
