@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 /**
  * Report statuses that tell the member (H-202), on a real database of its own: the receipt on the report, a reply sent once
  * with its edited words and logged, Done refused until its blank is filled, the email only while Emails from HelixOS is on,
- * a follow-up that sends it back to New, the member reading only their own, and the badge counting New only. Migration 0218.
+ * a follow-up that sends it back to New, the member reading only their own, and the badge counting New only. Migration 0232.
  */
 const dir = mkdtempSync(path.join(tmpdir(), "hx-replies-"));
 process.env.DATABASE_URL = `file:${path.join(dir, "test.db")}`;
@@ -88,13 +88,13 @@ describe("report statuses that tell the member", () => {
   });
 });
 
-describe("migration 0218", () => {
+describe("migration 0232", () => {
   it("comes after every migration before it in the journal, by number and by time", () => {
     const journal = JSON.parse(readFileSync(path.join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
-    const at = journal.entries.findIndex((e) => e.tag === "0218_report_statuses");
+    const at = journal.entries.findIndex((e) => e.tag === "0232_report_statuses");
     expect(at).toBeGreaterThan(0);
     for (const e of journal.entries.slice(0, at)) {
-      expect(e.tag < "0218").toBe(true);
+      expect(e.tag < "0232").toBe(true);
       expect(e.when).toBeLessThan(journal.entries[at]!.when);
     }
   });
