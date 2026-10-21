@@ -139,6 +139,8 @@ export async function updateWorkspaceAction(formData: FormData): Promise<void> {
       name: str(formData, "name") || coach.workspace.name,
       timezone: str(formData, "timezone") || coach.workspace.timezone,
       airtableBaseId: opt(formData, "airtableBaseId"),
+      // H-202: an agent's Done draft sends on its own only when the coach turns this on; off by default.
+      autoDoneAfterMerge: formData.get("autoDoneAfterMerge") === "on",
       // The Platforms menu's addresses (rev 843): https only; a blank or a bad one goes back to the default (none for Community).
       platformLinks: Object.fromEntries(PLATFORMS.flatMap((p) => {
         const link = cleanPlatformLink(opt(formData, `platform_${p.key}`));

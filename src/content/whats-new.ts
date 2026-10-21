@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 324,
+    date: "2026-10-19",
+    title: "One answer for the same report sent twice",
+    lines: [
+      "If you sent the same thing more than once, Danno can put them together. My reports shows them under one, and one reply answers them all.",
+      "A follow-up on any of them goes to the same place, so nothing gets lost.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 323,
     date: "2026-10-19",
     title: "Hear back on what you report",

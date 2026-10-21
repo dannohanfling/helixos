@@ -9,7 +9,7 @@ import { SCREENSHOT_MAX_BYTES, readReport, reportScreenshotKey, sniffImage } fro
 import { proofStorageConfigured, putReportObject } from "@/lib/proof-storage";
 import { redactUrls } from "@/lib/engine/storage-policy";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { addReceipt, followUp, sendReply } from "@/lib/report-replies";
+import { addReceipt, childrenFollow, followUp, mergeReports, rootReport, sendReply, unmergeReport } from "@/lib/report-replies";
 import { coachFirstName } from "@/lib/queries/reports";
 import { REPLY_STATUSES } from "@/lib/engine/report-status";
 import { redirect } from "next/navigation";
@@ -59,7 +59,7 @@ export async function markReportAction(formData: FormData): Promise<void> {
   const workspaceId = v.workspace.id;
   const id = str(formData, "reportId");
   const what = str(formData, "mark");
-  const r = await db.query.memberReports.findFirst({ where: and(eq(schema.memberReports.id, id), eq(schema.memberReports.workspaceId, workspaceId)) });
+  const r = await rootReport(workspaceId, id);
   if (!r) return;
   // A quiet mark, with no message (H-202 keeps it beside the replies): the status follows it.
   const set =
@@ -70,7 +70,31 @@ export async function markReportAction(formData: FormData): Promise<void> {
         : null;
   if (!set) return;
   await db.update(schema.memberReports).set(set).where(and(eq(schema.memberReports.id, r.id), eq(schema.memberReports.workspaceId, workspaceId)));
+  await childrenFollow(workspaceId, r.id, set.status);
   refresh();
+}
+
+const backTo = (formData: FormData) => `/coach/reports${str(formData, "tab") ? `?tab=${encodeURIComponent(str(formData, "tab"))}` : ""}`;
+const withParam = (back: string, q: string) => `${back}${back.includes("?") ? "&" : "?"}${q}`;
+
+/** Merge (H-202): the ticked reports of the same member go under this one, and one reply answers them all. */
+export async function mergeReportsAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const id = str(formData, "reportId");
+  const ids = formData.getAll("ids").map((x) => String(x));
+  const out = await mergeReports(v.workspace.id, id, ids);
+  refresh();
+  const back = backTo(formData);
+  redirect(out.ok ? withParam(back, `merged=${id}#r-${id}`) : withParam(back, `replyError=${encodeURIComponent(out.error)}&report=${id}#r-${id}`));
+}
+
+/** Take a merged report back out (H-202): it stands on its own again. */
+export async function unmergeReportAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const id = str(formData, "reportId");
+  await unmergeReport(v.workspace.id, id);
+  refresh();
+  redirect(`${backTo(formData)}#r-${id}`);
 }
 
 /**
