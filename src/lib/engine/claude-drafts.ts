@@ -20,7 +20,7 @@ export const AREA_WORDS: Record<DraftArea, { one: string; menu: string }> = {
   content: { one: "Post", menu: "/content" },
   pathway: { one: "Pathway", menu: "/pathway" },
   course: { one: "Course", menu: "/courses" },
-  bot_profile: { one: "Your bot", menu: "/bot" },
+  bot_profile: { one: "Your bot", menu: "/settings" },
 };
 
 export type FieldSpec = { key: string; label: string; kind: "text" | "list" | "choice" | "price" | "stories" | "magnetContent" | "date"; max?: number; maxItems?: number; choices?: readonly string[] };
@@ -80,6 +80,18 @@ export const CONTENT_FIELDS: FieldSpec[] = [
   { key: "suggestedDate", label: "Suggested date", kind: "date" },
 ];
 
+/**
+ * What your bot says about your business (H-184): the words only. Never the booking link, the guarantee's terms or anything sent
+ * to Community Loyalty: the bot keeps its current answers until the member approves, and what it is sent stays on Your bot.
+ */
+export const BOT_FIELDS: FieldSpec[] = [
+  { key: "whatIDo", label: "What I do", kind: "text", max: 3000 },
+  { key: "botQuestion1", label: "Question 1 your bot asks before booking", kind: "text", max: 300 },
+  { key: "botQuestion2", label: "Question 2 your bot asks before booking", kind: "text", max: 300 },
+  { key: "botQuestion3", label: "Question 3 your bot asks before booking", kind: "text", max: 300 },
+  { key: "bookingExpect", label: "What to expect when you book", kind: "text", max: 500 },
+];
+
 /** An Essence section's own fields, by its key (H-184): a draft is of one section at a time. */
 function essenceFields(section: string | null): FieldSpec[] {
   const s = section ? sectionByKey(section) : undefined;
@@ -93,6 +105,7 @@ export function specsFor(area: DraftArea, targetId: string | null = null): Field
   if (area === "magnet") return MAGNET_FIELDS;
   if (area === "content") return CONTENT_FIELDS;
   if (area === "essence") return essenceFields(targetId);
+  if (area === "bot_profile") return BOT_FIELDS;
   return [];
 }
 export const PATH_MAX = 5;

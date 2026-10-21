@@ -18,6 +18,7 @@ import { cleanDescriptor } from "@/lib/engine/deck";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import { syncPrimaryKpi } from "@/lib/queries/kpi";
 import { isOneEmoji } from "@/lib/engine/emoji";
+import { markDraftEdited } from "@/lib/claude-drafts";
 
 /** A picked logo's id when it is one of this member's own images of kind logo; otherwise null, so the kit keeps no logo. */
 async function ownLogo(workspaceId: string, userId: string, picked: string): Promise<string | null> {
@@ -83,7 +84,7 @@ async function updateProfile(formData: FormData): Promise<void> {
  * the house question) and the guarantee's structured terms. Nothing is pushed from here; Your bot shows what would change.
  */
 export async function updateBotFactsAction(formData: FormData): Promise<void> {
-  const { userId, workspaceId } = await ctx();
+  const { v, userId, workspaceId } = await ctx();
   const n = (key: string): number | undefined => (str(formData, key) ? num(formData, key) : undefined);
   const conditions = str(formData, "termsConditions").split("\n").map((l) => l.trim()).filter(Boolean);
   // Bot connection (rev 808): the link the bot sends to book a call, and what to expect. A link must be a full https:// one.
@@ -102,6 +103,13 @@ export async function updateBotFactsAction(formData: FormData): Promise<void> {
       guaranteeTerms: { windowMonths: n("termsWindowMonths"), attendancePct: n("termsAttendancePct"), replayDays: n("termsReplayDays"), measure: opt(formData, "termsMeasure") ?? undefined, conditions: conditions.length ? conditions : undefined, exclusions: opt(formData, "termsExclusions") ?? undefined, remedy: opt(formData, "termsRemedy") ?? undefined },
     })
     .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)));
+  // Saved from the form opened with Claude's draft in it (H-184): that draft is settled as edited.
+  const draftId = str(formData, "draftId");
+  if (draftId) {
+    await markDraftEdited({ workspaceId, userId }, draftId, v.membership.id, { name: v.actor.name, connector: false });
+    refresh();
+    redirect("/settings?draftNote=edited#your-bot");
+  }
   refresh();
 }
 

@@ -83,7 +83,7 @@ async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   try {
     // ── 1. The connector. ──
-    const writer = await connect(maya.id, ws, ["essence", "magnets", "content", "content:write"]);
+    const writer = await connect(maya.id, ws, ["essence", "magnets", "content", "content:write", "bot"]);
     const other = await connect(jordan.id, jordanM.workspaceId, ["essence", "magnets", "content", "content:write"]);
     const listed = ((await rpc(writer, "tools/list")).result?.tools ?? []).map((x) => x.name);
     must(["essence_read", "essence_draft", "magnets_list", "magnet_draft", "content_list", "content_draft"].every((n) => listed.includes(n)), `the six draft tools are listed: ${listed.join(", ")}`);
@@ -154,6 +154,22 @@ async function main() {
     must(await page.locator('[data-testid="claude-draft-approve"]').isDisabled(), "and Approve stays off");
     must((await db.query.contentItems.findFirst({ where: eq(schema.contentItems.id, scheduledId) }))!.hook === null, "and the post is untouched");
     console.log("✓ 390: the new post's draft fits; Edit makes the post and fills its form; its save settles the draft; a scheduled post's draft shows red with Approve off");
+
+    // ── 4. Your bot (D2c): its words drafted, the booking link never touched, approved in Settings. ──
+    const bookingBefore = mayaM.bookingUrl;
+    r = await call(writer, "bot_profile_draft", { fields: { whatIDo: "x", bookingUrl: "https://elsewhere.example" } });
+    must(/Nothing was saved/.test(r.text) && /bookingUrl/.test(r.text), `the booking link is refused by name: ${r.text}`);
+    r = await call(writer, "bot_profile_draft", { fields: { whatIDo: "I help coaches fill their calendar without the hustle.", botQuestion1: "What are you building right now?" } });
+    must(!r.isError && r.data?.saved === true, `the bot draft is saved: ${r.text}`);
+    must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaM.id) }))!.whatIDo === mayaM.whatIDo, "the bot's words are unchanged until Approve");
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await open(page, `${base}/settings#your-bot`, "claude-draft");
+    must((await page.locator('#your-bot [data-testid="claude-draft-value-whatIDo"]').innerText()).includes("without the hustle"), "the draft shows in Settings beside the bot's words");
+    await submit(page, '#your-bot [data-testid="claude-draft-approve"]');
+    const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaM.id) }))!;
+    must(mm.whatIDo === "I help coaches fill their calendar without the hustle." && mm.botQuestion1 === "What are you building right now?" && mm.bookingUrl === bookingBefore, "Approve writes the bot's words and leaves the booking link");
+    await db.update(schema.memberships).set({ whatIDo: mayaM.whatIDo, botQuestion1: mayaM.botQuestion1 }).where(eq(schema.memberships.id, mayaM.id));
+    console.log("✓ your bot: the booking link refused; the draft waits in Settings; Approve writes the words and leaves the link");
     await ctx.close();
   } finally {
     await browser.close();
