@@ -96,7 +96,7 @@ export default async function MorePage() {
         </div>
         <Link href="/whats-new" className="flex items-center justify-center gap-1.5 text-[11px] text-ink-3" data-testid="app-version">
           {APP_VERSION} · What&apos;s new
-          {unseen ? <NewDot /> : null}
+          {badges["/whats-new"] ? <NewDot /> : null}
         </Link>
       </div>
     </>
