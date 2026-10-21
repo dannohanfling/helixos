@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 331,
+    date: "2026-10-19",
+    title: "HelixOS on your phone's home screen",
+    lines: [
+      "On your phone, Today now offers to add HelixOS to your home screen. It then opens straight to Today, full screen, like any other app. Tap Done or Not now and it won't ask again on that phone.",
+      "If your connection drops, HelixOS shows a calm offline screen instead of an error, and comes back by itself when you're online again.",
+      "HelixOS has a new icon, the Evolve Omega medallion, on your home screen and in your browser tab. On newer iPhones the top and bottom bars also sit clear of the notch and the home bar.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 330,
     date: "2026-10-19",
     title: "The HelixOS app is on its way",

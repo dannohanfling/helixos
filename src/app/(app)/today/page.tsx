@@ -19,6 +19,7 @@ import { dismissApplauseAction } from "@/lib/actions/colosseum";
 import { firstArrivalFor } from "@/lib/first-arrival";
 import { FirstArrival } from "@/components/first-arrival";
 import { EveningClose } from "@/components/evening-close";
+import { InstallCard } from "@/components/pwa/install-card";
 import { setupFor } from "@/lib/setup-card";
 import { SetupCard } from "@/components/setup-card";
 import { StartHere } from "@/components/start-here";
@@ -326,6 +327,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </span>
         </div>
       </div>
+
+      {/* H-626: "Add HelixOS to your home screen", for a client on a phone's browser from their third day; it decides on the phone. */}
+      {v.role === "client" && !v.switchedInto && !v.team && !d.firstSession ? <InstallCard today={v.today} /> : null}
 
       {/* The week, the month and the feedback live on Intentions (rev 157): Today keeps one line once they're set, and the menu's badge says when something is due. */}
       {month || week ? (
