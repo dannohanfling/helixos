@@ -28,6 +28,9 @@ async function main() {
   const { sendPush, sendTestPush } = await import("@/lib/push/send");
   const { runDailyPushes } = await import("@/lib/push/daily");
   const { runCallPushes } = await import("@/lib/push/calls");
+  const { runEventPushes } = await import("@/lib/push/events");
+  const { totalPoints } = await import("@/lib/queries/points");
+  const { tierFor } = await import("@/lib/engine/tiers");
   const { callsBetween } = await import("@/lib/calls");
 
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
@@ -154,6 +157,30 @@ async function main() {
     const live = await runCallPushes(new Date(Date.parse(nextCall.startIso) + 60_000), fake);
     must(live.some((r) => r.step === "live" && r.outcome.sent) && sent.some((x) => x.body === "We're live now. Tap to join."), `at the start: ${JSON.stringify(live)}`);
     console.log("✓ live call reminders: 15 minutes before and at the start, each once, for a call she can join");
+
+    // ── 4c. The event pushes: rank up (once per rank, only when switched on) and her webinar 15 minutes before. ──
+    await db.delete(schema.pushSends).where(eq(schema.pushSends.membershipId, m.id));
+    const noon = new Date(wallTimeToUtc(`${today}T12:00`, tz)!);
+    const level = tierFor(await totalPoints(ws.id, maya.id)).level;
+    const celebrated = m.celebratedTierLevel;
+    await db.update(schema.memberships).set({ celebratedTierLevel: Math.max(0, level - 1) }).where(eq(schema.memberships.id, m.id));
+    sent.length = 0;
+    must(!(await runEventPushes(noon, fake)).some((r) => r.type === "rank_up" && r.outcome.sent), "rank up is off until she switches it on");
+    await db.update(schema.pushPrefs).set({ types: { rank_up: true, webinar: true } }).where(eq(schema.pushPrefs.membershipId, m.id));
+    const ranked = await runEventPushes(noon, fake);
+    if (level > 1) {
+      must(ranked.some((r) => r.type === "rank_up" && r.outcome.sent) && sent.some((x) => /You've risen to .+\. Come see your seat\./.test(x.body) && x.path === "/rewards"), `rank up once switched on: ${JSON.stringify(ranked)}`);
+      must(!(await runEventPushes(noon, fake)).some((r) => r.type === "rank_up" && r.outcome.sent), "the same rank never twice");
+    }
+    await db.update(schema.memberships).set({ celebratedTierLevel: celebrated }).where(eq(schema.memberships.id, m.id));
+    const [wb] = await db.insert(schema.webinars).values({ id: `push-walk-${Date.now()}`, workspaceId: ws.id, userId: maya.id, title: "Push walk webinar", scheduledAt: `${today}T12:14` }).returning();
+    try {
+      const web = await runEventPushes(noon, fake);
+      must(web.some((r) => r.type === "webinar" && r.outcome.sent) && sent.some((x) => x.body === "Your webinar starts in 15 minutes." && x.path === "/webinars"), `her webinar 15 minutes before: ${JSON.stringify(web)}`);
+    } finally {
+      await db.delete(schema.webinars).where(eq(schema.webinars.id, wb.id));
+    }
+    console.log(`✓ event pushes: rank up only when switched on, once per rank${level > 1 ? "" : " (seed at the first rank: not sent)"}; her webinar 15 minutes before`);
 
     // ── 5. The cron needs its secret. ──
     must((await page.request.get(`${base}/api/cron/push`)).status() === 401, "the push cron answers only with the cron secret");

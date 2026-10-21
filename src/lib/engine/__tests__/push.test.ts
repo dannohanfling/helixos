@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DAILY_CAP, DEFAULT_PREFS, PUSH_TYPES, callTimeLabel, dueCallStep, dueDaily, isQuiet, mayPush, pushCopy, shouldAsk, wants, type DailyState, type PushType } from "@/lib/engine/push";
+import { DAILY_CAP, DEFAULT_PREFS, PUSH_TYPES, callTimeLabel, dueCallStep, dueDaily, dueIntentions, dueWebinar, isQuiet, mayPush, pushCopy, shouldAsk, wants, type DailyState, type PushType } from "@/lib/engine/push";
 
 const day = (over: Partial<DailyState> = {}): DailyState => ({ hour: 8, today: "2026-10-19", morningHour: 8, eveningHour: 17, lockedIn: false, closed: false, activeToday: false, streak: 0, ...over });
 
@@ -120,5 +120,27 @@ describe("live call reminders (H-771)", () => {
     expect(mayPush("call", 10, prefs, ["morning", "evening", "streak", "call"])).toEqual({ ok: true });
     expect(mayPush("call", 22, prefs, [])).toMatchObject({ ok: false, why: "quiet hours" });
     expect(mayPush("call", 10, { ...prefs, types: { call: false } }, [])).toMatchObject({ ok: false });
+  });
+});
+
+describe("event pushes (H-767): weekly intentions and your webinar", () => {
+  it("weekly intentions: Monday from 9 AM, only while this week's are still to set", () => {
+    expect(dueIntentions({ weekday: 1, hour: 9, weekDue: true })).toBe(true);
+    expect(dueIntentions({ weekday: 1, hour: 10, weekDue: true })).toBe(true);
+    expect(dueIntentions({ weekday: 1, hour: 8, weekDue: true })).toBe(false);
+    expect(dueIntentions({ weekday: 1, hour: 9, weekDue: false })).toBe(false);
+    expect(dueIntentions({ weekday: 2, hour: 9, weekDue: true })).toBe(false);
+  });
+  it("your webinar: in the run that lands 15 to 5 minutes before it starts", () => {
+    const at = "2026-10-20T18:00:00.000Z";
+    expect(dueWebinar(at, new Date("2026-10-20T17:46:00.000Z"))).toBe(true);
+    expect(dueWebinar(at, new Date("2026-10-20T17:40:00.000Z"))).toBe(false);
+    expect(dueWebinar(at, new Date("2026-10-20T17:57:00.000Z"))).toBe(false);
+  });
+  it("rank up, intentions and webinar are ready to switch; the bot, the coach and the Colosseum stay Coming soon", () => {
+    const ready = (t: string) => PUSH_TYPES.find((p) => p.type === t)?.ready;
+    expect(["rank_up", "intentions", "webinar"].every(ready)).toBe(true);
+    expect(["bot_call", "coach_answer", "colosseum"].some(ready)).toBe(false);
+    expect(pushCopy("rank_up", { rank: "Sentinel" }).body).toBe("You've risen to Sentinel. Come see your seat.");
   });
 });

@@ -27,11 +27,11 @@ export const PUSH_TYPES: { type: PushType; label: string; example: string; defau
   { type: "evening", label: "Evening close", example: "Close out the day. Your +20 is waiting.", defaultOn: true, ready: true },
   { type: "streak", label: "Streak waiting on you", example: "Your 12-day streak is waiting on you.", defaultOn: true, ready: true },
   { type: "bot_call", label: "A call booked by your bot", example: "Your bot booked a call for Tuesday at 2:00 PM.", defaultOn: true, ready: false },
-  { type: "rank_up", label: "Rank up", example: "You've risen to Sentinel. Come see your seat.", defaultOn: false, ready: false },
+  { type: "rank_up", label: "Rank up", example: "You've risen to Sentinel. Come see your seat.", defaultOn: false, ready: true },
   { type: "coach_answer", label: "Your coach answered", example: "Danno answered your Office Hours question.", defaultOn: false, ready: false },
-  { type: "intentions", label: "Weekly intentions", example: "Set this week's intentions. Two minutes.", defaultOn: false, ready: false },
+  { type: "intentions", label: "Weekly intentions", example: "Set this week's intentions. Two minutes.", defaultOn: false, ready: true },
   { type: "colosseum", label: "Colosseum top 3", example: "You're in the top 3 this week.", defaultOn: false, ready: false },
-  { type: "webinar", label: "Your webinar starts soon", example: "Your webinar starts in 15 minutes.", defaultOn: false, ready: false },
+  { type: "webinar", label: "Your webinar starts soon", example: "Your webinar starts in 15 minutes.", defaultOn: false, ready: true },
 ];
 
 /** At most this many pushes a day across all types; call reminders don't count (H-771). */
@@ -167,6 +167,18 @@ export function dueCallStep(startIso: string, now: Date, member: { today: string
 export function callTimeLabel(startIso: string, tz: string): string {
   const parts = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date(startIso));
   return parts.replace(":00 ", " ");
+}
+
+/** Weekly intentions (H-767): Monday from 9 AM in the member's zone, only while this week's intentions aren't set. */
+export const INTENTIONS_HOUR = 9;
+export function dueIntentions(s: { weekday: number; hour: number; weekDue: boolean }): boolean {
+  return s.weekday === 1 && s.weekDue && inWindow(s.hour, INTENTIONS_HOUR);
+}
+
+/** "Your webinar starts in 15 minutes": the member's own scheduled webinar, in the run that lands 15 to 5 minutes before. */
+export function dueWebinar(scheduledIso: string, now: Date): boolean {
+  const min = (Date.parse(scheduledIso) - now.getTime()) / 60_000;
+  return min <= CALL_SOON_MINUTES && min > CALL_SOON_LATEST;
 }
 
 /**
