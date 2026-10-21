@@ -7,13 +7,13 @@
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { ctx, num, refresh, str } from "@/lib/action-helpers";
+import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { markSeen, saveRung, tickRung } from "@/lib/my-helix";
 
 /** Tick a rung, or clear the tick. While switched in, the coach ticks it for the client and the change is logged as theirs. */
 export async function tickRungAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx();
-  await tickRung({ workspaceId, userId }, str(formData, "key"), str(formData, "on") === "1", v.actor.id);
+  await tickRung({ workspaceId, userId }, str(formData, "key"), str(formData, "on") === "1", v.actor.id, opt(formData, "reason"));
   refresh();
 }
 

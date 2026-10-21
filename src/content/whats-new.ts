@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 321,
+    date: "2026-10-19",
+    title: "Personal tasks, wins that weren't on the list, and offer tiers you set",
+    lines: [
+      "Tasks have a Personal area: for your own life, with no points and kept out of your business numbers.",
+      "On Today, \"Did something else? Add it\" logs a win that wasn't on your list. Close the day has \"Also today\": outreach messages from any app (WhatsApp too), scripts written, videos recorded and videos posted. Outreach counts toward DMs started on the Aqueduct.",
+      "On an offer you can set its tier (Freebie, Starter, Core or Premium) for My Helix. Customer journey mapped leads to your Pathway, and when you tick a rung yourself you can add one line on how you did it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 320,
     date: "2026-10-21",
     title: "Proof Bank: the list fits again, a status filter, Approve selected",

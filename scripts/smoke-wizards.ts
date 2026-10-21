@@ -383,6 +383,8 @@ async function main() {
   // The price carries its currency; the container is chosen, never assumed
   await page.selectOption('[data-testid="offer-currency"]', "NZD");
   if (!(await page.locator('[data-testid="offer-container"] option[value=""]').count())) throw new Error("the container select offers a blank choice, not a default");
+  // Docket #10 (H-195): the tier is set on the offer; blank reads it from the price.
+  if ((await page.locator('[data-testid="offer-tier"]').inputValue()) !== "" || (await page.locator('[data-testid="offer-tier"] option').count()) !== 5) throw new Error("the tier starts as read from the price, with the four tiers to pick");
   // Step 6 reads the bank: the older fixed answers still count and can move into it; a ticked bank objection with a reframe counts too
   const answeredBefore = Number((await page.locator('[data-testid="objections-answered"]').innerText()).split(" ")[0]);
   if (!(await page.locator('[data-testid="legacy-objections"]').count())) throw new Error("the example offer's older answers should be shown as still counted");

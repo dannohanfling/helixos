@@ -3,7 +3,7 @@ import { connectionFor } from "@/lib/ghl";
 import { connectProgress } from "@/lib/engine/connect-copy";
 import { clTokenSet } from "@/lib/community-loyalty";
 import { requireViewer } from "@/lib/auth";
-import { eveningCloseAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
+import { eveningCloseAction, logWinAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
 import { streakRecountSeenAction } from "@/lib/actions/streak";
 import type { TodayActivity } from "@/lib/queries/daily";
 import type { DailyLog } from "@/db/schema";
@@ -560,6 +560,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
           {/* Today's board */}
           <Card title="Also on your plate" action={<NewTaskForm today={v.today} />}>
+            {/* Docket #9 (H-195): a win that wasn't on the list, logged as a task done today. */}
+            {v.switchedInto || v.team ? null : (
+              <form action={logWinAction} className="mb-3 flex gap-2" data-testid="log-win">
+                <input className="field min-w-0 flex-1 py-1 text-sm" name="title" placeholder="Did something else? Add it" maxLength={300} required aria-label="Something else you did today" data-testid="log-win-title" />
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Adding…" data-testid="log-win-add">
+                  Add
+                </SubmitButton>
+              </form>
+            )}
             {boardTasks.length ? (
               <div className="-mx-2 divide-y">
                 {boardTasks.map((t) => (
@@ -931,6 +940,16 @@ function CloseForm({ log, activity, owner, today, error, closeKpis }: { log: Dai
         {n("newLeads", "New leads", "Opt-ins, hand-raises")}
         {n("cashCollected", "Cash collected ($)", "Adds to your goal")}
       </div>
+      {/* Docket #9 (H-195): wins that weren't on the list. Outreach in any app counts toward DMs started on the Aqueduct. */}
+      <details className="rounded-lg border p-3" open={Boolean(log && (log.outreachMessages || log.scriptsWritten || log.videosRecorded || log.videosPosted))} data-testid="close-also">
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">Also today (optional)</summary>
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {n("outreachMessages", "Outreach messages", "Any app, WhatsApp too")}
+          {n("scriptsWritten", "Scripts written", "Calls, videos, posts")}
+          {n("videosRecorded", "Videos recorded", "Recorded today")}
+          {n("videosPosted", "Videos posted", "Count them in Posts too")}
+        </div>
+      </details>
       {closeKpis.length ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="close-kpis">
           {closeKpis.map((k) => (
