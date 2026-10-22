@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 345,
+    date: "2026-10-22",
+    title: "Pages open faster on your phone",
+    lines: [
+      "Every page now starts sooner and downloads less: the logo is a fraction of its old size, the menu waits on fewer lookups, and the special fonts load only where they're used.",
+      "The moving scenes on the Forum and the Aqueduct show their photo straight away and start the film a moment later, with about half the data.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 344,
     date: "2026-10-22",
     title: "Your Evolve Omega pass shows your own name",

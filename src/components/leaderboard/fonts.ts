@@ -8,6 +8,9 @@ import localFont from "next/font/local";
 export const lbSpartan = localFont({ src: "./fonts/LeagueSpartan-latin.woff2", variable: "--lb-spartan", weight: "100 900", display: "swap" });
 export const lbSans = localFont({ src: "./fonts/Montserrat-latin.woff2", variable: "--lb-sans", weight: "100 900", display: "swap" });
 export const lbSerif = localFont({
+  // Not preloaded (Speed 1, H-1623): the ceremonies on every page import it, so a preload cost every page 61 KB; the browser
+  // fetches it only when a ceremony or the board actually draws in it.
+  preload: false,
   src: [
     { path: "./fonts/CormorantGaramond-latin.woff2", weight: "300 700", style: "normal" },
     { path: "./fonts/CormorantGaramond-italic-latin.woff2", weight: "300 700", style: "italic" },

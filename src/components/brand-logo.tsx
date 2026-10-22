@@ -17,12 +17,15 @@ export function BrandLogo({ size = 128, className = "" }: { size?: 64 | 96 | 128
 /**
  * The in-app mark: the real logo, no container (it is already a circular medallion; a circle inside a rounded square is two
  * competing containers). 40px in the sidebar and the mobile header, 96px on a loading state, from the 2× files.
+ * The light and on-dark artwork are the same file here, so one set serves both: AVIF, then WebP, then the PNG (Speed 1,
+ * H-1623: the loading state's 98 KB PNG is 13 KB as AVIF and shows on every first open).
  */
 export function AppLogo({ size, className = "" }: { size: 40 | 80 | 96; className?: string }) {
   const file = size <= 40 ? 80 : size <= 80 ? 160 : 320;
   return (
     <picture className={`shrink-0 ${className}`}>
-      <source srcSet={`/brand/app-logo-ondark-${file}.png`} media="(prefers-color-scheme: dark)" />
+      <source srcSet={`/brand/app-logo-${file}.avif`} type="image/avif" />
+      <source srcSet={`/brand/app-logo-${file}.webp`} type="image/webp" />
       <img src={`/brand/app-logo-light-${file}.png`} width={size} height={size} alt="Evolve Omega" decoding="async" data-testid="app-logo" />
     </picture>
   );

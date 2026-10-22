@@ -50,25 +50,31 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // A client gets the coach's first name for "Tell Danno".
     viewer.role === "client" ? coachFirstName(viewer.workspace.id) : Promise.resolve(null),
   ]);
-  // The kept rank climbs with the points (H-1088), before anything below reads the member's rank.
-  await keepRank(viewer, points);
+  // These read nothing the others write, so they run together (Speed 1, H-1623): one wait instead of five in a row.
+  const [, loyaltyOn, ooh, hasAppRow, hdrs, horizon] = await Promise.all([
+    // The kept rank climbs with the points (H-1088), before anything below reads the member's rank.
+    keepRank(viewer, points),
+    // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
+    hasLeaderboardFeed(viewer.membership.id),
+    // Office Hours by program level (H-470): the menu item is there only while the account has it.
+    oohAccessFor(viewer),
+    // Get the app (H-655): Coming soon until a store link is set; gone once one of this member's phones opened the app. Not for a team member.
+    viewer.team ? Promise.resolve(null) : hasAppFor(viewer.membership.id),
+    headers(),
+    // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
+    horizonShell(viewer),
+  ]);
   const rank = rankUpShell(viewer, points);
-  // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
-  const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
-  // Office Hours by program level (H-470): the menu item is there only while the account has it.
-  const oohOn = (await oohAccessFor(viewer)).open;
-  // Get the app (H-655): Coming soon until a store link is set; gone once one of this member's phones opened the app. Not for a team member.
-  const hasApp = viewer.team ? false : Boolean(await hasAppFor(viewer.membership.id));
+  const oohOn = ooh.open;
+  const hasApp = Boolean(hasAppRow);
   // The Daily welcome (H-312): once a day on first open, over whatever page they opened; never on /coach, never switched in.
-  const pathNow = (await headers()).get("x-helixos-path") ?? "";
+  const pathNow = hdrs.get("x-helixos-path") ?? "";
   // The first arrival (H-472): once per person on their first open, instead of the daily welcome, which starts the next day.
   const arrival = await firstArrivalFor(viewer, pathNow);
   const welcome = arrival ? null : await welcomeFor(viewer, pathNow);
   // The catch-up ceremony (H-934): a rank reached before the relic clips gets its clip once, first thing, when no rank-up is due.
   const catchUp = (rank && !rank.stampOnly) || arrival ? null : await catchUpShell(viewer, points, rank?.stampOnly === true);
   const catchUpPlays = catchUp?.kind === "play";
-  // On the horizon (H-385): which Coming soon entries have shipped, and the one-time "something you wanted just shipped" notice.
-  const horizon = await horizonShell(viewer);
   // The streak flame (H-558): read after the welcome, which counts the first open of the day as showing up. A team member has
   // none (the streak is the owner's); a coach switched in sees the client's flame but never plays their surge.
   const flameStreak = welcome ? await streakFor(viewer.workspace.id, viewer.user.id, { today: viewer.today, hour: viewer.hour, tz: viewer.tz, days: viewer.membership.workDays }) : streak;

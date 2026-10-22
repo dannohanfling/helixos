@@ -73,7 +73,7 @@ async function main() {
     if (!(await mark.count()) || (await mark.getAttribute("alt")) !== "Evolve Omega" || (await mark.getAttribute("width")) !== "40") throw new Error("the header mark must be the real logo at 40px with real alt text");
     // currentSrc is empty until the browser has picked and loaded a candidate (a cold first page can take a moment): wait for it.
     await mark.evaluate((el) => new Promise<void>((done) => { const img = el as HTMLImageElement; if (img.complete && img.currentSrc) done(); else { img.addEventListener("load", () => done(), { once: true }); setTimeout(done, 10000); } }));
-    if (!/app-logo-(light|ondark)-80\.png$/.test(await mark.evaluate((el) => (el as HTMLImageElement).currentSrc))) throw new Error("a 40px logo must be served from the 80px file");
+    if (!/app-logo-(light-80\.png|80\.(avif|webp))$/.test(await mark.evaluate((el) => (el as HTMLImageElement).currentSrc))) throw new Error("a 40px logo must be served from the 80px file");
     await expectText(page, "Lock in your first day", "welcome cta");
     // H-164 §1 and §2: the welcome is the only card and holds the lock-in; the picks come ticked; one button.
     if (await page.locator('[data-testid="lockin-hero"]').count()) throw new Error("no second Lock in card while the welcome shows");

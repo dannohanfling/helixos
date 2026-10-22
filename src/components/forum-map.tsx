@@ -180,6 +180,7 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
       <div className="fo-scene">
         {(["day", "night"] as Look[]).map((k) => (
           <picture key={k}>
+            <source type="image/avif" srcSet={`/forum/forum-${k}.avif`} />
             <source type="image/webp" srcSet={`/forum/forum-${k}.webp`} />
             <img src={`/forum/forum-${k}.jpg`} alt="" className="fo-photo" style={{ opacity: look === k ? 1 : 0 }} loading={k === look ? "eager" : "lazy"} decoding="async" data-testid={`forum-photo-${k}`} />
           </picture>

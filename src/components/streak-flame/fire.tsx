@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { whenIdle } from "@/lib/when-idle";
 import { flameClip, surgeEnvelope, surgeLook, SURGE_SECONDS, type FlameLook } from "@/lib/engine/streak-flame";
 
 const MOTION = "(prefers-reduced-motion: reduce)";
@@ -100,10 +101,13 @@ export function Fire({ look, place, width, height, surgeAt = null, className = "
     const onPlaying = () => setPlayingSrc(src);
     // Paused (off screen, the tab hidden): the poster shows again and the mode says so, so only a running loop counts as one.
     const onPause = () => setPlayingSrc((cur) => (cur === src ? null : cur));
+    // The first load waits until the page is idle (Speed 1, H-1623): the poster is already there, so the page's own content
+    // gets the connection first and the loop follows a moment later.
+    let cancelIdle: (() => void) | null = null;
     const io = new IntersectionObserver((entries) => {
       const e = entries[entries.length - 1];
       visible.current = e.isIntersecting && laidOut(el);
-      if (visible.current) setLoaded(true);
+      if (visible.current && !loaded && !cancelIdle) cancelIdle = whenIdle(() => setLoaded(true));
       sync();
     });
     io.observe(el);
@@ -112,6 +116,7 @@ export function Fire({ look, place, width, height, surgeAt = null, className = "
     v?.addEventListener("playing", onPlaying);
     v?.addEventListener("pause", onPause);
     return () => {
+      cancelIdle?.();
       io.disconnect();
       document.removeEventListener("visibilitychange", sync);
       v?.removeEventListener("loadeddata", sync);
