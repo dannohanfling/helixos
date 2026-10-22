@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
@@ -73,11 +73,17 @@ export async function seatsLeft(owner: Pick<schema.Membership, "id" | "teamCap">
 /** Every HelixOS a person may sign in to: their own memberships (coach first, then by start) and the teams they are on, live only. */
 export type Choice = { key: string; kind: "own" | "team"; label: string; sub: string; workspaceId: string; role: "coach" | "client" };
 export async function choicesFor(userId: string): Promise<Choice[]> {
-  const own = await db.query.memberships.findMany({ where: and(eq(schema.memberships.userId, userId), isNull(schema.memberships.removedAt)) });
-  const teams = await db.query.teamMembers.findMany({ where: and(eq(schema.teamMembers.teamUserId, userId), isNull(schema.teamMembers.removedAt)) });
+  // Three waits instead of five (Speed 2): what doesn't depend on another answer is read alongside it.
+  const [own, teams] = await Promise.all([
+    db.query.memberships.findMany({ where: and(eq(schema.memberships.userId, userId), isNull(schema.memberships.removedAt)) }),
+    db.query.teamMembers.findMany({ where: and(eq(schema.teamMembers.teamUserId, userId), isNull(schema.teamMembers.removedAt)) }),
+  ]);
   const wsIds = [...new Set([...own.map((m) => m.workspaceId), ...teams.map((t) => t.workspaceId)])];
-  const workspaces = new Map(wsIds.length ? (await db.query.workspaces.findMany({ where: inArray(schema.workspaces.id, wsIds) })).map((w) => [w.id, w]) : []);
-  const owners = teams.length ? await db.query.memberships.findMany({ where: inArray(schema.memberships.id, teams.map((t) => t.ownerMembershipId)) }) : [];
+  const [wsRows, owners] = await Promise.all([
+    wsIds.length ? db.query.workspaces.findMany({ where: inArray(schema.workspaces.id, wsIds) }) : Promise.resolve([]),
+    teams.length ? db.query.memberships.findMany({ where: inArray(schema.memberships.id, teams.map((t) => t.ownerMembershipId)) }) : Promise.resolve([]),
+  ]);
+  const workspaces = new Map(wsRows.map((w) => [w.id, w]));
   const ownerUsers = new Map(owners.length ? (await db.query.users.findMany({ where: inArray(schema.users.id, owners.map((o) => o.userId)) })).map((u) => [u.id, u]) : []);
   const out: Choice[] = [];
   for (const m of [...own].sort((a, b) => (a.role === b.role ? a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id) : a.role === "coach" ? -1 : 1))) {
@@ -93,6 +99,27 @@ export async function choicesFor(userId: string): Promise<Choice[]> {
     out.push({ key: `t:${t.id}`, kind: "team", label: `${ou?.name ?? "A member"}'s team`, sub: `${o.businessName?.trim() || w.name}, as a team member`, workspaceId: w.id, role: "client" });
   }
   return out;
+}
+
+/**
+ * How many HelixOS the person can be in, for the menu's "Switch HelixOS" (more than one shows it): the same rows choicesFor
+ * lists, counted in one wait (Speed 2). Own memberships in a workspace that exists; team seats whose owner is still a member.
+ */
+export async function choiceCount(userId: string): Promise<number> {
+  const [[own], [team]] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(schema.memberships)
+      .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.memberships.workspaceId))
+      .where(and(eq(schema.memberships.userId, userId), isNull(schema.memberships.removedAt))),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(schema.teamMembers)
+      .innerJoin(schema.memberships, eq(schema.memberships.id, schema.teamMembers.ownerMembershipId))
+      .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.teamMembers.workspaceId))
+      .where(and(eq(schema.teamMembers.teamUserId, userId), isNull(schema.teamMembers.removedAt), isNull(schema.memberships.removedAt))),
+  ]);
+  return Number(own?.n ?? 0) + Number(team?.n ?? 0);
 }
 
 /** The cookie an invite leaves for the owner's next Settings render: the link, shown once, gone in two minutes. Never a log line, never the database. */

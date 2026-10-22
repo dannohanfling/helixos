@@ -53,10 +53,14 @@ export type HorizonShell = { shippedKeys: string[]; notice: { itemId: string; ti
  * items yet reads as nothing shipped, which is the menu as it was.
  */
 export async function horizonShell(v: Viewer): Promise<HorizonShell> {
-  const items = await db.query.horizonItems.findMany({ where: eq(schema.horizonItems.workspaceId, v.workspace.id), columns: { id: true, title: true, line: true, area: true, status: true, fromFeedback: true, sort: true, shippedAt: true, menuKey: true, hidden: true } });
+  // The member's own wants are read alongside the items (Speed 2): one wait for the menu, not two.
+  const ownNotice = v.role === "client" && !v.switchedInto && !v.team;
+  const [items, wants] = await Promise.all([
+    db.query.horizonItems.findMany({ where: eq(schema.horizonItems.workspaceId, v.workspace.id), columns: { id: true, title: true, line: true, area: true, status: true, fromFeedback: true, sort: true, shippedAt: true, menuKey: true, hidden: true } }),
+    ownNotice ? db.query.horizonWants.findMany({ where: and(eq(schema.horizonWants.workspaceId, v.workspace.id), eq(schema.horizonWants.userId, v.user.id), isNull(schema.horizonWants.notifiedAt)), columns: { itemId: true, notifiedAt: true } }) : Promise.resolve([]),
+  ]);
   const shippedKeys = [...shippedMenuKeys(items)];
-  if (v.role !== "client" || v.switchedInto || v.team) return { shippedKeys, notice: null };
-  const wants = await db.query.horizonWants.findMany({ where: and(eq(schema.horizonWants.workspaceId, v.workspace.id), eq(schema.horizonWants.userId, v.user.id), isNull(schema.horizonWants.notifiedAt)), columns: { itemId: true, notifiedAt: true } });
+  if (!ownNotice) return { shippedKeys, notice: null };
   const due = wants.length ? shippedNotice(items, wants) : null;
   return { shippedKeys, notice: due ? { itemId: due.id, title: due.title, line: due.line } : null };
 }
