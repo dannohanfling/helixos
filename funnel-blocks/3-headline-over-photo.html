@@ -1,0 +1,14 @@
+<!-- Evolve Omega: headline over a photo. Paste into a GHL Custom Code element.
+     Edit three things: the photo address in --eo-photo, the headline words, and the ONE phrase inside <span>.
+     Brand rule: exactly one phrase in gold. Set Anton in the GHL page fonts; without it a condensed fallback shows. -->
+<section class="eo-hp" style="--eo-photo:url('[PHOTO URL]')">
+<style>
+.eo-hp,.eo-hp *{box-sizing:border-box}
+.eo-hp{position:relative;display:flex;align-items:flex-end;min-height:min(78vh,640px);padding:32px 20px;background:#030100 var(--eo-photo) center/cover no-repeat;isolation:isolate}
+.eo-hp::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(3,1,0,.15) 0%,rgba(3,1,0,.55) 45%,rgba(3,1,0,.92) 100%)}
+.eo-hp h1{max-width:900px;margin:0 auto;width:100%;font-family:Anton,"Oswald","Arial Narrow",Impact,sans-serif;font-weight:400;font-size:clamp(40px,11vw,96px);line-height:1;letter-spacing:.01em;text-transform:uppercase;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,.55)}
+.eo-hp h1 span{color:#DDA338}
+@media (min-width:768px){.eo-hp{align-items:center;padding:64px 40px}.eo-hp::before{background:linear-gradient(90deg,rgba(3,1,0,.92) 0%,rgba(3,1,0,.6) 55%,rgba(3,1,0,.2) 100%)}}
+</style>
+<h1>Your headline words here with <span>one gold phrase</span></h1>
+</section>

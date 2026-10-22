@@ -1,0 +1,31 @@
+<!-- Evolve Omega: testimonial marquee. Paste into a GHL Custom Code element.
+     Edit the quotes in the list only; the script copies it once for the seamless loop. -->
+<section class="eo-mq" aria-label="What clients say">
+<style>
+.eo-mq,.eo-mq *{box-sizing:border-box}
+.eo-mq{overflow:hidden;padding:24px 0;background:#030100;font-family:"DM Sans",Arial,sans-serif}
+.eo-mq-t{display:flex;width:max-content;animation:eo-mq 60s linear infinite}
+.eo-mq:hover .eo-mq-t,.eo-mq:focus-within .eo-mq-t,.eo-mq.eo-p .eo-mq-t{animation-play-state:paused}
+.eo-mq ul{display:flex;gap:16px;margin:0;padding:0 8px;list-style:none}
+.eo-mq li{flex:0 0 280px;padding:18px 20px;border:1px solid #3a2d18;border-radius:14px;background:#0b0703;color:#E0CEBA;font-size:16px;line-height:1.5}
+.eo-mq li b{display:block;margin-top:10px;color:#DDA338;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+@keyframes eo-mq{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.eo-mq{overflow-x:auto;scroll-snap-type:x mandatory}.eo-mq-t{animation:none}.eo-mq ul[aria-hidden]{display:none}.eo-mq li{scroll-snap-align:start}}
+</style>
+<div class="eo-mq-t">
+<ul>
+<li>"In the last, like, five minutes, five calls got scheduled. I couldn't change my calendar fast enough."<b>Kim Y.</b></li>
+<li>"That wasn't me talking to you at three o'clock in the morning? I really did think it was you."<b>Stacie J.</b></li>
+<li>"You save so much time... and you don't need a VA."<b>Flavie B.</b></li>
+<li>"I've got nine people requesting information, and 68 people have engaged with it."<b>Pam G.</b></li>
+<li>"It wasn't even a call, it was just conversation."<b>Shawna M.</b></li>
+<li>"Over 200 leads. A lot of people went in the bot."<b>Kim Y.</b></li>
+</ul>
+</div>
+<script>
+(function(s){var t=s.querySelector(".eo-mq-t"),u=t.querySelector("ul"),c=u.cloneNode(true);
+c.setAttribute("aria-hidden","true");t.appendChild(c);
+s.addEventListener("touchstart",function(){s.classList.toggle("eo-p")},{passive:true});
+})(document.currentScript.closest(".eo-mq"));
+</script>
+</section>

@@ -1,0 +1,36 @@
+<!-- Evolve Omega: monthly/yearly price toggle. Paste into a GHL Custom Code element.
+     Put the real amounts in data-monthly and data-yearly (for example $97). Until then they show as placeholders. Never leave a made-up price. -->
+<section class="eo-pt" data-monthly="[MONTHLY PRICE]" data-yearly="[YEARLY PRICE]">
+<style>
+.eo-pt,.eo-pt *{box-sizing:border-box}
+.eo-pt{padding:32px 20px;background:#030100;color:#E0CEBA;font-family:"DM Sans",Arial,sans-serif;text-align:center}
+.eo-pt-g{display:inline-flex;padding:4px;border:1px solid #3a2d18;border-radius:999px;background:#0b0703}
+.eo-pt-g button{min-width:112px;min-height:44px;padding:0 18px;border:0;border-radius:999px;background:transparent;color:#E0CEBA;font:600 15px "DM Sans",Arial,sans-serif;cursor:pointer;transition:background .25s,color .25s}
+.eo-pt-g button[aria-pressed=true]{background:#DDA338;color:#030100}
+.eo-pt-g button:focus-visible{outline:2px solid #F0C76A;outline-offset:2px}
+.eo-pt-p{display:flex;justify-content:center;align-items:baseline;gap:6px;margin-top:22px}
+.eo-pt-n{display:inline-flex;font-family:Anton,"Oswald","Arial Narrow",Impact,sans-serif;font-size:56px;line-height:1;color:#F6F1E7}
+.eo-pt-d{display:inline-block;height:1em;overflow:hidden}
+.eo-pt-d i{display:flex;flex-direction:column;font-style:normal;transition:transform .55s cubic-bezier(.2,.7,.2,1)}
+.eo-pt-d i b{height:1em;font-weight:400}
+.eo-pt-n.eo-ph{font-size:30px}
+.eo-pt-u{color:#cbb89d;font-size:16px}
+@media (prefers-reduced-motion:reduce){.eo-pt-d i,.eo-pt-g button{transition:none}}
+</style>
+<div class="eo-pt-g" role="group" aria-label="Billing period"><button type="button" aria-pressed="true" data-k="monthly">Monthly</button><button type="button" aria-pressed="false" data-k="yearly">Yearly</button></div>
+<div class="eo-pt-p"><span class="eo-pt-n" aria-live="polite"></span><span class="eo-pt-u"></span></div>
+<script>
+(function(s){
+var n=s.querySelector(".eo-pt-n"),u=s.querySelector(".eo-pt-u"),bs=s.querySelectorAll("button"),R="0123456789 ";
+function roll(v){var w=Math.max(s.dataset.monthly.length,s.dataset.yearly.length),t=v.padStart(w," "),d=/^[\s\d.,$€£]*$/.test(s.dataset.monthly+s.dataset.yearly);
+n.setAttribute("aria-label",v);
+n.classList.toggle("eo-ph",!d);if(!d){n.textContent=v;return}
+if(n.children.length!==w){n.textContent="";for(var k=0;k<w;k++){var c=document.createElement("span");c.className="eo-pt-d";c.setAttribute("aria-hidden","true");c.innerHTML="<i>"+R.split("").map(function(x){return"<b>"+(x==" "?"&nbsp;":x)+"</b>"}).join("")+"</i>";n.appendChild(c)}}
+[].forEach.call(n.children,function(c,k){var ch=t[k],p=R.indexOf(ch),i=c.firstChild;
+if(p<0){c.className="eo-pt-s";c.textContent=ch}else{if(!i||i.tagName!="I"){c.className="eo-pt-d";c.innerHTML="<i>"+R.split("").map(function(x){return"<b>"+(x==" "?"&nbsp;":x)+"</b>"}).join("")+"</i>";i=c.firstChild}
+i.style.transform="translateY(-"+p+"em)"}})}
+function set(k){bs.forEach(function(b){b.setAttribute("aria-pressed",b.dataset.k==k)});roll(s.dataset[k]);u.textContent=k=="monthly"?"/ month":"/ year"}
+bs.forEach(function(b){b.onclick=function(){set(b.dataset.k)}});set("monthly");
+})(document.currentScript.closest(".eo-pt"));
+</script>
+</section>

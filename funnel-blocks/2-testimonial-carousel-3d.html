@@ -1,0 +1,49 @@
+<!-- Evolve Omega: 3D testimonial carousel. Paste into a GHL Custom Code element. Edit the quotes in the list.
+     Small screens (under 480px), slow phones and reduced motion get a plain swipe row instead of the ring. -->
+<section class="eo-cr" aria-label="Client results" aria-roledescription="carousel">
+<style>
+.eo-cr,.eo-cr *{box-sizing:border-box}
+.eo-cr{position:relative;padding:32px 16px;background:#030100;font-family:"DM Sans",Arial,sans-serif;overflow:hidden}
+.eo-cr-s{height:260px;perspective:1100px;touch-action:pan-y}
+.eo-cr ul{position:relative;width:260px;height:100%;margin:0 auto;padding:0;list-style:none;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.2,.7,.2,1)}
+.eo-cr li{position:absolute;inset:0;padding:22px;border:1px solid #3a2d18;border-radius:16px;background:#0b0703;color:#E0CEBA;font-size:16px;line-height:1.5;display:flex;flex-direction:column;justify-content:center;backface-visibility:hidden;transition:opacity .7s}
+.eo-cr li b{display:block;margin-top:12px;color:#DDA338;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+.eo-cr nav{display:flex;justify-content:center;gap:16px;margin-top:20px}
+.eo-cr button{width:48px;height:48px;border:1px solid #DDA338;border-radius:50%;background:transparent;color:#DDA338;font-size:22px;cursor:pointer}
+.eo-cr button:focus-visible{outline:2px solid #F0C76A;outline-offset:3px}
+.eo-cr.eo-flat .eo-cr-s{height:auto;perspective:none;overflow-x:auto;scroll-snap-type:x mandatory}
+.eo-cr.eo-flat ul{display:flex;gap:14px;width:max-content;transform:none!important;transition:none}
+.eo-cr.eo-flat li{position:static;display:block;flex:0 0 min(78vw,300px);transform:none!important;opacity:1!important;scroll-snap-align:center}
+.eo-cr.eo-flat nav{display:none}
+</style>
+<div class="eo-cr-s">
+<ul>
+<li>"In the last, like, five minutes, five calls got scheduled. I couldn't change my calendar fast enough."<b>Kim Y.</b></li>
+<li>"That wasn't me talking to you at three o'clock in the morning? I really did think it was you."<b>Stacie J.</b></li>
+<li>"You save so much time... and you don't need a VA."<b>Flavie B.</b></li>
+<li>"I've got nine people requesting information, and 68 people have engaged with it."<b>Pam G.</b></li>
+<li>"It wasn't even a call, it was just conversation."<b>Shawna M.</b></li>
+<li>"Over 200 leads. A lot of people went in the bot."<b>Kim Y.</b></li>
+</ul>
+</div>
+<nav><button type="button" aria-label="Previous">&#8249;</button><button type="button" aria-label="Next">&#8250;</button></nav>
+<script>
+(function(s){
+var u=s.querySelector("ul"),li=[].slice.call(u.children),n=li.length,a=360/n,i=0,x=null,
+r=Math.round(150/Math.tan(Math.PI/n)),
+slow=matchMedia("(pointer:coarse)").matches&&((navigator.hardwareConcurrency||8)<=4||(navigator.deviceMemory||8)<=2),
+mq=matchMedia("(max-width:479px),(prefers-reduced-motion:reduce)");
+function draw(){li.forEach(function(c,k){c.style.transform="rotateY("+k*a+"deg) translateZ("+r+"px)";
+var d=Math.abs(((k-i)%n+n)%n);d=Math.min(d,n-d);c.style.opacity=d>1?.25:1;c.setAttribute("aria-hidden",d?"true":"false")});
+u.style.transform="translateZ(-"+r+"px) rotateY("+(-i*a)+"deg)"}
+function go(d){i+=d;draw()}
+function mode(){var f=slow||mq.matches;s.classList.toggle("eo-flat",f);if(f)li.forEach(function(c){c.removeAttribute("aria-hidden")});else draw()}
+var b=s.querySelectorAll("button");b[0].onclick=function(){go(-1)};b[1].onclick=function(){go(1)};
+s.addEventListener("keydown",function(e){if(s.classList.contains("eo-flat"))return;if(e.key=="ArrowLeft")go(-1);if(e.key=="ArrowRight")go(1)});
+var st=s.querySelector(".eo-cr-s");
+st.addEventListener("pointerdown",function(e){x=e.clientX});
+st.addEventListener("pointerup",function(e){if(x===null||s.classList.contains("eo-flat"))return;var d=e.clientX-x;x=null;if(Math.abs(d)>40)go(d<0?1:-1)});
+(mq.addEventListener?mq.addEventListener("change",mode):mq.addListener(mode));mode();
+})(document.currentScript.closest(".eo-cr"));
+</script>
+</section>
