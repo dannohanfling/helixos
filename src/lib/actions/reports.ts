@@ -9,10 +9,20 @@ import { SCREENSHOT_MAX_BYTES, readReport, reportScreenshotKey, sniffImage } fro
 import { proofStorageConfigured, putReportObject } from "@/lib/proof-storage";
 import { redactUrls } from "@/lib/engine/storage-policy";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { addReceipt, childrenFollow, followUp, mergeReports, rootReport, sendReply, unmergeReport } from "@/lib/report-replies";
+import { addReceipt, childrenFollow, followUp, mergeReports, rootReport, sendReply, unmergeReport, unreadReplies } from "@/lib/report-replies";
 import { coachFirstName } from "@/lib/queries/reports";
 import { REPLY_STATUSES } from "@/lib/engine/report-status";
 import { redirect } from "next/navigation";
+
+/**
+ * The coach's replies this member hasn't read yet (H-1656), for the My reports button in the issue panel. Asked when the panel
+ * opens, never by the menu frame, so no page pays for it. Nothing for a coach switched in or a team member.
+ */
+export async function myUnreadRepliesAction(): Promise<number> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "My reports is {first}'s own." });
+  if (v.role !== "client") return 0;
+  return (await unreadReplies({ workspaceId, userId })).count;
+}
 
 export type SendResult = { ok: true; screenshot: "kept" | "none" | "not-stored" } | { ok: false; error: string; field?: string };
 
