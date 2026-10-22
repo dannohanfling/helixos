@@ -6,7 +6,7 @@
 export default function Loading() {
   return (
     <div className="space-y-4" role="status" aria-live="polite" data-testid="bot-preview-loading">
-      <div className="h-7 w-64 animate-pulse rounded-md bg-surface-2" />
+      <div className="skel h-7 w-64" aria-hidden="true" />
       <p className="flex items-center gap-2 text-sm text-ink-2">
         <span className="spinner" aria-hidden="true" /> Reading your bot from Community Loyalty… this can take a few seconds.
       </p>
