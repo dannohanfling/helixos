@@ -51,7 +51,7 @@ async function main() {
     await login(page, "As a client");
     await page.goto(`${base}/arena`);
     await page.getByTestId("arena-page").waitFor({ timeout: 30000 });
-    const text = await page.getByTestId("arena-page").innerText();
+    const text = (await page.getByTestId("arena-page").textContent()) ?? "";
     for (const words of ["Thirty Days in the", "Show up 24 days.", "Everyone who finishes", "Live with me", "Put these in", "A note from Danno", "Before you"]) must(text.includes(words), `the page keeps its copy: "${words}"`);
     must(!/\$\s?\d|price/i.test(text), "no prices on the Arena page");
     const count = page.getByTestId("arena-count");
