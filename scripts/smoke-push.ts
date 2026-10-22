@@ -56,7 +56,10 @@ async function main() {
 
     // ── 0. Get the app (H-655, H-731): Coming soon while no store link is set, on More, its own page and Settings. ──
     await page.goto(`${base}/more`);
-    must((await page.locator('main [data-testid="nav-coming-soon"][data-href="/get-the-app"]').count()) === 1, "More shows Get the app as Coming soon");
+    // Wait for it rather than counting at once: on a cold dev server the first page can still be rendering.
+    const soonItem = page.locator('main [data-testid="nav-coming-soon"][data-href="/get-the-app"]');
+    await soonItem.first().waitFor({ timeout: 20_000 }).catch(() => undefined);
+    must((await soonItem.count()) === 1, "More shows Get the app as Coming soon");
     await page.goto(`${base}/get-the-app`);
     await page.getByTestId("get-app-soon").waitFor();
     await page.goto(`${base}/settings?tab=data`);
@@ -197,6 +200,61 @@ async function main() {
       await db.delete(schema.officeHoursRequests).where(eq(schema.officeHoursRequests.id, oh.id));
     }
     console.log(`✓ event pushes: rank up only when switched on, once per rank${level > 1 ? "" : " (seed at the first rank: not sent)"}; her webinar 15 minutes before; a booked call and a covered Office Hours question, each once`);
+
+    // ── 4d. Settings → Notifications in the app: "Allow on this phone" (H-1612), with a fake Capacitor bridge. ──
+    await page.goto(`${base}/settings/notifications`);
+    await page.getByTestId("notifications-page").waitFor();
+    must((await page.getByTestId("phone-push").count()) === 0, "the website shows no Allow row");
+    // Let the page's own writes (a rank ceremony marking itself seen) finish before this walk writes to the same SQLite file.
+    await page.waitForLoadState("networkidle");
+    const fakeApp = async (receive: string) => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      // A plain script string: tsx's helpers (__name) don't exist inside the browser page.
+      await ctx.addInitScript({
+        content: `(() => {
+          const listeners = {};
+          let state = ${JSON.stringify(receive)};
+          window.Capacitor = {
+            isNativePlatform: () => true,
+            getPlatform: () => "ios",
+            Plugins: { PushNotifications: {
+              checkPermissions: async () => ({ receive: state }),
+              requestPermissions: async () => { if (state !== "denied") state = "granted"; return { receive: state }; },
+              register: async () => { for (const cb of listeners.registration || []) cb({ value: "fedcba9876543210fedcba9876543210" }); },
+              addListener: async (event, cb) => { (listeners[event] = listeners[event] || []).push(cb); return { remove: () => undefined }; },
+            } },
+          };
+        })();`,
+      });
+      const p = await ctx.newPage();
+      await login(p, "As a client");
+      await p.goto(`${base}/settings/notifications`);
+      await p.getByTestId("phone-push").waitFor();
+      await p.waitForLoadState("networkidle");
+      return { ctx, p };
+    };
+    await db.delete(schema.pushPrefs).where(eq(schema.pushPrefs.membershipId, m.id));
+    {
+      const { ctx, p } = await fakeApp("prompt");
+      must((await p.getByTestId("phone-push").getAttribute("data-state")) === "off", "in the app, a phone not yet asked reads Off");
+      await p.getByTestId("phone-push-allow").click();
+      await p.locator('[data-testid="phone-push"][data-state="on"]').waitFor();
+      let got = false;
+      for (let i = 0; i < 20 && !got; i++) {
+        got = Boolean(await db.query.pushDevices.findFirst({ where: and(eq(schema.pushDevices.membershipId, m.id), eq(schema.pushDevices.token, "fedcba9876543210fedcba9876543210")) }));
+        if (!got) await p.waitForTimeout(250);
+      }
+      must(got, "Allow registers the phone and its token reaches HelixOS");
+      must(!((await (await p.request.get(`${base}/api/app/push-ask`)).json()) as { ask: boolean }).ask, "Allow counts as yes, so the HelixOS card never asks again");
+      await ctx.close();
+    }
+    {
+      const { ctx, p } = await fakeApp("denied");
+      must((await p.getByTestId("phone-push").getAttribute("data-state")) === "blocked", "a phone that said no reads Off with the way to its settings");
+      must((await p.getByTestId("phone-push-allow").count()) === 0 && (await p.getByTestId("phone-push-open-settings").count()) === 1, "no Allow once the phone said no; iPhone gets Open Settings");
+      await ctx.close();
+    }
+    console.log("✓ Settings → Notifications: no Allow row on the website; in the app Off → Allow → On, the token recorded and the card answered; a phone that said no is sent to its settings");
 
     // ── 5. The cron needs its secret. ──
     must((await page.request.get(`${base}/api/cron/push`)).status() === 401, "the push cron answers only with the cron secret");

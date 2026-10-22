@@ -8,6 +8,7 @@ import { prefsFor } from "@/lib/push/send";
 import { savePushPrefsAction, sendTestPushAction } from "@/lib/actions/push";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { PhonePushSwitch } from "@/components/pwa/phone-push-switch";
 
 export const metadata = { title: "Notifications" };
 
@@ -60,6 +61,9 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                 Notifications from HelixOS
               </label>
               <p className="mt-1 text-sm text-ink-2">At most three a day, plus reminders for live calls. Never anything about your health.</p>
+              <div className="mt-3 empty:hidden">
+                <PhonePushSwitch />
+              </div>
             </Card>
             <Card title="What you get">
               <ul className="divide-y">
