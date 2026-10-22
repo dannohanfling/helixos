@@ -244,7 +244,7 @@ async function main() {
       console.log("✓ reduced motion: messengers rest mid-street, no breathing; otherwise they walk");
 
       // Settings: the secret is shown once.
-      await page.goto(`${base}/settings#forum`, { waitUntil: "networkidle" });
+      await page.goto(`${base}/settings?tab=programs#forum`, { waitUntil: "networkidle" });
       await submit(page, '[data-testid="forum-webhook-make"]');
       const shown = await page.locator('[data-testid="forum-webhook-secret-value"]').innerText();
       must(/^hxf_/.test(shown), "a new secret is shown");

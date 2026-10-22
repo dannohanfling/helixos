@@ -699,7 +699,7 @@ async function main() {
     console.log("✓ board_checkin by voice; a team member refused");
 
     // Slice 4: the skill for Claude, built from the current principles; the HumanOS switch behind Body's own gate.
-    await page.goto(`${base}/settings#board-in-claude`);
+    await page.goto(`${base}/settings?tab=programs#board-in-claude`);
     must((await page.locator('[data-testid="board-skill-steps"] li').count()) === 6, "six install steps");
     const skill = await page.request.get(`${base}/api/board/skill`);
     must(skill.status() === 200 && (skill.headers()["content-disposition"] ?? "").includes("evolve-omega-board.skill"), `the skill downloads: ${skill.status()}`);

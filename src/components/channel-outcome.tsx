@@ -3,7 +3,7 @@ import { summarize, type ChannelOutcome, type OutcomeFix, type OutcomeState } fr
 import { SubmitButton } from "@/components/submit-button";
 
 /** Where a Fix it button goes (friction walk C1): the Publishing card, or the post's own Distribute page. */
-export const fixHref = (fix: OutcomeFix, contentId: string): string => (fix.where === "publishing" ? "/settings#publishing" : `/content/${contentId}/repurpose`);
+export const fixHref = (fix: OutcomeFix, contentId: string): string => (fix.where === "publishing" ? "/settings?tab=connections#publishing" : `/content/${contentId}/repurpose`);
 
 /**
  * The plain banner over a post with a channel that did not send (friction walk C1, 7 Oct: the failure hid behind "2 of 3

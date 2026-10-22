@@ -19,7 +19,7 @@ export async function eraseMyBodyAction(formData: FormData): Promise<void> {
   if (!plan) redirect("/settings");
   await eraseBody(plan, v.actor.id);
   refresh();
-  redirect("/settings?humanos=deleted#humanos");
+  redirect("/settings?tab=programs&humanos=deleted#humanos");
 }
 
 export async function eraseMyAccountAction(formData: FormData): Promise<void> {

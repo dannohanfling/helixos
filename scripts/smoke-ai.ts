@@ -26,7 +26,7 @@ async function submit(page: Page, selector: string) {
   await page.waitForTimeout(400);
 }
 async function connect(page: Page, provider: string, key: string) {
-  await page.goto(`${base}/settings`);
+  await page.goto(`${base}/settings?tab=connections`);
   await page.selectOption('select[name="provider"]', provider);
   await page.fill('input[name="key"]', key);
   await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');
@@ -58,7 +58,7 @@ async function main() {
     await page.goto(`${base}/content/ladders`);
     const promiseNoKey = await page.locator('[data-testid="ai-promise"]').first().innerText();
     if (!/needs your own Anthropic or OpenAI key/.test(promiseNoKey)) throw new Error(`ladder page should say it needs a key before the click, got "${promiseNoKey}"`);
-    if (!(await page.locator('[data-testid="ai-promise"] a[href="/settings#ai"]').count())) throw new Error("the key line has no way to Settings");
+    if (!(await page.locator('[data-testid="ai-promise"] a[href="/settings?tab=connections#ai"]').count())) throw new Error("the key line has no way to Settings");
     console.log("✓ without a key the ✨ actions say so, with the way to Settings");
 
     // No key: the ✨ features point at Settings, nothing names an environment variable
@@ -121,7 +121,7 @@ async function main() {
     const bound = task.match(/Channel: (Your Facebook group|Other people's groups)\.(?: Format: [^\n]*?)? Max (2000|1200) chars\. Links: (ok|none)\./);
     if (!bound) throw new Error(`the group draft task must carry its channel's length and link rule, got: ${task.slice(-300)}`);
     console.log(`✓ group draft bounded by its channel: "${bound[0]}"`);
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await expectText(page, "Group-aligned drafts", "usage by feature");
     const usage = await page.locator('[data-testid="ai-usage"]').innerText();
     if (!/[2-9] calls/.test(usage)) throw new Error(`expected at least 2 calls (key check + repurpose), got: ${usage.slice(0, 80)}`);
@@ -140,7 +140,7 @@ async function main() {
 
     // Member: at the cap, ✨ is paused with a clear message; coach lifts it; ✨ is back
     await login(page, "client");
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await expectText(page, "cap is reached", "cap message");
     await page.goto(`${base}/content/ladders`);
     await expectText(page, "Build the skeleton", "ai paused on ladders");
@@ -154,7 +154,7 @@ async function main() {
     console.log("✓ daily cap pauses ✨ with a message; coach override restores it");
 
     // Remove key
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     // A delete asks first: the trigger opens the confirm, its own Remove sends.
     await page.click('button:has-text("Remove key")');
     await submit(page, 'dialog[open] [data-testid="confirm-delete-yes"]');

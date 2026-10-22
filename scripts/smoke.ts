@@ -349,7 +349,7 @@ async function main() {
     await submit(page, 'button:has-text("Verify · award points")');
     console.log("✓ verified a submission");
   }
-  await page.goto(`${base}/settings`);
+  await page.goto(`${base}/settings?tab=coach`);
   await expectText(page, "Invite links", "coach settings");
 
   // Join flow

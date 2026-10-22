@@ -59,13 +59,13 @@ async function main() {
     // Absent key: the feature is visible and says what is missing
     await page.goto(`${base}/proof`);
     await expectText(page, "Harvest from Fathom", "harvest card");
-    if (!(await page.locator('[data-testid="harvest-needs-key"] a[href="/settings#fathom"]').count())) throw new Error("the harvest card must point at Settings when there is no key");
+    if (!(await page.locator('[data-testid="harvest-needs-key"] a[href="/settings?tab=connections#fathom"]').count())) throw new Error("the harvest card must point at Settings when there is no key");
     await page.goto(`${base}/proof/harvest`);
     if (!(await page.locator('[data-testid="harvest-needs-key"]').count())) throw new Error("the harvest page must say the key is missing");
     console.log("✓ without a key the feature is visible and points at Settings");
 
     // Connecting: tick one is required, the wording exact, a bad key says why, a good key connects
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     const tickOne = (await page.locator('[data-testid="fathom-consent"]').innerText()).replace(/\s+/g, " ").trim();
     if (tickOne !== TICK_ONE) throw new Error(`tick one wording differs:\n${tickOne}`);
     await fillExact(page, '[data-testid="fathom-key"]', "fathom-good");
@@ -90,7 +90,7 @@ async function main() {
     if (!(await page.locator('[data-testid="harvest-needs-ai"]').count())) throw new Error("without an AI key the page must say so");
     if (!(await page.locator('[data-testid="read-recording"]').first().isDisabled())) throw new Error("reading must wait for an AI key");
     // Connect the AI key
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await page.selectOption('select[name="provider"]', "anthropic");
     await page.fill('input[name="key"]', "sk-ant-good");
     await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');

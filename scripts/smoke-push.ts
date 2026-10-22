@@ -59,7 +59,7 @@ async function main() {
     must((await page.locator('main [data-testid="nav-coming-soon"][data-href="/get-the-app"]').count()) === 1, "More shows Get the app as Coming soon");
     await page.goto(`${base}/get-the-app`);
     await page.getByTestId("get-app-soon").waitFor();
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=data`);
     await page.getByTestId("account-app-soon").waitFor();
     console.log("✓ Get the app: Coming soon on More, on its page and in Settings while no store link is set");
 
@@ -73,7 +73,7 @@ async function main() {
     console.log("✓ the app records the phone once per install; the token comes later; bad input is refused");
     await page.goto(`${base}/more`);
     must((await page.locator('[data-href="/get-the-app"], a[href="/get-the-app"]').count()) === 0, "Get the app is gone from More once the app was opened");
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=data`);
     must((await page.getByTestId("account-app-have").innerText()).includes("iPhone"), "Settings says which phone has the app");
     console.log("✓ Get the app: gone from More once the app was opened; Settings says it's on iPhone");
 

@@ -1999,7 +1999,7 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
         </div>
       ) : null}
       <p className="mb-3 text-sm text-ink-2" data-testid="deck-honesty">
-        A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in <span data-testid="deck-kit-name">{deck.kitApplied ? deck.kit.name : <>the house starter kit, until a kit of your own is saved: <Link href="/settings#brand-kit" className="underline" data-testid="deck-kit-link">Set your brand kit (5 min)</Link></>}</span>.
+        A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in <span data-testid="deck-kit-name">{deck.kitApplied ? deck.kit.name : <>the house starter kit, until a kit of your own is saved: <Link href="/settings?tab=brand#brand-kit" className="underline" data-testid="deck-kit-link">Set your brand kit (5 min)</Link></>}</span>.
       </p>
       {deck.openingOmitted.length ? (
         <p className="mb-2 text-sm text-ink-2" data-testid="deck-opening-omitted">
@@ -2272,7 +2272,7 @@ function ShotListCard({ webinarId, resolved, hasLogo }: { webinarId: string; res
         ))}
         <div className="label">Your logo</div>
         <p className={`rounded-lg p-2 text-sm ${list.logo ? "bg-good-soft" : "bg-surface-2"}`} data-testid="shot-item-logo" data-state={list.logo ? "gathered" : "missing"}>
-          {list.logo ? "In: on the cover and in the footer bar." : <>Add one on <Link href="/settings#brand-kit" className="underline">Settings</Link> (the brand kit) or <Link href="/images" className="underline">Images</Link>; without it the brand line stands as type.</>}
+          {list.logo ? "In: on the cover and in the footer bar." : <>Add one on <Link href="/settings?tab=brand#brand-kit" className="underline">Settings</Link> (the brand kit) or <Link href="/images" className="underline">Images</Link>; without it the brand line stands as type.</>}
         </p>
       </div>
     </Card>

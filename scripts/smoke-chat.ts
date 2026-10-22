@@ -122,7 +122,7 @@ async function main() {
     if (!(await page.locator('script[src="https://communityloyalty.io/js/widget/walkwidget1/float.js"]').count())) throw new Error("the widget script comes from the card's widget id");
     const html = await page.content();
     if (html.includes(SECRET)) throw new Error("the secret never reaches the page");
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     if (!(await page.locator('[data-testid="linked-chats-empty"]').count())) throw new Error("Linked chats starts empty");
     // The identity call (rev 270): the SDK's host is unreachable here, so a stand-in $chatbot records what setUser gets.
     // Loaded before the page's script mounts: called at once. Not loaded: nothing until the SDK's own ready event.
@@ -269,7 +269,7 @@ async function main() {
     if (!(await page.locator('[data-testid="link-chat-error"]').count())) throw new Error("a failed post shows its reason");
     if (hits.length) throw new Error("nothing recorded while the webhook was down");
     await submit(page, '[data-testid="link-chat-confirm"]');
-    await page.waitForURL(/\/settings\?chat=linked/);
+    await page.waitForURL(/\/settings\?tab=connections&chat=linked/);
     const link = hits.find((h) => h.event === "link");
     if (!link || link.body.email !== "client@demo.helixos.app" || link.body.user_ns !== "walk-ns-1" || link.body.channel !== "messenger" || link.body.name !== client.name) throw new Error(`the bot got link with the member's own email: ${JSON.stringify(link)}`);
     if (Object.keys(link.body).sort().join(",") !== "at,channel,email,event,name,user_ns") throw new Error(`link carries only what was promised: ${Object.keys(link.body)}`);
@@ -298,9 +298,9 @@ async function main() {
     console.log("✓ the link flow: header-only secret, chat channels only, a down webhook keeps the link, then link posted with the member's email; used, expired and the limit refused");
 
     // ── 5. Unlink. ──
-    await page.goto(`${base}/settings#linked-chats`);
+    await page.goto(`${base}/settings?tab=connections#linked-chats`);
     await submit(page, '[data-testid="chat-unlink"]');
-    await page.waitForURL(/\/settings\?chat=unlinked/);
+    await page.waitForURL(/\/settings\?tab=connections&chat=unlinked/);
     const un = hits.find((h) => h.event === "unlink");
     if (!un || un.body.user_ns !== "walk-ns-1" || un.body.email !== "client@demo.helixos.app") throw new Error(`the bot got unlink: ${JSON.stringify(un)}`);
     if (!(await page.locator('[data-testid="linked-chats-empty"]').count())) throw new Error("the list is empty after unlink");
@@ -313,8 +313,10 @@ async function main() {
       for (let i = 0; i < 40 && progressHits().length < n; i++) await page.waitForTimeout(250);
     };
     await login(page, "As a client");
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     if ((await page.locator('[data-testid="chat-share"]').getAttribute("data-on")) !== "1") throw new Error("progress sharing is on by default");
+    // The goal card sits on the You tab, the one Settings opens on.
+    await page.goto(`${base}/settings`);
     const goalForm = page.locator('form:has(input[name="target"])');
     await goalForm.locator('input[name="target"]').fill("7500");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), goalForm.locator("button").last().click()]);
@@ -330,7 +332,7 @@ async function main() {
     await page.waitForTimeout(1500);
     if (progressHits().length !== 1) throw new Error("a second change inside the hour is not pushed");
     // The switch off: nothing, even after the hour.
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await page.locator('[data-testid="chat-share-toggle"]').uncheck();
     await submit(page, '[data-testid="chat-share-save"]');
     await page.waitForURL(/chat=share-off/);

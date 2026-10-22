@@ -139,7 +139,7 @@ async function main() {
     if (call.result?.isError || !text.includes(client.name) || !text.includes("(client)")) throw new Error(`whoami answers as the member: ${JSON.stringify(call)}`);
     const audit = await db.query.mcpCalls.findMany({ where: eq(schema.mcpCalls.userId, client.id) });
     if (!audit.some((a) => a.tool === "whoami" && a.ok)) throw new Error("the call is in the audit log");
-    await page.goto(`${base}/settings?at=${Date.now()}#connected-apps`);
+    await page.goto(`${base}/settings?tab=connections&at=${Date.now()}#connected-apps`);
     const row = page.locator('[data-testid="connected-app"]');
     if ((await row.count()) !== 1 || (await row.getAttribute("data-scopes")) !== "today tasks" || !(await row.innerText()).includes("whoami")) throw new Error(`Settings lists the app with its scopes and last tool: ${await row.count()}`);
     console.log("✓ over the MCP route: initialize, the grant's tools (no dots), whoami as the member, the audit row, the app in Settings");
@@ -228,14 +228,14 @@ async function main() {
     r = await form({ grant_type: "refresh_token", refresh_token: tok.refresh_token, client_id: reg.client_id });
     if (r.status !== 400) throw new Error("the old refresh token, used again, is refused");
     if ((await initialize(tok2.access_token)).status !== 401) throw new Error("a refresh token seen twice ends the whole grant");
-    await page.goto(`${base}/settings?at=${Date.now()}#connected-apps`);
+    await page.goto(`${base}/settings?tab=connections&at=${Date.now()}#connected-apps`);
     if (await page.locator('[data-testid="connected-app"]').count()) throw new Error("the revoked grant is off the list");
     // A new grant, cut from Settings.
     const k3 = pkce();
     const c3 = await consent(page, reg.client_id, "today", ["today"], k3.challenge);
     const tok3 = (await (await form({ grant_type: "authorization_code", code: c3.code, code_verifier: k3.verifier, client_id: reg.client_id, redirect_uri: CALLBACK })).json()) as typeof tok;
     if ((await initialize(tok3.access_token)).status !== 200) throw new Error("the third grant works");
-    await page.goto(`${base}/settings?at=${Date.now()}#connected-apps`);
+    await page.goto(`${base}/settings?tab=connections&at=${Date.now()}#connected-apps`);
     await submit(page, '[data-testid="app-disconnect"]');
     await page.waitForURL(/apps=disconnected/);
     if ((await initialize(tok3.access_token)).status !== 401) throw new Error("Disconnect ends access at once");
@@ -252,7 +252,7 @@ async function main() {
     if ((await initialize(tok4.access_token)).status !== 200) throw new Error("the client's grant works while open");
     await logout(page);
     await login(page, "As the coach");
-    await page.goto(`${base}/settings?at=${Date.now()}#connected-apps`);
+    await page.goto(`${base}/settings?tab=connections&at=${Date.now()}#connected-apps`);
     // The page streams and then lands its hash: let it settle before the click, or the click lands on a moving box.
     await page.locator('[data-testid="apps-open-toggle"]').waitFor({ timeout: 20000 });
     await page.waitForLoadState("networkidle");
@@ -277,7 +277,7 @@ async function main() {
     await page.goto(u.toString());
     if ((await page.locator('[data-testid="consent-refused"]').getAttribute("data-state")) !== "switched") throw new Error("a coach switched into a client can't connect for them");
     await submit(page, '[data-testid="switch-back"]');
-    await page.goto(`${base}/settings?at=${Date.now()}#connected-apps`);
+    await page.goto(`${base}/settings?tab=connections&at=${Date.now()}#connected-apps`);
     // Settings streams in after navigation; a tick before it settles is reset when the form re-renders (cold server).
     await page.waitForLoadState("networkidle");
     await page.locator('[data-testid="apps-open-toggle"]').check();

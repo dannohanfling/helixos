@@ -467,7 +467,7 @@ async function main() {
       const maya2 = await mem("client@demo.helixos.app");
       if (maya2.headshotSource !== "upload" || maya2.headshotAirtableId || maya2.headshotUrl === maya1.headshotUrl) throw new Error("her upload replaces the import");
       // The badge on her ladder graphics uses the photo only when she says so (rule 6: a photo in HelixOS is not consent to publish).
-      await page.goto(`${base}/settings`);
+      await page.goto(`${base}/settings?tab=brand`);
       await page.waitForLoadState("networkidle");
       if (await page.locator('[data-testid="brand-use-headshot"]').isChecked()) throw new Error("the photo is not the badge until she ticks it");
       await page.fill('[data-testid="brand-form"] input[name="name"]', "Maya's kit");

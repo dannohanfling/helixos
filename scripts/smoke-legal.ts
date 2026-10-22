@@ -132,7 +132,7 @@ async function main() {
     const footer = p1.locator('[data-testid="legal-footer"]');
     must((await footer.count()) === 1, "the footer under Today");
     for (const href of ["/privacy", "/terms", "/support", "/community-guidelines"]) must((await footer.locator(`a[href="${href}"]`).count()) === 1, `the footer links ${href}`);
-    await p1.goto(`${base}/settings`);
+    await p1.goto(`${base}/settings?tab=data`);
     const account = p1.locator("#account");
     for (const href of ["/privacy", "/terms", "/support", "/api/export?format=json", "/settings/delete-humanos", "/settings/delete-account"]) must((await account.locator(`a[href="${href}"]`).count()) === 1, `Settings → Account links ${href}`);
     console.log("✓ signed in: the footer under every page with its four links; Settings → Account with Privacy, Terms, Support, Download my data, Delete my HumanOS data and Delete my account");
@@ -311,7 +311,7 @@ async function main() {
     must((await bodyCount()) === before, "the wrong email deletes nothing");
     await p3.fill('[data-testid="delete-humanos-email"]', jordan.email.toUpperCase());
     await p3.click('[data-testid="delete-humanos-submit"]');
-    await p3.waitForURL(/\/settings\?humanos=deleted/);
+    await p3.waitForURL(/\/settings\?(tab=programs&)?humanos=deleted/);
     must((await p3.locator('[data-testid="humanos-deleted"]').count()) === 1, "Settings says the HumanOS data was deleted");
     must((await bodyCount()) === 0, "every HumanOS table is empty for the member");
     must(Boolean(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, jm.id) })), "the membership stays");

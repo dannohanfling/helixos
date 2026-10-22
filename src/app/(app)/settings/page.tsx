@@ -22,7 +22,9 @@ import { ADD_PERMISSION } from "@/lib/engine/post-picture";
 import { saveMfDomainsAction } from "@/lib/actions/magic-funnel";
 import { mfAvailable } from "@/lib/mf/data";
 import { BotConnectionCard } from "@/components/bot-connection-card";
-import { Card, Field, PageHeader } from "@/components/ui";
+import { Card, Field, PageHeader, Tabs } from "@/components/ui";
+import { SettingsHashTab } from "@/components/settings-hash-tab";
+import { tabFor, tabsFor, type SettingsTab } from "@/lib/engine/settings-tabs";
 import { GhlConnect } from "@/components/ghl-connect";
 import { PLATFORMS } from "@/lib/platforms";
 import { ChangePasswordForm } from "@/components/change-password-form";
@@ -79,7 +81,7 @@ import { hasAppFor } from "@/lib/queries/app-devices";
 export const metadata = { title: "Settings" };
 
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string; botDraft?: string; draftNote?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string; botDraft?: string; draftNote?: string; tab?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const appHas = v.team ? null : await hasAppFor(v.membership.id);
   // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
@@ -94,7 +96,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField, botDraft, draftNote } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField, botDraft, draftNote, tab: tabParam } = await searchParams;
+  // Settings in tabs (H-164 §16): one tab at a time, You first; an old #anchor finds its tab (SettingsHashTab).
+  const tab = tabFor(tabParam, v.role);
+  const at = (t: SettingsTab) => tab === t;
   // Claude's draft of what the bot says (H-184): the one waiting, the one being edited in the form, and what happened to drafts here.
   const meBot = { workspaceId: v.workspace.id, userId: v.user.id };
   const [botWaiting, botChanges] = v.team ? [[], []] : await Promise.all([pendingDrafts(meBot, "bot_profile", v.membership.id), changesFor(meBot, "bot_profile", v.membership.id)]);
@@ -245,7 +250,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <ScrollToHash />
+      <SettingsHashTab current={tab} />
       <PageHeader title="Settings" />
+      <div data-testid="settings-tabs" data-tab={tab}>
+        <Tabs current={tab} items={tabsFor(v.role).map((t) => ({ key: t.key, label: t.label, href: `/settings?tab=${t.key}` }))} />
+      </div>
+      {at("connections") ? (<>
       <Card id="publishing" className="mb-4 scroll-mt-20" title={GHL_COPY.title} action={<Link href="/connect-tools" className="text-xs text-ink-2 hover:underline" data-testid="settings-connect-tools">Connect your tools, step by step →</Link>}>
         {conn?.mediaScopeMissingAt ? (
           <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" role="status" data-testid="ghl-add-permission">
@@ -263,13 +273,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <div className="mb-4">
         <FathomKeyCard v={v} notice={fathomNotice} />
       </div>
+      </>) : null}
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        {at("you") ? (<>
         <Card className="min-w-0" title="Password">
           <ChangePasswordForm />
         </Card>
         <Card id="login-email" className="min-w-0" title="Login email">
           <ChangeEmailForm current={v.user.email} />
         </Card>
+        </>) : null}
+        {at("data") ? (<>
         {/* Account (H-331): the pages the app stores point at, the export, and the two deletions a member can run alone. */}
         <Card id="account" className="min-w-0" title="Account">
           <ul className="space-y-2 text-sm" data-testid="account-links">
@@ -295,6 +309,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             )}
           </ul>
         </Card>
+        </>) : null}
+        {at("you") ? (<>
         {v.team ? null : (
           <Card id="photo" className="min-w-0" title="Your photo" action={<span className="text-xs text-ink-3" data-testid="photo-source">{v.membership.headshotSource === "upload" ? "your own" : v.membership.headshotSource === "import" ? "from your coach's records" : v.membership.headshotSource === "removed" ? "removed" : "none yet"}</span>}>
             {photoNotice === "removed" ? <p className="mb-2 rounded-lg bg-surface-2 p-2 text-sm" role="status" data-testid="photo-removed">Removed. Your coach&apos;s import won&apos;t put it back.</p> : null}
@@ -481,6 +497,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </Link>
           </p>
         </Card>
+        </>) : null}
+        {at("bot") ? (<>
         <Card id="your-bot" title="What your bot says about your business">
           <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/my-bot" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>
           {draftNote ? <p className="mb-3 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[draftNote] ?? draftNote}</p> : null}
@@ -560,6 +578,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           )}
         </Card>
         {v.switchedInto || v.team ? null : <BotConnectionCard workspaceId={v.workspace.id} userId={v.user.id} membershipId={v.membership.id} tz={v.membership.timezone ?? v.workspace.timezone} />}
+        </>) : null}
+        {at("programs") ? (<>
         {v.switchedInto || v.team || !mfAvailable(v.membership) ? null : (
           <Card id="magic-funnel" className="scroll-mt-20" title="🪄 Magic funnel">
             {mfError ? (
@@ -616,6 +636,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             ))}
           </ol>
         </Card>
+        </>) : null}
+        {at("data") ? (<>
         <Card title="Your data">
           <p className="text-sm text-ink-2">Everything you&apos;ve put into HelixOS belongs to you. Download it any time; it&apos;s the same file you&apos;d get when you leave.</p>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
@@ -635,8 +657,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {storage.blocked ? <p className="mt-2 text-xs text-danger" data-testid="storage-blocked">Full. New attachments are refused until something is deleted.</p> : null}
           <p className="mt-2 text-xs text-ink-3">Attachments on your proofs, in private storage.</p>
         </Card>
+        </>) : null}
+        {at("you") ? (<>
         {setupList}
         {goalCard}
+        </>) : null}
+        {at("programs") ? (<>
         {leaderboard ? (
           <Card id="leaderboard" title="Loyalty leaderboard">
             <p className="text-sm" data-testid="leaderboard-state">
@@ -656,6 +682,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </p>
           </Card>
         ) : null}
+        </>) : null}
+        {at("connections") ? (<>
         <Card id="connected-apps" title="Connected apps" action={<Link href="/connect" className="text-xs text-ink-2 hover:underline" data-testid="settings-connect-claude">Connect to Claude, step by step →</Link>}>
           {/* The MCP server (rev 224): the apps this member let act as them, and the way to cut each one. */}
           {appsNote ? <p className="mb-2 text-sm text-good" data-testid="apps-note">{appsNote}</p> : null}
@@ -699,9 +727,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p className="text-sm text-ink-2" data-testid="connected-apps-empty">None yet. <Link href="/connect" className="underline">Connect HelixOS to Claude</Link> to read and write your own HelixOS from a chat.</p>
           )}
         </Card>
+        </>) : null}
+        {at("programs") ? (<>
         <Card id="forum" className="scroll-mt-20" title="🏛️ The Forum" action={<Link href="/forum" className="text-xs text-ink-2 hover:underline">Your Forum →</Link>}>
           <ForumWebhookCard url={`${appBase()}/api/forum/report`} made={forumHook.webhookCreatedAt ? formatDateTime(forumHook.webhookCreatedAt, v.tz, { zone: true }) : null} usedAt={forumHook.webhookUsedAt ? formatDateTime(forumHook.webhookUsedAt, v.tz, { zone: true }) : null} canChange={!v.switchedInto && !v.team} />
         </Card>
+        </>) : null}
+        {at("connections") ? (<>
         <Card id="linked-chats" title="Your coach's assistant">
           {/* Community Loyalty chat (rev 241): the member's own switch on progress pushes, then the chats they confirmed as theirs. */}
           {chatNote ? <p className="mb-2 text-sm text-good" data-testid="chat-note">{chatNote}</p> : null}
@@ -734,6 +766,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p className="text-sm text-ink-2" data-testid="linked-chats-empty">None yet. When your coach&apos;s assistant sends you a &quot;confirm it&apos;s you&quot; link in a chat, confirming it lists that chat here.</p>
           )}
         </Card>
+        </>) : null}
+        {at("data") ? (<>
         {v.role === "client" ? (
           <Card id="your-coach" title="Your coach">
             {/* Switch to client (rev 216): the member's own choice, and what their coach changed while working in here. */}
@@ -751,6 +785,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {changesList}
           </Card>
         ) : null}
+        </>) : null}
+        {at("brand") ? (<>
         <Card id="team" title="Team" action={seats ? <span className="text-xs text-ink-3" data-testid="team-seats">{seatsLine(seats)}</span> : null}>
           <p className="mb-3 text-sm text-ink-2">Invite a VA or a team member into your HelixOS with their own login. They can work in your content, DMs, tasks, webinars and contacts, and nothing else: not your day, your HumanOS, your connections, your billing or this team. Every change they make is shown here as theirs.</p>
           {teamNote ? <p className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm" role="status" data-testid="team-note">{teamNote}</p> : null}
@@ -964,11 +1000,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </form>
           ) : null}
         </Card>
+        </>) : null}
+        {at("coach") ? (<>
         {v.role === "coach" ? (
           <>
             {/* Settings → Calls (H-820, plan H-828): the weekly calls members see on Calls and Today. */}
             <CallsSettingsCard rows={callRows} workspace={v.workspace} notice={callsNotice} error={callsError} openCall={callsOpen} field={refusedField} />
-            <Card title="Workspace">
+            <Card id="workspace" title="Workspace">
               <form action={updateWorkspaceAction} className="space-y-3">
                 <Field label="Name">
                   <input className="field" name="name" defaultValue={v.workspace.name} />
@@ -1007,7 +1045,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </SubmitButton>
               </form>
             </Card>
-            <Card title="Invite links">
+            <Card id="invites" title="Invite links">
               <div className="space-y-3 text-sm">
                 <div>
                   <div className="label">Clients</div>
@@ -1042,6 +1080,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </Card>
           </>
         ) : null}
+        </>) : null}
       </div>
       {/* The version this deploy is (rev 193), linking to What's new. */}
       <p className="mt-6 text-center text-xs text-ink-3">

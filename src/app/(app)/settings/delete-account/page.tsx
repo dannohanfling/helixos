@@ -56,7 +56,7 @@ export default async function DeleteAccountPage({ searchParams }: { searchParams
                   <SubmitButton className="btn btn-danger" pendingText="Deleting…" data-testid="delete-account-submit">
                     Delete my account
                   </SubmitButton>
-                  <Link href="/settings#account" className="text-sm underline">
+                  <Link href="/settings?tab=data#account" className="text-sm underline">
                     Keep my account
                   </Link>
                 </div>

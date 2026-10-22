@@ -119,7 +119,7 @@ async function main() {
     // The card (rev 333): Connect opens the steps with the token and the Location ID; the user id is asked once connected, or
     // changed through Reconnect, which also takes a new token.
     const connect = async (token: string, ghlUserId: string) => {
-      await page.goto(`${base}/settings`);
+      await page.goto(`${base}/settings?tab=connections`);
       if (await page.locator('[data-testid="ghl-connected"]').count()) {
         await page.locator('[data-testid="ghl-reconnect"] > summary').click();
         await pickUser(page, '[data-testid="ghl-reconnect-user"]', ghlUserId);

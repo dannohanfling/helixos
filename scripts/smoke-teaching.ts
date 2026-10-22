@@ -35,7 +35,7 @@ async function logout(page: Page) {
   await page.waitForURL(/\/login/);
 }
 async function connectAi(page: Page) {
-  await page.goto(`${base}/settings`);
+  await page.goto(`${base}/settings?tab=connections`);
   await page.selectOption('select[name="provider"]', "anthropic");
   await page.fill('input[name="key"]', "sk-ant-good");
   await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');

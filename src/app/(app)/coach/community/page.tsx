@@ -105,7 +105,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
       <Card id="setup" title="Setup" className="mb-5">
         {!conn ? (
           <p className="text-sm text-ink-2" data-testid="community-no-connection">
-            Connect your GoHighLevel sub-account first, on <Link className="underline" href="/settings#publishing">Settings → Publishing</Link>. The posts go out through your Social Planner, from your team account.
+            Connect your GoHighLevel sub-account first, on <Link className="underline" href="/settings?tab=connections#publishing">Settings → Publishing</Link>. The posts go out through your Social Planner, from your team account.
           </p>
         ) : (
           <>

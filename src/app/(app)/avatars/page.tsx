@@ -112,7 +112,7 @@ export default async function AvatarsPage({ searchParams }: { searchParams: Prom
             </form>
           ) : (
             <p className="text-sm text-ink-3" data-testid="interview-no-key">
-              {NO_KEY} <Link href="/settings#ai" className="underline">Settings</Link>
+              {NO_KEY} <Link href="/settings?tab=connections#ai" className="underline">Settings</Link>
             </p>
           )}
           {going.length ? (
