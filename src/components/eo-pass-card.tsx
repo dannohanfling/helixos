@@ -14,7 +14,7 @@ import { passWired } from "@/lib/integrations";
  * it (once, on their own press), when the program is ready and, for clients, once the coach has opened it. With one, "Add to
  * wallet" and, on a computer, a QR code of the same link to scan with a phone.
  */
-export async function EoPassCard({ v, ready, error }: { v: Viewer; ready?: boolean; error?: string }) {
+export async function EoPassCard({ v, ready, added, error }: { v: Viewer; ready?: boolean; added?: boolean; error?: string }) {
   const m = v.membership;
   const offer = passOffer({ role: m.role, hasPass: Boolean(m.eoCustomerId || m.eoPassUrl), installed: Boolean(m.eoPassInstalledAt) }, programState(await ownProgram(m.workspaceId)));
   const qr = m.eoPassUrl ? await QRCode.toString(m.eoPassUrl, { type: "svg", margin: 1, width: 132, color: { dark: "#030100", light: "#ffffff" } }) : null;
@@ -33,6 +33,11 @@ export async function EoPassCard({ v, ready, error }: { v: Viewer; ready?: boole
           {ready ? (
             <p className="mt-1 text-xs text-good" data-testid="eo-pass-made">
               Your pass is made. Add it to your wallet below.
+            </p>
+          ) : null}
+          {added && m.eoPassInstalledAt ? (
+            <p className="mt-1 text-xs text-good" data-testid="eo-pass-added">
+              Pass added ✓ It&apos;s in your wallet now, and messages from your coach arrive on it.
             </p>
           ) : null}
           {error ? (

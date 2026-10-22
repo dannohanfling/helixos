@@ -20,6 +20,8 @@ let created = 0;
 /** The live Evolve Omega template's placeholders (H-798, H-817): a create-pass field outside these is refused, as eLoyalty does. */
 const TEMPLATE_PLACEHOLDERS = ["First_Name", "Last_Name", "Email", "MEMBER_ID", "Push_Notification", "Points", "Tier", "Current_Offer"];
 const fields = new Map<string, string>();
+/** The name each created pass shows, oldest first (H-1640). */
+const passNamesShown: string[] = [];
 const balances = new Map(CUSTOMERS.map((c) => [c.id, { balance: c.points_balance, earned: c.points_earned }]));
 const moved: { id: string; type: string; points: number; reason: string; created_at: string }[] = [];
 const now = () => new Date().toISOString();
@@ -46,7 +48,7 @@ createServer((req, res) => {
     forced = Number(url.searchParams.get("status") ?? 200);
     return json(200, { forced });
   }
-  if (url.pathname === "/__calls") return json(200, { calls, writes, fields: Object.fromEntries(fields), balances: Object.fromEntries(balances) });
+  if (url.pathname === "/__calls") return json(200, { calls, writes, fields: Object.fromEntries(fields), balances: Object.fromEntries(balances), passNamesShown });
   const move = req.method === "POST" ? url.pathname.match(/^\/api\/public\/admin\/points\/(add|deduct)$/) : null;
   if (req.method !== "GET") writes.push(`${req.method} ${url.pathname}`);
   if (move) {
@@ -80,6 +82,9 @@ createServer((req, res) => {
       if (!b.Email || !b.MEMBER_ID) return json(400, { error: "Email and MEMBER_ID are required" });
       created += 1;
       balances.set(`cus_eo_${created}`, { balance: 0, earned: 0 });
+      // What the pass shows as its name (H-1640): an empty Last_Name shows the template's prompt, as seen on the live pass.
+      const last = typeof b.Last_Name === "string" && !b.Last_Name.trim() ? "Enter Your Last Name Here" : String(b.Last_Name ?? "");
+      passNamesShown.push([String(b.First_Name ?? ""), last].filter(Boolean).join(" "));
       json(200, { customerId: `cus_eo_${created}`, serialNumber: `SER-eo-${created}`, passTypeIdentifier: "pass.com.evolveomega", apple: { downloadUrl: `https://pass.example/eo-${created}` } });
     });
     return;

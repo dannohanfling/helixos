@@ -367,6 +367,16 @@ async function main() {
     must((await page.locator('[data-testid="eo-pass-add"]').getAttribute("href")) === "https://pass.example/eo-1" && (await page.locator('[data-testid="eo-pass-qr"] svg').count()) === 1, "the card offers Add to wallet and its QR code");
     must((await page.locator('[data-testid="eo-pass-get"]').count()) === 0, "no second Get my pass");
     must(JSON.stringify((await mockCalls()).writes.slice(writes3)) === JSON.stringify([`POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`]), "one create, by the program's template");
+    // H-1640: the pass never shows the template's name prompt; with the sync off, no opening points are queued at create.
+    const shown = ((await (await fetch(`${HOST}/__calls`)).json()) as { passNamesShown: string[] }).passNamesShown;
+    must(shown.length === 1 && shown[0].trim().length > 0 && !/enter your|last name/i.test(shown[0]), `the pass shows a real name, never the template's prompt: "${shown[0]}"`);
+    must((await db.query.loyaltyPointsMoves.findMany({ where: eq(schema.loyaltyPointsMoves.source, `sync-open:${coachM.id}`) })).length === 0, "with the sync off, making a pass queues no points");
+    // The redirect after Add (H-1641): landing on /rewards/pass-added marks the pass added and shows "Pass added".
+    await page.goto(`${base}/rewards/pass-added`);
+    await page.locator('[data-testid="eo-pass-added"]').waitFor({ timeout: 15000 });
+    must(Boolean((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.eoPassInstalledAt), "landing after Add marks the pass added");
+    must((await page.locator('form:has-text("I added it")').count()) === 0, "no I added it once the pass is marked added");
+    console.log("✓ pass: a real name only, nothing queued with the sync off, and landing after Add marks it added");
     // Step D (H-734): one Latest Message on the coach's own pass, only when Send is pressed, into Push_Notification once.
     const writes4 = (await mockCalls()).writes.length;
     await page.goto(`${base}/coach`);

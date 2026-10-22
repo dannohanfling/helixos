@@ -10,6 +10,8 @@ import { open } from "@/lib/crypto";
 import { address, parseCreatedPass } from "@/lib/engine/eloyalty";
 import { type PassProgram, createFailureWords, passNames, refusalReason, safePassUrl } from "@/lib/engine/eo-pass";
 import { postJson } from "@/lib/points-outbox";
+import { queueMemberMoves } from "@/lib/points-sync";
+import { type SyncMode, modeReaches } from "@/lib/engine/points-sync";
 
 /** The coach's own program in this workspace: the feed on a coach's membership that has a key and a template. */
 export async function ownProgram(workspaceId: string): Promise<schema.LeaderboardFeed | null> {
@@ -53,6 +55,12 @@ export async function createMemberPass(m: schema.Membership, user: { name: strin
     .set({ eoCustomerId: parsed.pass.customerId, eoPassSerial: parsed.pass.serial, eoPassTypeId: parsed.pass.passTypeId, eoPassUrl: safePassUrl(parsed.pass.downloadUrl) })
     .where(and(eq(schema.memberships.id, m.id), isNull(schema.memberships.eoCustomerId)));
   if ((res.rowsAffected ?? 0) === 0) console.log("[eo-pass] a second pass was created for a member who already had one: look in eLoyalty");
+  else if (modeReaches(feed.syncMode as SyncMode, m.role === "coach")) {
+    // The opening add (H-1640): a new pass starts at 0, so when the sync reaches this member, their HelixOS total is queued at
+    // once as one add on the outbox, instead of waiting for the next sync run. Nothing is sent from here; the outbox sends it.
+    const queued = await queueMemberMoves(feed, { ...m, eoCustomerId: parsed.pass.customerId, eoPassSerial: parsed.pass.serial, eoPassTypeId: parsed.pass.passTypeId });
+    console.log(`[eo-pass] opening points ${queued ? "queued" : "had nothing to queue"}`);
+  }
   console.log(`[eo-pass] pass created (${safePassUrl(parsed.pass.downloadUrl) ? "with" : "without"} a wallet link)`);
   return { ok: true };
 }
