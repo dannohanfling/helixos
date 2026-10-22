@@ -1,4 +1,5 @@
 /** Applies pending migrations to DATABASE_URL. Run before `next start` on a new deploy: `npm run db:migrate`. Idempotent. */
+import { syncLibraryTasks, type LibraryTaskRow } from "@/db/library-sync";
 import { sql } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "@/db";
 import stages from "@/data/seed/stages.json";
@@ -52,8 +53,9 @@ async function syncLibrary(): Promise<void> {
     await db
       .insert(schema.pathwayStages)
       .values({ ...s, tagline: s.tagline ?? null, description: s.description ?? null, entryCriteria: s.entryCriteria ?? null, exitCriteria: s.exitCriteria ?? null })
-      .onConflictDoUpdate({ target: schema.pathwayStages.key, set: { ...s } });
+      .onConflictDoUpdate({ target: schema.pathwayStages.key, set: { ...s, key: undefined } });
   }
+  const taskRows: LibraryTaskRow[] = [];
   for (const t of library) {
     const row = {
       key: t.key,
@@ -69,8 +71,9 @@ async function syncLibrary(): Promise<void> {
       unlocks: t.unlocks ?? null,
       trainingUrl: t.trainingUrl ?? null,
     };
-    await db.insert(schema.libraryTasks).values(row).onConflictDoUpdate({ target: schema.libraryTasks.key, set: row });
+    taskRows.push(row);
   }
+  await syncLibraryTasks(taskRows);
   // Socrates Domain's question library: keyed by the seed id, so an update reaches every workspace; a client's own questions have no key and are never touched.
   // The Evidence starter shelf: Danno's nine studies, every one with a DOI resolved through OpenAlex, keyed by seed id. A client's own rows live elsewhere.
   for (const s of researchSeed) {

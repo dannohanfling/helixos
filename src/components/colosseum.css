@@ -73,7 +73,7 @@
 .co-wins { list-style: none; margin: 10px 0 0; padding: 0; }
 .co-win { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--co-line); font-size: 15px; }
 .co-win > form { grid-column: 2; }
-.co-kindtag { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--co-gold-text); }
+.co-kindtag { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--co-gold-text); white-space: nowrap; }
 .co-wintext { min-width: 0; overflow-wrap: anywhere; }
 .co-wintext b { font-family: "Cormorant Garamond", Georgia, serif; font-size: 18px; }
 .co-when { font-size: 12px; color: var(--co-muted); white-space: nowrap; }
@@ -111,11 +111,17 @@
   .co-chg { display: none; }
   .co-share { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .co-share .field, .co-share .co-btn { grid-column: span 2; }
-  .co-win { grid-template-columns: minmax(0, 1fr); }
-  .co-win > form { grid-column: 1; }
-  .co-win-mod { grid-template-columns: minmax(0, 1fr) 44px; }
-  .co-win-mod .co-kindtag, .co-win-mod .co-wintext, .co-win-mod .co-when { grid-column: 1; }
-  .co-win-mod .co-dots { grid-column: 2; grid-row: 1; }
+  /* A win on a phone (H-1635): the label on its own line, then the name and the win, then the date on the left with
+     Applaud and its count on the right. Every piece is placed, so a long win never squeezes a column to nothing. */
+  .co-win { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .co-win > .co-kindtag, .co-win > .co-wintext, .co-win > form { grid-column: 1 / -1; }
+  .co-win > .co-when { grid-column: 1; }
+  .co-win > .co-applause { grid-column: 2; justify-content: flex-end; }
+  .co-win-mod { grid-template-columns: minmax(0, 1fr) auto 44px; }
+  .co-win-mod > .co-kindtag { grid-column: 1 / 3; grid-row: 1; }
+  .co-win-mod > .co-dots { grid-column: 3; grid-row: 1; }
+  .co-win-mod > .co-wintext, .co-win-mod > form { grid-column: 1 / -1; }
+  .co-win-mod > .co-applause { grid-column: 2 / -1; }
 }
 @media (max-width: 560px) {
   .co-stats dd { font-size: 24px; }

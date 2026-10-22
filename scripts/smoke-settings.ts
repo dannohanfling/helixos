@@ -66,6 +66,20 @@ async function main() {
     await page.locator("#community-loyalty").waitFor({ timeout: 20000 });
     if (await page.locator("#you").count()) throw new Error("Connections shows only its own cards");
     console.log("✓ Settings in six tabs, You first; /settings#brand-kit opens Brand and team; a tab shows only its cards");
+    // H-1635: at 360 the tab bar scrolls sideways; no tab overlaps the next, and the open tab is scrolled into view.
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto(`${base}/settings?tab=data&w=${++visit}`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(300);
+    const bar = await page.locator('[data-testid="settings-tabs"] > div').evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      const tabs = [...el.querySelectorAll("a")].map((a) => ({ left: a.getBoundingClientRect().left, right: a.getBoundingClientRect().right, fits: a.scrollWidth <= a.clientWidth + 1, on: a.getAttribute("aria-current") === "page" }));
+      return { tabs, barLeft: b.left, barRight: b.right, page: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1 };
+    });
+    if (!bar.tabs.every((t, i) => t.fits && (i === 0 || bar.tabs[i - 1].right <= t.left + 0.5))) throw new Error(`at 360 the Settings tabs overlap: ${JSON.stringify(bar.tabs)}`);
+    const on = bar.tabs.find((t) => t.on);
+    if (!on || on.left < bar.barLeft - 1 || on.right > bar.barRight + 1 || !bar.page) throw new Error(`at 360 the open tab shows and the page doesn't scroll sideways: ${JSON.stringify(bar)}`);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    console.log("✓ at 360 the tabs scroll sideways without overlapping, with the open tab in view");
     await page.goto(settings("you"), { waitUntil: "networkidle" });
     const btn = page.locator('[data-testid="emoji-button"]');
     const grid = page.locator('[data-testid="emoji-grid"]');

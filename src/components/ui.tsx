@@ -1,5 +1,6 @@
 import { PendingLink } from "@/components/pending-link";
 import Link from "next/link";
+import { TabIntoView } from "@/components/tab-into-view";
 import type { ReactNode } from "react";
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: ReactNode; action?: ReactNode }) {
@@ -75,12 +76,14 @@ export function LinkButton({ href, children, variant = "ghost", size = "" }: { h
 
 export function Tabs({ items, current }: { items: { key: string; label: string; href: string; count?: number }[]; current: string }) {
   return (
-    <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-surface-2 p-1 text-sm">
+    // A phone scrolls the bar sideways (H-1635): each tab keeps its own width, never squeezed into its neighbour.
+    <div className="relative mb-4 flex gap-1 overflow-x-auto overscroll-x-contain rounded-xl bg-surface-2 p-1 text-sm">
       {items.map((it) => (
         <Link
           key={it.key}
           href={it.href}
-          className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition ${
+          aria-current={current === it.key ? "page" : undefined}
+          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition ${
             current === it.key ? "bg-surface shadow-sm" : "text-ink-2 hover:text-ink"
           }`}
         >
@@ -88,6 +91,7 @@ export function Tabs({ items, current }: { items: { key: string; label: string; 
           {typeof it.count === "number" ? <span className="badge">{it.count}</span> : null}
         </Link>
       ))}
+      <TabIntoView />
     </div>
   );
 }

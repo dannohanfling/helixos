@@ -254,6 +254,18 @@ async function main() {
     await page.locator('[data-testid="share-win-ok"]').waitFor({ timeout: 10000 });
     await page.goto(`${base}/colosseum?tab=wins`, { waitUntil: "networkidle" });
     must((await page.locator('[data-testid="win"]').first().innerText()).includes("Three calls booked from one post"), "the win is on the feed");
+    // H-1635: on a phone a win stacks: the label on its own line, then the win, then the date with Applaud beside it.
+    const wide = page.viewportSize();
+    await page.setViewportSize({ width: 360, height: 800 });
+    // No named helper inside evaluate: the walk's compiler wraps named functions in a helper the page doesn't have.
+    const [tag, text, when] = await page.locator('[data-testid="win"]').first().evaluate((el) =>
+      [".co-kindtag", ".co-wintext", ".co-when"].map((sel) => {
+        const r = el.querySelector(sel)?.getBoundingClientRect();
+        return r ? { t: r.top, b: r.bottom, w: r.width, h: r.height } : null;
+      }),
+    );
+    must(tag && text && when && tag.h < 24 && tag.b <= text.t + 1 && text.b <= when.t + 1 && text.w > 250, `at 360 a win stacks label, text, then date: ${JSON.stringify({ tag, text, when })}`);
+    if (wide) await page.setViewportSize(wide);
     await page.goto(`${base}/colosseum`, { waitUntil: "networkidle" });
     must((await page.locator('[data-testid="tab-arena-body"] [data-testid="win"]').count()) === 1, "Wins from the stands shows it");
     await page.goto(`${base}/colosseum?tab=wins`, { waitUntil: "networkidle" });
