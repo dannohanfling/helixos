@@ -66,6 +66,8 @@ import { waitingByMenu, waitingCount as draftsWaitingCount } from "@/lib/claude-
 import { callsBetween } from "@/lib/calls";
 import { canJoin, joinState, nextCallLine, nextCallWithin } from "@/lib/engine/calls";
 import { CallJoin } from "@/components/call-join";
+import { ArenaToday } from "@/components/arena-today";
+import { arenaTodayCard } from "@/lib/arena";
 import { waitingCount } from "@/lib/handoff";
 import { plansWaitingLine } from "@/lib/engine/handoff";
 
@@ -109,7 +111,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   // The day's data, the intentions, the closed days, Body's line, the coach's notices and the rest of the page's own reads run
   // together (H-164 §9: one after another they held "Loading…" for seconds; the timing line below says what each part cost).
   const callsNow = new Date();
-  const [d, week, month, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup, callsSoon] = await Promise.all([
+  const [d, week, month, body, featuresOn, boardDue, toolsConn, coachNew, recParts, setup, callsSoon, arena] = await Promise.all([
     todayData(v),
     // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
     db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) }).then((w) => w ?? null),
@@ -135,6 +137,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     setupFor(v),
     // The Next call line (H-828): the weekly calls of the next 24 hours, one query; nothing shows without one.
     callsBetween(v.workspace.id, callsNow, new Date(callsNow.getTime() + 24 * 3_600_000), { role: v.role, programTier: v.membership.programTier }),
+    // 30 Days in the Arena (H-1563): the invite, then the member's day; reads only, alongside the rest.
+    !v.switchedInto ? arenaTodayCard(v) : Promise.resolve(null),
   ]);
   const tData = tick();
   // H-202: a reply on one of the member's reports they haven't seen, as one line to My reports. Never while switched in.
@@ -283,6 +287,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </Link>
       ) : null}
       {/* The Next call line (H-828): a weekly call that is live or starts within 24 hours, with Join from 10 minutes before; no length (H-836). */}
+      {arena ? <ArenaToday card={arena} /> : null}
       {nextCall && nextCallState ? (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm" data-testid="today-next-call" data-state={nextCallState} data-call={nextCall.call.id}>
           <span className="min-w-0 font-medium" data-testid="today-next-call-line">

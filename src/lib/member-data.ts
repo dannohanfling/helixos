@@ -32,6 +32,9 @@ export const MEMBER_TABLES = {
   /** Applause the member gave on others' wins (H-1171). Applause on their own wins goes with the win (src/lib/erase.ts). */
   win_applause: schema.winApplause,
   helix_ticks: schema.helixTicks,
+  /** 30 Days in the Arena (H-1562): the member's "I'm in" and their Huddle check-ins. */
+  arena_entries: schema.arenaEntries,
+  arena_huddle_checkins: schema.arenaHuddleCheckins,
   setup_ticks: schema.setupTicks,
   monthly_intentions: schema.monthlyIntentions,
   office_hours_requests: schema.officeHoursRequests,
@@ -237,6 +240,10 @@ export const USER_TABLES = {
 
 /** Keyed by the workspace alone: they go only with the workspace, when its last member is deleted. */
 export const WORKSPACE_TABLES = {
+  // 30 Days in the Arena (H-1562): the challenge, its pods and its Huddles are the coach's; a captain is named by membership.
+  arena_challenges: schema.arenaChallenges,
+  arena_pods: schema.arenaPods,
+  arena_huddles: schema.arenaHuddles,
   // How each Bot Feature unlocks here (rev 618): the coach's rules, not any one member's.
   bot_feature_rules: schema.botFeatureRules,
   integrations: schema.integrations,

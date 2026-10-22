@@ -1401,6 +1401,13 @@
       "when": 1792596415762,
       "tag": "0242_tools_open",
       "breakpoints": true
+    },
+    {
+      "idx": 200,
+      "version": "6",
+      "when": 1792679611875,
+      "tag": "0243_arena",
+      "breakpoints": true
     }
   ]
 }

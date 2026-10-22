@@ -5461,3 +5461,89 @@ export const pushSends = sqliteTable(
   (t) => [uniqueIndex("push_sends_once").on(t.membershipId, t.type, t.key), index("push_sends_day").on(t.membershipId, t.sentAt)],
 );
 export type PushSend = typeof pushSends.$inferSelect;
+
+/**
+ * 30 Days in the Arena (H-1562, plan H-1563): a member challenge in a set window. One row per challenge per workspace, made
+ * the first time the workspace's Arena page is read; the dates and the target are the plan's (src/lib/engine/arena.ts).
+ */
+export const arenaChallenges = sqliteTable(
+  "arena_challenges",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    /** The window in the challenge's own zone, as dates: the first and the last day that count. */
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    /** The last day to join, in the same zone. */
+    joinBy: text("join_by").notNull(),
+    timezone: text("timezone").notNull(),
+    targetDays: integer("target_days").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("arena_challenges_slug").on(t.workspaceId, t.slug)],
+);
+export type ArenaChallenge = typeof arenaChallenges.$inferSelect;
+
+/** Pods of five with a captain (PR B): the coach names the captain and moves members between pods. */
+export const arenaPods = sqliteTable(
+  "arena_pods",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    challengeId: text("challenge_id").notNull(),
+    name: text("name").notNull(),
+    captainMembershipId: text("captain_membership_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("arena_pods_challenge").on(t.challengeId)],
+);
+export type ArenaPod = typeof arenaPods.$inferSelect;
+
+/** A member's "I'm in": once per challenge. Days closed and points are read from the daily logs and the ledger, never copied. */
+export const arenaEntries = sqliteTable(
+  "arena_entries",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    challengeId: text("challenge_id").notNull(),
+    podId: text("pod_id"),
+    joinedAt: text("joined_at").notNull(),
+    /** Set when the member reaches the target (PR C); the prize itself is applied by hand by the coach. */
+    finishedAt: text("finished_at"),
+  },
+  (t) => [uniqueIndex("arena_entries_once").on(t.challengeId, t.membershipId), index("arena_entries_user").on(t.workspaceId, t.userId)],
+);
+export type ArenaEntry = typeof arenaEntries.$inferSelect;
+
+/** The live Huddles (PR B), one row per date, with the start as a UTC instant. */
+export const arenaHuddles = sqliteTable(
+  "arena_huddles",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    challengeId: text("challenge_id").notNull(),
+    startsAt: text("starts_at").notNull(),
+    label: text("label").notNull(),
+  },
+  (t) => [uniqueIndex("arena_huddles_once").on(t.challengeId, t.startsAt)],
+);
+export type ArenaHuddle = typeof arenaHuddles.$inferSelect;
+
+/** "I'm here" at a Huddle (PR B): once per member per Huddle, worth the huddle points in the ledger. */
+export const arenaHuddleCheckins = sqliteTable(
+  "arena_huddle_checkins",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    huddleId: text("huddle_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("arena_huddle_checkins_once").on(t.huddleId, t.membershipId)],
+);
+export type ArenaHuddleCheckin = typeof arenaHuddleCheckins.$inferSelect;
