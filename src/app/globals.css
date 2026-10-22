@@ -537,3 +537,25 @@ html[data-installed] [data-app-off] {
     display: none;
   }
 }
+
+/*
+ * Quick phone fixes (H-1684).
+ * 1. iOS Safari zooms the page when a field's text is under 16 px. On phones every text field, text area and select is at
+ *    least 16 px, whatever its own class says. Pinch-zoom stays on (no maximum-scale).
+ * 2. Headings and card titles wrap in balanced lines; body text avoids a lone last word.
+ */
+@media (max-width: 767px), (pointer: coarse) {
+  :is(
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]),
+      textarea,
+      select
+    ) {
+    font-size: max(16px, 1em) !important;
+  }
+}
+:where(h1, h2, h3, h4, .card-title, legend) {
+  text-wrap: balance;
+}
+:where(p, li, dd, blockquote) {
+  text-wrap: pretty;
+}

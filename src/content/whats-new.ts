@@ -12,12 +12,22 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 350,
+    n: 351,
     date: "2026-10-22",
     title: "Add a screenshot to your Office Hours request",
     lines: [
       "When you ask for help on Office Hours, you can add a screenshot: upload a picture or capture your screen, so your coach sees the problem before the call.",
       "You can replace or remove it while you can still change the request. Your coach sees it with your request; nobody else can open it.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 350,
+    date: "2026-10-22",
+    title: "Smoother on your phone",
+    lines: [
+      "Tapping into a box to type on an iPhone no longer zooms the page in.",
+      "Headings and paragraphs wrap more evenly, and the big scene photos load first.",
     ],
     audience: "everyone",
   },
