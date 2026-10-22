@@ -14,10 +14,9 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     n: 344,
     date: "2026-10-22",
-    title: "Your Evolve Omega pass shows your name, and knows when it's added",
+    title: "Your Evolve Omega pass shows your own name",
     lines: [
-      "A new pass carries your name as it is in HelixOS. If you go by one name, that's all it shows.",
-      "After you add the pass to your wallet, you come back to Rewards and it says Pass added ✓. No need to press I added it, though it's still there if you need it.",
+      "A new pass carries your name as it is in HelixOS. If you go by one name, that's all it shows, never a blank to fill in.",
     ],
     audience: "everyone",
   },
