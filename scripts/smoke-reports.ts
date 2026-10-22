@@ -319,8 +319,9 @@ async function main() {
     // H-1656: the panel's My reports button counts the reply too.
     await page.locator('[data-testid="report-open"]').first().click();
     const countBtn = page.locator('dialog[open] [data-testid="report-form-my-reports"]');
-    await page.waitForFunction(() => document.querySelector('dialog[open] [data-testid="report-form-my-reports"]')?.textContent?.includes("1 new reply"), null, { timeout: 15000 });
-    must((await countBtn.innerText()).includes("My reports (1 new reply)"), `the panel's button counts the reply: ${await countBtn.innerText()}`);
+    // Both replies count: the Seen on the issue and the Done on the Ask Danno answer.
+    await page.waitForFunction(() => /My reports \(\d+ new repl(y|ies)\)/.test(document.querySelector('dialog[open] [data-testid="report-form-my-reports"]')?.textContent ?? ""), null, { timeout: 15000 });
+    must(/My reports \(2 new replies\)/.test(await countBtn.innerText()), `the panel's button counts both replies: ${await countBtn.innerText()}`);
     await page.keyboard.press("Escape");
     await page.goto(`${base}/reports`);
     const mine = page.locator(`#r-${issue.id} [data-testid="my-report"]`);
