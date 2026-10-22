@@ -5,6 +5,7 @@
  *  2. One call to action: every Start with me button goes to the existing checkout, the nav one jumps to the Start section;
  *     no "Book a call" and no call page.
  *  3. No price or currency sign anywhere in the page's text; the only audience figure is the approved line.
+ *  3b. The proof strip (approved quotes, no figures, still with reduced motion) and the reading bar (H-1725).
  *  4. Every picture loads; the Open Graph image is a 1200x630 JPEG.
  *  5. At 1440, 390 and 360: nothing wider than the screen, every control 44px tall or more.
  *  6. No Meta Pixel beacon without FUNNEL_PIXEL_ID (the walk's server has none); no other tracker on the page.
@@ -13,6 +14,8 @@
  * `npx tsx scripts/smoke-funnel1.ts http://localhost:3000`
  */
 import { chromium, type Page } from "@playwright/test";
+import { PROOF } from "@/lib/hermes/funnel";
+import { hasNumbers } from "@/lib/hermes/rules";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const CHECKOUT = "https://evolveomega.com/partner";
@@ -94,8 +97,27 @@ async function main() {
     for (const section of ["fn-feature-today", "fn-feature-aqueduct", "fn-feature-board", "fn-feature-colosseum", "fn-chamber", "fn-letter", "fn-start"]) {
       must(await page.locator(`[data-testid="${section}"]`).count(), `the ${section} section`);
     }
-    must(!/What members say|Proof Bank/i.test(text), "no proof section at launch");
-    console.log("✓ no price anywhere; the approved audience line; every section from the mockup, no proof section yet");
+    console.log("✓ no price anywhere; the approved audience line; every section from the mockup");
+
+    // 3b. The proof strip and the reading bar (H-1725): approved quotes only, none with a figure, a loop that stops for
+    // reduced motion; the bar fills as the page scrolls.
+    const quotes = await page.locator('[data-testid="fn-proof"] ul:not([aria-hidden]) .fn-proof-quote').allInnerTexts();
+    must(quotes.length === PROOF.length, `the strip shows each approved quote once (${quotes.length})`);
+    for (const q of quotes) must(!hasNumbers(q), `no figure in a quote on the page: ${q.slice(0, 40)}`);
+    must((await page.locator('[data-testid="fn-proof"] ul[aria-hidden="true"]').count()) === 1, "the loop's copy is hidden from screen readers");
+    const anim = await page.locator(".fn-proof-track").evaluate((e) => getComputedStyle(e).animationName);
+    must(anim === "fn-proof", `the strip drifts (${anim})`);
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+    await page.waitForTimeout(200);
+    const bar = await page.locator('[data-testid="fn-progress"]').evaluate((e) => getComputedStyle(e).transform);
+    must(/^matrix\(0\.[1-9]/.test(bar), `the reading bar fills as the page scrolls (${bar})`);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const still = await browser.newPage({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
+    await still.goto(`${base}/start`);
+    must((await still.locator(".fn-proof-track").evaluate((e) => getComputedStyle(e).animationName)) === "none", "reduced motion stops the strip");
+    must((await still.locator('[data-testid="fn-proof"] ul[aria-hidden="true"]').evaluate((e) => getComputedStyle(e).display)) === "none", "reduced motion shows one copy");
+    await still.close();
+    console.log(`✓ the proof strip: ${quotes.length} approved quotes, no figures, still with reduced motion; the reading bar fills on scroll`);
 
     // 4. Pictures.
     await page.evaluate(async () => {
