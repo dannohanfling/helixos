@@ -103,7 +103,12 @@ export function MfProofPicker({ initial, max = 40 }: { initial: MfProofHit[]; ma
               </label>
             </li>
           ))}
-          {pending ? <li className="px-2 py-1 text-xs text-ink-3">Loading…</li> : null}
+          {pending ? (
+            <li className="space-y-1.5 px-2 py-1.5" aria-label="Loading">
+              <div className="skel h-3 w-3/4" />
+              <div className="skel h-3 w-1/2" />
+            </li>
+          ) : null}
           {!pending && !hits.length ? <li className="px-2 py-1 text-xs text-ink-3">No proof matches.</li> : null}
           {chosen.length >= max ? <li className="px-2 py-1 text-xs text-ink-3">That&apos;s {max}, the most it uses.</li> : null}
         </ul>
