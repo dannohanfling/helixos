@@ -115,6 +115,10 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
   if (ids.member_reports.length) {
     for (const r of await db.query.memberReports.findMany({ where: inArray(schema.memberReports.id, ids.member_reports) })) if (r.screenshotKey && r.screenshotUrl) objects.push({ store: "proof", key: r.screenshotKey, url: r.screenshotUrl, label: "member_reports", rowId: r.id });
   }
+  // An Office Hours request's screenshot (H-1706), in the private store under ooh/, with the request that points at it.
+  if (ids.office_hours_requests?.length) {
+    for (const r of await db.query.officeHoursRequests.findMany({ where: inArray(schema.officeHoursRequests.id, ids.office_hours_requests), columns: { id: true, screenshotKey: true, screenshotUrl: true } })) if (r.screenshotKey && r.screenshotUrl) objects.push({ store: "proof", key: r.screenshotKey, url: r.screenshotUrl, label: "office_hours_requests", rowId: r.id });
+  }
   // Lead magnet files in the public store: the recorded PDF and upload, and every file under the magnet's folder.
   const magnets = ids.lead_magnets.length ? await db.query.leadMagnets.findMany({ where: inArray(schema.leadMagnets.id, ids.lead_magnets) }) : [];
   const publicKeys = new Set<string>();

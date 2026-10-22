@@ -374,7 +374,7 @@ defineTool({
   name: "office_hours_list",
   scope: "office_hours",
   kind: "read",
-  description: "The member's own Office Hours requests, newest session first and numbered: the session in the member's own day and time, the category, the question, and how it went (pending, covered, no-show).",
+  description: "The member's own Office Hours requests, newest session first and numbered: the session in the member's own day and time, the category, the question, whether a screenshot is attached, and how it went (pending, covered, no-show).",
   input: {},
   handler: async (v): Promise<ToolResult> => {
     ownerOnly(v, "read Office Hours requests");
@@ -383,7 +383,7 @@ defineTool({
     if (!rows.length) return { text: `You haven't asked for Office Hours yet.${locked}`, data: { requests: [], locked: Boolean(locked) } };
     const how = (r: schema.OfficeHoursRequest) => (r.outcome ? OOH_OUTCOME_LABEL[r.outcome] : "pending");
     const session = oohSchedule(v.workspace);
-    const lines = rows.map((r) => `${sessionSpoken(r.friday, session, v.tz)}, ${r.category}: ${r.description.replace(/\s+/g, " ").slice(0, 120)} (${how(r)})`);
-    return { text: `${rows.length} request${rows.length === 1 ? "" : "s"}:\n${numbered(lines)}${locked}`, data: { locked: Boolean(locked), requests: rows.map((r, i) => ({ n: i + 1, id: r.id, friday: r.friday, category: r.category, outcome: r.outcome ?? "pending", submitted: r.createdAt, edited: r.editedAt })) } };
+    const lines = rows.map((r) => `${sessionSpoken(r.friday, session, v.tz)}, ${r.category}: ${r.description.replace(/\s+/g, " ").slice(0, 120)}${r.screenshotUrl ? " [screenshot attached]" : ""} (${how(r)})`);
+    return { text: `${rows.length} request${rows.length === 1 ? "" : "s"}:\n${numbered(lines)}${locked}`, data: { locked: Boolean(locked), requests: rows.map((r, i) => ({ n: i + 1, id: r.id, friday: r.friday, category: r.category, outcome: r.outcome ?? "pending", hasScreenshot: Boolean(r.screenshotUrl), submitted: r.createdAt, edited: r.editedAt })) } };
   },
 });

@@ -690,6 +690,13 @@ export const officeHoursRequests = sqliteTable(
     attendeeUserIds: text("attendee_user_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
     /** Attendees not on HelixOS, names only (H-413); never an email or a phone number. */
     attendeesOther: text("attendees_other"),
+    /**
+     * An optional picture of the problem (H-1706), in the private store under ooh/<workspace>/<request>.<ext>: the key, its
+     * address there, and its checked type. Shown only through /api/office-hours/<id>/screenshot, never by its address.
+     */
+    screenshotKey: text("screenshot_key"),
+    screenshotUrl: text("screenshot_url"),
+    screenshotType: text("screenshot_type"),
     createdAt: createdAt(),
   },
   (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday), uniqueIndex("office_hours_requests_airtable").on(t.workspaceId, t.airtableId)],

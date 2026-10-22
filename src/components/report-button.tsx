@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { myUnreadRepliesAction, sendReportAction, type SendResult } from "@/lib/actions/reports";
-import { FORM_REPORT_KINDS, KIND_LABEL, SCREENSHOT_MAX_BYTES, SEVERITY_LABEL } from "@/lib/engine/reports";
+import { FORM_REPORT_KINDS, KIND_LABEL, SEVERITY_LABEL } from "@/lib/engine/reports";
 import { REPORT_SEVERITIES, type MemberReportKind } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
-import { FilePicker } from "@/components/file-picker";
+import { ScreenshotPicker, type Shot } from "@/components/screenshot-picker";
 
 /** The refusal goes in the address the way every form's does, so the shared button puts the typing back and marks the field. */
 /** Docket #2: how long a send may take before the form says so and offers Send again; what you typed stays. */
@@ -27,21 +27,6 @@ function setRefusal(error: string | null, field?: string) {
 
 const DOT: Record<string, string> = { red: "bg-danger", orange: "bg-warn", green: "bg-good" };
 
-/** A picture shrunk in the browser to at most 1600 px wide and re-encoded as JPEG, so it fits a form's send. */
-async function shrink(blob: Blob): Promise<Blob> {
-  const bitmap = await createImageBitmap(blob);
-  const scale = Math.min(1, 1600 / bitmap.width);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  for (const q of [0.85, 0.7, 0.55, 0.4]) {
-    const out = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", q));
-    if (out && out.size <= SCREENSHOT_MAX_BYTES) return out;
-  }
-  throw new Error("too large");
-}
-
 /**
  * "I have an issue or a suggestion" (rev 432 items 2 and 3), from the menu on every page: what it is, how much it gets in the
  * way, the words, an optional screenshot (an upload, or a capture of this screen where the browser allows it), and the page
@@ -54,17 +39,9 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
   const form = useRef<HTMLFormElement>(null);
   const pathname = usePathname();
   const [kind, setKind] = useState<MemberReportKind>("issue");
-  const [shot, setShot] = useState<{ blob: Blob; url: string; file: File } | null>(null);
+  const [shot, setShot] = useState<Shot | null>(null);
   const [shotError, setShotError] = useState<string | null>(null);
   const [result, setResult] = useState<SendResult | null>(null);
-  // Read after mounting: the server can't know the browser's features, and a button only the browser draws would make its HTML
-  // differ from the server's (a hydration error on every page).
-  const [canCapture, setCanCapture] = useState(false);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- a browser feature read once after mounting, never during render
-    setCanCapture(Boolean(navigator.mediaDevices?.getDisplayMedia));
-  }, []);
-
   // New replies on My reports (H-1656): asked when the panel opens, so the menu on every page reads nothing for it.
   const [unread, setUnread] = useState(0);
   const open = () => {
@@ -82,42 +59,6 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
     setShotError(null);
     setResult(null);
     setRefusal(null);
-  };
-  const take = async (blob: Blob) => {
-    try {
-      const small = await shrink(blob);
-      setShot((old) => {
-        if (old) URL.revokeObjectURL(old.url);
-        // The picker shows the shrunk picture as the one chosen, named for what it is.
-        return { blob: small, url: URL.createObjectURL(small), file: new File([small], "screenshot.jpg", { type: "image/jpeg" }) };
-      });
-      setShotError(null);
-    } catch {
-      setShotError("That picture couldn't be read. Try another, or send without one.");
-    }
-  };
-  const capture = async () => {
-    // The dialog steps aside so the capture shows the page, then comes back.
-    dialog.current?.close();
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false, preferCurrentTab: true } as DisplayMediaStreamOptions);
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.muted = true;
-      await video.play();
-      await new Promise((r) => setTimeout(r, 300));
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d")!.drawImage(video, 0, 0);
-      stream.getTracks().forEach((t) => t.stop());
-      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
-      if (blob) await take(blob);
-    } catch {
-      setShotError("The capture was cancelled or isn't allowed here. You can upload a picture instead.");
-    } finally {
-      dialog.current?.showModal();
-    }
   };
   // Docket #2 (T.G.): a send that hangs comes back after SEND_TIMEOUT_MS with a plain line, and Start over clears the form.
   const send = async (fd: FormData) => {
@@ -235,30 +176,15 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
               <div className="font-medium">
                 A screenshot <span className="font-normal text-ink-3">(optional)</span>
               </div>
-              <FilePicker
-                kind="image"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                files={shot ? [shot.file] : []}
-                testId="report-screenshot"
-                labels={{ take: "Take photo", upload: "Upload picture" }}
-                hint={
-                  canCapture ? (
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void capture()} data-testid="report-capture">
-                      Capture this screen
-                    </button>
-                  ) : null
-                }
-                onChange={(fs) => {
-                  if (fs[0]) void take(fs[0]);
-                  else if (shot) {
-                    URL.revokeObjectURL(shot.url);
-                    setShot(null);
-                  }
-                }}
+              <ScreenshotPicker
+                idPrefix="report"
+                shot={shot}
+                onShot={setShot}
+                error={shotError}
+                onError={setShotError}
+                beforeCapture={() => dialog.current?.close()}
+                afterCapture={() => dialog.current?.showModal()}
               />
-              {/* eslint-disable-next-line @next/next/no-img-element -- a local preview of the member's own picture, never a remote one */}
-              {shot ? <img src={shot.url} alt="The screenshot that will be sent" className="max-h-40 rounded-lg border" data-testid="report-preview" /> : null}
-              {shotError ? <p className="text-xs text-danger">{shotError}</p> : null}
             </div>
             <p className="text-xs text-ink-3">The page you&apos;re on goes with it: {pathname}</p>
             <p className="text-xs text-ink-3">
