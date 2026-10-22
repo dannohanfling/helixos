@@ -13,8 +13,12 @@ export const CLIENT_SCOPES: readonly Scope[] = MCP_SCOPES.filter((s) => !["body"
 export function notSwitchedRefusal(): string {
   return "Not in a client's HelixOS: this tool acts as a client, so call client_switch with the client's first name first.";
 }
-/** The agent's own tools, which keep acting as the agent itself (through the coach's own viewer) while it is switched in. */
-export const AGENT_OWN_SCOPES: readonly Scope[] = ["forum", "inbox", "clients"];
+/**
+ * The agent's own tools, which keep acting as the agent itself (through the coach's own viewer) while it is switched in. The
+ * Partner Program is the coach's, never a client's (CLIENT_SCOPES leaves it out), so its tools are the agent's own too: without
+ * this an agent with the Partner tick was refused every partner tool as "not in a client's HelixOS" (21 Oct, the partner walk).
+ */
+export const AGENT_OWN_SCOPES: readonly Scope[] = ["forum", "inbox", "clients", "partner"];
 export const isAgentOwnScope = (scope: Scope | null): boolean => scope === null || AGENT_OWN_SCOPES.includes(scope);
 
 /**

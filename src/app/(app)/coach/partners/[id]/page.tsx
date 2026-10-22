@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireCoach } from "@/lib/auth";
-import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { Badge, Card, PageHeader } from "@/components/ui";
+import { ItemGone } from "@/components/item-gone";
 import { SubmitButton } from "@/components/submit-button";
 import { addPaymentAction, addTouchAction, saveRestaurantAction } from "@/lib/actions/partner";
 import { CANCEL_REASONS, PAYMENT_PLANS, RESTAURANT_PLANS, RESTAURANT_SOURCES, RESTAURANT_STAGES, RESTAURANT_TYPES, RISKS, TOUCH_CHANNELS, TOUCH_WHO, WALLETPUSH_STATUSES } from "@/lib/engine/partner";
@@ -32,7 +33,7 @@ export default async function PartnerRestaurantPage({ params, searchParams }: { 
   const coach = await requireCoach();
   const W = coach.workspace.id;
   const r = await restaurantById(W, id, coach.today);
-  if (!r) return <Empty icon="🍽️" title="That restaurant isn't in your Partner Program" action={<Link href="/coach/partners" className="btn btn-soft">Back to the program</Link>} />;
+  if (!r) return <ItemGone what="This restaurant" href="/coach/partners" list="the Partner Program" />;
   const [touches, payments] = await Promise.all([touchesFor(W, r.id), paymentsFor(W, r.id)]);
   const str = (k: string) => (r as unknown as Record<string, unknown>)[k];
   const v = (k: string) => String(str(k) ?? "");

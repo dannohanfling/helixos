@@ -161,7 +161,7 @@ async function main() {
     // Maya's Settings: connected, the links, the way to the editor; never the key. On /loyalty she sets words, tiers, rewards and hides one: the page and feed change at once.
     await logout(page);
     await login(page, "As a client");
-    await page.goto(`${base}/settings#leaderboard`);
+    await page.goto(`${base}/settings?tab=programs#leaderboard`);
     await page.locator('[data-testid="leaderboard-state"]').waitFor();
     must((await page.locator('[data-testid="leaderboard-state"]').innerText()).includes("connected") && (await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith(`/lb/${feedRow.slug}`), "Settings says connected, with the page link");
     // The menu item (H-140): with a board set up, "Loyalty leaderboard" is in the owner's side menu (the Settings card links there too, so two links at least).

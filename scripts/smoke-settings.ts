@@ -54,6 +54,19 @@ async function main() {
     // ── 1. The emoji picker. ──
     await login(page, "As a client");
     await page.goto(settings("you"), { waitUntil: "networkidle" });
+    // Settings in tabs (H-164 §16): six for a member in Danno's order, You first; an old #anchor lands on its card's tab.
+    const tabNames = (await page.locator('[data-testid="settings-tabs"] a').allInnerTexts()).map((t) => t.trim());
+    if (tabNames.join("|") !== "You|Connections|Your bot|Brand and team|Programs|Data and privacy") throw new Error(`a member's Settings tabs: ${tabNames.join("|")}`);
+    if ((await page.locator('[data-testid="settings-tabs"]').getAttribute("data-tab")) !== "you" || (await page.locator("#community-loyalty").count())) throw new Error("Settings opens on You, one tab at a time");
+    await page.goto(`${base}/settings?w=${++visit}#brand-kit`);
+    await page.locator('[data-testid="settings-tabs"][data-tab="brand"]').waitFor({ timeout: 20000 });
+    await page.locator("#brand-kit").waitFor({ timeout: 20000 });
+    if (!page.url().includes("tab=brand")) throw new Error(`an old /settings#brand-kit opens Brand and team, got ${page.url()}`);
+    await page.click('[data-testid="settings-tabs"] a:has-text("Connections")');
+    await page.locator("#community-loyalty").waitFor({ timeout: 20000 });
+    if (await page.locator("#you").count()) throw new Error("Connections shows only its own cards");
+    console.log("✓ Settings in six tabs, You first; /settings#brand-kit opens Brand and team; a tab shows only its cards");
+    await page.goto(settings("you"), { waitUntil: "networkidle" });
     const btn = page.locator('[data-testid="emoji-button"]');
     const grid = page.locator('[data-testid="emoji-grid"]');
     // A tap before React has attached its handlers does nothing: tap, wait for the grid, tap again if it has not opened.

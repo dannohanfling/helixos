@@ -104,7 +104,7 @@ async function main() {
     console.log(`✓ before: ${seededSections.length} seeded sections and ${seededItems.length} seeded posts carry no mark; no confirms`);
 
     // The key the ✨ actions run on, against the mock
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await page.selectOption('select[name="provider"]', "anthropic");
     await page.fill('input[name="key"]', "sk-ant-good");
     await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');

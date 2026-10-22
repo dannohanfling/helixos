@@ -24,7 +24,7 @@ async function client(coach: Awaited<ReturnType<typeof requireCoach>>, id: strin
   return { workspaceId: m!.workspaceId, userId: m!.userId, membershipId: m!.id, by: coach.user.id, back: `/coach/${m!.id}/bot#bot-connection` };
 }
 /** The member's own bot, from Settings. */
-const self = (v: Awaited<ReturnType<typeof ctx>>["v"]): Whose => ({ workspaceId: v.workspace.id, userId: v.user.id, membershipId: v.membership.id, by: v.user.id, back: "/settings#bot-connection" });
+const self = (v: Awaited<ReturnType<typeof ctx>>["v"]): Whose => ({ workspaceId: v.workspace.id, userId: v.user.id, membershipId: v.membership.id, by: v.user.id, back: "/settings?tab=bot#bot-connection" });
 
 export async function makeBotKeyAction(fd: FormData): Promise<void> {
   const w = str(fd, "membershipId") ? await client(await requireCoach(), str(fd, "membershipId")) : self((await ctx({ whileSwitched: "refuse", reason: OWN })).v);

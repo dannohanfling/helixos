@@ -50,7 +50,7 @@ async function main() {
     await page.waitForURL(/\/today/);
 
     // Connect the AI key so the ✨ actions are live
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await page.selectOption('select[name="provider"]', "anthropic");
     await page.fill('input[name="key"]', "sk-ant-good");
     await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');
@@ -215,7 +215,7 @@ async function main() {
     console.log("✓ filled: the Essence leads every system message, cached; the task follows; placeholders never sent");
 
     // The cost display carries the prefix and the cache tokens
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await expectText(page, "Your Essence rides on every call", "cost line names the prefix");
     await expectText(page, "written", "cache tokens counted");
     // db and schema are already imported above

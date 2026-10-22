@@ -80,7 +80,7 @@ async function main() {
       console.log("✓ Booking calendars has its own item under People, named and linked");
     }
     // The brand kit: a pair that cannot read on a slide is refused here with the pair named; the Turas kit saves
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=brand`);
     await page.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
     const kit: Record<string, string> = { name: "Turas — True North", ground: "FAF8F5", ink: "9CA3AF", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: "000000", placeholder: "FFF3A3", aliases: "Turas" };
     // §6.1: a face comes from the list, or from "Other (licensed font)" typed by name; the colours keep their hex inputs.
@@ -370,7 +370,7 @@ async function main() {
 
     // The Platforms links are the coach's to set (rev 843): a new Academy address and a Community link on Settings → Workspace
     // reach everyone's menu; a non-https one is not kept.
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=coach`);
     await page.locator('[data-testid="platform-academy"]').waitFor({ timeout: 15000 });
     await page.fill('[data-testid="platform-academy"]', "https://learn.example.com/academy");
     await page.fill('[data-testid="platform-community"]', "https://community.example.com");

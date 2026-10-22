@@ -14,15 +14,15 @@ const GROUPS: { field: Stage1Field; name: string; edit: string }[] = [
   { field: "ai_persona_role_cbf", name: "Who it speaks as", edit: "/essence?step=identity" },
   { field: "ai_constraints_cbf", name: "House rules", edit: "/essence?step=guidelines_to_respond" },
   { field: PRODUCT_FIELD, name: "What it sells", edit: "" },
-  { field: "qualifying_question_1", name: "Question 1", edit: "/settings#your-bot" },
-  { field: "qualifying_question_2", name: "Question 2", edit: "/settings#your-bot" },
-  { field: "qualifying_question_3", name: "Question 3", edit: "/settings#your-bot" },
+  { field: "qualifying_question_1", name: "Question 1", edit: "/settings?tab=bot#your-bot" },
+  { field: "qualifying_question_2", name: "Question 2", edit: "/settings?tab=bot#your-bot" },
+  { field: "qualifying_question_3", name: "Question 3", edit: "/settings?tab=bot#your-bot" },
   { field: "business_time_zone_cbf", name: "Time zone", edit: "/settings#you" },
   { field: "business_name_cbf", name: "Business name", edit: "/settings#you" },
 ];
 
 /** Where a section of the offers field is changed. */
-const SECTION_EDIT: Record<string, string> = { what: "/settings#your-bot", money: "#lines", facts: "#lines", examples: "#examples", stories: "#stories", partners: "/proof", one_on_one: "/offers" };
+const SECTION_EDIT: Record<string, string> = { what: "/settings?tab=bot#your-bot", money: "#lines", facts: "#lines", examples: "#examples", stories: "#stories", partners: "/proof", one_on_one: "/offers" };
 const sectionEdit = (key: string): string => SECTION_EDIT[key] ?? "/offers";
 
 /**

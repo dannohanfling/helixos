@@ -28,14 +28,14 @@ export default async function HarvestPage({ searchParams }: { searchParams: Prom
       {!fk ? (
         <Card>
           <p className="text-sm" data-testid="harvest-needs-key">
-            Fathom isn&apos;t connected yet. <Link href="/settings#fathom" className="underline">Paste your Fathom API key in Settings</Link> and your recordings appear here.
+            Fathom isn&apos;t connected yet. <Link href="/settings?tab=connections#fathom" className="underline">Paste your Fathom API key in Settings</Link> and your recordings appear here.
           </p>
         </Card>
       ) : null}
       {fk && !ai ? (
         <Card className="mb-4">
           <p className="text-sm" data-testid="harvest-needs-ai">
-            Reading a recording needs your own Anthropic or OpenAI key. <Link href="/settings#ai" className="underline">Connect it in Settings</Link>.
+            Reading a recording needs your own Anthropic or OpenAI key. <Link href="/settings?tab=connections#ai" className="underline">Connect it in Settings</Link>.
           </p>
         </Card>
       ) : null}

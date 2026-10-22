@@ -17,8 +17,8 @@ export async function saveFathomKeyAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const key = str(formData, "fathomKey");
   const ticked = formData.get("consent") === "on";
-  if (!v.membership.fathomConsentAt && !ticked) redirect("/settings?fathom=consent#fathom");
-  if (!key) redirect("/settings?fathom=nokey#fathom");
+  if (!v.membership.fathomConsentAt && !ticked) redirect("/settings?tab=connections&fathom=consent#fathom");
+  if (!key) redirect("/settings?tab=connections&fathom=nokey#fathom");
   const r = await validateFathomKey(userId, key);
   const row = { keyEncrypted: seal(key)!, last4: key.slice(-4), lastValidatedAt: r.ok ? nowIso() : null, lastError: r.ok ? null : r.error };
   const existing = await fathomConnectionFor(workspaceId, userId);
@@ -26,7 +26,7 @@ export async function saveFathomKeyAction(formData: FormData): Promise<void> {
   else await db.insert(schema.fathomConnections).values({ id: newId(), workspaceId, userId, ...row });
   if (!v.membership.fathomConsentAt && ticked) await db.update(schema.memberships).set({ fathomConsentAt: nowIso() }).where(eq(schema.memberships.id, v.membership.id));
   refresh();
-  redirect("/settings#fathom");
+  redirect("/settings?tab=connections#fathom");
 }
 
 export async function recheckFathomKeyAction(): Promise<void> {
@@ -48,7 +48,7 @@ export async function removeFathomKeyAction(): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   await db.delete(schema.fathomConnections).where(and(eq(schema.fathomConnections.workspaceId, workspaceId), eq(schema.fathomConnections.userId, userId)));
   refresh();
-  redirect(deletedTo("/settings", "key"));
+  redirect(deletedTo("/settings?tab=connections#fathom", "key"));
 }
 
 /** The transcript as the model sees it is capped; a call longer than this is read up to the cap and the client is told. */

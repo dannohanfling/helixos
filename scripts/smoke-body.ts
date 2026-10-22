@@ -128,7 +128,7 @@ async function main() {
     if ((await client.locator("main a").count()) < 10) throw new Error("the More page lists the menu to read");
     if (await client.locator('a[href="/body"], a[href="/body/foods"]').count()) throw new Error("no Body entry anywhere in the menu while Body is off");
     // Rev 320: while it's off, the HumanOS section holds exactly one entry, the way to the switch, and nothing of its pages.
-    if ((await client.locator('main a[href="/settings#humanos"]').count()) !== 1) throw new Error("while HumanOS is off, the menu's HumanOS section is one 'Turn on HumanOS' entry");
+    if ((await client.locator('main a[href="/settings?tab=programs#humanos"]').count()) !== 1) throw new Error("while HumanOS is off, the menu's HumanOS section is one 'Turn on HumanOS' entry");
     if ((await client.locator('main a[href^="/body"]').count()) !== 0) throw new Error("no HumanOS page in the menu while it is off");
     await client.goto(`${base}/today`);
     await client.locator("main h1, main h2").first().waitFor({ timeout: 30000 });
@@ -1479,7 +1479,7 @@ async function main() {
         if (!/AI key/.test(await client.locator('[data-testid="body-photo-off"]').innerText())) throw new Error("without a key, the Log page says the photo needs one");
         // The key goes in through Settings, as a member's would (sealed by the server with its own secret), and is checked against the mock.
         await db.delete(schema.aiCredentials).where(and(eq(schema.aiCredentials.workspaceId, mem.workspaceId), eq(schema.aiCredentials.userId, maya.id)));
-        await client.goto(`${base}/settings`);
+        await client.goto(`${base}/settings?tab=connections`);
         await client.selectOption('select[name="provider"]', "anthropic");
         await fillExact(client, 'input[name="key"]', "sk-ant-good");
         await press(client, 'button:has-text("Connect and check"), button:has-text("Replace and check")', async () => !!(await db.query.aiCredentials.findFirst({ where: and(eq(schema.aiCredentials.workspaceId, mem.workspaceId), eq(schema.aiCredentials.userId, maya.id)) })), "the member's AI key saved");
@@ -2248,14 +2248,14 @@ async function main() {
     // ── The HumanOS switch (rev 320/322): the member's own, from Settings; the coach's path only with working access; both logged. ──
     const humanosEvents = async () => (await db.query.bodyShareEvents.findMany({ where: and(mine(schema.bodyShareEvents), eq(schema.bodyShareEvents.kind, "humanos")) })).map((e) => (e.shared ? "on" : "off"));
     const foodsBefore = (await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).length;
-    await client.goto(`${base}/settings`);
+    await client.goto(`${base}/settings?tab=programs`);
     await press(client, '[data-testid="humanos-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="humanos-state"]').innerText()), "HumanOS off from Settings");
     if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mem.id) }))!.bodyEnabled) throw new Error("the member's switch sets their own membership");
     if ((await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).length !== foodsBefore) throw new Error("turning HumanOS off keeps every row");
     await notFoundPage(client, "/body");
     await client.goto(`${base}/more`);
     await client.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
-    if ((await client.locator('main a[href="/body"]').count()) || !(await client.locator('main a[href="/settings#humanos"]').count())) throw new Error("with HumanOS off, the menu has no HumanOS pages and one 'Turn on HumanOS' entry");
+    if ((await client.locator('main a[href="/body"]').count()) || !(await client.locator('main a[href="/settings?tab=programs#humanos"]').count())) throw new Error("with HumanOS off, the menu has no HumanOS pages and one 'Turn on HumanOS' entry");
     // The coach's path: nothing on the roster while the client's working access is off; the control once it's on; the switch turns it on and shares nothing.
     const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     await db.update(schema.memberships).set({ coachCanWork: false }).where(eq(schema.memberships.id, mem.id));
@@ -2271,7 +2271,7 @@ async function main() {
     // Delete-all above removed the settings row; whatever is there, neither consent switch is on after the coach's switch.
     const settingsNow = await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) });
     if (settingsNow && (settingsNow.shareWithCoach || settingsNow.aiUse)) throw new Error("the two consent switches stay where the member left them");
-    await client.goto(`${base}/settings`);
+    await client.goto(`${base}/settings?tab=programs`);
     if (!/: On/.test(await client.locator('[data-testid="humanos-state"]').innerText())) throw new Error("the member's Settings card says On after the coach's switch");
     await client.goto(`${base}/body`);
     await client.locator('[data-testid="body-start"], [data-testid="body-tiles"]').first().waitFor({ timeout: 30000 });

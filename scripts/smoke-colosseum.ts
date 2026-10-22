@@ -71,7 +71,7 @@ async function main() {
     must((await page.locator('[data-testid="rewards-colosseum"]').count()) === 0, "off: no Colosseum tab on Rewards");
     await logout(page);
     await login(page, "As the coach");
-    await page.goto(`${base}/settings#connected-apps`, { waitUntil: "networkidle" });
+    await page.goto(`${base}/settings?tab=connections#connected-apps`, { waitUntil: "networkidle" });
     await page.check('[data-testid="colosseum-on-toggle"]');
     await submit(page, '[data-testid="colosseum-on-save"]');
     // The save's POST can land after another request on the page answers, so wait for the write rather than the first POST.

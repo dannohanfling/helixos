@@ -269,7 +269,7 @@ async function main() {
     await plant(youngOrphan, new Date().toISOString());
     const recordedBefore = (await listed()).filter((o) => o.pathname.startsWith("proofs/") && !o.pathname.includes("orphan-")).map((o) => o.pathname).sort();
     if (recordedBefore.length !== 2) throw new Error(`two recorded objects are in the store before the visit, got ${recordedBefore.length}`);
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=data`);
     await expectText(page, "of 2 GB used", "quota line");
     // The reconcile runs after the response is sent: give it a moment.
     let afterSettings: string[] = [];

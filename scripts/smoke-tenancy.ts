@@ -546,7 +546,7 @@ async function main() {
     if (await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, A.id)) })) failures.push("BRAND KIT: A's reset left A's kit");
     if (JSON.stringify(await db.query.brandKits.findFirst({ where: eq(schema.brandKits.id, bKit.id) })) !== bKitBefore) failures.push("BRAND KIT: A's save or reset changed B's kit");
     // A's Settings lists only A's logos, and the deck's logo lookup refuses B's image for A's kit.
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=brand`);
     if ((await page.locator('[data-testid="brand-logo"] option').allInnerTexts()).some((t) => t.includes("B's logo"))) failures.push("BRAND KIT: A's logo picker lists B's logo");
     const { deckLogos } = await import("@/lib/deck-logo");
     const forA = await deckLogos({ workspaceId: ws, userId: A.id }, { logoImageId: bLogo.id, logoDarkImageId: bLogo.id }, { background: STARTER_KIT.ground, ground: STARTER_KIT.ground }, async () => null);

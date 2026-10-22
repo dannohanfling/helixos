@@ -40,7 +40,7 @@ export default async function MyBotConnectionPage({ searchParams }: { searchPara
         </div>
       </Card>
       <p className="text-xs text-ink-3">
-        Your bot&apos;s own words (what you do, its three questions, your booking link) are in <Link href="/settings#your-bot" className="underline">Settings → What your bot says</Link>.
+        Your bot&apos;s own words (what you do, its three questions, your booking link) are in <Link href="/settings?tab=bot#your-bot" className="underline">Settings → What your bot says</Link>.
       </p>
     </>
   );

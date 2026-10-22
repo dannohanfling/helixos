@@ -215,7 +215,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                 <T name="forYouIf" label="This is for you if…" value={shown.forYouIf} />
                 <T name="notForYouIf" label="This is not for you if…" value={shown.notForYouIf} />
                 <p className="text-xs text-ink-3 sm:col-span-2">
-                  The three questions your bot asks before booking are yours, not this offer&apos;s: they live under <Link href="/settings#your-bot" className="underline">Settings</Link>.
+                  The three questions your bot asks before booking are yours, not this offer&apos;s: they live under <Link href="/settings?tab=bot#your-bot" className="underline">Settings</Link>.
                 </p>
               </div>
             </Card>

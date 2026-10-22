@@ -47,7 +47,7 @@ async function main() {
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
   const coach = page;
-  await coach.goto(`${base}/settings`);
+  await coach.goto(`${base}/settings?tab=brand`);
   await coach.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
   const kit: Record<string, string> = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: "000000", placeholder: "FFF3A3", aliases: "Turas" };
   // §6.1: a face comes from the list, or from "Other (licensed font)" typed by name; the colours keep their hex inputs.
@@ -287,7 +287,7 @@ async function main() {
   console.log("✓ layouts 5: the core item builds the table, the summary strikes USD $4,994 through to USD $1,500, the guarantee has its seal, in the file and the thumbnails");
   // The anchor is the member's own kit's (rev 568): the client turns it off on their own Settings.
   const coach2 = page;
-  await coach2.goto(`${base}/settings`);
+  await coach2.goto(`${base}/settings?tab=brand`);
   await coach2.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
   if (!(await coach2.locator('[data-testid="brand-price-anchor"]').isChecked())) throw new Error("the price anchor is on by default");
   await coach2.uncheck('[data-testid="brand-price-anchor"]');

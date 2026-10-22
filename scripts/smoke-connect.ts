@@ -115,7 +115,7 @@ async function main() {
     console.log("✓ the contact ID is checked for its shape; the agent and the contact save");
 
     // Settings carries the same card, and the way to the page.
-    await page.goto(`${base}/settings#community-loyalty`);
+    await page.goto(`${base}/settings?tab=connections#community-loyalty`);
     await page.locator('#community-loyalty [data-testid="cl-connected-badge"]').waitFor({ timeout: 15000 });
     await page.locator('[data-testid="settings-connect-tools"]').waitFor({ timeout: 5000 });
     console.log("✓ Settings carries the same card and links to Connect your tools");

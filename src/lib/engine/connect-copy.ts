@@ -101,7 +101,7 @@ export function connectProgress(o: { ghl: boolean; cl: boolean }): { done: numbe
  * owner and sees none of this.
  */
 export function publishBlockers(conn: { accounts: unknown[]; lastError: string | null; ghlUserId: string | null; mediaScopeMissingAt?: string | null; connectedAt?: string | null } | null): { what: string; fix: { href: string; label: string } }[] {
-  const settings = { href: "/settings#publishing", label: "Fix it on Settings" };
+  const settings = { href: "/settings?tab=connections#publishing", label: "Fix it on Settings" };
   if (!conn) return [{ what: "GoHighLevel isn't connected, so scheduled posts wait for you to copy and paste them.", fix: { href: "/connect-tools#publishing", label: "Connect GoHighLevel" } }];
   if (conn.lastError) return [{ what: `GoHighLevel refused the last check: ${conn.lastError}`, fix: settings }];
   if (!conn.accounts.length) return [{ what: GHL_HELP.noPages, fix: settings }];

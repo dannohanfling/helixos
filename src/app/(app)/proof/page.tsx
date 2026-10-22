@@ -309,7 +309,7 @@ export default async function ProofPage({ searchParams }: { searchParams: Promis
             ) : (
               <p className="text-sm" data-testid="harvest-needs-key">
                 Not connected.{" "}
-                <Link href="/settings#fathom" className="underline">
+                <Link href="/settings?tab=connections#fathom" className="underline">
                   Paste your Fathom API key in Settings
                 </Link>{" "}
                 to pick a recording and pull quotes from it.

@@ -174,7 +174,7 @@ async function main() {
     const owner = await browser.newPage();
     watch(owner);
     await login(owner, "As a client");
-    await owner.goto(`${base}/settings`);
+    await owner.goto(`${base}/settings?tab=brand`);
     await owner.locator('[data-testid="team-seats"]').waitFor({ timeout: 20000 });
     must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("0 of 5 seats used"), "a new owner has 5 seats and none used");
     must(await owner.locator('[data-testid="team-empty"]').count(), "nobody on the team yet");
@@ -188,13 +188,13 @@ async function main() {
     must(inviteRow && !inviteRow.usedAt, "the invite is stored by its hash, unused");
     must(!JSON.stringify(inviteRow).includes(code1), "the code itself is never stored");
     must(Date.parse(inviteRow!.expiresAt) - Date.now() > 6.9 * 86400000 && Date.parse(inviteRow!.expiresAt) - Date.now() <= 7 * 86400000, "the link is good for seven days");
-    await owner.goto(`${base}/settings`);
+    await owner.goto(`${base}/settings?tab=brand`);
     must(!(await owner.locator('[data-testid="team-invite-url"]').count()), "the link is shown once: a plain Settings load has no link");
     must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("0 of 5 seats used (1 invite open)"), "the open invite is spoken for on the seats line");
     must((await owner.locator('[data-testid="team-invite-open"]').innerText()).includes("Sam, our VA"), "the pending invite is listed with its label");
     // A second and third invite, for Tess and for Jordan, made the same way.
     const makeInvite = async (label: string) => {
-      await owner.goto(`${base}/settings`);
+      await owner.goto(`${base}/settings?tab=brand`);
       await owner.fill('[data-testid="team-invite-form"] input[name="label"]', label);
       await submit(owner, '[data-testid="team-invite"]');
       await owner.locator('[data-testid="team-invite-url"]').waitFor({ timeout: 20000 });
@@ -335,7 +335,7 @@ async function main() {
     must((await sam.locator('[data-testid="bf-view-only"]').count()) === 1 && !(await sam.locator('[data-testid="bf-turn-on"]').count()), "a feature's page is view-only for a team member");
     console.log("✓ Bot Features: a team member sees the cards, view-only, with no way to ask");
     // The loyalty leaderboard (rev 639): its card and hide list are the owner's, never on a team member's Settings.
-    await sam.goto(`${base}/settings`);
+    await sam.goto(`${base}/settings?tab=programs`);
     must(!(await sam.locator('[data-testid="leaderboard-state"], [data-testid="leaderboard-hidden"]').count()), "a team member's Settings has no leaderboard card or hide list");
 
     // ── 5. Isolation: Jordan's records read as missing. ──
@@ -361,7 +361,7 @@ async function main() {
     console.log("✓ isolation: another client's records read to a team member exactly as missing ids");
 
     // ── 6. The owner sees the team; a used link and an expired link are gone. ──
-    await owner.goto(`${base}/settings`);
+    await owner.goto(`${base}/settings?tab=brand`);
     const member = owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" });
     await member.waitFor({ timeout: 20000 });
     const memberText = await member.innerText();
@@ -402,7 +402,7 @@ async function main() {
     // cap, so read the page again, up to ten times, until it says 2 of 2.
     let seatsText = "";
     for (let i = 0; i < 10; i++) {
-      await owner.goto(`${base}/settings`);
+      await owner.goto(`${base}/settings?tab=brand`);
       seatsText = await owner.locator('[data-testid="team-seats"]').innerText();
       if (seatsText.includes("2 of 2 seats used (1 invite open)")) break;
       await owner.waitForTimeout(500);
@@ -439,7 +439,7 @@ async function main() {
     must(blocked(tw.status(), await tw.text()), "nothing of Maya's opens for a removed team member");
     await tessCtx.close();
     // The owner removes Sam from Settings; Sam's next request ends the same way.
-    await owner.goto(`${base}/settings`);
+    await owner.goto(`${base}/settings?tab=brand`);
     must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("1 of 6 seats used"), "Tess's seat is free again");
     await confirmThrough(owner, owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" }).locator('[data-testid="team-remove"]'));
     must((await db.query.teamMembers.findFirst({ where: eq(schema.teamMembers.id, samRow.id) }))!.removedAt, "Sam is removed");

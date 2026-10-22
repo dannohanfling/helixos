@@ -51,7 +51,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           ? `Connected ✓ on ${stampDate(latest.createdAt, v.tz, { month: "short", day: "numeric" })}${latest.lastUsedAt ? `, last used ${formatDateTime(latest.lastUsedAt, v.tz)}` : ", not used yet"}.`
           : "Not connected yet."}{" "}
         {latest ? (
-          <Link href="/settings#connected-apps" className="font-normal underline">Settings → Connected apps</Link>
+          <Link href="/settings?tab=connections#connected-apps" className="font-normal underline">Settings → Connected apps</Link>
         ) : null}
       </p>
       <Card title="Connect HelixOS to Claude">
@@ -112,7 +112,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-ink-3">A connected app never sends, publishes or deletes anything, never reaches another member, and never sees your keys. Today and Tasks work from a chat now (your lock-in, your close, adding, ticking and moving tasks), and HumanOS when its own AI switch is on; more areas follow. Disconnect any time in <Link href="/settings#connected-apps" className="underline">Settings → Connected apps</Link>.</p>
+        <p className="mt-3 text-xs text-ink-3">A connected app never sends, publishes or deletes anything, never reaches another member, and never sees your keys. Today and Tasks work from a chat now (your lock-in, your close, adding, ticking and moving tasks), and HumanOS when its own AI switch is on; more areas follow. Disconnect any time in <Link href="/settings?tab=connections#connected-apps" className="underline">Settings → Connected apps</Link>.</p>
       </details>
     </>
   );

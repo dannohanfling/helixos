@@ -95,7 +95,7 @@ async function main() {
     console.log("✓ create: type first, scaffold in the type's shape, keyword PLAN, tracked link from the title with nothing personal on it");
 
     // With a key: written from the Big Promise, the audience, the offer, approved proof and confirmed evidence; the blacklisted line comes out and the page says so
-    await page.goto(`${base}/settings`);
+    await page.goto(`${base}/settings?tab=connections`);
     await page.selectOption('select[name="provider"]', "anthropic");
     await page.fill('input[name="key"]', "sk-ant-good");
     await submit(page, 'button:has-text("Connect and check"), button:has-text("Replace and check")');

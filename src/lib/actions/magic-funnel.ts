@@ -130,7 +130,7 @@ export async function saveMfDomainsAction(fd: FormData): Promise<void> {
   const own = v.membership.role === "coach" && Number.isInteger(cap) && cap >= 0 && cap <= 5000 ? { mfDailyCap: cap } : {};
   await db.update(schema.memberships).set({ mfDomains: domains, ...own }).where(eq(schema.memberships.id, v.membership.id));
   refresh();
-  redirect(`/settings?${bad.length ? `mfError=${encodeURIComponent(`Not a domain: ${bad.slice(0, 3).join(", ")}. Use the host only, like go.yourdomain.com.`)}` : "mf=saved"}#magic-funnel`);
+  redirect(`/settings?tab=programs&${bad.length ? `mfError=${encodeURIComponent(`Not a domain: ${bad.slice(0, 3).join(", ")}. Use the host only, like go.yourdomain.com.`)}` : "mf=saved"}#magic-funnel`);
 }
 
 /** The coach's switch and daily cap for one client (rev 812 §8): off until Danno turns it on for that client. */

@@ -140,7 +140,7 @@ export default async function LaddersPage() {
                     <AiPromise enabled={false}>{null}</AiPromise>
                   </>
                 )}
-                <span className="text-xs text-ink-3">{ai ? "AI drafts every field from your facts and approved proof, on your own key. You edit, the checklist keeps it honest." : <>No AI key connected, so you get the full structure with every blank marked. <Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have it drafted for you.</>}</span>
+                <span className="text-xs text-ink-3">{ai ? "AI drafts every field from your facts and approved proof, on your own key. You edit, the checklist keeps it honest." : <>No AI key connected, so you get the full structure with every blank marked. <Link href="/settings?tab=connections#ai" className="underline">Connect your AI key in Settings</Link> to have it drafted for you.</>}</span>
               </div>
             </form>
           </Card>

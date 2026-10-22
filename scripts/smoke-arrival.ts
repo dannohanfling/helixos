@@ -149,7 +149,7 @@ async function main() {
 
     // ── 4. A fresh team member: the team face, the owner's name and initial, the tiles open to them; Office Hours follows the owner. ──
     const invite = async (): Promise<string> => {
-      await owner.goto(`${base}/settings`);
+      await owner.goto(`${base}/settings?tab=brand`);
       await owner.locator('[data-testid="team-invite-form"]').waitFor({ timeout: 20000 });
       await owner.fill('[data-testid="team-invite-form"] input[name="label"]', `Arrival ${run}`);
       await submit(owner, '[data-testid="team-invite"]');

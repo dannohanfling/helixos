@@ -22,6 +22,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 342,
+    date: "2026-10-21",
+    title: "Settings in six tabs",
+    lines: [
+      "Settings is now six tabs: You, Connections, Your bot, Brand and team, Programs, and Data and privacy. It opens on You, and each tab shows only its own cards.",
+      "Coaches get a seventh tab, Coach, with the workspace and invite links. Old links to a Settings card still open the right tab.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 341,
     date: "2026-10-21",
     title: "Claim your 30 days of Academy or Elite, and see who opens it",
