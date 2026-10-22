@@ -80,6 +80,11 @@ async function main() {
     const dialog = page.locator('dialog[open][data-testid="report-dialog"]');
     await dialog.waitFor({ state: "visible", timeout: 10000 });
     must((await dialog.innerText()).includes(`Tell ${coachFirst}`), "the dialog names the coach");
+    // H-1656: My reports is a clear button at the top of the panel, before the form, with no count while nothing is new.
+    const myBtn = dialog.locator('[data-testid="report-form-my-reports"]');
+    const myBox = (await myBtn.boundingBox())!;
+    const kindBox = (await dialog.locator('[data-testid="report-kind-issue"]').boundingBox())!;
+    must(myBox.height >= 36 && myBox.y < kindBox.y && (await myBtn.innerText()).trim().endsWith("My reports"), `My reports is a button above the form: ${JSON.stringify(myBox)} "${await myBtn.innerText()}"`);
     must((await dialog.innerText()).includes("The page you're on goes with it: /today"), "the page it came from is shown and goes with it");
     await page.locator('dialog[open] [data-testid="report-screenshot"]').setInputFiles({ name: "not-a-picture.png", mimeType: "image/png", buffer: Buffer.from("<svg onload=alert(1)>") });
     await dialog.getByText("That picture couldn't be read").waitFor({ timeout: 10000 });
@@ -92,6 +97,8 @@ async function main() {
     await page.locator('dialog[open] [data-testid="report-send"]').click();
     await page.locator('dialog[open] [data-testid="report-sent"]').waitFor({ timeout: 20000 });
     must((await page.locator('dialog[open] [data-testid="report-sent"]').innerText()).includes("The screenshot went with it"), "the sent panel says the screenshot went");
+    const seeIt = page.locator('dialog[open] [data-testid="report-my-reports"]');
+    must((await seeIt.innerText()).trim() === "See it in My reports" && /\bbtn\b/.test((await seeIt.getAttribute("class")) ?? ""), "the thank-you has a See it in My reports button");
     const issue = (await reports())[0];
     must(issue && issue.kind === "issue" && issue.severity === "red" && issue.description === ISSUE && issue.page === "/today" && issue.userId === maya.id, `the issue is stored as sent: ${JSON.stringify(issue)}`);
     must(issue.screenshotKey === `reports/${ws}/${issue.id}.jpg` && issue.screenshotType === "image/jpeg", "the screenshot was shrunk to a JPEG and kept under reports/");
@@ -309,6 +316,13 @@ async function main() {
     const replyLine = page.locator('[data-testid="today-report-reply"]');
     await replyLine.waitFor({ timeout: 20000 });
     must((await replyLine.innerText()).includes("My reports"), "Today says there's a reply");
+    // H-1656: the panel's My reports button counts the reply too.
+    await page.locator('[data-testid="report-open"]').first().click();
+    const countBtn = page.locator('dialog[open] [data-testid="report-form-my-reports"]');
+    // Both replies count: the Seen on the issue and the Done on the Ask Danno answer.
+    await page.waitForFunction(() => /My reports \(\d+ new repl(y|ies)\)/.test(document.querySelector('dialog[open] [data-testid="report-form-my-reports"]')?.textContent ?? ""), null, { timeout: 15000 });
+    must(/My reports \(2 new replies\)/.test(await countBtn.innerText()), `the panel's button counts both replies: ${await countBtn.innerText()}`);
+    await page.keyboard.press("Escape");
     await page.goto(`${base}/reports`);
     const mine = page.locator(`#r-${issue.id} [data-testid="my-report"]`);
     await mine.waitFor({ timeout: 20000 });

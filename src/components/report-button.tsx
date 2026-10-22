@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { sendReportAction, type SendResult } from "@/lib/actions/reports";
+import { myUnreadRepliesAction, sendReportAction, type SendResult } from "@/lib/actions/reports";
 import { FORM_REPORT_KINDS, KIND_LABEL, SCREENSHOT_MAX_BYTES, SEVERITY_LABEL } from "@/lib/engine/reports";
 import { REPORT_SEVERITIES, type MemberReportKind } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
@@ -65,11 +65,14 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
     setCanCapture(Boolean(navigator.mediaDevices?.getDisplayMedia));
   }, []);
 
+  // New replies on My reports (H-1656): asked when the panel opens, so the menu on every page reads nothing for it.
+  const [unread, setUnread] = useState(0);
   const open = () => {
     setResult(null);
     setShotError(null);
     setRefusal(null);
     dialog.current?.showModal();
+    myUnreadRepliesAction().then(setUnread, () => setUnread(0));
   };
   const startOver = () => {
     form.current?.reset();
@@ -149,11 +152,12 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
             <p className="text-sm text-ink-2">
               It&apos;s in {coachFirst}&apos;s inbox with the page you were on.{result.screenshot === "kept" ? " The screenshot went with it." : result.screenshot === "not-stored" ? " The screenshot couldn't be kept, so it went without one." : ""}
             </p>
-            <div className="flex items-center justify-between gap-2">
-              <a href="/reports" className="text-sm underline" data-testid="report-my-reports">My reports</a>
+            {/* H-1656: where to see it next is the one clear action here, not a faint link. */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <a href="/reports" className="btn btn-brand btn-sm" data-testid="report-my-reports">See it in My reports</a>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
+                className="btn btn-ghost btn-sm"
                 onClick={() => {
                   dialog.current?.close();
                   setResult(null);
@@ -165,12 +169,14 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
           </div>
         ) : (
           <form ref={form} className="space-y-3 p-5" data-testid="report-form" action={send}>
-            <h2 id="report-title" className="text-lg font-semibold">
+            {/* H-1656: My reports first and plain to see, so a member checks a reply before writing the same thing again. */}
+            <a href="/reports" className="btn btn-soft w-full justify-center" data-testid="report-form-my-reports" data-unread={unread || undefined}>
+              <span aria-hidden="true">📬</span> My reports{unread ? ` (${unread} new ${unread === 1 ? "reply" : "replies"})` : ""}
+            </a>
+            <p className="-mt-1 text-center text-xs text-ink-2">What you sent, and every reply.</p>
+            <h2 id="report-title" className="pt-1 text-lg font-semibold">
               Tell {coachFirst}
             </h2>
-            <p className="-mt-2 text-xs text-ink-3">
-              <a href="/reports" className="underline" data-testid="report-form-my-reports">My reports</a>: what you sent and every reply.
-            </p>
             <input type="hidden" name="page" value={pathname ?? ""} />
             <fieldset className="space-y-1 text-sm">
               <legend className="font-medium">What is it?</legend>
