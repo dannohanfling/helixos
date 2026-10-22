@@ -112,7 +112,7 @@ export default async function RewardsPage({ searchParams }: { searchParams: Prom
         </Card>
       </div>
 
-      <EoPassCard v={v} ready={sp.pass === "ready"} error={sp.passError} />
+      <EoPassCard v={v} ready={sp.pass === "ready"} added={sp.pass === "added"} error={sp.passError} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Prizes you unlock" action={<span className="text-xs text-ink-3">milestones, no points spent</span>}>
