@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 349,
+    date: "2026-10-22",
+    title: "Every page starts sooner, and you stay signed in",
+    lines: [
+      "Every page starts about twice as fast: the menu's numbers are now looked up all at once instead of one after another.",
+      "Using HelixOS keeps you signed in: the 30 days now count from your last visit, not from when you signed in.",
+      "A tab left open while HelixOS updates moves to the new version on your next click instead of getting stuck loading.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 348,
     date: "2026-10-22",
     title: "Pages show their shape while they load",

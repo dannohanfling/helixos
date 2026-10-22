@@ -52,6 +52,29 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
   }
 }
 
+/** A session in use is renewed at most once a day (Speed 2): the 30 days count from the last visit, not from the sign-in. */
+export const RENEW_AFTER_SECONDS = 60 * 60 * 24;
+
+/** The cookie's own settings, shared by sign-in and renewal so the two never differ. */
+export const sessionCookieOptions = () => ({ httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: MAX_AGE_SECONDS });
+
+/**
+ * A fresh token for a session in use, or null when none is due: the token doesn't verify, or it was issued less than a day
+ * ago. Same payload, so the session version check still signs it out after a password change, and a switch or team seat stays
+ * as it was. Proxy only, on a page load (GET); never on sign-in, sign-out or a switch, which write their own cookie.
+ */
+export async function renewedSessionToken(token: string, nowSeconds = Math.floor(Date.now() / 1000)): Promise<string | null> {
+  let iat: number | undefined;
+  try {
+    ({ iat } = (await jwtVerify(token, secret())).payload);
+  } catch {
+    return null;
+  }
+  if (typeof iat !== "number" || nowSeconds - iat < RENEW_AFTER_SECONDS) return null;
+  const payload = await verifySessionToken(token);
+  return payload ? signSession(payload) : null;
+}
+
 export async function readSession(): Promise<SessionPayload | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
@@ -61,13 +84,7 @@ export async function readSession(): Promise<SessionPayload | null> {
 
 export async function writeSession(payload: SessionPayload): Promise<void> {
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, await signSession(payload), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: MAX_AGE_SECONDS,
-  });
+  jar.set(SESSION_COOKIE, await signSession(payload), sessionCookieOptions());
 }
 
 export async function clearSession(): Promise<void> {

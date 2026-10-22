@@ -314,6 +314,21 @@ export async function seenIds(userId: string, recordingIds: string[]): Promise<S
 }
 
 /** The published recordings this member hasn't seen yet: the menu's count and Today's line. */
+/**
+ * The menu's Recordings item in one pass (Speed 2): whether this member has any, and how many they haven't opened. Reads only
+ * the columns that decide who may see a call, never its summary, steps or invitees, and the views of those calls alone.
+ */
+export async function recordingsMenu(workspaceId: string, seer: Seer): Promise<{ enabled: boolean; fresh: number }> {
+  const rows = await db.query.recordings.findMany({
+    where: and(eq(schema.recordings.workspaceId, workspaceId), eq(schema.recordings.status, "published")),
+    columns: { id: true, status: true, audience: true, audienceUserIds: true },
+  });
+  const ids = rows.filter((r) => canSee(r, seer)).map((r) => r.id);
+  if (!ids.length) return { enabled: false, fresh: 0 };
+  const seen = await seenIds(seer.userId, ids);
+  return { enabled: true, fresh: ids.filter((id) => !seen.has(id)).length };
+}
+
 export async function newRecordings(workspaceId: string, seer: Seer): Promise<schema.Recording[]> {
   const rows = await visibleRecordings(workspaceId, seer);
   const seen = await seenIds(seer.userId, rows.map((r) => r.id));

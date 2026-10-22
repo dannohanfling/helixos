@@ -4,7 +4,7 @@ import { agentsOnFor, inboxCount } from "@/lib/handoff";
 import { waitingByMenu } from "@/lib/claude-drafts";
 import { WHATS_NEW } from "@/content/whats-new";
 import { unseenCount } from "@/lib/engine/whats-new";
-import { hasVisibleRecordings, newRecordings } from "@/lib/recordings";
+import { recordingsMenu } from "@/lib/recordings";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 import { openClaims } from "@/lib/queries/rewards";
 import { waitingFeatures } from "@/lib/bot-features";
@@ -24,17 +24,17 @@ export async function navBadges(viewer: Viewer): Promise<NavCounts> {
   const coachView = viewer.role === "coach" && !viewer.switchedInto;
   // A member's own Agent inbox (H-727): in the menu once they have an agent, with the same count; never while switched in or on a team.
   const memberView = viewer.role === "client" && !viewer.switchedInto && !viewer.team;
-  const recordingsQ = viewer.role === "client" ? hasVisibleRecordings(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }) : Promise.resolve(false);
+  // The Recordings item shows a client only once something is published for them (Recordings R1), with the calls they haven't
+  // opened yet as its count (rev 498), both from one pass.
+  const recordingsQ = viewer.role === "client" ? recordingsMenu(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }) : Promise.resolve({ enabled: false, fresh: 0 });
   const agentsQ = memberView ? agentsOnFor({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : Promise.resolve(false);
   const [due, recordingsEnabled, reportsNew, feedbackNew, recordingsNew, claimsOpen, verifyWaiting, inboxNew, agentsOn, memberInboxNew, drafts] = await Promise.all([
     intentionsDueFor(viewer.workspace.id, viewer.user.id, viewer.today),
-    // The Recordings item shows a client only once something is published for them (Recordings R1).
-    recordingsQ,
+    recordingsQ.then((r) => r.enabled),
     // The coach's counts (rev 432): issues and ideas not yet opened, and monthly feedback new since they last looked.
     coachView ? unseenReports(viewer.workspace.id) : Promise.resolve(0),
     coachView ? newMonthlyFeedback(viewer.workspace.id, viewer.membership.feedbackSeenAt) : Promise.resolve(0),
-    // Rev 498: the calls this member hasn't opened yet, as a count on the Recordings item.
-    recordingsQ.then((on) => (on ? newRecordings(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }).then((r) => r.length) : 0)),
+    recordingsQ.then((r) => (r.enabled ? r.fresh : 0)),
     // Reward claims the coach hasn't marked done and Bot Features waiting to be switched on, on the Coach item.
     coachView ? Promise.all([openClaims(viewer.workspace.id), waitingFeatures(viewer.workspace.id)]).then(([a, b]) => a + b) : Promise.resolve(0),
     // Client work waiting for approval (H-1280): Pathway hand-ins and certification deliverables, on Submissions to verify.

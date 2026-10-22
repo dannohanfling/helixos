@@ -50,7 +50,8 @@ export async function viewerFor(userId: string, workspaceId: string): Promise<Vi
     db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
     db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId) }),
   ]);
-  if (!membership || membership.removedAt) return null;
+  if (!membership) return null;
+  if (membership.removedAt) return null;
   if (!user || !workspace) return null;
   const tz = membership.timezone || workspace.timezone;
   return { user, workspace, membership, role: membership.role, tz, today: todayInTz(tz), hour: hourInTz(tz), actor: user, switchedInto: null, team: null };

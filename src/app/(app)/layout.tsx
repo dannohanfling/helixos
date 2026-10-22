@@ -17,6 +17,7 @@ import { catchUpShell, rankUpShell } from "@/lib/scenes";
 import { keepRank } from "@/lib/ranks";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { SoundsConfig } from "@/components/sounds-config";
+import { DeployCheck } from "@/components/deploy-check";
 import { SceneMotionConfig } from "@/components/scene-motion-config";
 import { VoiceProvider } from "@/components/voice-context";
 import { voiceState } from "@/lib/queries/essence";
@@ -89,6 +90,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         {zoneNoticeDue(viewer) && !welcome && !arrival ? <ZoneNotice saved={viewer.membership.timezone} workspaceTz={viewer.workspace.timezone} savedText={viewer.membership.timezone ? zoneNoticeText(viewer.membership.timezone, zoneName(viewer.membership.timezone), false) : null} workspaceText={zoneNoticeText(viewer.workspace.timezone, zoneName(viewer.workspace.timezone), true)} /> : null}
         {children}
       </VoiceProvider>
+      {/* A tab left open across a deploy moves to the new build on its next click (Speed 2). */}
+      <DeployCheck />
       <SoundsConfig on={viewer.membership.soundsOn} />
       <SceneMotionConfig on={viewer.membership.sceneMotion} />
       {arrival ? <FirstArrival card={arrival} /> : null}
