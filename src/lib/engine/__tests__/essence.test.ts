@@ -85,6 +85,24 @@ describe("Brand has its own budget (H-811)", () => {
     expect(brandFieldSizes(d).map((f) => f.key)).toEqual(["notes", "values", "tagline"]);
     expect(brandFieldSizes(d)[0]).toMatchObject({ label: "Notes", chars: JSON.stringify({ notes: "n".repeat(200) }).length });
   });
+  it("line breaks a browser sends as \\r\\n are stored as \\n, so saving an over-limit Brand unchanged, or trimmed, is never refused as growing (20 Oct)", () => {
+    // Brand over its budget, imported with "\n" line breaks: 600 lines of an operating spine.
+    const lines = Array.from({ length: 600 }, (_, i) => `Step ${i}: hold the line under pressure.`);
+    const stored = normalizeEssence({ brand: { operating_spine: lines.join("\n") } });
+    expect(brandOver(stored)).toBeGreaterThan(0);
+    // The form posts the same text back with "\r\n": the same size once cleaned, and a save that keeps it is allowed.
+    const resent = normalizeEssence({ brand: { operating_spine: lines.join("\r\n") } });
+    expect(brandChars(resent)).toBe(brandChars(stored));
+    expect(essenceSaveRefusal(stored, resent)).toBeNull();
+    // A trim of a few lines, sent with "\r\n", goes through.
+    const trimmed = normalizeEssence({ brand: { operating_spine: lines.slice(0, 590).join("\r\n") } });
+    expect(essenceSaveRefusal(stored, trimmed)).toBeNull();
+    // Stories and outcomes are cleaned the same way.
+    expect(normalizeEssence({ representative_stories: { stories: [{ name: "A", summary: "one\r\ntwo", when_to_use: "" }] } }).representative_stories?.stories).toEqual([{ name: "A", summary: "one\ntwo", when_to_use: "" }]);
+    // Growing it is still refused.
+    const grown = normalizeEssence({ brand: { operating_spine: [...lines, "One more line."].join("\r\n") } });
+    expect(essenceSaveRefusal(stored, grown)).toMatchObject({ error: "brandover" });
+  });
   it("a save is refused only when it grows the core past its cap, or Brand past its own, each named", () => {
     const small = normalizeEssence(core);
     const coreBig = normalizeEssence({ ...core, ethical_standards: { transparency: "x".repeat(ESSENCE_CAP) } });

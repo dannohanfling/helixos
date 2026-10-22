@@ -80,18 +80,24 @@ export const placeholderFor = (section: string, field: string, kind: FieldKind =
   return kind === "list" ? p.split(" / ").join("\n") : p;
 };
 
+/**
+ * A typed value as stored: a browser sends a text box's line breaks as "\r\n", stored text has "\n". Without this, saving a long
+ * multi-line field unchanged grew it by a character a line, so a trim that should fit was refused as growing (Lindsey, 20 Oct).
+ */
+const cleanText = (v: unknown): string => String(v ?? "").replace(/\r\n?/g, "\n").trim();
+
 const cleanList = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : typeof v === "string" ? v.split("\n").map((x) => x.trim()).filter(Boolean) : []);
 const cleanStories = (v: unknown): Story[] =>
   Array.isArray(v)
     ? v
-        .map((x) => (x && typeof x === "object" ? { name: String((x as Story).name ?? "").trim(), summary: String((x as Story).summary ?? "").trim(), when_to_use: String((x as Story).when_to_use ?? "").trim() } : null))
+        .map((x) => (x && typeof x === "object" ? { name: cleanText((x as Story).name), summary: cleanText((x as Story).summary), when_to_use: cleanText((x as Story).when_to_use) } : null))
         .filter((x): x is Story => Boolean(x && (x.name || x.summary || x.when_to_use)))
     : [];
 
 const cleanOutcomes = (v: unknown): Outcome[] =>
   Array.isArray(v)
     ? v
-        .map((x) => (x && typeof x === "object" ? { name: String((x as Outcome).name ?? "").trim().slice(0, 80), line: String((x as Outcome).line ?? "").trim().slice(0, 1000), audience: String((x as Outcome).audience ?? "").trim().slice(0, 80) } : null))
+        .map((x) => (x && typeof x === "object" ? { name: cleanText((x as Outcome).name).slice(0, 80), line: cleanText((x as Outcome).line).slice(0, 1000), audience: cleanText((x as Outcome).audience).slice(0, 80) } : null))
         .filter((x): x is Outcome => Boolean(x && (x.name || x.line)))
         .slice(0, MAX_OUTCOMES)
     : [];
@@ -113,7 +119,7 @@ export function normalizeEssence(input: unknown): EssenceData {
     for (const f of section.fields) {
       const v = raw[f.key];
       if (f.kind === "text") {
-        const s = typeof v === "string" ? v.trim() : "";
+        const s = typeof v === "string" ? cleanText(v) : "";
         if (s) sec[f.key] = s;
       } else if (f.kind === "list") {
         const arr = cleanList(v);
