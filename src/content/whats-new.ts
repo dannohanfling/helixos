@@ -12,12 +12,22 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 346,
+    n: 347,
     date: "2026-10-22",
     title: "My reports is easy to find",
     lines: [
       "Open \"I have an issue or a suggestion\" and My reports is the first button, with how many new replies are waiting for you.",
       "After you send something, See it in My reports takes you straight to it.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 346,
+    date: "2026-10-22",
+    title: "Settings tabs and Colosseum wins fit your phone",
+    lines: [
+      "On a phone, the Settings tabs now slide sideways instead of piling on top of each other, and the tab you're on is always in view.",
+      "Wins from the stands stack neatly on a phone: the label on its own line, then the win, then the date with Applaud beside it.",
     ],
     audience: "everyone",
   },

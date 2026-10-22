@@ -1,3 +1,4 @@
+import { syncLibraryTasks, type LibraryTaskRow } from "@/db/library-sync";
 import { isNull, and, eq, inArray, ne, notInArray } from "drizzle-orm";
 import { TIERS } from "@/lib/engine/tiers";
 /** The Daily welcome (H-312) is "seen" for the demo's members whatever the day, so no walk meets it by surprise; the welcome walk clears the mark for its own run. */
@@ -38,8 +39,9 @@ export async function seedLibrary(): Promise<void> {
     await db
       .insert(schema.pathwayStages)
       .values({ ...s, tagline: s.tagline ?? null, description: s.description ?? null, entryCriteria: s.entryCriteria ?? null, exitCriteria: s.exitCriteria ?? null })
-      .onConflictDoUpdate({ target: schema.pathwayStages.key, set: { ...s } });
+      .onConflictDoUpdate({ target: schema.pathwayStages.key, set: { ...s, key: undefined } });
   }
+  const taskRows: LibraryTaskRow[] = [];
   for (const t of library as LibraryRow[]) {
     const row = {
       key: t.key,
@@ -55,8 +57,10 @@ export async function seedLibrary(): Promise<void> {
       unlocks: t.unlocks ?? null,
       trainingUrl: t.trainingUrl ?? null,
     };
-    await db.insert(schema.libraryTasks).values(row).onConflictDoUpdate({ target: schema.libraryTasks.key, set: row });
-  }  // My Helix's 67 rungs (rev 710): seeded once, then the coach's to edit, so a reseed keeps their labels, links and signals.
+    taskRows.push(row);
+  }
+  await syncLibraryTasks(taskRows);
+  // My Helix's 67 rungs (rev 710): seeded once, then the coach's to edit, so a reseed keeps their labels, links and signals.
   for (const r of rungs as { key: string; phase: number; order: number; label: string; signal: string; href: string }[]) {
     await db.insert(schema.helixRungs).values(r).onConflictDoNothing();
   }
