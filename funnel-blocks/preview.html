@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Funnel blocks preview</title>
 <style>body{margin:0;background:#030100;color:#E0CEBA;font-family:"DM Sans",Arial,sans-serif}.pv-l{margin:0;padding:18px 20px 6px;color:#a8987f;font-size:13px;letter-spacing:.08em;text-transform:uppercase;border-top:1px solid #2a2114}h2.pv{margin:0;padding:20px;font-size:18px;color:#F6F1E7}</style></head><body>
-<h2 class="pv">Evolve Omega funnel blocks: preview (H-1673, items 1 to 4)</h2>
+<h2 class="pv">Evolve Omega funnel blocks: preview (H-1673, items 1 to 7)</h2>
 <p class="pv-l">1. Testimonial marquee (hover or tap to pause)</p><!-- Evolve Omega: testimonial marquee. Paste into a GHL Custom Code element.
      Edit the quotes in the list only; the script copies it once for the seamless loop. -->
 <section class="eo-mq" aria-label="What clients say">
@@ -167,4 +167,114 @@ bs.forEach(function(b){b.onclick=function(){set(b.dataset.k)}});set("monthly");
 })(document.currentScript.closest(".eo-pt"));
 </script>
 </section>
+<p class="pv-l">5. Before/after slider, as delivered (placeholders until Danno supplies approved images)</p><!-- Evolve Omega: before/after slider. Paste into a GHL Custom Code element.
+     Put real, approved images in data-before and data-after (Danno's own, or approved Proof Bank items), and describe each in data-alt-*.
+     Until then the two panes show placeholders. Never use an invented result. -->
+<figure class="eo-ba" data-before="[BEFORE IMAGE URL]" data-after="[AFTER IMAGE URL]" data-alt-before="[Describe the before image]" data-alt-after="[Describe the after image]">
+<style>
+.eo-ba,.eo-ba *{box-sizing:border-box}
+.eo-ba{position:relative;max-width:900px;margin:0 auto;aspect-ratio:4/3;overflow:hidden;border:1px solid #3a2d18;border-radius:16px;background:#0b0703;font-family:"DM Sans",Arial,sans-serif;--p:50%}
+.eo-ba-b,.eo-ba-a{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#a8987f;font-size:15px;text-align:center;padding:16px}
+.eo-ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.eo-ba-b{padding-right:52%}.eo-ba-a{padding-left:52%}
+.eo-ba-a{clip-path:inset(0 0 0 var(--p));background:#120c05}
+.eo-ba-a.eo-k{transition:clip-path .25s ease}
+.eo-ba span{position:absolute;top:12px;padding:4px 10px;border-radius:999px;background:rgba(3,1,0,.75);color:#F6F1E7;font-size:12px;letter-spacing:.08em;text-transform:uppercase;pointer-events:none}
+.eo-ba-l{left:12px}.eo-ba-r{right:12px}
+.eo-ba-h{position:absolute;top:0;bottom:0;left:var(--p);width:2px;margin-left:-1px;background:#DDA338;pointer-events:none}
+.eo-ba-h::after{content:"\2039\00a0\203A";position:absolute;top:50%;left:50%;display:grid;place-items:center;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:#DDA338;color:#030100;font-size:20px;font-weight:700}
+.eo-ba input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize;touch-action:pan-y}
+.eo-ba input:focus-visible~.eo-ba-h::after{outline:2px solid #F6F1E7;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.eo-ba-a.eo-k{transition:none}}
+</style>
+<div class="eo-ba-b"></div><div class="eo-ba-a"></div>
+<span class="eo-ba-l">Before</span><span class="eo-ba-r">After</span>
+<input type="range" min="0" max="100" value="50" aria-label="Compare before and after: move left for more after, right for more before">
+<div class="eo-ba-h"></div>
+<script>
+(function(f){var d=f.dataset,r=f.querySelector("input"),a=f.querySelector(".eo-ba-a");
+[["b",d.before,d.altBefore],["a",d.after,d.altAfter]].forEach(function(x){var el=f.querySelector(".eo-ba-"+x[0]);
+if(/^\[/.test(x[1])){el.textContent=x[1]}else{var i=new Image();i.src=x[1];i.alt=x[2];i.loading="lazy";el.appendChild(i)}});
+function set(){f.style.setProperty("--p",r.value+"%")}
+r.addEventListener("input",set);
+r.addEventListener("keydown",function(){a.classList.add("eo-k")});
+r.addEventListener("pointerdown",function(){a.classList.remove("eo-k")});
+set();
+})(document.currentScript.closest(".eo-ba"));
+</script>
+</figure>
+<p class="pv-l">5b. Same slider with plain stand-in panes to show the drag. Not a result.</p><!-- Evolve Omega: before/after slider. Paste into a GHL Custom Code element.
+     Put real, approved images in data-before and data-after (Danno's own, or approved Proof Bank items), and describe each in data-alt-*.
+     Until then the two panes show placeholders. Never use an invented result. -->
+<figure class="eo-ba" data-before="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 800 600%27%3E%3Crect width=%27800%27 height=%27600%27 fill=%27%23241a10%27/%3E%3Ctext x=%27400%27 y=%27310%27 fill=%27%23a8987f%27 font-family=%27Arial%27 font-size=%2740%27 text-anchor=%27middle%27%3ESTAND-IN A%3C/text%3E%3C/svg%3E" data-after="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 800 600%27%3E%3Crect width=%27800%27 height=%27600%27 fill=%27%23DDA338%27/%3E%3Ctext x=%27400%27 y=%27310%27 fill=%27%23030100%27 font-family=%27Arial%27 font-size=%2740%27 text-anchor=%27middle%27%3ESTAND-IN B%3C/text%3E%3C/svg%3E" data-alt-before="Stand-in image A" data-alt-after="Stand-in image B">
+<style>
+.eo-ba,.eo-ba *{box-sizing:border-box}
+.eo-ba{position:relative;max-width:900px;margin:0 auto;aspect-ratio:4/3;overflow:hidden;border:1px solid #3a2d18;border-radius:16px;background:#0b0703;font-family:"DM Sans",Arial,sans-serif;--p:50%}
+.eo-ba-b,.eo-ba-a{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#a8987f;font-size:15px;text-align:center;padding:16px}
+.eo-ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.eo-ba-b{padding-right:52%}.eo-ba-a{padding-left:52%}
+.eo-ba-a{clip-path:inset(0 0 0 var(--p));background:#120c05}
+.eo-ba-a.eo-k{transition:clip-path .25s ease}
+.eo-ba span{position:absolute;top:12px;padding:4px 10px;border-radius:999px;background:rgba(3,1,0,.75);color:#F6F1E7;font-size:12px;letter-spacing:.08em;text-transform:uppercase;pointer-events:none}
+.eo-ba-l{left:12px}.eo-ba-r{right:12px}
+.eo-ba-h{position:absolute;top:0;bottom:0;left:var(--p);width:2px;margin-left:-1px;background:#DDA338;pointer-events:none}
+.eo-ba-h::after{content:"\2039\00a0\203A";position:absolute;top:50%;left:50%;display:grid;place-items:center;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:#DDA338;color:#030100;font-size:20px;font-weight:700}
+.eo-ba input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize;touch-action:pan-y}
+.eo-ba input:focus-visible~.eo-ba-h::after{outline:2px solid #F6F1E7;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.eo-ba-a.eo-k{transition:none}}
+</style>
+<div class="eo-ba-b"></div><div class="eo-ba-a"></div>
+<span class="eo-ba-l">Before</span><span class="eo-ba-r">After</span>
+<input type="range" min="0" max="100" value="50" aria-label="Compare before and after: move left for more after, right for more before">
+<div class="eo-ba-h"></div>
+<script>
+(function(f){var d=f.dataset,r=f.querySelector("input"),a=f.querySelector(".eo-ba-a");
+[["b",d.before,d.altBefore],["a",d.after,d.altAfter]].forEach(function(x){var el=f.querySelector(".eo-ba-"+x[0]);
+if(/^\[/.test(x[1])){el.textContent=x[1]}else{var i=new Image();i.src=x[1];i.alt=x[2];i.loading="lazy";el.appendChild(i)}});
+function set(){f.style.setProperty("--p",r.value+"%")}
+r.addEventListener("input",set);
+r.addEventListener("keydown",function(){a.classList.add("eo-k")});
+r.addEventListener("pointerdown",function(){a.classList.remove("eo-k")});
+set();
+})(document.currentScript.closest(".eo-ba"));
+</script>
+</figure>
+<p class="pv-l">7. Gold aurora headline</p><!-- Evolve Omega: gold aurora headline. Paste into a GHL Custom Code element on a dark section. Edit the words only.
+     Set Anton in the GHL page fonts. With reduced motion the gold stands still. Browsers that can't clip a background to text show solid gold. -->
+<section class="eo-au">
+<style>
+.eo-au,.eo-au *{box-sizing:border-box}
+.eo-au{padding:40px 20px;background:#030100;text-align:center}
+.eo-au h1{margin:0 auto;max-width:1000px;font-family:Anton,"Oswald","Arial Narrow",Impact,sans-serif;font-weight:400;font-size:clamp(44px,12vw,120px);line-height:1;letter-spacing:.01em;text-transform:uppercase;color:#DDA338}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+.eo-au h1{background:linear-gradient(110deg,#B9822A 0%,#DDA338 18%,#F6E3B0 30%,#F0C76A 40%,#C8902F 55%,#FFF1CF 68%,#DDA338 82%,#B9822A 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:eo-au 12s ease-in-out infinite alternate}}
+@keyframes eo-au{from{background-position:0% 50%}to{background-position:100% 50%}}
+@media (prefers-reduced-motion:reduce){.eo-au h1{animation:none;background-position:35% 50%}}
+</style>
+<h1>Your headline here</h1>
+</section>
+<p class="pv-l">7b. Gold aurora, 30 Days in the Arena header version</p><!-- Evolve Omega: gold aurora headline, 30 Days in the Arena header version. Paste into a GHL Custom Code element on a dark section. Edit the words only.
+     Set Anton in the GHL page fonts. With reduced motion the gold stands still. Browsers that can't clip a background to text show solid gold. -->
+<section class="eo-au eo-au-arena">
+<style>
+.eo-au,.eo-au *{box-sizing:border-box}
+.eo-au{padding:40px 20px;background:#030100;text-align:center}
+.eo-au h1{margin:0 auto;max-width:1000px;font-family:Anton,"Oswald","Arial Narrow",Impact,sans-serif;font-weight:400;font-size:clamp(44px,12vw,120px);line-height:1;letter-spacing:.01em;text-transform:uppercase;color:#DDA338}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+.eo-au h1{background:linear-gradient(110deg,#B9822A 0%,#DDA338 18%,#F6E3B0 30%,#F0C76A 40%,#C8902F 55%,#FFF1CF 68%,#DDA338 82%,#B9822A 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:eo-au 12s ease-in-out infinite alternate}}
+.eo-au-arena{padding:56px 20px 44px}
+.eo-au-arena h1{font-size:clamp(48px,13vw,128px)}
+@keyframes eo-au{from{background-position:0% 50%}to{background-position:100% 50%}}
+@media (prefers-reduced-motion:reduce){.eo-au h1{animation:none;background-position:35% 50%}}
+</style>
+<h1>30 Days in the Arena</h1>
+</section>
+<p class="pv-l">6. Reading progress bar: the thin gold bar at the very top of this page</p><!-- Evolve Omega: reading progress bar. Paste once into a GHL Custom Code element anywhere on a long page.
+     A thin gold bar at the very top fills as the visitor scrolls. CSS only. Browsers without scroll-driven animation never show it. -->
+<div class="eo-pb" aria-hidden="true"></div>
+<style>
+.eo-pb{position:fixed;top:0;left:0;right:0;z-index:2147483000;height:3px;background:#DDA338;transform-origin:0 50%;transform:scaleX(0);display:none;pointer-events:none}
+@supports (animation-timeline:scroll()){.eo-pb{display:block;animation:eo-pb linear both;animation-timeline:scroll(root block)}}
+@keyframes eo-pb{to{transform:scaleX(1)}}
+</style>
 </body></html>

@@ -1,0 +1,16 @@
+<!-- Evolve Omega: gold aurora headline, 30 Days in the Arena header version. Paste into a GHL Custom Code element on a dark section. Edit the words only.
+     Set Anton in the GHL page fonts. With reduced motion the gold stands still. Browsers that can't clip a background to text show solid gold. -->
+<section class="eo-au eo-au-arena">
+<style>
+.eo-au,.eo-au *{box-sizing:border-box}
+.eo-au{padding:40px 20px;background:#030100;text-align:center}
+.eo-au h1{margin:0 auto;max-width:1000px;font-family:Anton,"Oswald","Arial Narrow",Impact,sans-serif;font-weight:400;font-size:clamp(44px,12vw,120px);line-height:1;letter-spacing:.01em;text-transform:uppercase;color:#DDA338}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+.eo-au h1{background:linear-gradient(110deg,#B9822A 0%,#DDA338 18%,#F6E3B0 30%,#F0C76A 40%,#C8902F 55%,#FFF1CF 68%,#DDA338 82%,#B9822A 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:eo-au 12s ease-in-out infinite alternate}}
+.eo-au-arena{padding:56px 20px 44px}
+.eo-au-arena h1{font-size:clamp(48px,13vw,128px)}
+@keyframes eo-au{from{background-position:0% 50%}to{background-position:100% 50%}}
+@media (prefers-reduced-motion:reduce){.eo-au h1{animation:none;background-position:35% 50%}}
+</style>
+<h1>30 Days in the Arena</h1>
+</section>

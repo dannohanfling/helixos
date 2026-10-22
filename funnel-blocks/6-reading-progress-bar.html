@@ -1,0 +1,8 @@
+<!-- Evolve Omega: reading progress bar. Paste once into a GHL Custom Code element anywhere on a long page.
+     A thin gold bar at the very top fills as the visitor scrolls. CSS only. Browsers without scroll-driven animation never show it. -->
+<div class="eo-pb" aria-hidden="true"></div>
+<style>
+.eo-pb{position:fixed;top:0;left:0;right:0;z-index:2147483000;height:3px;background:#DDA338;transform-origin:0 50%;transform:scaleX(0);display:none;pointer-events:none}
+@supports (animation-timeline:scroll()){.eo-pb{display:block;animation:eo-pb linear both;animation-timeline:scroll(root block)}}
+@keyframes eo-pb{to{transform:scaleX(1)}}
+</style>
