@@ -3,6 +3,7 @@ import "./globals.css";
 import { APP_DESCRIPTION } from "@/lib/brand";
 import { NativeBridge } from "@/components/pwa/native-bridge";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: { default: "HelixOS", template: "%s · HelixOS" },
@@ -34,6 +35,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <RegisterServiceWorker />
         {/* The store apps (H-877): does nothing on the website. */}
         <NativeBridge />
+        {/* Real phones' speed (Speed 1, H-1623): only on Vercel, where its script is served from the site itself, and it records
+            nothing until Speed Insights is switched on for the project. No member data: page paths and timings only. */}
+        {process.env.VERCEL ? <SpeedInsights /> : null}
       </body>
     </html>
   );

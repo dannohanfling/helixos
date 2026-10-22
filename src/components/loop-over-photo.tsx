@@ -7,8 +7,10 @@
  * - Only play() starts it (no autoplay attribute), and only while the box is on screen, the tab shows and the scene isn't
  *   paused; a refused play() (Low Power Mode, a slow line) leaves the photo.
  * - A file that won't load hides the video for good. Reduced motion: no video at all.
+ * - It starts loading once the page is idle, WebM first (Speed 1, H-1623).
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { whenIdle } from "@/lib/when-idle";
 
 const MOTION = "(prefers-reduced-motion: reduce)";
 const subscribeMotion = (cb: () => void) => {
@@ -34,9 +36,11 @@ export function LoopOverPhoto({ mp4, webm, held, className = "", testId }: { mp4
       if (onScreen.current && !document.hidden && !held) void v.play().catch(() => undefined);
       else v.pause();
     };
+    // The first load waits until the page is idle (Speed 1, H-1623): the photo is already there, so the page gets the line first.
+    let cancelIdle: (() => void) | null = null;
     const io = new IntersectionObserver((entries) => {
       onScreen.current = entries[entries.length - 1].isIntersecting;
-      if (onScreen.current) setNear(true);
+      if (onScreen.current && !near && !cancelIdle) cancelIdle = whenIdle(() => setNear(true));
       sync();
     });
     io.observe(v);
@@ -48,6 +52,7 @@ export function LoopOverPhoto({ mp4, webm, held, className = "", testId }: { mp4
     v.addEventListener("pause", onPause);
     sync();
     return () => {
+      cancelIdle?.();
       io.disconnect();
       document.removeEventListener("visibilitychange", sync);
       v.removeEventListener("loadeddata", sync);
@@ -71,8 +76,9 @@ export function LoopOverPhoto({ mp4, webm, held, className = "", testId }: { mp4
       data-testid={testId}
       data-loop-mode={playing ? "video" : near ? "loading" : "idle"}
     >
-      {near ? <source src={mp4} type="video/mp4" /> : null}
-      {near ? <source src={webm} type="video/webm" onError={() => setFailed(true)} /> : null}
+      {/* WebM (VP9) first: about half the MP4's size. A browser that can't play it falls through to the MP4. */}
+      {near ? <source src={webm} type='video/webm; codecs="vp9"' /> : null}
+      {near ? <source src={mp4} type="video/mp4" onError={() => setFailed(true)} /> : null}
     </video>
   );
 }

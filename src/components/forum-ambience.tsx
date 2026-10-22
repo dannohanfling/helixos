@@ -27,6 +27,7 @@ export function ForumAmbience({ look, loop = false }: { look: Look; loop?: boole
           {FORUM_FLICKER.map((f, i) => (
             // The same picture as the map's own night photo, so the browser serves it from its cache: no second download.
             <picture key={i}>
+              <source srcSet="/forum/forum-night.avif" type="image/avif" />
               <source srcSet="/forum/forum-night.webp" type="image/webp" />
               <img className="amb-fl amb-fo-fl" src="/forum/forum-night.jpg" alt="" decoding="async" style={{ clipPath: f.clip, animationDuration: s(f.d), animationDelay: s(f.dl) }} data-testid="amb-flicker" />
             </picture>
