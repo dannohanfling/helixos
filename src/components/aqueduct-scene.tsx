@@ -94,7 +94,7 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
             <picture>
               <source srcSet={`${picture}.avif`} type="image/avif" />
               <source srcSet={`${picture}.webp`} type="image/webp" />
-              <img ref={photo} className="aq-bg aq-bg-now" src={`${picture}.jpg`} alt="" width={PICTURE.width} height={PICTURE.height} decoding="async" onError={() => setBroken((b) => new Set(b).add(picture))} data-testid="aqueduct-photo" />
+              <img ref={photo} className="aq-bg aq-bg-now" src={`${picture}.jpg`} alt="" width={PICTURE.width} height={PICTURE.height} fetchPriority="high" decoding="async" onError={() => setBroken((b) => new Set(b).add(picture))} data-testid="aqueduct-photo" />
             </picture>
           )}
           {loop && !broken.has(picture) ? <LoopOverPhoto mp4={loop.mp4} webm={loop.webm} held={still} className="aq-bg aq-loop" testId="aqueduct-loop" /> : null}
