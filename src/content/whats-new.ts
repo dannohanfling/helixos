@@ -12,12 +12,22 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 343,
+    n: 344,
     date: "2026-10-22",
     title: "Pages open faster on your phone",
     lines: [
       "Every page now starts sooner and downloads less: the logo is a fraction of its old size, the menu waits on fewer lookups, and the special fonts load only where they're used.",
       "The moving scenes on the Forum and the Aqueduct show their photo straight away and start the film a moment later, with about half the data.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 343,
+    date: "2026-10-22",
+    title: "30 Days in the Arena: tap I'm in",
+    lines: [
+      "A December challenge while Danno is in Egypt: close your day on 24 of the 30 days from Fri 27 Nov to Sat 26 Dec, and stack points along the way. The Arena page has the rules, the prizes and the Huddle dates.",
+      "Tap I'm in on the Arena page or on your Today card by Thu 26 Nov. Once you're in, Today shows your day, your days closed out of 24 and the next Huddle.",
     ],
     audience: "everyone",
   },
