@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 349,
+    n: 350,
     date: "2026-10-22",
     title: "Smoother on your phone",
     lines: [
@@ -20,6 +20,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "Headings and paragraphs wrap more evenly, and the big scene photos load first.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 349,
+    date: "2026-10-22",
+    title: "Fix the name on a pass",
+    lines: [
+      "Coach has Fix my pass on your own program: it writes your name, as it is in HelixOS, onto the pass you already have. Check your phone, and tick Names update in place once it shows.",
+      "After that tick, each client's row has Fix this pass, and you can choose to fix a member's pass whenever they change their name. A pass made with a prompt in its name is marked Name needs fixing.",
+    ],
+    audience: "coach",
   },
   {
     n: 348,

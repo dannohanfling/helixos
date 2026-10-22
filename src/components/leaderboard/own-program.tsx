@@ -5,6 +5,8 @@ import { DeskSettings } from "@/components/leaderboard/desk-settings";
 import { checkLeaderboardAction, saveLeaderboardAction, setIssuePassesAction } from "@/lib/actions/leaderboard";
 import { sendPassMessageAction, setInvitesAction, setSyncModeAction } from "@/lib/actions/points-sync";
 import { PASS_MESSAGE_DEFAULT, PASS_MESSAGE_MAX, passMessageWords } from "@/lib/engine/pass-message";
+import { fixMyPassAction, setNameFixAction } from "@/lib/actions/pass-fix";
+import { fixWords } from "@/lib/engine/pass-fix";
 import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
 
 /**
@@ -12,7 +14,7 @@ import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
  * sealed eLoyalty key, shown by its last four, the host and the pass template), the "Issue passes" switch that opens
  * "Get my pass" to clients, the coach's own pass, and the Points desk's settings for the add-and-deduct check.
  */
-export function OwnProgramCard({ membershipId, feed, ownPass, passMessage }: { membershipId: string; feed: schema.LeaderboardFeed | null; ownPass: { made: boolean; installed: boolean; addressed?: boolean; lastMessageAt?: string | null }; passMessage?: string }) {
+export function OwnProgramCard({ membershipId, feed, ownPass, passMessage, passFix }: { membershipId: string; feed: schema.LeaderboardFeed | null; ownPass: { made: boolean; installed: boolean; addressed?: boolean; lastMessageAt?: string | null }; passMessage?: string; passFix?: string }) {
   const ready = Boolean(feed?.keyEncrypted && feed.templateId && feed.lastCheckOk);
   return (
     <Card className="mb-4" title="🎫 Your own program: the Evolve Omega pass" id="own-program">
@@ -47,6 +49,7 @@ export function OwnProgramCard({ membershipId, feed, ownPass, passMessage }: { m
           </a>
         </p>
         {feed && ready && ownPass.addressed ? <PassMessage lastMessageAt={ownPass.lastMessageAt ?? null} outcome={passMessage} /> : null}
+        {feed && ready && ownPass.addressed ? <PassFix feed={feed} outcome={passFix} /> : null}
         {feed ? (
           <form action={setIssuePassesAction} className="mt-2 flex flex-wrap items-center gap-2">
             <input type="hidden" name="id" value={feed.id} />
@@ -143,5 +146,39 @@ function PassMessage({ lastMessageAt, outcome }: { lastMessageAt: string | null;
         </span>
       ) : null}
     </form>
+  );
+}
+
+/**
+ * Fix my pass (H-1699, plan H-1701): rewrite the name on the coach's own pass from HelixOS, then tick "Names update in place" once
+ * it shows on the phone. Until that tick, "Fix this pass" on clients' rows stays shut and names are never fixed on a change.
+ */
+function PassFix({ feed, outcome }: { feed: schema.LeaderboardFeed; outcome?: string }) {
+  const said = fixWords(outcome);
+  return (
+    <div className="mt-2 text-xs" data-testid="own-pass-fix">
+      <form action={fixMyPassAction} className="flex flex-wrap items-center gap-1">
+        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Fixing…" data-testid="own-pass-fix-run">
+          Fix my pass
+        </SubmitButton>
+        <span className="text-ink-3">Writes your name, as it is in HelixOS, onto your pass. Nothing else.</span>
+      </form>
+      {said ? (
+        <p className={`mt-1 ${said.good ? "text-good" : "text-danger"}`} data-testid="own-pass-fix-result">
+          {said.text}
+        </p>
+      ) : null}
+      <form action={setNameFixAction} className="mt-1 flex flex-wrap items-center gap-2">
+        <label>
+          <input type="checkbox" name="nameFixProven" defaultChecked={feed.nameFixProven} data-testid="name-fix-proven" /> Names update in place (my pass showed the fix)
+        </label>
+        <label className={feed.nameFixProven ? undefined : "text-ink-3"}>
+          <input type="checkbox" name="fixNamesOnChange" defaultChecked={feed.fixNamesOnChange} disabled={!feed.nameFixProven} data-testid="fix-names-on-change" /> Fix a member&apos;s pass when they change their name
+        </label>
+        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…" data-testid="name-fix-save">
+          Save
+        </SubmitButton>
+      </form>
+    </div>
   );
 }
