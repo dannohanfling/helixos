@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { APP_DESCRIPTION } from "@/lib/brand";
 
-/** Add-to-home-screen: HelixOS opens on Today as a standalone app, in the brand colours, with the drawn mark as its icon. */
+/** Add-to-home-screen: HelixOS opens on Today as a standalone app, in the brand colours, with the Evolve Omega medallion as its icon (H-667). */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "HelixOS",
@@ -14,10 +14,10 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f6f5f1",
     theme_color: "#f6f5f1",
     icons: [
-      { src: "/pwa-icon/192", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/pwa-icon/512", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/pwa-icon/192?maskable=1", sizes: "192x192", type: "image/png", purpose: "maskable" },
-      { src: "/pwa-icon/512?maskable=1", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/app-icon/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/app-icon/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/app-icon/icon-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+      { src: "/app-icon/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

@@ -12,7 +12,7 @@ import { Boardroom } from "@/components/boardroom";
 import { councilClipFiles } from "@/lib/board-clips";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 import "./boardroom.css";
 
 export const metadata = { title: "My Board" };
@@ -135,7 +135,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
         ) : null}
         {fresh && canAsk ? (
           <div className="br-quiet" style={{ fontSize: 13, margin: "0 0 12px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }} data-testid="board-fresh-note">
-            <span>Fresh start on {formatDate(fresh.slice(0, 10))}: the Board reads only discussions since then.</span>
+            <span>Fresh start on {stampDate(fresh, v.tz)}: the Board reads only discussions since then.</span>
             {canUndo ? (
               <form action={undoFreshStartAction}>
                 <SubmitButton className="br-tab" pendingText="…" data-testid="board-fresh-undo">
@@ -163,7 +163,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
               const row = (
                 <li key={d.id} data-testid="board-discussion" data-before={before ? "1" : "0"}>
                   <span className="br-quiet" style={{ fontSize: 13 }}>
-                    {formatDate(d.createdAt.slice(0, 10))}
+                    {stampDate(d.createdAt, v.tz)}
                   </span>
                   <Link href={`/my-board/${d.id}`} className="br-serif br-oneline" style={{ fontSize: 20, fontWeight: 600 }} title={d.question} data-testid="board-discussion-question">
                     {d.question}
@@ -193,7 +193,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
               return i === firstBefore ? (
                 <li key={`before-${d.id}`} className="br-log-group" aria-hidden={false} style={{ display: "block" }}>
                   <h3 className="br-quiet" style={{ margin: "8px 0 0", fontSize: 13, fontWeight: 400, letterSpacing: 2, textTransform: "uppercase" }} data-testid="board-before-fresh">
-                    Before your fresh start ({formatDate(fresh!.slice(0, 10))})
+                    Before your fresh start ({stampDate(fresh!, v.tz)})
                   </h3>
                   <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>{row}</ul>
                 </li>

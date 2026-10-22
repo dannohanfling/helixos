@@ -7,6 +7,7 @@ import { db, schema } from "@/db";
 import { nowIso } from "@/lib/dates";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { addTask, ownTask, rescheduleTask, toggleTask } from "@/lib/tasks-core";
+import { unhookIntentionTask } from "@/lib/intention-chain";
 
 export async function createTaskAction(formData: FormData): Promise<void> {
   const { v } = await ctx({ team: "allow" });
@@ -41,7 +42,9 @@ export async function setFocusAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteTaskAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx({ team: "allow" });
+  const { workspaceId, userId } = await ctx({ team: "allow" });
+  // A task that is also on this week's intention (H-198): "both" takes it off the intention too; otherwise the intention keeps its words.
+  await unhookIntentionTask({ workspaceId, userId }, str(formData, "id"), str(formData, "intention") === "both");
   await db.delete(schema.tasks).where(and(eq(schema.tasks.id, str(formData, "id")), eq(schema.tasks.userId, userId)));
   refresh();
   // A task is deleted from Today or Tasks; the person stays on whichever it was, with the line saying it went.

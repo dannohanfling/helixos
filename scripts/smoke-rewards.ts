@@ -76,11 +76,17 @@ async function main() {
     await expectText(page, "Some rungs aren't open yet", "the page says some of the ladder is not open");
     const chatbot = await row(page, "Custom Chatbot Strategy Blueprint").locator('[data-testid="reward-status"]').innerText();
     if (!/not live yet/.test(chatbot)) throw new Error(`behaviour-trigger reward should be marked not live, got "${chatbot}"`);
+    // The two 30-day access rewards are claimable with no link once the tier is met (H-1596 A); the seed's points vary, so count them in.
+    const { TIERS, rankOf } = await import("@/lib/engine/tiers");
+    const mayaRow = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    const levelOf = (name: string) => TIERS.find((t) => t.name === name)!.level;
+    const mayaLevel = rankOf(mayaRow, await totalPoints(ws, maya.id)).level;
+    const accessOpen = (mayaLevel >= levelOf("Sentinel") ? 1 : 0) + (mayaLevel >= levelOf("Centurion") ? 1 : 0);
     const forms = await page.locator('[data-testid="claim-form"]').count();
-    if (forms !== 3) throw new Error(`only the 3 linked, affordable items should have a Claim button; saw ${forms}`);
+    if (forms !== 3 + accessOpen) throw new Error(`only the 3 linked, affordable items (and ${accessOpen} access rewards) should have a Claim button; saw ${forms}`);
     if (/your coach will follow up/i.test(await page.locator("main").innerText())) throw new Error("the old 'coach will follow up' promise is still on the page");
     await page.screenshot({ path: "screenshots/rw01-catalogue.png", fullPage: true });
-    console.log(`✓ catalogue: ${rewardCount} rewards + ${prizeCount} prizes, unlinked items are "Opening soon", ${forms} claimable`);
+    console.log(`✓ catalogue: ${rewardCount} rewards + ${prizeCount} prizes, unlinked items are "Opening soon" (access rewards aside), ${forms} claimable`);
 
     // A claim is an instant unlock: points off, that reward's booking link revealed, and following it is recorded
     const alignment = row(page, "Offer + Messaging Alignment Session");
@@ -167,6 +173,45 @@ async function main() {
     const mine = row(page, "Offer + Messaging Alignment Session");
     if (!(await mine.locator('[data-testid="claim-done-badge"]').count()) || (await mine.locator('[data-testid="book-link"]').count())) throw new Error("a claim marked done should say Done on Rewards, with no booking link");
     console.log("✓ client: the delivered claim says Done on Rewards");
+
+    // H-1586 / H-1596 A: a Sentinel client claims 30 Days Access to Academy with no link. The row says the coach
+    // acts next, never "booking link"; Coach says it's delivered by hand and flags it once it has waited a day; Mark done turns it Done.
+    const ACADEMY = "30 Days Access to Evolve Omega Academy";
+    const sentinelAt = TIERS.find((t) => t.name === "Sentinel")!.minPoints;
+    const short = sentinelAt - (await totalPoints(ws, maya.id));
+    if (short > 0) await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: ws, userId: maya.id, type: "bonus", points: short + 100, reason: "Smoke: to Sentinel" });
+    await page.goto(`${base}/rewards`);
+    const academy = row(page, ACADEMY);
+    if (!(await academy.locator('[data-testid="claim-form"]').count())) throw new Error("a Sentinel client should see Claim on the Academy access reward, link or not");
+    const beforeAcademy = await totalPoints(ws, maya.id);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), academy.locator('button:has-text("Claim")').click()]);
+    // A grant re-renders the row (the action's ok words are not shown), so the row is what the client reads.
+    await academy.locator('[data-testid="claim-waiting"]').waitFor({ timeout: 15000 });
+    if (/booking link/i.test(await academy.innerText())) throw new Error("a claim with no link must not mention a booking link");
+    const line = await academy.locator('[data-testid="claim-waiting-line"]').innerText();
+    if (!/opens your 30 days/.test(line) || (await academy.locator('[data-testid="book-link"]').count())) throw new Error(`the access claim should wait on the coach, with no booking link: "${line}"`);
+    if ((await totalPoints(ws, maya.id)) !== beforeAcademy) throw new Error("the access reward costs no points");
+    await page.screenshot({ path: "screenshots/rw04-access-claim.png", fullPage: true });
+    console.log("✓ access: a Sentinel client claims Academy with no link; the row says the coach opens it, no points move");
+
+    const academyClaim = (await db.query.rewardClaims.findFirst({ where: and(eq(schema.rewardClaims.userId, maya.id), eq(schema.rewardClaims.rewardName, ACADEMY)) }))!;
+    await login(page, "coach");
+    await page.goto(`${base}/coach?claims=open#claims`);
+    const academyRow = page.locator('[data-testid="claim-row"]').filter({ hasText: ACADEMY }).filter({ hasText: "Maya" });
+    if (!/you deliver this by hand/.test(await academyRow.innerText())) throw new Error("Coach should say the access claim is delivered by hand");
+    if (await page.locator('[data-testid="claims-overdue"]').count()) throw new Error("a fresh claim should not be flagged as waiting over a day");
+    await db.update(schema.rewardClaims).set({ createdAt: new Date(Date.now() - 2 * 86400_000).toISOString() }).where(eq(schema.rewardClaims.id, academyClaim.id));
+    await page.reload();
+    const overdue = await page.locator('[data-testid="claims-overdue"]').innerText();
+    if (!/^1 reward claim waiting on you over a day/.test(overdue)) throw new Error(`Coach should flag the day-old claim at the top: "${overdue}"`);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="claim-row"]').filter({ hasText: ACADEMY }).locator('[data-testid="claim-done"]').click()]);
+    await page.waitForLoadState("networkidle");
+    await page.reload();
+    if (await page.locator('[data-testid="claims-overdue"]').count()) throw new Error("Mark done should clear the waiting line");
+    await login(page, "client");
+    await page.goto(`${base}/rewards`);
+    if (!(await row(page, ACADEMY).locator('[data-testid="claim-done-badge"]').count())) throw new Error("the access claim marked done should say Done on Rewards");
+    console.log("✓ access: Coach says delivered by hand, flags it after a day, Mark done turns the client's row Done");
   } finally {
     await browser.close();
     rmSync(overridePath, { force: true });

@@ -18,7 +18,9 @@ describe("the crons", () => {
     expect(crons).toContainEqual({ path: "/api/cron/leaderboards", schedule: "*/5 * * * *" });
     // The stall watch (H-495): every five minutes, so an agent that stops checking in is flagged the same night.
     expect(crons).toContainEqual({ path: "/api/cron/forum-watch", schedule: "*/5 * * * *" });
-    expect(crons).toHaveLength(5);
+    // The app's push notifications (H-877): every five minutes, so a call reminder 15 minutes before lands on time.
+    expect(crons).toContainEqual({ path: "/api/cron/push", schedule: "*/5 * * * *" });
+    expect(crons).toHaveLength(6);
   });
   it("the health route reads the database, so the ping warms the connection too, and returns no data", () => {
     const route = readFileSync(join(process.cwd(), "src/app/api/health/route.ts"), "utf8");

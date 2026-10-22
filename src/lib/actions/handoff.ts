@@ -13,7 +13,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner, refusalOf, holdHandoff, releaseHandoff, supersedeHandoff } from "@/lib/handoff";
+import { agentSettings, answerHandoff, decideHandoff, tickNeed, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner, refusalOf, holdHandoff, releaseHandoff, supersedeHandoff } from "@/lib/handoff";
 import { CHECKIN_DEFAULTS, CHECKIN_EVERY, cleanSessionUrl, hhmm } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
 import { PING_TITLE } from "@/lib/engine/agent-connection";
@@ -79,6 +79,13 @@ export async function decideHandoffAction(_prev: HandoffFormState, formData: For
   const r = await decideHandoff(o, v.actor.id, str(formData, "id"), decision, String(formData.get("note") ?? "").trim());
   refresh();
   return r.ok ? { ok: r.text } : { error: r.text };
+}
+
+/** H-1494: the owner ticks a "needs you" item on the Inbox, Done or Not needed; either way it leaves the list. */
+export async function tickInboxNeedAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx(OWN_INBOX);
+  await tickNeed({ workspaceId, userId }, str(formData, "id"));
+  refresh();
 }
 
 export async function answerHandoffAction(formData: FormData): Promise<void> {

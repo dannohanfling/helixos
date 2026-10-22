@@ -158,7 +158,7 @@ describe("where the mark is set and where the gate stands (read off the source)"
     expect(faq).toMatch(/export async function acceptSafeFaqAction/);
     expect(faq).toMatch(/filter\(\(r\) => !needsEyes\(r\)\)/);
     // It is wired from exactly one page, the Bot Brief, and nowhere else.
-    for (const f of files) if (!/src\/lib\/actions\/faq\.ts$|src\/app\/\(app\)\/brain\/page\.tsx$/.test(f)) expect(readFileSync(f, "utf8"), f).not.toMatch(/acceptSafe/);
+    for (const f of files) if (!/src\/lib\/actions\/faq\.ts$|src\/app\/\(app\)\/my-bot\/page\.tsx$/.test(f)) expect(readFileSync(f, "utf8"), f).not.toMatch(/acceptSafe/);
     // The one Accept form takes exactly one record's fields, never a list of ids.
     const mark = read("src/components/provenance.tsx");
     expect(mark).toMatch(/fields: Record<string, string>/);

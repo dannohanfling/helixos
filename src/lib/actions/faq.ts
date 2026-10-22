@@ -12,7 +12,7 @@ import { originAfterAccept, originAfterSave, sameText } from "@/lib/engine/prove
 import { FAQ_SEND_IN_FLIGHT, pushFaq } from "@/lib/community-loyalty";
 import { logSync } from "@/lib/integrations";
 
-const BRAIN = "/brain";
+const BRAIN = "/my-bot";
 const MAX_UPLOAD = 5 * 1024 * 1024;
 
 /** The coach's own entry, or nowhere. */
@@ -116,7 +116,7 @@ export async function deleteFaqAction(formData: FormData): Promise<void> {
   await db.delete(schema.faqEntries).where(eq(schema.faqEntries.id, e.id));
   await logSync({ workspaceId, userId, provider: "community_loyalty", direction: "out", event: "faq.remove", payload: { entryId: e.id, question: e.question.slice(0, 120), by: v.user.name }, status: "sent", note: `removed by ${v.user.name}` });
   refresh();
-  redirect(deletedTo("/brain", "answer"));
+  redirect(deletedTo(BRAIN, "answer"));
 }
 
 /** Approve and send to my bot: the approved answers composed and pushed, read back both ways, and the outcome said plainly. */

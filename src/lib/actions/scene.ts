@@ -21,3 +21,10 @@ export async function setSoundsOnAction(formData: FormData): Promise<void> {
   await db.update(schema.memberships).set({ soundsOn: str(formData, "soundsOn") === "on" }).where(eq(schema.memberships.id, v.membership.id));
   refresh();
 }
+
+/** "Scene motion" (Roma Vivit 2 PR 6, H-1060): one switch, on by default, the member's own; a coach switched in is refused. */
+export async function setSceneMotionAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "The Scene motion switch is {first}'s own." });
+  await db.update(schema.memberships).set({ sceneMotion: str(formData, "sceneMotion") === "on" }).where(eq(schema.memberships.id, v.membership.id));
+  refresh();
+}

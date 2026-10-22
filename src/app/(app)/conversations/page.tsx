@@ -7,7 +7,7 @@ import { createContactAction, snoozeContactAction } from "@/lib/actions/contacts
 import { TemplatePicker } from "@/components/template-picker";
 import { Badge, Card, Empty, Field, PageHeader, Tabs } from "@/components/ui";
 import { templatesFor } from "@/lib/queries/templates";
-import { addDays, relativeDay } from "@/lib/dates";
+import { addDays, relativeDay, dayOf } from "@/lib/dates";
 import { STAGE_META } from "@/lib/stage-meta";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -82,7 +82,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
     { key: "cold", label: "Cold", href: "/conversations?filter=cold", count: cold.length },
   ];
   const list = filter === "pipeline" ? pipeline : filter === "clients" ? clients : filter === "cold" ? cold : filter === "inbound" ? inbound : attention;
-  const week7 = contacts.filter((c) => c.createdAt.slice(0, 10) >= addDays(v.today, -7)).length;
+  const week7 = contacts.filter((c) => dayOf(c.createdAt, v.tz) >= addDays(v.today, -7)).length;
 
   return (
     <>

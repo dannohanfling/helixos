@@ -3,7 +3,7 @@ import { connectionFor } from "@/lib/ghl";
 import { connectProgress } from "@/lib/engine/connect-copy";
 import { clTokenSet } from "@/lib/community-loyalty";
 import { requireViewer } from "@/lib/auth";
-import { eveningCloseAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
+import { eveningCloseAction, logWinAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
 import { streakRecountSeenAction } from "@/lib/actions/streak";
 import type { TodayActivity } from "@/lib/queries/daily";
 import type { DailyLog } from "@/db/schema";
@@ -19,6 +19,7 @@ import { dismissApplauseAction } from "@/lib/actions/colosseum";
 import { firstArrivalFor } from "@/lib/first-arrival";
 import { FirstArrival } from "@/components/first-arrival";
 import { EveningClose } from "@/components/evening-close";
+import { InstallCard } from "@/components/pwa/install-card";
 import { setupFor } from "@/lib/setup-card";
 import { SetupCard } from "@/components/setup-card";
 import { StartHere } from "@/components/start-here";
@@ -28,9 +29,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { FailedBanner } from "@/components/channel-outcome";
 import curriculumLinks from "@/data/curriculum-links.json";
 import { PendingLink } from "@/components/pending-link";
-import { FIELD_TASKS } from "@/lib/engine/pathway";
 import { TaskRow } from "@/components/task-row";
-import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
+import { Badge, Card, Field, Progress } from "@/components/ui";
 import { addDays, formatDate, formatDateTime, relativeDay } from "@/lib/dates";
 import { oohNoticeWords } from "@/lib/engine/office-hours";
 import { oohSchedule, sessionWhen } from "@/lib/engine/ooh-session";
@@ -51,6 +51,7 @@ import { WorkoutReadCard } from "@/components/body/workout-read";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
+import { unreadReplies } from "@/lib/report-replies";
 import { openClaims } from "@/lib/queries/rewards";
 import { recentlyOn, waitingFeatures } from "@/lib/bot-features";
 import { checkinsDue } from "@/lib/board-steps";
@@ -58,6 +59,10 @@ import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 import { logTiming, tick } from "@/lib/timing";
+import { after } from "next/server";
+import { markAnnounced, newlyOpen, refreshTools } from "@/lib/tools-open";
+import { SHOWN_AS_ROWS, thenItems } from "@/lib/engine/then-list";
+import { waitingByMenu, waitingCount as draftsWaitingCount } from "@/lib/claude-drafts";
 import { callsBetween } from "@/lib/calls";
 import { canJoin, joinState, nextCallLine, nextCallWithin } from "@/lib/engine/calls";
 import { CallJoin } from "@/components/call-join";
@@ -132,8 +137,21 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     callsBetween(v.workspace.id, callsNow, new Date(callsNow.getTime() + 24 * 3_600_000), { role: v.role, programTier: v.membership.programTier }),
   ]);
   const tData = tick();
+  // H-202: a reply on one of the member's reports they haven't seen, as one line to My reports. Never while switched in.
+  const replies = !v.switchedInto && !v.team ? await unreadReplies({ workspaceId: v.workspace.id, userId: v.user.id }) : null;
   // The stall watch (H-495): an agent of the owner's that stopped checking in, until it is back. Never in a switched-in view.
   const stalled = !v.switchedInto && !v.team ? await stalledAgentsOf({ workspaceId: v.workspace.id, userId: v.user.id }) : [];
+  // Tools open as a client reaches them (H-164 §12): what opened since Today last said so, said once; then, once the page has
+  // shown, My Helix is read again so the next opening is ready. Never for a team member; a coach switched in doesn't use it up.
+  const opened = v.role === "client" && !v.team ? newlyOpen(v.membership) : [];
+  if (v.role === "client" && !v.team) {
+    after(async () => {
+      if (opened.length && !v.switchedInto) await markAnnounced(v.membership.id, v.membership.toolsPhase);
+      await refreshTools(v);
+    });
+  }
+  // Claude's drafts waiting for this member's Approve (H-184), the webinar wizard's included: one line, to the list.
+  const draftsWaiting = v.team ? 0 : draftsWaitingCount(await waitingByMenu({ workspaceId: v.workspace.id, userId: v.user.id }));
   // Applause on the member's wins (H-1171): one quiet line, grouped, until they close it; only where the Colosseum is on.
   const applause = v.workspace.colosseumOn && !v.switchedInto && !v.team ? await applauseNews(v) : null;
   // A member's agent inbox (H-727 PR 2): one calm line while a plan waits for their OK, nothing otherwise. The coach's own
@@ -168,6 +186,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const rest = d.actions.slice(1, 6);
   // Before lock-in the hero is the lock-in itself, so Then lists everything else, the lock-in left out.
   const thenList = morningDone ? rest : d.actions.filter((a) => a.key !== "checkin").slice(0, 5);
+  // The suggestions above the Then list: the next actions the rows below don't already say (H-164 §14), three at most.
+  const suggestions = thenList.filter((a) => !SHOWN_AS_ROWS.has(a.key)).slice(0, 3);
+  const then = thenItems({ today: v.today, tasks: boardTasks, content: d.contentDue, inbound: d.inbound, followUps: d.followUps, upcoming: d.upcomingTasks });
+  const taskById = new Map([...boardTasks, ...d.upcomingTasks].map((t) => [t.id, t]));
+  const contentById = new Map(d.contentDue.map((c) => [c.id, c]));
+  const contactById = new Map([...d.inbound, ...d.followUps].map((c) => [c.id, c]));
   // Rev 497: the recordings' action items in Then. A member gets a line per call (the two newest) with items still for them to
   // decide, and a line for calls not yet opened (rev 498); the coach one line for the items from the last two weeks' calls.
   const recLines: { key: string; title: string; href: string }[] = [];
@@ -198,6 +222,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     <>
       {replay ? <FirstArrival card={replay} /> : null}
       {closeScene ? <EveningClose scene={closeScene} /> : null}
+      {replies?.count ? (
+        <Link href={`/reports#r-${replies.reportId}`} className="mb-4 block rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-report-reply">
+          {replies.count === 1 ? "A reply on your report" : `${replies.count} replies on your reports`}: see it in My reports →
+        </Link>
+      ) : null}
       {coachNew && (coachNew[0] || coachNew[1] || coachNew[2] || coachNew[3]) ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="coach-new">
           {coachNew[0] ? (
@@ -288,6 +317,23 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           ))}
         </div>
       ) : null}
+      {opened.length ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-good bg-good-soft px-3 py-2 text-sm" data-testid="today-tools-opened">
+          <span className="font-medium">New:</span>
+          {opened.map((n, i) => (
+            <span key={n.href}>
+              <Link href={n.href} className="font-medium underline">{n.label}</Link>
+              {i < opened.length - 1 ? "," : ""}
+            </span>
+          ))}
+          <span>{opened.length === 1 ? "is" : "are"} open in your menu, for the stage you&apos;ve reached.</span>
+        </div>
+      ) : null}
+      {draftsWaiting ? (
+        <Link href="/drafts" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-drafts">
+          Drafts waiting ({draftsWaiting}): Claude&apos;s drafts for you to approve, edit or discard →
+        </Link>
+      ) : null}
       {tools && tools.done < tools.total ? (
         <Link href="/connect-tools" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-connect-tools">
           Connect your tools: {tools.line}. GoHighLevel posts for you, Community Loyalty runs your bot →
@@ -310,6 +356,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </span>
         </div>
       </div>
+
+      {/* H-626: "Add HelixOS to your home screen", for a client on a phone's browser from their third day; it decides on the phone. */}
+      {v.role === "client" && !v.switchedInto && !v.team && !d.firstSession ? <InstallCard today={v.today} /> : null}
 
       {/* The week, the month and the feedback live on Intentions (rev 157): Today keeps one line once they're set, and the menu's badge says when something is due. */}
       {month || week ? (
@@ -431,85 +480,36 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </section>
       ) : null}
 
-      {/* Next best action */}
-      <section className={`mb-5 grid gap-3 ${morningDone ? "md:grid-cols-[1.4fr_1fr]" : ""}`}>
-        {morningDone ? <div className={`card p-5 ${primary.tone === "warning" ? "border-warn" : "border-accent"}`} style={{ background: primary.tone === "warning" ? "var(--warn-soft)" : "var(--accent-soft)" }}>
-          <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Next best action</div>
-          <div className="mt-1 text-xl font-bold">{primary.title}</div>
-          <div className="mt-1 text-sm text-ink-2">{primary.why}</div>
-          <div className="mt-3 flex items-center gap-3">
-            <Link href={primary.href} className="btn btn-primary">
-              {primary.cta}
-            </Link>
-            {primary.points ? <span className="text-sm font-semibold text-accent-ink">+{primary.points} pts</span> : null}
+      {/* Today in three parts (H-164 §14): the next best action, the Top 3, then one list of everything else by when it's due. */}
+      {morningDone ? (
+        <section className="mb-5" data-testid="today-nba">
+          <div className={`card p-5 ${primary.tone === "warning" ? "border-warn" : "border-accent"}`} style={{ background: primary.tone === "warning" ? "var(--warn-soft)" : "var(--accent-soft)" }}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Next best action</div>
+            <div className="mt-1 text-xl font-bold">{primary.title}</div>
+            <div className="mt-1 text-sm text-ink-2">{primary.why}</div>
+            <div className="mt-3 flex items-center gap-3">
+              <Link href={primary.href} className="btn btn-primary">
+                {primary.cta}
+              </Link>
+              {primary.points ? <span className="text-sm font-semibold text-accent-ink">+{primary.points} pts</span> : null}
+            </div>
           </div>
-        </div> : null}
-        <div className="card p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Then</div>
-          <ul className="mt-2 space-y-2">
-            {recLines.map((a) => (
-              <li key={a.key} data-testid="then-recording">
-                <Link href={a.href} className="flex items-start gap-2 text-sm hover:underline">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
-                  <span>{a.title} →</span>
-                </Link>
-              </li>
-            ))}
-            {thenList.length || recLines.length ? (
-              thenList.map((a) => (
-                <li key={a.key}>
-                  <Link href={a.href} className="flex items-start gap-2 text-sm hover:underline">
-                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${a.tone === "warning" ? "bg-warn" : a.tone === "primary" ? "bg-accent" : "bg-ink-3"}`} />
-                    <span>
-                      {a.title}
-                      {a.points ? <span className="ml-1 text-xs text-ink-3">+{a.points}</span> : null}
-                    </span>
-                  </Link>
-                </li>
-              ))
-            ) : (
-              <li className="text-sm text-ink-2">That&apos;s the whole list. Nice.</li>
-            )}
-          </ul>
-          {d.goal && d.goal.target > 0 ? (
-            <div className="mt-4 border-t pt-3">
-              <div className="flex items-center justify-between gap-2 text-xs" data-testid="today-goal-bar" data-pace={d.goal.pace}>
-                <span className="font-semibold text-ink-2">
-                  {d.goal.recordId ? <Link href={`/goals/${d.goal.recordId}`} className="hover:underline" data-testid="today-goal-link">{d.goal.title}</Link> : d.goal.title}
-                  {d.goal.name && d.goal.name !== d.goal.title ? <span className="ml-1 font-normal text-ink-3">· {d.goal.name}</span> : null}
-                  {d.goal.pace !== "none" ? <span className="ml-1 font-normal text-ink-3">· {PACE_LABEL[d.goal.pace].toLowerCase()}</span> : null}
-                </span>
-                <span className="tabular text-ink-2">
-                  {d.goal.unit === "$" ? "$" : ""}
-                  {d.goal.actual.toLocaleString()} / {d.goal.unit === "$" ? "$" : ""}
-                  {d.goal.target.toLocaleString()}
-                </span>
-              </div>
-              <div className="mt-1.5">
-                <Progress value={goalPct} tone={goalPct >= 100 ? "good" : "accent"} height={6} />
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 border-t pt-3 text-xs text-ink-3">
-              <Link href="/settings" className="underline">Set your one goal</Link> and it shows here, filled by the cash you log in the close.
-            </div>
-          )}
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-4">
           {/* After lock-in: a compact summary (energy, the win line, the 3 picks to tick, Edit), with the 30-day build under it. */}
           {morningDone ? (
-            <Card id="checkin" title="Today's lock-in" action={<Badge tone="good">Done · +10</Badge>}>
+            <Card id="checkin" title={<span data-testid="top3-title">Top 3</span>} action={<Badge tone="good">Done · +10</Badge>}>
               <div className="space-y-3" data-testid="lockin-summary">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="badge">⚡ {ENERGY[d.log?.energy ?? 3]}</span>
                   {d.log?.intention ? <span className="text-ink-2">“{d.log.intention}”</span> : null}
                 </div>
                 <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-2">
-                    Top 3 · {doneFocus.length}/{d.focusTasks.length} done
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-2" data-testid="top3-count">
+                    {doneFocus.length}/{d.focusTasks.length} done
                   </div>
                   {d.focusTasks.length ? (
                     <div className="-mx-2 divide-y">
@@ -558,38 +558,67 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Card>
           ) : null}
 
-          {/* Today's board */}
-          <Card title="Also on your plate" action={<NewTaskForm today={v.today} />}>
-            {boardTasks.length ? (
-              <div className="-mx-2 divide-y">
-                {boardTasks.map((t) => (
-                  <TaskRow key={t.id} task={t} today={v.today} origin={d.taskOrigins.get(t.id)} />
-                ))}
-              </div>
-            ) : (
-              <Empty icon="🧹" title="Board is clear" hint="Nothing overdue, nothing else due today." />
+          {/* Then (H-164 §14): one list in place of Also on your plate, Content to ship, Conversations and Coming up, by when each
+              is due. The suggestions and the calls' action items sit on top; a failed post's banner stays above its row. */}
+          <Card id="then" title={<span data-testid="then-title">Then</span>} action={<NewTaskForm today={v.today} />}>
+            {d.failedPosts.map((p) => (
+              <FailedBanner key={p.id} outcomes={p.outcomes} contentId={p.id} title={p.title} className="mb-3 text-xs" />
+            ))}
+            {/* Docket #9 (H-195): a win that wasn't on the list, logged as a task done today. */}
+            {v.switchedInto || v.team ? null : (
+              <form action={logWinAction} className="mb-3 flex gap-2" data-testid="log-win">
+                <input className="field min-w-0 flex-1 py-1 text-sm" name="title" placeholder="Did something else? Add it" maxLength={300} required aria-label="Something else you did today" data-testid="log-win-title" />
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Adding…" data-testid="log-win-add">
+                  Add
+                </SubmitButton>
+              </form>
             )}
-          </Card>
-
-          {/* Content + conversations */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Card title="Content to ship" action={<Link href="/content" className="text-xs text-ink-2 hover:underline">All content →</Link>}>
-              {d.failedPosts.map((p) => (
-                <FailedBanner key={p.id} outcomes={p.outcomes} contentId={p.id} title={p.title} className="mb-3 text-xs" />
-              ))}
-              {d.contentDue.length ? (
-                <ul className="space-y-2">
-                  {d.contentDue.map((c) => {
-                    const day = c.postAt?.slice(0, 10) ?? v.today;
-                    const late = day < v.today;
+            {recLines.length || suggestions.length ? (
+              <ul className="mb-3 space-y-2" data-testid="then-suggestions">
+                {recLines.map((a) => (
+                  <li key={a.key} data-testid="then-recording">
+                    <Link href={a.href} className="flex items-start gap-2 text-sm hover:underline">
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+                      <span>{a.title} →</span>
+                    </Link>
+                  </li>
+                ))}
+                {suggestions.map((a) => (
+                  <li key={a.key} data-testid="then-suggestion">
+                    <Link href={a.href} className="flex items-start gap-2 text-sm hover:underline">
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${a.tone === "warning" ? "bg-warn" : a.tone === "primary" ? "bg-accent" : "bg-ink-3"}`} />
+                      <span>
+                        {a.title}
+                        {a.points ? <span className="ml-1 text-xs text-ink-3">+{a.points}</span> : null}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {then.length ? (
+              <ul className="-mx-2 divide-y" data-testid="then-list">
+                {then.map((item) => {
+                  const when = item.late ? <span className="font-semibold text-danger">{relativeDay(item.day, v.today)}</span> : item.day === v.today ? (item.at.endsWith("~") ? "today" : `today ${item.at.slice(11, 16)}`) : relativeDay(item.day, v.today);
+                  if (item.kind === "task" || item.kind === "soon") {
+                    const t = taskById.get(item.id)!;
                     return (
-                      <li key={c.id} className="flex items-start justify-between gap-2 text-sm">
+                      <li key={item.key} data-testid="then-item" data-kind={item.kind} data-late={item.late ? "1" : "0"}>
+                        <TaskRow task={t} today={v.today} compact={item.kind === "soon"} origin={d.taskOrigins.get(t.id)} />
+                      </li>
+                    );
+                  }
+                  if (item.kind === "content") {
+                    const c = contentById.get(item.id)!;
+                    return (
+                      <li key={item.key} className="flex items-start justify-between gap-2 px-2 py-2 text-sm" data-testid="then-item" data-kind="content" data-late={item.late ? "1" : "0"}>
                         <div className="min-w-0">
+                          <span className="mr-1" aria-hidden>✍️</span>
                           <Link href={`/content/${c.id}`} className="font-medium hover:underline">
                             {c.title}
                           </Link>
                           <div className="text-xs text-ink-3">
-                            {c.platform} · {late ? <span className="font-semibold text-danger">{relativeDay(day, v.today)}</span> : c.status}
+                            {c.platform} · {when}
                           </div>
                         </div>
                         <form action={setContentStatusAction}>
@@ -601,39 +630,27 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                         </form>
                       </li>
                     );
-                  })}
-                </ul>
-              ) : (
-                <Empty icon="✍️" title="Nothing scheduled today" hint="One post a day keeps the algorithm warm." action={<Link href="/content" className="btn btn-ghost btn-sm">Plan a post</Link>} />
-              )}
-            </Card>
-            <Card title="Conversations" action={<Link href="/conversations" className="text-xs text-ink-2 hover:underline">All DMs →</Link>}>
-              {d.inbound.length || d.followUps.length ? (
-                <ul className="space-y-2 text-sm">
-                  {d.inbound.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-2">
-                      <Link href={`/conversations/${c.id}`} className="min-w-0 truncate font-medium hover:underline">
-                        {c.name}
-                      </Link>
-                      <Badge tone="warn">replied · waiting on you</Badge>
-                    </li>
-                  ))}
-                  {d.followUps
-                    .filter((c) => !d.inbound.some((i) => i.id === c.id))
-                    .map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-2">
-                        <Link href={`/conversations/${c.id}`} className="min-w-0 truncate font-medium hover:underline">
+                  }
+                  const c = contactById.get(item.id)!;
+                  return (
+                    <li key={item.key} className="flex items-center justify-between gap-2 px-2 py-2 text-sm" data-testid="then-item" data-kind={item.kind} data-late={item.late ? "1" : "0"}>
+                      <span className="min-w-0 truncate">
+                        <span className="mr-1" aria-hidden>💬</span>
+                        <Link href={`/conversations/${c.id}`} className="font-medium hover:underline">
                           {c.name}
                         </Link>
-                        <span className="text-xs text-ink-3">follow up · {c.stage.replace("_", " ")}</span>
-                      </li>
-                    ))}
-                </ul>
-              ) : (
-                <Empty icon="💬" title="No follow-ups due" hint="Start 3 new conversations today." action={<Link href="/conversations?new=1" className="btn btn-ghost btn-sm">Add a contact</Link>} />
-              )}
-            </Card>
-          </div>
+                      </span>
+                      {item.kind === "reply" ? <Badge tone="warn">replied · waiting on you</Badge> : <span className="shrink-0 text-xs text-ink-3">follow up · {when}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2" data-testid="then-empty">
+                That&apos;s the whole list. Nice. <Link href="/content" className="underline">Plan a post</Link> or <Link href="/conversations?new=1" className="underline">start a conversation</Link>.
+              </p>
+            )}
+          </Card>
         </div>
 
         {/* The right column: the close, HumanOS, your brand, the pathway, what's coming, the level (friction walk T4, 7 Oct:
@@ -788,36 +805,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               ) : null}
             </div>
           ) : null}
-          {d.brandKitStarter ? (
-            <Card title="Your brand" action={<Link href="/settings#brand-kit" className="text-xs text-ink-2 hover:underline">Settings →</Link>}>
-              <Link href="/settings#brand-kit" className="font-semibold hover:underline" data-testid="brand-kit-nudge">
-                Set your brand kit (5 min)
-              </Link>
-              <div className="mt-1 text-xs text-ink-3">Your colours, fonts and logo. Until then your decks use the house starter kit.</div>
-            </Card>
-          ) : null}
-          {d.pathwayNext ? (
-            <Card title="Next on your pathway" action={<Link href="/pathway" className="text-xs text-ink-2 hover:underline">Pathway →</Link>}>
-              <Link href={FIELD_TASKS[d.pathwayNext.key]?.href ?? `/pathway?task=${d.pathwayNext.key}`} className="font-semibold hover:underline" data-testid="pathway-next">
-                {d.pathwayNext.name}
-              </Link>
-              <div className="mt-1 text-xs text-ink-3">+{d.pathwayNext.points} pts when your coach verifies it</div>
-            </Card>
-          ) : null}
-          <Card title="Coming up">
-            {d.upcomingTasks.length ? (
-              <ul className="space-y-1.5 text-sm">
-                {d.upcomingTasks.map((t) => (
-                  <li key={t.id} className="flex justify-between gap-2">
-                    <span className="truncate">{t.title}</span>
-                    <span className="shrink-0 text-xs text-ink-3">{relativeDay(t.dueDate!, v.today)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-ink-2">Nothing scheduled this week yet.</p>
-            )}
-          </Card>
           <Card title="Level">
             <div className="flex items-center justify-between text-sm">
               <span className="font-semibold">
@@ -832,6 +819,29 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             <Link href="/rewards" className="mt-3 inline-block text-xs text-ink-2 hover:underline">
               See rewards →
             </Link>
+            {d.goal && d.goal.target > 0 ? (
+              <div className="mt-4 border-t pt-3">
+                <div className="flex items-center justify-between gap-2 text-xs" data-testid="today-goal-bar" data-pace={d.goal.pace}>
+                  <span className="font-semibold text-ink-2">
+                    {d.goal.recordId ? <Link href={`/goals/${d.goal.recordId}`} className="hover:underline" data-testid="today-goal-link">{d.goal.title}</Link> : d.goal.title}
+                    {d.goal.name && d.goal.name !== d.goal.title ? <span className="ml-1 font-normal text-ink-3">· {d.goal.name}</span> : null}
+                    {d.goal.pace !== "none" ? <span className="ml-1 font-normal text-ink-3">· {PACE_LABEL[d.goal.pace].toLowerCase()}</span> : null}
+                  </span>
+                  <span className="tabular text-ink-2">
+                    {d.goal.unit === "$" ? "$" : ""}
+                    {d.goal.actual.toLocaleString()} / {d.goal.unit === "$" ? "$" : ""}
+                    {d.goal.target.toLocaleString()}
+                  </span>
+                </div>
+                <div className="mt-1.5">
+                  <Progress value={goalPct} tone={goalPct >= 100 ? "good" : "accent"} height={6} />
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 border-t pt-3 text-xs text-ink-3">
+                <Link href="/settings" className="underline">Set your one goal</Link> and it shows here, filled by the cash you log in the close.
+              </div>
+            )}
           </Card>
         </div>
       </div>
@@ -894,7 +904,19 @@ function suggestedPicks(candidates: PickTask[], carriedIds: Set<string>, today: 
 
 function CloseForm({ log, activity, owner, today, error, closeKpis }: { log: DailyLog | null; activity: TodayActivity; owner: string | null; today: string; error?: string; closeKpis: { id: string; name: string; unit: string; value: number | null }[] }) {
   // First close: start from what the app already saw today. Editing a close shows what was saved.
-  const prefill: Partial<Record<keyof DailyLog, number>> = log?.eveningDoneAt ? {} : { dmsStarted: activity.dmsStarted, conversations: activity.conversations, posts: activity.posts, newLeads: activity.newLeads };
+  const prefill: Partial<Record<keyof DailyLog, number>> = log?.eveningDoneAt ? {} : { dmsStarted: activity.dmsStarted, conversations: activity.conversations, posts: activity.posts, newLeads: activity.newLeads, callsBooked: activity.callsBooked };
+  // Close the day prefilled (H-164 §16): what HelixOS already saw is a check to confirm, so a close is that check plus the win
+  // line. The boxes stay in the form, folded, for a correction; nothing seen means they show open, as before.
+  const seen = log?.eveningDoneAt
+    ? []
+    : [
+        activity.dmsStarted ? `${activity.dmsStarted} DM${activity.dmsStarted === 1 ? "" : "s"} started` : "",
+        activity.conversations ? `${activity.conversations} repl${activity.conversations === 1 ? "y" : "ies"}` : "",
+        activity.posts ? `${activity.posts} posted` : "",
+        activity.callsBooked ? `${activity.callsBooked} call${activity.callsBooked === 1 ? "" : "s"} booked` : "",
+        activity.newLeads ? `${activity.newLeads} new lead${activity.newLeads === 1 ? "" : "s"}` : "",
+      ].filter(Boolean);
+  const checked = seen.length > 0;
   const n = (key: keyof DailyLog, label: string, hint: string) => {
     const value = log?.eveningDoneAt ? Number(log[key] ?? 0) : (prefill[key] ?? (log ? Number(log[key] ?? 0) : 0));
     return (
@@ -918,19 +940,45 @@ function CloseForm({ log, activity, owner, today, error, closeKpis }: { log: Dai
           {error}
         </p>
       ) : null}
-      {!log?.eveningDoneAt && (activity.dmsStarted || activity.conversations || activity.posts || activity.newLeads) ? (
-        <p className="rounded-lg bg-surface-2 p-2 text-xs text-ink-2" data-testid="close-prefill">Filled in from what you logged today ({[activity.dmsStarted ? `${activity.dmsStarted} DMs` : "", activity.conversations ? `${activity.conversations} replies` : "", activity.posts ? `${activity.posts} posted` : "", activity.newLeads ? `${activity.newLeads} new leads` : ""].filter(Boolean).join(", ")}). Correct anything, then close. Points already earned during the day aren&apos;t counted twice.</p>
+      {checked ? (
+        <div className="rounded-lg bg-surface-2 p-3 text-sm" data-testid="close-check">
+          <p className="text-xs text-ink-2" data-testid="close-prefill">Filled in from what you logged today. Right? Then your win line, and close. Points already earned during the day aren&apos;t counted twice.</p>
+          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {seen.map((line) => (
+              <li key={line} className="font-medium" data-testid="close-check-line">
+                <span className="mr-1 text-good" aria-hidden>✓</span>
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {n("dmsStarted", "DMs started", "+5 each")}
-        {n("conversations", "Conversations", "+2 each")}
-        {n("callsBooked", "Calls booked", "+25 each")}
-        {n("callsHeld", "Calls held", "+10 each")}
-        {n("posts", "Posts", "+15 each")}
-        {n("offersMade", "Offers made", "Asks count")}
-        {n("newLeads", "New leads", "Opt-ins, hand-raises")}
-        {n("cashCollected", "Cash collected ($)", "Adds to your goal")}
-      </div>
+      <Field label="Biggest win today">
+        <input className="field" name="win" defaultValue={log?.win ?? ""} placeholder="Say it out loud. Wins compound." data-testid="close-win" />
+      </Field>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{n("cashCollected", "Cash collected ($)", "Adds to your goal")}</div>
+      <details className="rounded-lg border p-3" open={!checked || Boolean(error)} data-testid="close-numbers">
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">{checked ? "Change a number, or add calls held, offers and leads" : "Today's numbers"}</summary>
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {n("dmsStarted", "DMs started", "+5 each")}
+          {n("conversations", "Conversations", "+2 each")}
+          {n("callsBooked", "Calls booked", "+25 each")}
+          {n("callsHeld", "Calls held", "+10 each")}
+          {n("posts", "Posts", "+15 each")}
+          {n("offersMade", "Offers made", "Asks count")}
+          {n("newLeads", "New leads", "Opt-ins, hand-raises")}
+        </div>
+      </details>
+      {/* Docket #9 (H-195): wins that weren't on the list. Outreach in any app counts toward DMs started on the Aqueduct. */}
+      <details className="rounded-lg border p-3" open={Boolean(log && (log.outreachMessages || log.scriptsWritten || log.videosRecorded || log.videosPosted))} data-testid="close-also">
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">Also today (optional)</summary>
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {n("outreachMessages", "Outreach messages", "Any app, WhatsApp too")}
+          {n("scriptsWritten", "Scripts written", "Calls, videos, posts")}
+          {n("videosRecorded", "Videos recorded", "Recorded today")}
+          {n("videosPosted", "Videos posted", "Count them in Posts too")}
+        </div>
+      </details>
       {closeKpis.length ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="close-kpis">
           {closeKpis.map((k) => (
@@ -942,23 +990,25 @@ function CloseForm({ log, activity, owner, today, error, closeKpis }: { log: Dai
           ))}
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Start">
-          <input className="field" name="start" defaultValue={log?.start ?? ""} placeholder="Tomorrow I'll start…" />
-        </Field>
-        <Field label="Stop">
-          <input className="field" name="stop" defaultValue={log?.stop ?? ""} placeholder="I'll stop…" />
-        </Field>
-        <Field label="Keep">
-          <input className="field" name="keep" defaultValue={log?.keep ?? ""} placeholder="I'll keep…" />
-        </Field>
-      </div>
-      <Field label="Biggest win today">
-        <input className="field" name="win" defaultValue={log?.win ?? ""} placeholder="Say it out loud. Wins compound." />
-      </Field>
-      <Field label="Grateful for (optional)">
-        <input className="field" name="gratitude" defaultValue={log?.gratitude ?? ""} />
-      </Field>
+      <details className="rounded-lg border p-3" open={Boolean(log && (log.start || log.stop || log.keep || log.gratitude))} data-testid="close-reflect">
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">Start, stop, keep and grateful for (optional)</summary>
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+          <Field label="Start">
+            <input className="field" name="start" defaultValue={log?.start ?? ""} placeholder="Tomorrow I'll start…" />
+          </Field>
+          <Field label="Stop">
+            <input className="field" name="stop" defaultValue={log?.stop ?? ""} placeholder="I'll stop…" />
+          </Field>
+          <Field label="Keep">
+            <input className="field" name="keep" defaultValue={log?.keep ?? ""} placeholder="I'll keep…" />
+          </Field>
+        </div>
+        <div className="mt-3">
+          <Field label="Grateful for">
+            <input className="field" name="gratitude" defaultValue={log?.gratitude ?? ""} />
+          </Field>
+        </div>
+      </details>
       <details className="rounded-lg border p-3" open={Boolean(log && (log.webinarRegs || log.webinarShows || log.applications))}>
         <summary className="cursor-pointer text-xs font-semibold text-ink-2">🎤 Webinar funnel (optional)</summary>
         <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">

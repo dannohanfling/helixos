@@ -13,3 +13,7 @@ import "./forum";
 import "./handoff";
 import "./reports";
 import "./webinars";
+import "./offers";
+import "./area-drafts";
+import "./clients";
+import "./partner";

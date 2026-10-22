@@ -1,6 +1,7 @@
 "use server";
 
 import { PLATFORMS, cleanPlatformLink } from "@/lib/platforms";
+import { canonicalZone } from "@/lib/engine/zones";
 
 import { readMoney } from "@/lib/engine/money";
 import { queueProgress } from "@/lib/chat-progress";
@@ -18,6 +19,7 @@ import { cleanDescriptor } from "@/lib/engine/deck";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import { syncPrimaryKpi } from "@/lib/queries/kpi";
 import { isOneEmoji } from "@/lib/engine/emoji";
+import { markDraftEdited } from "@/lib/claude-drafts";
 
 /** A picked logo's id when it is one of this member's own images of kind logo; otherwise null, so the kit keeps no logo. */
 async function ownLogo(workspaceId: string, userId: string, picked: string): Promise<string | null> {
@@ -32,17 +34,6 @@ async function ownAvatar(workspaceId: string, userId: string, picked: string): P
   if (!id) return null;
   const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)) });
   return img && (img.kind === "photo" || img.kind === "logo") ? img.id : null;
-}
-
-/** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
-function validTimezone(tz: string): string | null {
-  if (!tz) return null;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return tz;
-  } catch {
-    return null;
-  }
 }
 
 export async function updateProfileAction(formData: FormData): Promise<void> {
@@ -65,10 +56,12 @@ async function updateProfile(formData: FormData): Promise<void> {
       bigPromise: opt(formData, "bigPromise"),
       audience: opt(formData, "audience"),
       reminderHour: Math.min(23, Math.max(0, num(formData, "reminderHour") || 8)),
-      eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 17)),
+      eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 19)),
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",
       scoreboardEmail: formData.get("scoreboardEmail") === "on",
-      timezone: validTimezone(str(formData, "timezone")),
+      // A typo keeps the zone the member had (H-457); choosing one here also retires the one-time "We're showing times in" line.
+      timezone: canonicalZone(str(formData, "timezone")) ?? v.membership.timezone,
+      tzPromptSeenAt: v.membership.tzPromptSeenAt ?? nowIso(),
       // The streak's week (H-289 §2): every day unless the member picks Monday to Friday.
       workDays: str(formData, "workDays") === "weekdays" ? "weekdays" : "all",
       // The Setup card (H-270 §1, S2): the time zone and reminder hours chosen by the member, not defaulted.
@@ -83,7 +76,7 @@ async function updateProfile(formData: FormData): Promise<void> {
  * the house question) and the guarantee's structured terms. Nothing is pushed from here; Your bot shows what would change.
  */
 export async function updateBotFactsAction(formData: FormData): Promise<void> {
-  const { userId, workspaceId } = await ctx();
+  const { v, userId, workspaceId } = await ctx();
   const n = (key: string): number | undefined => (str(formData, key) ? num(formData, key) : undefined);
   const conditions = str(formData, "termsConditions").split("\n").map((l) => l.trim()).filter(Boolean);
   // Bot connection (rev 808): the link the bot sends to book a call, and what to expect. A link must be a full https:// one.
@@ -102,6 +95,13 @@ export async function updateBotFactsAction(formData: FormData): Promise<void> {
       guaranteeTerms: { windowMonths: n("termsWindowMonths"), attendancePct: n("termsAttendancePct"), replayDays: n("termsReplayDays"), measure: opt(formData, "termsMeasure") ?? undefined, conditions: conditions.length ? conditions : undefined, exclusions: opt(formData, "termsExclusions") ?? undefined, remedy: opt(formData, "termsRemedy") ?? undefined },
     })
     .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)));
+  // Saved from the form opened with Claude's draft in it (H-184): that draft is settled as edited.
+  const draftId = str(formData, "draftId");
+  if (draftId) {
+    await markDraftEdited({ workspaceId, userId }, draftId, v.membership.id, { name: v.actor.name, connector: false });
+    refresh();
+    redirect("/settings?draftNote=edited#your-bot");
+  }
   refresh();
 }
 
@@ -139,6 +139,8 @@ export async function updateWorkspaceAction(formData: FormData): Promise<void> {
       name: str(formData, "name") || coach.workspace.name,
       timezone: str(formData, "timezone") || coach.workspace.timezone,
       airtableBaseId: opt(formData, "airtableBaseId"),
+      // H-202: an agent's Done draft sends on its own only when the coach turns this on; off by default.
+      autoDoneAfterMerge: formData.get("autoDoneAfterMerge") === "on",
       // The Platforms menu's addresses (rev 843): https only; a blank or a bad one goes back to the default (none for Community).
       platformLinks: Object.fromEntries(PLATFORMS.flatMap((p) => {
         const link = cleanPlatformLink(opt(formData, `platform_${p.key}`));
@@ -231,4 +233,11 @@ export async function setAvatarEmojiAction(emoji: string): Promise<{ ok: true } 
   await db.update(schema.users).set({ avatarEmoji: e }).where(eq(schema.users.id, userId));
   refresh();
   return { ok: true };
+}
+
+/** "Show all tools" (H-164 §12): every tool in the member's menu now, or back to opening them by stage. A coach working in their HelixOS may set it too. */
+export async function setShowAllToolsAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx();
+  await db.update(schema.memberships).set({ showAllTools: formData.get("showAllTools") === "on" }).where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)));
+  refresh();
 }

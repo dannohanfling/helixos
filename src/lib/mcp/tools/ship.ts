@@ -25,7 +25,7 @@ import { headlineChoices } from "@/lib/engine/graphic";
 import { shipFacts } from "@/lib/queries/ship";
 import { connectionFor } from "@/lib/ghl";
 import { checkPreviewToken, issuePreviewToken } from "@/lib/ship-preview";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 
 const appUrl = siteUrl;
 const linkTo = (id: string) => `${appUrl()}/content/ladders/${id}`;
@@ -42,7 +42,7 @@ defineTool({
   handler: async (v, input): Promise<ToolResult> => {
     const rows = await db.query.ladders.findMany({ where: and(eq(schema.ladders.workspaceId, v.workspace.id), eq(schema.ladders.userId, v.user.id)), orderBy: desc(schema.ladders.createdAt), limit: Number(input.limit ?? 10) });
     if (!rows.length) return { text: "No ladders yet. Say a topic and I'll write one.", data: { ladders: [] } };
-    const lines = rows.map((l) => `${l.topic} (${stateOf(l)}, ${formatDate(l.createdAt.slice(0, 10))})`);
+    const lines = rows.map((l) => `${l.topic} (${stateOf(l)}, ${stampDate(l.createdAt, v.tz)})`);
     return { text: `${rows.length} recent ladder${rows.length === 1 ? "" : "s"}:\n${numbered(lines)}`, data: { ladders: rows.map((l, i) => ({ n: i + 1, id: l.id, topic: l.topic, status: stateOf(l), created: l.createdAt })) } };
   },
 });
@@ -79,7 +79,7 @@ defineTool({
     const rows = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: desc(schema.deckImages.createdAt) });
     const found = findImages(rows, String(input.words ?? ""), v.today);
     if (!found.length) return { text: `No photo in their Images matches "${input.words}". They can add one in HelixOS (Images), or go without a photo.`, data: { images: [] } };
-    const lines = found.map((i) => `${i.caption || i.kind}, added ${formatDate(i.createdAt.slice(0, 10))}`);
+    const lines = found.map((i) => `${i.caption || i.kind}, added ${stampDate(i.createdAt, v.tz)}`);
     return { text: `${found.length} match${found.length === 1 ? "" : "es"}, the first suggested:\n${numbered(lines)}`, data: { images: found.map((i, n) => ({ n: n + 1, id: i.id, caption: i.caption, kind: i.kind, added: i.createdAt, suggested: n === 0 })) } };
   },
 });

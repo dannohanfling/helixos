@@ -62,18 +62,18 @@ async function main() {
   await page.waitForURL(/\/today/);
 
   // Collapsible nav. The menu saves its state 300 ms after a tap (NavStateProvider), so each tap waits for that save, the menu's
-  // own POST (its body carries "collapsed"), before anything reloads (H-757). A run that stopped halfway can leave Build
-  // collapsed, so the walk opens it first.
-  const build = 'nav button:has-text("Build")';
+  // own POST (its body carries "collapsed"), before anything reloads (H-757). Get leads starts shut (H-1010), so the walk
+  // opens it first.
+  const build = 'nav button:has-text("Get leads")';
   const tap = async () => {
     const saved = page.waitForResponse((r) => r.request().method() === "POST" && /"collapsed"/.test(r.request().postData() ?? ""), { timeout: 15000 }).catch(() => null);
     await page.click(build);
     if (!(await saved)) throw new Error("The menu's state was never saved");
   };
   if ((await page.locator(build).getAttribute("aria-expanded")) === "false") await tap();
-  await expectText(page, "Webinars", "Build open before the collapse check");
+  await expectText(page, "Webinars", "Get leads open before the collapse check");
   await tap();
-  if (await page.locator('nav a:has-text("Webinars")').isVisible()) throw new Error("Build group did not collapse");
+  if (await page.locator('nav a:has-text("Webinars")').isVisible()) throw new Error("Get leads group did not collapse");
   await page.reload();
   await page.locator(`${build}[aria-expanded="false"]`).waitFor({ timeout: 10000 }).catch(() => {
     throw new Error("Collapse did not persist across reload");

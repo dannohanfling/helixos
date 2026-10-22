@@ -243,3 +243,16 @@ export async function setOohOverrideAction(formData: FormData): Promise<void> {
   await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: `office_hours.${override ?? "follow_level"}`, payload: { by: coach.user.name, override, level: m.programTier }, status: "sent", note: `Office Hours ${override ? `set ${override}` : "set to follow the level"} by ${coach.user.name}` });
   refresh();
 }
+
+/** H-164 §12: the coach opens every tool for a client (or puts the menu back to opening by their stage). */
+export async function setClientShowAllToolsAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  const membershipId = str(formData, "membershipId");
+  const on = str(formData, "on") === "1";
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id), eq(schema.memberships.role, "client")) });
+  if (!m) return;
+  await db.update(schema.memberships).set({ showAllTools: on }).where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
+  await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: `tools.${on ? "all" : "by_stage"}`, payload: { by: coach.user.name, on }, status: "sent", note: `Every tool ${on ? "opened" : "back to opening by stage"} by ${coach.user.name}` });
+  refresh();
+}

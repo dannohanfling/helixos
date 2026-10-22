@@ -56,7 +56,7 @@ export default async function CoachRecordingsPage({ searchParams }: { searchPara
     if (what === "skip") return `Skipped ${done}. They're under Skipped if you need one back.`;
     return `Published ${done} as suggested.${Number(left) ? ` ${left} had no suggestion: open each with Review and choose who it's for.` : ""}`;
   })() : null;
-  const tz = v.workspace.timezone;
+  const tz = v.tz;
   const when = (r: schema.Recording) => (r.startedAt ? formatDateTime(r.startedAt, tz) : "Date unknown");
 
   // To review, read once: series, members on the call, the suggestion. Filtered by series, date range and "has members on it".

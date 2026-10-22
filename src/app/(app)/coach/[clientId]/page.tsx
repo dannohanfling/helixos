@@ -4,7 +4,9 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { setTestAccountAction, switchToClientAction } from "@/lib/actions/switch";
-import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction, setClientTierAction, setOohOverrideAction } from "@/lib/actions/coach";
+import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction, setClientTierAction, setOohOverrideAction, setClientShowAllToolsAction } from "@/lib/actions/coach";
+import { setAgentGrantAction } from "@/lib/actions/agent-clients";
+import { agentSwitchesFor, grantsForClient } from "@/lib/agent-clients";
 import { PROGRAM_ORDER } from "@/lib/engine/recordings";
 import { oohAccessWords, oohSwitchWords } from "@/lib/engine/office-hours";
 import { oohAccessOf } from "@/lib/office-hours-access";
@@ -20,6 +22,7 @@ import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { simplePath } from "@/lib/engine/pathway";
 import { pillarSummary } from "@/lib/engine/pillars";
 import { catalogue } from "@/lib/engine/rewards";
+import { COACH_DELIVERS } from "@/lib/engine/claim-next-step";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import { totalPoints } from "@/lib/queries/points";
 import { logsBetween, streakFor } from "@/lib/queries/daily";
@@ -27,7 +30,7 @@ import { tasksFromNotes } from "@/lib/queries/tasks";
 import { AdjustPointsForm } from "@/components/adjust-points-form";
 import { isNotNull } from "drizzle-orm";
 import { daysSinceNudge } from "@/lib/nudge";
-import { addDays, daysBetween, formatDate, formatDateTime, todayInTz, hourInTz } from "@/lib/dates";
+import { addDays, daysBetween, formatDate, formatDateTime, todayInTz, hourInTz, stampDate } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
@@ -82,6 +85,14 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const emailChange = await lastEmailChange(u.id);
   // The client's team (Danno, 6 Oct): who is on it, with "added by" and "last active", the open invites, and the seat cap.
   const [team, teamInvites] = await Promise.all([teamOf(m.id), openInvites(m.id)]);
+  // Agents in this client's HelixOS (H-1385): the coach's own agents, which have a live grant, and their switches in and out.
+  const [coachAgents, agentGrants, agentSwitches] = await Promise.all([
+    db.query.forumAgents.findMany({ where: and(eq(schema.forumAgents.workspaceId, v.workspace.id), eq(schema.forumAgents.userId, v.user.id)), orderBy: [asc(schema.forumAgents.name)] }).then((rows) => rows.filter((a) => !a.builtIn)),
+    grantsForClient({ workspaceId: v.workspace.id, userId: v.user.id }, clientId),
+    agentSwitchesFor({ workspaceId: v.workspace.id, userId: v.user.id }, clientId),
+  ]);
+  const agentOn = new Set(agentGrants.filter((g) => !g.revokedAt).map((g) => g.agentId));
+  const agentName = new Map(coachAgents.map((a) => [a.id, a.name]));
   const switches = await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, m.id), eq(schema.coachChanges.coachUserId, v.user.id), inArray(schema.coachChanges.kind, ["switch_in", "switch_out"])), orderBy: [desc(schema.coachChanges.createdAt)], limit: 20 });
   // The copy-link cookie the reset action leaves when there is no email: shown once, for this client only, then it expires on its own.
   let copyLink: string | null = null;
@@ -169,7 +180,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
     <>
       <PageHeader
         title={`${u.avatarEmoji ?? ""} ${u.name}`.trim()}
-        subtitle={<span className="flex items-center gap-2">{hasHeadshot(m) ? <MemberAvatar membershipId={m.id} hasPhoto emoji={u.avatarEmoji} size={40} version={m.headshotUpdatedAt} name={u.name} /> : null}<span>{`${m.businessName ? `${m.businessName} · ` : ""}${m.programTier} · joined ${formatDate(m.createdAt.slice(0, 10))} · ${u.email}`}</span></span>}
+        subtitle={<span className="flex items-center gap-2">{hasHeadshot(m) ? <MemberAvatar membershipId={m.id} hasPhoto emoji={u.avatarEmoji} size={40} version={m.headshotUpdatedAt} name={u.name} /> : null}<span>{`${m.businessName ? `${m.businessName} · ` : ""}${m.programTier} · joined ${stampDate(m.createdAt, v.tz)} · ${u.email}`}</span></span>}
         action={
           <span className="flex items-center gap-2">
             {emailsBlocked ? (
@@ -244,6 +255,18 @@ export default async function CoachClientPage({ params, searchParams }: { params
           ) : null}
           <p className="text-xs text-ink-3" data-testid="ooh-access-words">{oohAccessWords(ooh)}</p>
         </div>
+        {/* Tools open as a client reaches them (H-164 §12); the coach can open them all. */}
+        <div className="space-y-1 sm:col-span-2">
+          <div className="font-semibold">Menu</div>
+          <form action={setClientShowAllToolsAction} className="flex flex-wrap items-center gap-2" data-testid="tools-switch-form">
+            <input type="hidden" name="membershipId" value={m.id} />
+            <input type="hidden" name="on" value={m.showAllTools ? "0" : "1"} />
+            <SubmitButton className={`btn btn-xs ${m.showAllTools ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="tools-switch">
+              {m.showAllTools ? "Open by stage instead" : "Open every tool"}
+            </SubmitButton>
+            <span className="text-xs text-ink-3" data-testid="tools-switch-words">{m.showAllTools ? "Every tool is in their menu." : `Their menu opens tools as they reach each stage of My Helix (up to phase ${m.toolsPhase} now).`}</span>
+          </form>
+        </div>
       </div>
       {/* Switch to client (rev 216): into this client's HelixOS, to look, or to set it up when they let their coach work in it. */}
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 text-sm" data-testid="client-switch" data-can-work={m.coachCanWork ? "1" : "0"}>
@@ -275,6 +298,43 @@ export default async function CoachClientPage({ params, searchParams }: { params
               {switches.map((c) => (
                 <li key={c.id}>
                   {c.kind === "switch_in" ? "In" : "Out"} · {c.mode === "work" ? "Working" : "Viewing"} · {formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </div>
+      {/* Agents that may work here (H-1385): off by default; Allow and Stop are the coach's alone; every switch and change is the client's record. */}
+      <div id="agents" className="mt-3 scroll-mt-20 rounded-lg border border-line p-3 text-sm" data-testid="client-agents" data-on={agentOn.size}>
+        <p className="font-medium">Agents that may work in {u.name.split(" ")[0]}&apos;s HelixOS</p>
+        <p className="mt-1 text-xs text-ink-3">Off for every agent until you allow it here. A granted agent switches in from its own token, works only while {u.name.split(" ")[0]} lets their coach work (view only otherwise), never touches HumanOS, connected apps, the account or anything that sends, and every change it makes shows in {u.name.split(" ")[0]}&apos;s Settings → Changes by your coach under the agent&apos;s name. Stop takes effect on the agent&apos;s next call.</p>
+        {coachAgents.length ? (
+          <ul className="mt-2 divide-y" data-testid="client-agent-list">
+            {coachAgents.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="client-agent" data-agent={a.name} data-granted={agentOn.has(a.id) ? "1" : "0"}>
+                <span className="font-medium">{a.name}</span>
+                <span className="text-xs text-ink-3">{agentOn.has(a.id) ? "may work here" : "not allowed"}</span>
+                <form action={setAgentGrantAction} className="ml-auto">
+                  <input type="hidden" name="clientMembershipId" value={m.id} />
+                  <input type="hidden" name="agentId" value={a.id} />
+                  <input type="hidden" name="on" value={agentOn.has(a.id) ? "0" : "1"} />
+                  <SubmitButton className={`btn btn-sm ${agentOn.has(a.id) ? "btn-ghost" : "btn-soft"}`} pendingText="Saving…" data-testid="client-agent-toggle">
+                    {agentOn.has(a.id) ? "Stop" : "Allow"}
+                  </SubmitButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-xs text-ink-3">You have no agents yet: add one on Coach → Agents first.</p>
+        )}
+        {agentSwitches.length ? (
+          <details className="mt-2 text-xs text-ink-3">
+            <summary className="cursor-pointer">Agent switches ({agentSwitches.length})</summary>
+            <ul className="mt-1 space-y-0.5" data-testid="client-agent-switches">
+              {agentSwitches.map((c) => (
+                <li key={c.id}>
+                  {agentName.get(c.agentId ?? "") ?? "An agent"} · {c.kind === "switch_in" ? "In" : "Out"} · {c.mode === "work" ? "Working" : "Viewing"} · {formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}
                 </li>
               ))}
             </ul>
@@ -336,7 +396,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 <span>
                   <span className="font-medium">{t.name}</span> <span className="text-ink-3">· {t.email}</span>
                   <span className="block text-xs text-ink-3">
-                    added by {t.addedByName} on {formatDate(t.member.createdAt.slice(0, 10))} · last active {lastActiveWords(t.member.lastActiveAt)}
+                    added by {t.addedByName} on {stampDate(t.member.createdAt, v.tz)} · last active {lastActiveWords(t.member.lastActiveAt)}
                   </span>
                 </span>
                 <form action={coachRemoveTeamMemberAction}>
@@ -552,7 +612,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
               <ul className="space-y-2" data-testid="coach-checkins" data-count={checkins.length}>
                 {checkins.slice(0, 8).map((c) => (
                   <li key={c.id} className="rounded-lg border p-2 text-xs" data-testid="coach-checkin" data-monday={c.monday}>
-                    <div className="mb-1 font-semibold text-ink-2">Week of {formatDate(c.monday, { month: "short", day: "numeric" })} · sent {formatDate(c.sentAt.slice(0, 10), { month: "short", day: "numeric" })}</div>
+                    <div className="mb-1 font-semibold text-ink-2">Week of {formatDate(c.monday, { month: "short", day: "numeric" })} · sent {stampDate(c.sentAt, v.tz, { month: "short", day: "numeric" })}</div>
                     <ul className="space-y-0.5 text-ink-2">
                       {c.lines.map((l, i) => (
                         <li key={i}>{l}</li>
@@ -646,7 +706,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 <ul className="mt-1 space-y-0.5 text-sm">
                   {waiting.map((p) => (
                     <li key={p.id}>
-                      {libByKey.get(p.libraryTaskKey)?.name ?? p.libraryTaskKey} <span className="text-xs text-ink-3">· {p.submittedAt ? formatDate(p.submittedAt.slice(0, 10)) : ""}</span>
+                      {libByKey.get(p.libraryTaskKey)?.name ?? p.libraryTaskKey} <span className="text-xs text-ink-3">· {p.submittedAt ? stampDate(p.submittedAt, v.tz) : ""}</span>
                     </li>
                   ))}
                 </ul>
@@ -693,7 +753,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
               <ul className="divide-y text-sm" data-testid="client-claims">
                 {claims.map((c) => {
                   const link = linkOf.get(c.rewardName);
-                  const booking = c.bookedAt ? `booked for ${when(c.bookedAt)}` : !link ? "no next step set yet" : c.bookingOpenedAt ? `opened the booking link ${when(c.bookingOpenedAt)}` : "hasn't opened the booking link yet";
+                  const booking = c.bookedAt ? `booked for ${when(c.bookedAt)}` : !link ? COACH_DELIVERS : c.bookingOpenedAt ? `opened the booking link ${when(c.bookingOpenedAt)}` : "hasn't opened the booking link yet";
                   return (
                     <li key={c.id} className="py-2">
                       <div className="flex items-center justify-between gap-2">

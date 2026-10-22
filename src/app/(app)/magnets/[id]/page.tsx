@@ -19,6 +19,9 @@ import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { ItemGone } from "@/components/item-gone";
+import { ClaudeDraftCard, ClaudeDraftHistory, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { changesFor, pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 
 export const metadata = { title: "Lead magnet" };
 
@@ -54,6 +57,14 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
   const handoverWarnings = [m.personalDm, m.chatbotAnswer].filter((t) => t && !endsWithQuestion(t)).length;
   // The publish gate: the magnet itself, when its AI draft has not been read. Shown only after the publish click asked for it.
   const gate = gateFor([{ name: m.title, origin: m.origin }]);
+  // Claude's draft of this magnet (H-184): the one waiting, the one being edited in the form below, and what happened to drafts here.
+  const me = { workspaceId: v.workspace.id, userId: v.user.id };
+  const [waiting, changes] = await Promise.all([pendingDrafts(me, "magnet", m.id), changesFor(me, "magnet", m.id)]);
+  const draft = waiting[0] ?? null;
+  const editing = draft && sp.draft === draft.id ? draft : null;
+  const red = draft && !editing ? await redLinesFor(me, draft) : [];
+  const shown: schema.LeadMagnet = editing ? { ...m, ...(editing.fields as Partial<schema.LeadMagnet>) } : m;
+  const here = `/magnets/${m.id}`;
   return (
     <>
       <PageHeader
@@ -81,28 +92,40 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
       {sp.pdf ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-pdf-built">PDF built. It is live at the link below.</p> : null}
       {sp.uploaded ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-uploaded">File uploaded. It is live at the link below.</p> : null}
       {sp.stripped && m.notes ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm whitespace-pre-wrap" data-testid="magnet-stripped">{m.notes}</p> : null}
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      {sp.draftNote ? <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[sp.draftNote] ?? sp.draftNote}</p> : null}
+      {editing ? (
+        <p className="mb-4 rounded-lg border border-accent bg-accent-soft/40 p-3 text-sm" data-testid="claude-draft-editing">
+          The form below is filled with Claude&apos;s draft. Change what you like, then save; the draft is settled as edited.{" "}
+          <Link href={here} className="underline">Back to the draft</Link>
+        </p>
+      ) : draft ? (
+        <div className="mb-4">
+          <ClaudeDraftCard draft={draft} rows={rowsFor("magnet", m as Record<string, unknown>, draft.fields)} red={red} tz={v.tz} editHref={`${here}?draft=${draft.id}`} back={here} />
+        </div>
+      ) : null}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card title="The magnet">
             {isUnreviewed(m.origin) ? <UnreviewedMark action={acceptMagnetAction} fields={{ id: m.id }} className="mb-3" /> : null}
-            <form action={updateMagnetAction} className="space-y-3" data-testid="magnet-form" id="magnet-form">
+            <form key={editing ? `draft-${editing.id}` : "saved"} action={updateMagnetAction} className="space-y-3" data-testid="magnet-form" id="magnet-form">
               <input type="hidden" name="id" value={m.id} />
+              {editing ? <input type="hidden" name="draftId" value={editing.id} /> : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Title">
-                  <input className="field" name="title" defaultValue={m.title} required />
+                  <input className="field" name="title" defaultValue={shown.title} required />
                 </Field>
                 <Field label="Type">
-                  <select className="field" name="type" defaultValue={m.type}>
+                  <select className="field" name="type" defaultValue={shown.type}>
                     {MAGNET_TYPES.map((t) => (
                       <option key={t} value={t}>{MAGNET_TYPE_INFO[t].label}</option>
                     ))}
                   </select>
                 </Field>
                 <Field label="Promise">
-                  <input className="field" name="promise" defaultValue={m.promise} />
+                  <input className="field" name="promise" defaultValue={shown.promise} />
                 </Field>
                 <Field label="Who it's for">
-                  <input className="field" name="audience" defaultValue={m.audience} />
+                  <input className="field" name="audience" defaultValue={shown.audience} />
                 </Field>
                 <Field label="Keyword" hint="Never shared between two magnets. A ladder that offers this magnet uses it in the final rung.">
                   <input className="field uppercase" name="keyword" defaultValue={m.keyword} maxLength={24} required />
@@ -117,7 +140,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
                 </Field>
               </div>
               <Field label="Content" hint={editorHint(m.type)}>
-                <textarea className="field font-mono text-sm" name="content" rows={16} defaultValue={contentToText(m.content)} data-testid="magnet-content" />
+                <textarea className="field font-mono text-sm" name="content" rows={16} defaultValue={contentToText(shown.content)} data-testid="magnet-content" />
               </Field>
               <fieldset className="grid gap-2 sm:grid-cols-2">
                 <legend className="mb-1 text-sm font-medium">Formats</legend>
@@ -164,6 +187,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
               <SubmitButton className="btn btn-primary" data-testid="magnet-save" pendingText="Saving…">Save</SubmitButton>
             </form>
           </Card>
+          <ClaudeDraftHistory rows={changes} tz={v.tz} back={here} />
           <Card title="Write it with AI">
             <form action={generateMagnetAction} className="space-y-2">
               <input type="hidden" name="id" value={m.id} />

@@ -11,7 +11,9 @@ describe("friction walk (7 Oct)", () => {
     for (const l of ["OOH requests", "Feedback", "Issues and ideas", "Community posts", "Move to a client", "Import from Airtable", "Integrations", "Community Pass"]) expect(labels(false)).toContain(l);
     expect(NAV.filter((n) => n.href === "/coach").every((n) => !navVisible(n, client))).toBe(true);
     // A member runs their own coaching business inside HelixOS: their clients and their numbers are theirs to see.
-    for (const l of ["Clients", "Numbers", "Rewards", "What's new"]) expect(labels(true)).toContain(l);
+    // What's new lives behind the version line (H-164 §10), not in the menu.
+    for (const l of ["Clients", "Numbers", "Rewards"]) expect(labels(true)).toContain(l);
+    expect(NAV.some((n) => n.href === "/whats-new")).toBe(false);
   });
   it("the Intentions share line carries no date that goes stale (I2)", () => {
     const r = monthShareTarget(null, "2026-10");

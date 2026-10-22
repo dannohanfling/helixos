@@ -499,6 +499,31 @@ export function headlineParts(h: string): { lines: string[]; gold: string[]; tex
   return { lines, gold, text };
 }
 
+/** A quoted line attributed to a name: `Name: "…"` or `Name T.: "…"`, a dozen letters or more inside the quotes. */
+const ATTRIBUTED = /([A-Z][a-z]+(?: [A-Z][a-z]+)?(?: [A-Z]\.?)?):\s*["“]([^"”]{12,})["”]/g;
+/**
+ * Words that sit before a colon in a writing prompt or a label, never a person: `Try: "…"`, `Step: "…"`. A real person with
+ * one of these as a name still counts when an approved proof carries it (H-1358).
+ */
+const LABEL_WORDS = new Set(["try", "say", "write", "ask", "note", "tip", "example", "prompt", "step", "remember", "question", "answer", "read", "comment", "message", "notice", "choose", "pick", "hint", "rule", "then", "next", "now", "bonus", "warning", "reminder", "today", "tonight", "day", "week", "part", "option", "hook", "body", "caption", "headline", "rung", "slide", "title", "subject", "line", "idea", "truth", "lesson", "result", "proof", "offer", "cta", "ps", "pro", "con", "pros", "cons", "do", "don't", "dont", "yes", "no", "first", "second", "third", "last", "before", "after", "morning", "evening", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]);
+export function looksLikeAPerson(who: string): boolean {
+  const first = who.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  return Boolean(first) && !LABEL_WORDS.has(first);
+}
+/** The ladder's parts by name, in the order the checklist reads them: the note can say where a line sits. */
+export function ladderParts(l: LadderLike): { name: string; text: string }[] {
+  return [
+    { name: "The hook", text: l.hook ?? "" },
+    { name: "The body", text: l.copy },
+    ...l.rungs.map((r) => ({ name: `Rung ${r.n}`, text: r.body })),
+    { name: "The IG caption", text: l.igCaption },
+    ...l.threadsChain.map((t, i) => ({ name: `Threads post ${i + 1}`, text: t })),
+    { name: "The headline", text: l.headline },
+    ...(l.altHeadlines ?? []).map((h, i) => ({ name: `Alternate headline ${i + 1}`, text: h })),
+    ...(l.carousel ?? []).map((c, i) => ({ name: `Carousel slide ${i + 1}`, text: c })),
+  ].filter((p) => p.text);
+}
+
 export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: Proof[]): Check[] {
   const checks: Check[] = [];
   const add = (key: string, label: string, ok: boolean, note = "", level: "fail" | "warn" = "fail") => checks.push({ key, label, ok, level, note: ok ? "" : note });
@@ -560,11 +585,22 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   const statHits = Array.from(all.matchAll(STAT)).map((m) => m[0]).filter((hit) => !verified.some((v) => v.includes(hit.toLowerCase().trim())));
   add("stats", "Every statistic is on the verified list", !statHits.length, `"${statHits[0]}" is not among your verified stats. Add it there with its source, or write [STAT PLACEHOLDER].`);
 
-  // Testimonials: a quoted line attributed to a name must be an approved proof, verbatim
-  const approved = proofs.filter((p) => p.status === "approved").map((p) => [p.shortVersion, p.resultAfter, p.longVersion, p.punchline].filter(Boolean).map((t) => String(t).replace(/^"|"$/g, "").toLowerCase()));
-  const attributed = Array.from(all.matchAll(/([A-Z][a-z]+(?: [A-Z]\.?)?):\s*["“]([^"”]{12,})["”]/g));
-  const unapproved = attributed.filter(([, , quote]) => !approved.some((texts) => texts.some((t) => t.includes(quote.toLowerCase().trim()) || quote.toLowerCase().trim().includes(t)))).map(([, who]) => who);
-  add("testimonials", "Every testimonial is approved and verbatim", !unapproved.length, `Not in the approved Proof Bank: ${Array.from(new Set(unapproved)).join(", ")}. Add it to Proof Bank and approve it, or write [PROOF PLACEHOLDER].`);
+  // Testimonials (H-1358): a quoted line attributed to a person's name must be an approved proof, verbatim. A label or an
+  // instruction word before the colon (Try: "Write one sentence…") is a writing prompt, not a person, unless an approved
+  // proof carries that very name. The note says which part holds the line and how it starts, so a leftover is findable.
+  const approvedProofs = proofs.filter((p) => p.status === "approved");
+  const approved = approvedProofs.map((p) => [p.shortVersion, p.resultAfter, p.longVersion, p.punchline, p.quote].filter(Boolean).map((t) => String(t).replace(/^"|"$/g, "").toLowerCase()));
+  const proofNames = new Set(approvedProofs.flatMap((p) => [p.who, p.name]).filter(Boolean).map((n) => String(n).trim().toLowerCase()));
+  const unapproved: string[] = [];
+  for (const part of ladderParts(l)) {
+    for (const [, who, quote] of part.text.matchAll(ATTRIBUTED)) {
+      if (!looksLikeAPerson(who) && !proofNames.has(who.toLowerCase())) continue;
+      const q = quote.toLowerCase().trim();
+      if (approved.some((texts) => texts.some((t) => t.includes(q) || q.includes(t)))) continue;
+      unapproved.push(`${part.name} quotes "${quote.trim().split(/\s+/).slice(0, 5).join(" ")}…" as if from ${who}`);
+    }
+  }
+  add("testimonials", "Every testimonial is approved and verbatim", !unapproved.length, `Not in the approved Proof Bank: ${unapproved.join("; ")}. Add it to Proof Bank and approve it, write [PROOF PLACEHOLDER], or take the name off the line.`);
 
   // Placeholders and format stop rules
   const ph = all.match(PLACEHOLDER);

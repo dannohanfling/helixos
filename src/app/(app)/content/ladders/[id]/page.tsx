@@ -164,7 +164,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           </form>
         </div>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <form action={updateLadderAction} className="space-y-4">
             <input type="hidden" name="id" value={l.id} />
@@ -196,7 +196,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-3">
                   <Field label="Headline" hint='8–14 words, two lines split with " / ", one (gold: PHRASE).'>
-                    <input className="field" name="headline" defaultValue={l.headline} />
+                    <input id="headline" className="field scroll-mt-20" name="headline" defaultValue={l.headline} />
                   </Field>
                   <Field label="Alternatives" hint="One per line.">
                     <textarea className="field" name="altHeadlines" rows={2} defaultValue={l.altHeadlines.join("\n")} />

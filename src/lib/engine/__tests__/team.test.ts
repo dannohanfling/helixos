@@ -26,7 +26,6 @@ const read = (f: string) => readFileSync(f, "utf8");
 /** What a team member may reach: content, DMs, tasks, webinars, contacts, the business plan (BG1: a VA works its tasks), Office Hours and the weekly calls for the owner (H-413, H-828), the shell's own pages, and nothing else. */
 const OPEN_PAGES = [
   "src/app/(app)/bot-features/[key]/page.tsx",
-  "src/app/(app)/bot-features/page.tsx",
   "src/app/(app)/calls/page.tsx",
   "src/app/(app)/clients/[id]/page.tsx",
   "src/app/(app)/clients/page.tsx",
@@ -49,6 +48,7 @@ const OPEN_PAGES = [
   "src/app/(app)/library/page.tsx",
   "src/app/(app)/loyalty/page.tsx",
   "src/app/(app)/more/page.tsx",
+  "src/app/(app)/my-bot/skills/page.tsx",
   "src/app/(app)/office-hours/page.tsx",
   "src/app/(app)/settings/page.tsx",
   "src/app/(app)/tasks/page.tsx",
@@ -110,7 +110,7 @@ describe("team access: what is open is named, and everything else is closed by d
     // Office Hours by level (H-470): the owner's access carries to the team; without it the item is gone for them too.
     const m = { role: "client" as const, passEnabled: true, bodyEnabled: true, recordingsEnabled: true, team: true, oohOn: true };
     // The Platforms links (Danno, 7 Oct) are outbound and open no HelixOS data: a team member sees them too.
-    expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/bot-features", "/calls", "/clients", "/content", "/conversations", "/goals", "/images", "/library", "/office-hours", "/tasks", "/today", "/webinars", "/whats-new", "https://academy.evolveomega.com", "https://app.evolveomega.com", "https://communityloyalty.io"]);
+    expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/calls", "/clients", "/content", "/conversations", "/goals", "/images", "/library", "/my-bot/skills", "/office-hours", "/tasks", "/today", "/webinars", "https://academy.evolveomega.com", "https://app.evolveomega.com", "https://communityloyalty.io"]);
     expect(NAV.filter((n) => navVisible(n, { ...m, oohOn: false })).some((n) => n.href === "/office-hours")).toBe(false);
     // Without the team flag the same member sees Body, Rewards and the rest.
     expect(NAV.filter((n) => navVisible(n, { ...m, team: false })).some((n) => n.href === "/body")).toBe(true);

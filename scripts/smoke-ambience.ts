@@ -50,17 +50,19 @@ async function main() {
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
   const ws = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mm.workspaceId) }))!;
+  const coachU = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+  const coachM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, coachU.id) }))!;
   const { aqueductFor } = await import("@/lib/aqueduct");
   const { stepRate } = await import("@/lib/engine/aqueduct");
   const { repairLine } = await import("@/lib/engine/aqueduct-repair");
-  const before = { aqueductPeriod: mm.aqueductPeriod, aqueductPaused: mm.aqueductPaused, aqueductRepairSeen: mm.aqueductRepairSeen, colosseumOn: ws.colosseumOn, sceneLook: mm.sceneLook, soundsOn: mm.soundsOn, arenaPaused: mm.arenaPaused, arenaHidden: mm.arenaHidden };
+  const before = { aqueductPeriod: mm.aqueductPeriod, aqueductPaused: mm.aqueductPaused, aqueductRepairSeen: mm.aqueductRepairSeen, colosseumOn: ws.colosseumOn, sceneLook: mm.sceneLook, soundsOn: mm.soundsOn, sceneMotion: mm.sceneMotion, arenaPaused: mm.arenaPaused, arenaHidden: mm.arenaHidden };
   const monday = mondayOf(todayInTz(mm.timezone || ws.timezone));
   const cheerKey = top3CheerKey(mm.id, monday);
   // Maya on the sand: a hand adjustment this week puts her first among the champions (never an active day). Removed at the end.
   const boost = crypto.randomUUID();
   await db.insert(schema.pointsLedger).values({ id: boost, workspaceId: mm.workspaceId, userId: maya.id, type: "bonus", points: 100000, reason: "Smoke: a champion this week", adjustedBy: "smoke" });
   await db.update(schema.workspaces).set({ colosseumOn: true }).where(eq(schema.workspaces.id, mm.workspaceId));
-  await db.update(schema.memberships).set({ arenaPaused: false, arenaHidden: false, soundsOn: true }).where(eq(schema.memberships.id, mm.id));
+  await db.update(schema.memberships).set({ arenaPaused: false, arenaHidden: false, soundsOn: true, sceneMotion: true }).where(eq(schema.memberships.id, mm.id));
   // An example decision of Maya's for the Council Chamber: out of the Board's memory and counts, removed at the end.
   const boardFixture = crypto.randomUUID();
   const seatKeys = ["danno", "alex", "jordan", "riley", "morgan"];
@@ -99,9 +101,10 @@ async function main() {
         const n = async (id: string) => page.locator(`[data-testid="arena-ambience"] [data-testid="${id}"]`).count();
         if (look === "night") must((await n("amb-flicker")) === 3 && (await n("amb-twinkle")) === 12 && (await n("amb-cloud")) === 0, `${w}/night: three flicker copies, twelve lights, no cloud`);
         else {
-          // The filmed loop carries the day's life (H-1253): no drawn cloud over it, the dust stays, no drawn birds (H-1180).
-          must((await n("amb-cloud")) === 0 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: no cloud over the loop, sixteen motes, no flicker`);
-          must((await page.locator('[data-testid="arena-loop"]').count()) === 1, `${w}/day: the arena's filmed loop is there`);
+          // The filmed birds carry the day's life (H-1367): no drawn cloud, the dust stays, no drawn birds (H-1180), no loop.
+          must((await n("amb-cloud")) === 0 && (await n("amb-mote")) === 16 && (await n("amb-flicker")) === 0, `${w}/day: no cloud, sixteen motes, no flicker`);
+          must((await page.locator('[data-testid="arena-birds"]').count()) === 1 && (await page.locator('[data-testid="arena-loop"]').count()) === 0, `${w}/day: the birds' canvas is there, the loop is gone`);
+          await page.waitForFunction(() => document.querySelector('[data-testid="arena-birds"]')?.getAttribute("data-birds") === "flying", null, { timeout: 15000 });
           must((await n("amb-bird")) === 0 && (await n("amb-flight")) === 0, `${w}/day: no drawn birds`);
         }
         const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -273,6 +276,46 @@ async function main() {
     await page2.close();
     console.log("✓ Aqueduct: the fountain (by day once the repair is seen, the filmed loop) at 390, 1024 and 1440 in both looks, nothing sideways; the card under the picture on a phone");
 
+    // ── The coach's repair preview (Roma Vivit 2 PR 5): on their own Aqueduct only, and it writes nothing. ──
+    await page.goto(`${base}/aqueduct`, { waitUntil: "networkidle" });
+    await page.locator('[data-testid="aqueduct-scene"]').waitFor();
+    must((await page.locator('[data-testid="aqueduct-preview"]').count()) === 0, "a client never sees Preview the repair");
+    await page.goto(`${base}/aqueduct?preview=repair`, { waitUntil: "networkidle" });
+    must((await page.locator('[data-testid="aqueduct-preview-tag"]').count()) === 0 && (await page.locator('[data-testid="aqueduct-preview"], [data-testid="aqueduct-preview-end"]').count()) === 0, "a client asking for the preview by address gets none");
+    const coachCtx = await browser.newContext({ viewport: { width: 390, height: 900 } });
+    const cp = await coachCtx.newPage();
+    cp.on("response", (res) => {
+      if (res.status() >= 500) failures.push(`${res.status()} ${res.url()}`);
+    });
+    const stamps: string[] = [];
+    cp.on("request", (rq) => {
+      if (rq.url().includes("/api/aqueduct/seen")) stamps.push(rq.url());
+    });
+    await cp.goto(`${base}/login`);
+    await cp.click('button:has-text("As the coach")');
+    await cp.waitForURL((u) => !u.pathname.startsWith("/login"));
+    await cp.goto(`${base}/aqueduct`, { waitUntil: "networkidle" });
+    const link = cp.locator('[data-testid="aqueduct-preview"]');
+    must((await link.count()) === 1, "the coach sees Preview the repair under their own Aqueduct");
+    must((await link.boundingBox())!.height >= 44, "the preview link is a full tap target");
+    const markerBefore = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.aqueductRepairSeen;
+    stamps.length = 0;
+    await link.click();
+    await cp.waitForURL(/preview=repair/);
+    await cp.locator('[data-testid="aqueduct-repair-card"]').waitFor({ timeout: 10000 });
+    must((await cp.locator('[data-testid="aqueduct-preview-tag"]').count()) === 1 && (await cp.locator('[data-testid="aqueduct-preview-note"]').count()) === 1, "the card says Preview and that nothing was saved");
+    must((await cp.locator('[data-testid="aqueduct-repair-moment"]').count()) === 1, "the repair moment plays");
+    await cp.waitForTimeout(4000);
+    await cp.screenshot({ path: "screenshots/ambience-aqueduct-preview-390.png" });
+    const sideways = await cp.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    must(sideways <= 0, `the preview at 390: nothing scrolls sideways (${sideways}px)`);
+    const markerAfter = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.aqueductRepairSeen;
+    must(stamps.length === 0 && JSON.stringify(markerAfter) === JSON.stringify(markerBefore), `the preview writes nothing: ${stamps.length} stamps, marker ${JSON.stringify(markerBefore)} → ${JSON.stringify(markerAfter)}`);
+    await cp.locator('[data-testid="aqueduct-preview-end"]').click();
+    await cp.waitForURL((u) => u.pathname === "/aqueduct" && !u.search.includes("preview"));
+    await coachCtx.close();
+    console.log("✓ Repair preview: the coach plays it from their own Aqueduct, labelled Preview, writing nothing; a client never sees it");
+
     // ── The Forum (PR 3). ──
     const fo = await ctx.newPage();
     fo.on("response", (res) => {
@@ -396,6 +439,61 @@ async function main() {
     await still4.close();
     console.log("✓ Council Chamber: its own parts at 390, 1024 and 1440 in both looks, running, nothing sideways, the seats on top; the light fades while a clip plays and comes back; a hidden tab holds it; reduced motion draws none of it");
 
+    // ── Scene motion off (Roma Vivit 2 PR 6): the member's own switch in Settings draws every scene still, as reduced motion does. ──
+    const sm = await ctx.newPage();
+    sm.on("response", (res) => {
+      if (res.status() >= 500) failures.push(`${res.status()} ${res.url()}`);
+    });
+    await sm.setViewportSize({ width: 390, height: 900 });
+    await sm.goto(`${base}/settings#sounds`, { waitUntil: "networkidle" });
+    const box = sm.locator('[data-testid="scene-motion-on"]');
+    must(await box.isChecked(), "Scene motion is on by default");
+    const row = (await box.locator("xpath=ancestor::label").boundingBox())!;
+    must(row.height >= 44, `the Scene motion switch is a full tap target (${row.height}px)`);
+    await box.uncheck();
+    await Promise.all([sm.waitForResponse((r) => r.request().method() === "POST"), sm.locator('[data-testid="scene-motion-save"]').click()]);
+    await sm.waitForTimeout(500);
+    must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.sceneMotion === false, "Scene motion off saves");
+    await db.update(schema.memberships).set({ sceneLook: "night", aqueductRepairSeen: null }).where(eq(schema.memberships.id, mm.id));
+    /** Every running animation inside a scene, and whether the page carries the switch. */
+    const running = (sel: string) =>
+      sm.evaluate((s) => {
+        const el = document.querySelector(s);
+        return { found: !!el, off: document.documentElement.dataset.sceneMotion === "off", running: el ? el.getAnimations({ subtree: true }).filter((a) => a.playState === "running").length : -1 };
+      }, sel);
+    for (const [name, url, sel, layer] of [
+      ["Colosseum", `${base}/rewards?tab=colosseum`, '[data-testid="arena"]', '[data-testid="arena-ambience"]'],
+      ["Aqueduct", `${base}/aqueduct`, '[data-testid="aqueduct-scene"]', '[data-testid="aqueduct-repair-moment"]'],
+      ["Forum", `${base}/forum`, '[data-testid="forum-map"]', '[data-testid="forum-ambience"]'],
+      ["Council Chamber", `${base}/my-board/${boardFixture}?play=1`, '[data-testid="board-room"]', '[data-testid="board-ambience"]'],
+    ] as const) {
+      await sm.goto(url, { waitUntil: "networkidle" });
+      await sm.locator(sel).first().waitFor();
+      await sm.waitForTimeout(1500);
+      const r = await running(sel);
+      must(r.found && r.off && r.running === 0 && (await sm.locator(layer).count()) === 0, `${name}: with Scene motion off nothing moves and no ambience is drawn (${JSON.stringify(r)})`);
+      if (name === "Council Chamber") must((await sm.locator('[data-testid="board-clip"], [data-testid="board-clip-next"]').count()) === 0, "Council Chamber: with Scene motion off no clip plays or preloads");
+      if (name === "Colosseum") {
+        const spots = () => sm.evaluate(() => [...document.querySelectorAll<HTMLElement>("[data-seat]")].map((n) => `${n.style.left},${n.style.top}`).join("|"));
+        const a = await spots();
+        await sm.waitForTimeout(1200);
+        must(a === (await spots()), "Colosseum: with Scene motion off the avatars hold still");
+      }
+      await sm.screenshot({ path: `screenshots/scene-motion-off-${name.toLowerCase().replace(/ /g, "-")}-390.png` });
+    }
+    // Back on from Settings: the scenes move again.
+    await sm.goto(`${base}/settings#sounds`, { waitUntil: "networkidle" });
+    await sm.locator('[data-testid="scene-motion-on"]').check();
+    await Promise.all([sm.waitForResponse((r) => r.request().method() === "POST"), sm.locator('[data-testid="scene-motion-save"]').click()]);
+    await sm.waitForTimeout(500);
+    must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.sceneMotion === true, "Scene motion back on saves");
+    await sm.goto(`${base}/forum`, { waitUntil: "networkidle" });
+    await sm.locator('[data-testid="forum-ambience"]').waitFor();
+    const back = await running('[data-testid="forum-map"]');
+    must(!back.off && back.running > 0, `Forum: with Scene motion back on the scene moves again (${JSON.stringify(back)})`);
+    await sm.close();
+    console.log("✓ Scene motion: the switch saves both ways; off, the Colosseum, the Aqueduct, the Forum and the Council Chamber run no animation and draw no ambience, the avatars hold and no clip plays");
+
     must(failures.length === 0, `no server errors: ${failures.join(", ")}`);
     console.log("Ambience smoke passed");
   } finally {
@@ -403,7 +501,7 @@ async function main() {
     await db.delete(schema.boardDecisions).where(eq(schema.boardDecisions.id, boardFixture));
     await db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, boost));
     await db.update(schema.workspaces).set({ colosseumOn: before.colosseumOn }).where(eq(schema.workspaces.id, mm.workspaceId));
-    await db.update(schema.memberships).set({ aqueductPeriod: before.aqueductPeriod, aqueductPaused: before.aqueductPaused, aqueductRepairSeen: before.aqueductRepairSeen, sceneLook: before.sceneLook, soundsOn: before.soundsOn, arenaPaused: before.arenaPaused, arenaHidden: before.arenaHidden }).where(eq(schema.memberships.id, mm.id));
+    await db.update(schema.memberships).set({ aqueductPeriod: before.aqueductPeriod, aqueductPaused: before.aqueductPaused, aqueductRepairSeen: before.aqueductRepairSeen, sceneLook: before.sceneLook, soundsOn: before.soundsOn, sceneMotion: before.sceneMotion, arenaPaused: before.arenaPaused, arenaHidden: before.arenaHidden }).where(eq(schema.memberships.id, mm.id));
   }
 }
 

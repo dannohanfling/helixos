@@ -12,10 +12,265 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 316,
-    date: "2026-10-20",
+    n: 342,
+    date: "2026-10-22",
     title: "Trimming a long Essence saves again",
     lines: ["If your Essence or its Brand was over the limit, saving a long section could be refused even after you cut words: each line break was being counted twice. It is counted once now, so any save that keeps a section the same size or smaller goes through."],
+    audience: "everyone",
+  },
+  {
+    n: 341,
+    date: "2026-10-21",
+    title: "Claim your 30 days of Academy or Elite, and see who opens it",
+    lines: [
+      "Once you reach Sentinel, 30 Days Access to Evolve Omega Academy has a Claim button; at Centurion, so does 30 Days Access to Evolve Omega Elite. They cost no points.",
+      "After you claim, the reward says Waiting on your coach: your coach opens your 30 days by hand, and it shows Done ✓ here once it's open.",
+      "Any claimed reward without a booking link now says the same, instead of a booking link that isn't there.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 340,
+    date: "2026-10-21",
+    title: "Your client list says who needs you",
+    lines: [
+      "Coach → Clients has two new columns: Needs you, with the one thing most worth your time (a question waiting, no lock-in in 7 days, or a bot not connected), and Stage, where each client is on the Pathway.",
+      "Clients who need you sort to the top, a question waiting first. Test accounts stay at the bottom.",
+    ],
+    audience: "coach",
+  },
+  {
+    n: 339,
+    date: "2026-10-19",
+    title: "My bot is one page, with three tabs",
+    lines: [
+      "Your bot and Bot Features are now one page, My bot, with three tabs: What it says (everything your bot is sent, for your approval), Skills (the features it unlocks) and Connection (your Community Loyalty connection and whether the bot is reading).",
+      "Old links still work and land on the right tab.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 338,
+    date: "2026-10-19",
+    title: "A calmer Today, and a close that's a check plus your win",
+    lines: [
+      "Today is three parts: your next best action, your Top 3, then one Then list with everything else by when it's due: overdue first, then today's tasks, posts and conversations, then the week ahead.",
+      "Next on your pathway and Set your brand kit moved to My Helix, beside your progress. Your goal sits under your level.",
+      "Close the day starts from what HelixOS already saw: DMs started, replies, posts and calls booked show as a check. Add your win line and close; the boxes are one tap away if a number needs fixing.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 337,
+    date: "2026-10-19",
+    title: "A shorter menu, in five groups",
+    lines: [
+      "The menu now reads Daily, HumanOS, My business, Get leads, My bot, Learn, and Board and agents. My business, Get leads, My bot and Learn start shut; tap one to open it, and it stays the way you left it.",
+      "My Helix is the progress line under the logo, and What's new is the version line at the bottom of the menu. Avatars sit inside Offers, and connecting Claude is in Settings → Connected apps.",
+      "New members see each tool once their My Helix reaches it, with a line on Today when one opens. Everyone already here keeps every tool. Settings → Your menu has \"Show all tools\" to see them all at any time.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 336,
+    date: "2026-10-21",
+    title: "The Inbox clears what is already done",
+    lines: [
+      "A row on Waiting on you settles itself when any post says its pull request merged, when the Ready it names was decided or replaced, or when the post it names was superseded, not only on a decision. The newest asks sit first. (H-1554)",
+    ],
+    audience: "coach",
+  },
+  {
+    n: 335,
+    date: "2026-10-21",
+    title: "A Scene motion switch in Settings",
+    lines: [
+      "Settings, Sounds and motion: turn Scene motion off and the Colosseum, the Aqueduct, the Forum and the Council Chamber stay still, with no flames, water, birds, circling arena or speaking clips. Celebrations stay still too, the same as when your device asks for reduced motion. It is on by default and only you can change it.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 334,
+    date: "2026-10-21",
+    title: "The streak flame without its box",
+    lines: [
+      "On a phone the flame sat in a hard black rectangle, in the top bar and on the streak sheet. The black now blends away and the edges fade, so only the fire shows, a little larger in the bar.",
+      "The waiting ember is brighter too: still low and slow with its amber Waiting on you tag, but it reads.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 333,
+    date: "2026-10-21",
+    title: "The Inbox number means something",
+    lines: [
+      "The number by Inbox now counts exactly what the Inbox shows: the approvals waiting on you, your agents' open \"needs you\" items (now listed there too, with Done and Not needed), and the messages to you under New for you.",
+      "An item clears on its own when you decide the approval it names, when its PR is reported merged, or when the agent clears it; one open more than three days asks the agent whether it is still needed.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 332,
+    date: "2026-10-19",
+    title: "Your evening reminder now comes at 7 PM",
+    lines: ["The evening reminder to close out your day now comes at 7 PM in your own time zone, unless you'd already picked a different hour. Change it any time in Settings."],
+    audience: "everyone",
+  },
+  {
+    n: 331,
+    date: "2026-10-19",
+    title: "HelixOS on your phone's home screen",
+    lines: [
+      "On your phone, Today now offers to add HelixOS to your home screen. It then opens straight to Today, full screen, like any other app. Tap Done or Not now and it won't ask again on that phone.",
+      "If your connection drops, HelixOS shows a calm offline screen instead of an error, and comes back by itself when you're online again.",
+      "HelixOS has a new icon, the Evolve Omega medallion, on your home screen and in your browser tab. On newer iPhones the top and bottom bars also sit clear of the notch and the home bar.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 330,
+    date: "2026-10-19",
+    title: "The HelixOS app is on its way",
+    lines: [
+      "HelixOS is coming to iPhone and Android as an app. Get the app sits in your menu and in Settings → Account, marked Coming soon for now.",
+      "Once it's ready, Get the app shows the steps for your phone, and it leaves your menu once you have the app.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 329,
+    date: "2026-10-21",
+    title: "Preview the Aqueduct's repair moment",
+    lines: [
+      "Coaches: under your own Aqueduct, Preview the repair plays the moment an arch is mended, with sample numbers and the card marked Preview. It saves nothing and never counts as a repair. Members never see it.",
+    ],
+    audience: "coach",
+  },
+  {
+    n: 328,
+    date: "2026-10-19",
+    title: "Every date and time in your own time zone",
+    lines: [
+      "Dates across HelixOS now follow the time zone in your Settings: your Board, Content, Images, Groups, Numbers, the Colosseum's week, check-ins and more. Something you did late in the evening shows on your day, not the next day in London.",
+      "Settings has every time zone in the world, searchable: type a city or a region. If you never set one, HelixOS takes your device's zone and tells you once: \"We're showing times in Australia/Sydney (AEDT). Change it in Settings.\"",
+      "Coaches see their own zone on the coach pages, Integrations and Recordings, and the points check and the loyalty desk name their zone instead of UTC.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 327,
+    date: "2026-10-20",
+    title: "Claude drafts what your bot says, you approve it",
+    lines: [
+      "Through the HelixOS connector, Claude can now draft what your bot says about your business: what you do, the three questions it asks before booking, and what to expect on the call.",
+      "It waits in amber in Settings until you approve it. Your bot keeps its current answers until then, and nothing is sent to your bot from a draft.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 326,
+    date: "2026-10-20",
+    title: "Claude drafts your Essence, lead magnets and posts",
+    lines: [
+      "Through the HelixOS connector, Claude can now draft a section of your Essence, a lead magnet or a post, the same way it drafts offers: in amber, waiting for your Approve, Edit or Discard.",
+      "A lead magnet is never published from a draft, and a post lands on your calendar as In progress on its date. Scheduling it is still your own step, and a post already scheduled can't be drafted over.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 325,
+    date: "2026-10-19",
+    title: "Claude drafts your offers, you approve them",
+    lines: [
+      "Through the HelixOS connector, Claude can now write a draft of one of your offers, or a new one. It sits on the offer in amber, \"Claude's draft: not approved yet\", and nothing changes until you press Approve.",
+      "Edit opens the offer with the draft filled in, and Discard drops it. Anything Claude got wrong, like a price you haven't given it, shows in red, and Approve waits until you've checked it.",
+      "\"Drafts waiting\" on Today lists every draft for you, and an amber dot marks the menu item that holds one.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 324,
+    date: "2026-10-19",
+    title: "One answer for the same report sent twice",
+    lines: [
+      "If you sent the same thing more than once, Danno can put them together. My reports shows them under one, and one reply answers them all.",
+      "A follow-up on any of them goes to the same place, so nothing gets lost.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 323,
+    date: "2026-10-19",
+    title: "Hear back on what you report",
+    lines: [
+      "When you send \"I have an issue or a suggestion\", you'll see \"Got it, Danno will see this soon\" straight away.",
+      "Danno's replies come to you as each report moves: seen, being worked on, done and how, or not now and why. A line on Today points to them, and an email follows if your emails are on.",
+      "My reports, from the same button, lists everything you've sent with its replies, and you can add a follow-up to the same report.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 322,
+    date: "2026-10-19",
+    title: "Your week adds up: the intention chain",
+    lines: [
+      "On Intentions, \"Your chain\" shows how this week adds up: the initiative it moves, this month's intention, this week's, its tasks done, and the key results moved. Each step is a tap.",
+      "Link your week to an initiative in Business goals, and each key result to one of yours there. On Friday, the number you write for a linked key result is logged on it, dated that day.",
+      "Tick a week's task right on the week card, and deleting one in Tasks asks whether to take it off your intention too.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 321,
+    date: "2026-10-19",
+    title: "Personal tasks, wins that weren't on the list, and offer tiers you set",
+    lines: [
+      "Tasks have a Personal area: for your own life, with no points and kept out of your business numbers.",
+      "On Today, \"Did something else? Add it\" logs a win that wasn't on your list. Close the day has \"Also today\": outreach messages from any app (WhatsApp too), scripts written, videos recorded and videos posted. Outreach counts toward DMs started on the Aqueduct.",
+      "On an offer you can set its tier (Freebie, Starter, Core or Premium) for My Helix. Customer journey mapped leads to your Pathway, and when you tick a rung yourself you can add one line on how you did it.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 320,
+    date: "2026-10-21",
+    title: "Proof Bank: the list fits again, a status filter, Approve selected",
+    lines: [
+      "The Proof Bank list fits the page again (a long one-liner used to push every badge off-screen), with a Draft / Permission given / Approved filter and counts, and Show 250 more so a big bank stays light.",
+      "Approve selected: tick drafts (or select the clean ones from a list file), tick the permission statement once for the batch, and Approve; each proof is recorded as if approved on its own page. Undo the last batch for 24 hours.",
+      "A list can carry a corrected name or wording for a draft (checked against the transcript): the confirm step says how many will be corrected first, and Undo puts the old words back too.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 319,
+    date: "2026-10-21",
+    title: "Let one of your agents work in a client's HelixOS",
+    lines: ["Coaches: let one of your agents work in a client's HelixOS, client by client, from the client's page. Every change shows in their Changes by your coach under the agent's name; it works only while the client lets their coach work, and never touches HumanOS, their connections, their account or anything that sends."],
+    audience: "coach",
+  },
+  {
+    n: 318,
+    date: "2026-10-21",
+    title: "The Partner Program has its own place",
+    lines: ["Coaches: the Partner Program sits under People: restaurants, touches, payments and the monthly statement, with tools for your agents."],
+    audience: "coach",
+  },
+  {
+    n: 317,
+    date: "2026-10-21",
+    title: "Ladders: prompts aren't testimonials, and your own headline",
+    lines: [
+      'A writing prompt like Try: "…" no longer trips the testimonial check; when a real one is quoted, the note says which part holds it.',
+      "Make the graphic now takes a headline you write yourself, and Edit headlines takes you to the field.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 316,
+    date: "2026-10-21",
+    title: "Doves and an eagle over the Colosseum",
+    lines: ["Doves and an eagle now fly over the Colosseum: a pair of doves every so often, and the eagle a little rarer, crossing the golden-hour sky. With reduced motion on, the still photo alone."],
     audience: "everyone",
   },
   {

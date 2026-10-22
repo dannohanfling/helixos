@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">HelixOS</string>
+    <string name="title_activity_main">HelixOS</string>
+    <string name="package_name">com.evolveomega.helixos</string>
+    <string name="custom_url_scheme">com.evolveomega.helixos</string>
+</resources>

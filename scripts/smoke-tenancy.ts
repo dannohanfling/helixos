@@ -52,6 +52,7 @@ const ROUTES: Record<string, Route> = {
   "/coach/[clientId]/body": { kind: "coach" },
   "/coach/[clientId]/bot": { kind: "coach" },
   "/coach/[clientId]/delete": { kind: "coach" },
+  "/coach/partners/[id]": { kind: "coach" },
   "/coach/recordings/[id]": { kind: "coach" },
   "/content/[id]": { kind: "owned", table: "contentItems" },
   "/content/[id]/compose": { kind: "owned", table: "contentItems" },
@@ -60,6 +61,7 @@ const ROUTES: Record<string, Route> = {
   "/conversations/[id]": { kind: "owned", table: "contacts" },
   "/calls/[id]/calendar": { kind: "public", why: "a weekly call's calendar file (H-828): the schedule the whole workspace shares, not a member's record; read only within the signed-in member's own workspace and level, another workspace's id or a call above their level reads as not there, and nothing of the member goes in it" },
   "/doctrine/[code]": { kind: "public", why: "a principle code from the shared doctrine, the same for everyone" },
+  "/doctrine/frameworks/[slug]": { kind: "public", why: "a Doctrine framework by its slug (H-1262), the coach's published catalogue read by every member of that workspace; a draft or another workspace's slug is the gone view" },
   "/api/graphics/[token]": { kind: "public", why: "a shipped ladder graphic at its unguessable token (Ship, rev 583 #1): the Social Planner fetches it with no session; dead once revoked; nothing of the member in the address" },
   "/groups/[id]": { kind: "owned", table: "groups" },
   "/library/[id]": { kind: "owned", table: "libraryPosts" },
@@ -104,6 +106,7 @@ const ROUTES: Record<string, Route> = {
   "/mf/p/[code]": { kind: "public", why: "a coach's preview of a Magic funnel page as the real page (H-142), by a day-long 43-character code: the gold design with the form inert, nothing counted; an unknown or expired code is the quiet closed page; rate limited" },
   "/mf/w/[webinarId]": { kind: "public", why: "Hermes: a webinar's cold page for ads, its default copy and an empty form, only while its HelixOS switch is on" },
   "/m/[slug]": { kind: "public", why: "a lead magnet's public hosted page, read by strangers" },
+  "/pwa-icon/[size]": { kind: "public", why: "the old home-screen icon addresses (H-667): 192 or 512 redirect to the medallion files in /public/app-icon, anything else is a 404; nothing personal" },
 };
 
 async function main() {

@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 import { switchToClientAction } from "@/lib/actions/switch";
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
 import { nudgeMemberAction, setClientPassAction, reinstateClientAction } from "@/lib/actions/coach";
-import { clientFacing } from "@/lib/engine/pathway";
+import { clientFacing, simplePath } from "@/lib/engine/pathway";
+import { FLAG_WORDS, byNeed, rosterFlag } from "@/lib/engine/roster-flag";
 import { setCertEnabledAction } from "@/lib/actions/courses";
 import { setMemberPassAction, setMyBotAction } from "@/lib/actions/integrations";
-import { agentChoicesFor, changedSinceLastPush, productFieldFor } from "@/lib/community-loyalty";
+import { agentChoicesFor, changedSinceLastPush, clTokenSet, productFieldFor } from "@/lib/community-loyalty";
 import { PRODUCT_FIELD, PRODUCT_FIELD_OLD } from "@/lib/engine/bot-fields";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
@@ -22,13 +23,14 @@ import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
 import { setClientHumanosAction } from "@/lib/actions/body";
 import { sendConnectLinkAction } from "@/lib/actions/connect";
-import { daysBetween, formatDate, formatDateTime, todayInTz, hourInTz } from "@/lib/dates";
+import { daysBetween, formatDate, formatDateTime, todayInTz, hourInTz, stampDate } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
 import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
 import { MonthAnswers } from "@/components/month-card";
 import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { openClaims } from "@/lib/queries/rewards";
+import { COACH_DELIVERS, overdueNoLinkClaims } from "@/lib/engine/claim-next-step";
 import { submissionsWaiting } from "@/lib/queries/submissions";
 import { setFeatureOnAction } from "@/lib/actions/bot-features";
 import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
@@ -65,7 +67,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const removedUsers = removedMembers.length ? await db.query.users.findMany({ where: inArray(schema.users.id, removedMembers.map((m) => m.userId)) }) : [];
   const removedNameOf = new Map(removedUsers.map((u) => [u.id, u.name]));
   const userIds = members.map((m) => m.userId);
-  const [users, logs, points, verified, waiting, library] = await Promise.all([
+  const [users, logs, points, verified, waiting, library, progressAll, stages, asks] = await Promise.all([
     userIds.length ? db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [],
     userIds.length ? db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.workspaceId, wsId), inArray(schema.dailyLogs.userId, userIds)) }) : [],
     userIds.length ? db.select({ userId: schema.pointsLedger.userId, points: schema.pointsLedger.points, type: schema.pointsLedger.type, refId: schema.pointsLedger.refId, adjustedBy: schema.pointsLedger.adjustedBy, createdAt: schema.pointsLedger.createdAt }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, wsId), inArray(schema.pointsLedger.userId, userIds))) : [],
@@ -73,8 +75,14 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     // The same read as the menu's "Submissions to verify" count (H-1280): clients still here, Pathway hand-ins and certification deliverables.
     submissionsWaiting(wsId),
     db.query.libraryTasks.findMany(),
+    // Who needs you (H-164 §17): each client's stage on the Pathway and their questions still open.
+    userIds.length ? db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), inArray(schema.pathwayProgress.userId, userIds)) }) : [],
+    db.query.pathwayStages.findMany(),
+    userIds.length ? db.query.memberReports.findMany({ where: and(eq(schema.memberReports.workspaceId, wsId), inArray(schema.memberReports.userId, userIds), eq(schema.memberReports.kind, "ask_danno"), isNull(schema.memberReports.doneAt)), columns: { userId: true } }) : [],
   ]);
   const submitted = waiting.pathway;
+  const stageCount = stages.length;
+  const stageOrder = new Map(stages.map((st) => [st.key, st.order]));
   const monthStart = `${v.today.slice(0, 7)}-01`;
   // Each client's own brand kit (rev 568): starter, in progress, or set, read once for the roster.
   const kitOf = await kitsByMember(wsId);
@@ -92,6 +100,9 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const featuresWaiting = featureRows.filter((r) => r.state === "requested");
   const featuresOn = featureRows.filter((r) => r.state === "on").slice(0, 8);
   const linkOf = new Map(catalogue(rewards, prizes, loadRewardsConfig()).map((i) => [i.name, i.bookingUrl]));
+  // Rewards with no link are delivered by hand (H-1586): a line at the top once one has waited over a day.
+  const openRows = claimsShown === "open" ? claimRows : await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, wsId), eq(schema.rewardClaims.status, "requested")), columns: { rewardName: true, createdAt: true } });
+  const claimsOverdue = overdueNoLinkClaims(openRows, (n) => linkOf.get(n), new Date());
   const [aiCreds, aiRows] = await Promise.all([
     db.query.aiCredentials.findMany({ where: eq(schema.aiCredentials.workspaceId, wsId) }),
     db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.workspaceId, wsId), gte(schema.aiUsage.createdAt, monthStart)) }),
@@ -127,7 +138,14 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
       const { active } = activeDaysOf(minePoints, mine, ctz);
       const todayLog = mine.find((l) => l.date === ctoday);
       const daysSilent = lastActive ? daysBetween(lastActive, ctoday) : 999;
+      const lastLockIn = mine.filter((l) => l.morningDoneAt).map((l) => l.date).sort().at(-1) ?? null;
+      const path = simplePath(stages, library, progressAll.filter((p) => p.userId === m.userId));
+      const stage = path.allDone ? stageCount : (stageOrder.get(path.stageKey) ?? 1);
+      const questions = asks.filter((a) => a.userId === m.userId).length;
+      const flag = m.testAccount ? null : rosterFlag({ questionsWaiting: questions, daysSinceLockIn: lastLockIn ? daysBetween(lastLockIn, ctoday) : null, daysSinceJoined: daysBetween(m.createdAt.slice(0, 10), ctoday), botConnected: clTokenSet(m) });
       return {
+        stage,
+        flag,
         m,
         u,
         pts,
@@ -142,8 +160,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
         waiting: submitted.filter((s) => s.userId === m.userId).length,
       };
     })
-    // Test accounts last (H-164 §8), then the quietest first.
-    .sort((a, b) => Number(a.m.testAccount) - Number(b.m.testAccount) || b.daysSilent - a.daysSilent);
+    // Test accounts last (H-164 §8), then who needs you (H-164 §17), then the quietest first.
+    .sort((a, b) => Number(a.m.testAccount) - Number(b.m.testAccount) || byNeed(a, b) || b.daysSilent - a.daysSilent);
   const atRisk = rows.filter((r) => r.daysSilent >= 3 && !r.m.testAccount);
   // The weekly 3-1-3 (rev 124), each member's own week by their own clock: who has set it, and, from Tuesday, who hasn't.
   const weekRows = userIds.length ? await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, wsId), inArray(schema.weeklyIntentions.userId, userIds)) }) : [];
@@ -182,7 +200,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
           .map((c) => [c.userId, c.connectedAt as string] as const)
       : [],
   );
-  const chipDate = (iso: string | null | undefined) => (iso ? ` ${formatDate(iso.slice(0, 10))}` : "");
+  const chipDate = (iso: string | null | undefined) => (iso ? ` ${stampDate(iso, v.tz)}` : "");
   // Body (rev 237 phase 12): a cell only for clients who share it with the coach; blank for the rest, private or off alike.
   const bodyOf = await coachBodyColumn(v, rows.map((r) => ({ userId: r.m.userId, today: theirToday(r.m) })));
   // B9: a ✉️ for a client who sent this week's check-in, shared or not.
@@ -192,7 +210,12 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     <>
       <span hidden data-page-wide />
       <PageHeader title="Coach view" subtitle={`${members.length} clients · ${waiting.total} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex flex-wrap gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/late-closes" className="btn btn-ghost btn-sm" data-testid="coach-late-link">Late close-outs</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/hermes/calendars" className="btn btn-ghost btn-sm" data-testid="coach-calendars-link">Booking calendars</Link><Link href="/coach/teaching" className="btn btn-ghost btn-sm" data-testid="coach-teaching-link">Teaching library</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
-      <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">Your bot →</Link>}>
+      {claimsOverdue ? (
+        <Link href="/coach?claims=open#claims" className="mb-4 block rounded-lg bg-warn-soft px-3 py-2 text-sm font-medium hover:underline" data-testid="claims-overdue">
+          {claimsOverdue} reward claim{claimsOverdue === 1 ? "" : "s"} waiting on you over a day →
+        </Link>
+      ) : null}
+      <Card className="mb-4" title="My bot" action={<Link href="/my-bot" className="text-xs underline">Your bot →</Link>}>
         <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
         <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">
           <input className="field min-w-56 flex-1 py-1 text-xs" name="clApiToken" type="password" autoComplete="off" data-testid="my-cl-api-token" placeholder={myBot.clApiToken ? "Saved ✓ — leave blank to keep it, or type clear to remove it" : "Community Loyalty API token (your own workspace)"} title="Your own uChat API token. It is a credential: stored sealed, never shown again. It lets HelixOS write your bot's fields." />
@@ -205,7 +228,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
           </label>
           <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
         </form>
-        {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} changed={changedOf.get(myBot.id) ?? null} tz={v.workspace.timezone} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
+        {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} changed={changedOf.get(myBot.id) ?? null} tz={v.tz} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
       </Card>
       <Card title="Clients" className="mb-4">
           {rows.length ? (
@@ -214,6 +237,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                 <thead className="whitespace-nowrap text-left text-xs uppercase tracking-wide text-ink-2">
                   <tr>
                     <th className="min-w-[220px] py-2 pr-3">Client</th>
+                    <th className="py-2 pr-3" title="The one thing that most needs you: a question waiting, no lock-in in 7 days, or a bot not connected">Needs you</th>
+                    <th className="py-2 pr-3" title="Their stage on the Pathway">Stage</th>
                     <th className="py-2 pr-3">Today</th>
                     <th className="py-2 pr-3">Streak</th>
                     <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing HumanOS with you">HumanOS</th>
@@ -245,6 +270,18 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                             </SubmitButton>
                           </form>
                         </div>
+                      </td>
+                      <td className="whitespace-nowrap py-2 pr-3 text-xs" data-testid="roster-flag" data-member={r.m.id} data-flag={r.flag ?? ""}>
+                        {r.flag ? (
+                          <Link href={r.flag === "question" ? "/coach/reports" : `/coach/${r.m.id}`} className={`font-semibold underline-offset-2 hover:underline ${r.flag === "bot" ? "text-ink-2" : "text-warn"}`}>
+                            {FLAG_WORDS[r.flag]}
+                          </Link>
+                        ) : (
+                          <span className="text-ink-3">·</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap py-2 pr-3 text-xs tabular" data-testid="roster-stage" data-member={r.m.id}>
+                        {r.stage} of {stageCount}
                       </td>
                       <td className="whitespace-nowrap py-2 pr-3">
                         <span title="Locked in">{r.todayLocked ? "☀️" : "○"}</span> <span title="Closed">{r.todayClosed ? "🌙" : "○"}</span>
@@ -389,13 +426,13 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                           </>
                         ) : null}
                         <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/lb/{feedOf.get(r.m.id)!.slug} · /api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
-                        {feedOf.get(r.m.id)!.keyEncrypted ? <PointsCheck feed={feedOf.get(r.m.id)!} error={sp.pointsCheckError} /> : null}
+                        {feedOf.get(r.m.id)!.keyEncrypted ? <PointsCheck feed={feedOf.get(r.m.id)!} error={sp.pointsCheckError} tz={v.tz} /> : null}
                         {feedOf.get(r.m.id)!.keyEncrypted ? <DeskSettings feed={feedOf.get(r.m.id)!} /> : null}
                         <a href={`/lb/${feedOf.get(r.m.id)!.slug}`} target="_blank" rel="noreferrer" className="text-[11px] underline" data-testid="leaderboard-open-page">Open their leaderboard page →</a>
                       </div>
                     ) : null}
                   </details>
-                  {r.m.clApiToken ? <BotPushLine m={r.m} clientName={r.u?.name ?? null} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
+                  {r.m.clApiToken ? <BotPushLine m={r.m} clientName={r.u?.name ?? null} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.tz} /> : null}
                   </div>
                   </details>
                 </li>
@@ -439,7 +476,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                         <span className="text-xs text-ink-3">+{lib?.points}</span>
                       </div>
                       <div className="text-xs text-ink-2">
-                        {u?.avatarEmoji} {u?.name} · {s.submittedAt ? formatDateTime(s.submittedAt, v.workspace.timezone) : ""}
+                        {u?.avatarEmoji} {u?.name} · {s.submittedAt ? formatDateTime(s.submittedAt, v.tz) : ""}
                       </div>
                       {s.submissionText ? <p className="mt-2 whitespace-pre-line rounded bg-surface-2 p-2">{s.submissionText}</p> : null}
                       {s.submissionUrl ? (
@@ -505,7 +542,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                   Today: <span className="font-semibold">{evidenceQuota.globalToday.toLocaleString()}</span> real searches{evidenceQuota.degraded ? <Badge tone="warn">degraded</Badge> : evidenceQuota.exhausted ? <Badge tone="danger">used up</Badge> : null}
                 </span>
                 <span data-testid="evidence-credits">
-                  {evidenceReported ? `OpenAlex reports ${evidenceReported.creditsRemaining?.toLocaleString()} of ${evidenceReported.creditsLimit?.toLocaleString()} credits left, as of ${formatDateTime(evidenceReported.createdAt.includes("T") ? evidenceReported.createdAt : `${evidenceReported.createdAt.replace(" ", "T")}Z`, v.workspace.timezone)}` : "OpenAlex has not reported a balance today (no real call yet)."}
+                  {evidenceReported ? `OpenAlex reports ${evidenceReported.creditsRemaining?.toLocaleString()} of ${evidenceReported.creditsLimit?.toLocaleString()} credits left, as of ${formatDateTime(evidenceReported.createdAt.includes("T") ? evidenceReported.createdAt : `${evidenceReported.createdAt.replace(" ", "T")}Z`, v.tz)}` : "OpenAlex has not reported a balance today (no real call yet)."}
                 </span>
               </div>
               <table className="w-full">
@@ -590,7 +627,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                 {claimRows.map((c) => {
                   const u = userById.get(c.userId);
                   const link = linkOf.get(c.rewardName);
-                  const booking = c.bookedAt ? `booked for ${formatDateTime(c.bookedAt, v.tz)}` : !link ? "no next step set yet" : c.bookingOpenedAt ? `opened the booking link ${formatDateTime(c.bookingOpenedAt, v.tz)}` : "hasn't opened the booking link yet";
+                  const booking = c.bookedAt ? `booked for ${formatDateTime(c.bookedAt, v.tz)}` : !link ? COACH_DELIVERS : c.bookingOpenedAt ? `opened the booking link ${formatDateTime(c.bookingOpenedAt, v.tz)}` : "hasn't opened the booking link yet";
                   return (
                     <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid="claim-row">
                       <Link href={`/coach/${members.find((mm) => mm.userId === c.userId)?.id ?? ""}`} className="font-medium hover:underline">

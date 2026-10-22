@@ -14,11 +14,12 @@ import { CHAMPION_SPOTS, LAP_SECONDS, RING_WORDS, seatAngle, seatPlace } from "@
 import type { ArenaSeat, ArenaWin } from "@/lib/colosseum";
 import { Applause } from "@/components/colosseum-bits";
 import { ColosseumAmbience } from "@/components/colosseum-ambience";
-import { LoopOverPhoto } from "@/components/loop-over-photo";
-import { loopFor } from "@/lib/engine/scene-loops";
+import { SceneBirds } from "@/components/scene-birds";
+import { COLOSSEUM_BIRDS } from "@/lib/engine/scene-birds";
 import { ModeratePanel } from "@/components/colosseum-moderate";
 import { top3CheerKey } from "@/lib/engine/ambience";
 import { armSounds, playSound } from "@/lib/sounds";
+import { keepStill, useQuiet } from "@/components/scene-life";
 
 type Look = "day" | "night";
 type RingSeat = ArenaSeat & { ring: number; index: number; of: number };
@@ -27,8 +28,10 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
   const [look, setLook] = useState<Look>(initialLook);
   const [modFor, setModFor] = useState<string | null>(null);
   const [paused, setPaused] = useState(initialPaused);
-  // Golden hour, filmed (H-1253): the arena's own loop over its photo, held with Pause and at night.
-  const dayLoop = loopFor("/colosseum/colosseum-day");
+  // Reduced motion, or the member's Scene motion switch off (Roma Vivit 2 PR 6): the loop holds every avatar still.
+  const quiet = useQuiet();
+  // Golden hour (H-1367): doves and an eagle fly over the still photo, held with Pause and at night.
+  const birds = look === "day";
   const [picked, setPicked] = useState<string | null>(null);
   const [broken, setBroken] = useState<Set<Look>>(() => new Set());
   const photo = useRef<HTMLImageElement>(null);
@@ -45,7 +48,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = keepStill();
     const nodes = [...el.querySelectorAll<HTMLButtonElement>("[data-seat]")].map((n) => ({ n, ring: Number(n.dataset.ring), index: Number(n.dataset.index), of: Number(n.dataset.of) }));
     let raf = 0;
     let t0 = performance.now();
@@ -81,7 +84,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", wake);
     };
-  }, [rings, paused]);
+  }, [rings, paused, quiet]);
 
   // The top-3 cheer (H-637): once a week, the first time the member sees themselves among this week's champions. The mark is
   // this browser's, and it is only set once the cheer has actually started: before the first tap on the page, or with sounds off,
@@ -147,7 +150,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
 
   return (
     <div className="co-wrap">
-      <div ref={box} className={`co-arena co-${look}`} data-testid="arena" data-look={look} data-paused={paused ? "1" : "0"} data-loop={dayLoop && look === "day" ? "1" : "0"}>
+      <div ref={box} className={`co-arena co-${look}`} data-testid="arena" data-look={look} data-paused={paused ? "1" : "0"} data-birds-scene={birds ? "1" : "0"}>
         {broken.has(look) ? null : (
           <picture>
             <source srcSet={`/colosseum/colosseum-${look}.avif`} type="image/avif" />
@@ -156,8 +159,8 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
             <img ref={photo} className="co-bg" src={`/colosseum/colosseum-${look}.jpg`} alt="" width={1680} height={944} decoding="async" onError={() => setBroken((b) => new Set(b).add(look))} data-testid="arena-photo" />
           </picture>
         )}
-        {broken.has(look) || !dayLoop ? null : <LoopOverPhoto mp4={dayLoop.mp4} webm={dayLoop.webm} held={paused || look !== "day"} className="co-bg co-loop" testId="arena-loop" />}
-        {broken.has(look) ? null : <ColosseumAmbience look={look} paused={paused} loop={Boolean(dayLoop)} />}
+        {broken.has(look) || !birds ? null : <SceneBirds sprites={COLOSSEUM_BIRDS} held={paused} className="co-bg co-loop" testId="arena-birds" />}
+        {broken.has(look) ? null : <ColosseumAmbience look={look} paused={paused} loop={birds} />}
         {rings.map((ring, r) =>
           ring.map((s) => {
             const p = seatPlace(r, seatAngle(r, s.index, s.of, 0));

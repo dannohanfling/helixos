@@ -5,26 +5,26 @@ import { requireViewer } from "@/lib/auth";
 import { createGroupAction, setGroupSlotAction } from "@/lib/actions/groups";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { groupRating, groupReadiness } from "@/lib/engine/groups";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 import type { Group } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Groups" };
 
 /** A posted date as "Oct 12", or nothing when the stored value can't be read (an imported row), never the error page. */
-function postedOn(at: string | null): string | null {
+function postedOn(at: string | null, tz: string): string | null {
   if (!at) return null;
   try {
-    return formatDate(at.slice(0, 10));
+    return stampDate(at, tz);
   } catch {
     return null;
   }
 }
 
-function GroupRow({ g, slot }: { g: Group; slot?: string }) {
+function GroupRow({ g, slot, tz }: { g: Group; slot?: string; tz: string }) {
   const ready = groupReadiness(g);
   const stars = groupRating(g.rating);
-  const posted = postedOn(g.lastPostedAt);
+  const posted = postedOn(g.lastPostedAt, tz);
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
       {slot ? <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-white">{slot}</span> : null}
@@ -76,14 +76,14 @@ export default async function GroupsPage() {
           No groups yet. Start with your own group, then add the ones you&apos;re already in, using the form on this page. When one starts working, move it into a prospect slot.
         </p>
       )}
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="space-y-4">
           <Card title="🏠 My group" action={own.length ? <Badge tone="good">{own.length === 1 ? "set" : `${own.length} groups`}</Badge> : <Badge tone="warn">not set</Badge>}>
-            {own.length ? <ul className="divide-y">{own.map((g) => <GroupRow key={g.id} g={g} />)}</ul> : <Empty icon="🏠" title="Add your own group" hint="Your Community Pass hashtag posts and CTAs go here first." />}
+            {own.length ? <ul className="divide-y">{own.map((g) => <GroupRow tz={v.tz} key={g.id} g={g} />)}</ul> : <Empty icon="🏠" title="Add your own group" hint="Your Community Pass hashtag posts and CTAs go here first." />}
           </Card>
           <Card title="🎯 Top 3 to prospect in" action={<span className="text-xs text-ink-3">value first, never a pitch</span>}>
             <ul className="divide-y">
-              {top3.map((g, i) => (g ? <GroupRow key={g.id} g={g} slot={String(i + 1)} /> : (
+              {top3.map((g, i) => (g ? <GroupRow tz={v.tz} key={g.id} g={g} slot={String(i + 1)} /> : (
                 <li key={`empty-${i}`} className="flex items-center gap-3 py-2.5 text-sm text-ink-3">
                   <span className="grid h-7 w-7 place-items-center rounded-full border text-xs font-bold">{i + 1}</span>
                   Open slot. Move a group here.
@@ -92,12 +92,12 @@ export default async function GroupsPage() {
             </ul>
             {bench.length ? (
               <Disclosure summary={<span className="text-xs text-ink-3 underline">Bench ({bench.length})</span>} className="mt-2">
-                <ul className="divide-y">{bench.map((g) => <GroupRow key={g.id} g={g} />)}</ul>
+                <ul className="divide-y">{bench.map((g) => <GroupRow tz={v.tz} key={g.id} g={g} />)}</ul>
               </Disclosure>
             ) : null}
           </Card>
           <Card title="👥 Groups I'm a member of" action={<span className="text-xs text-ink-3">{members.length}</span>}>
-            {members.length ? <ul className="divide-y">{members.map((g) => <GroupRow key={g.id} g={g} />)}</ul> : <p className="text-sm text-ink-2">Add the groups you already hang out in. When one starts working, promote it to a prospect slot.</p>}
+            {members.length ? <ul className="divide-y">{members.map((g) => <GroupRow tz={v.tz} key={g.id} g={g} />)}</ul> : <p className="text-sm text-ink-2">Add the groups you already hang out in. When one starts working, promote it to a prospect slot.</p>}
           </Card>
         </div>
         <Card title="Add a group">

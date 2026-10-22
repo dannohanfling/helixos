@@ -141,20 +141,22 @@ async function main() {
     await p1.goto(`${base}/today`);
     const nav = p1.locator('[data-testid="side-nav"]');
     const daily = p1.locator('[data-testid="nav-group"][data-group="Daily"]');
-    const build = p1.locator('[data-testid="nav-group"][data-group="Build"]');
-    must((await build.getAttribute("data-open")) === "true", "Build starts open");
+    const build = p1.locator('[data-testid="nav-group"][data-group="Board and agents"]');
+    must((await build.getAttribute("data-open")) === "true", "Board and agents starts open");
+    // H-1010: the four bigger groups start shut until the member opens one.
+    for (const shut of ["My business", "Get leads", "Learn"]) must((await p1.locator(`[data-testid="nav-group"][data-group="${shut}"]`).getAttribute("data-open")) === "false", `${shut} starts shut`);
     await build.locator('[data-testid="nav-group-toggle"]').click();
-    must((await build.getAttribute("data-open")) === "false" && (await build.locator('[data-testid="nav-group-toggle"]').getAttribute("aria-expanded")) === "false", "a tap folds Build");
+    must((await build.getAttribute("data-open")) === "false" && (await build.locator('[data-testid="nav-group-toggle"]').getAttribute("aria-expanded")) === "false", "a tap folds Board and agents");
     await p1.waitForTimeout(700);
     await p1.reload();
-    must((await build.getAttribute("data-open")) === "false", "folded Build stays folded after a reload (kept on the membership)");
+    must((await build.getAttribute("data-open")) === "false", "folded Board and agents stays folded after a reload (kept on the membership)");
     const other: BrowserContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, storageState: await ctx.storageState() });
     const p2 = await other.newPage();
     await p2.goto(`${base}/today`);
-    must((await p2.locator('[data-testid="nav-group"][data-group="Build"]').getAttribute("data-open")) === "false", "another browser sees the same folded group: not a device setting");
+    must((await p2.locator('[data-testid="nav-group"][data-group="Board and agents"]').getAttribute("data-open")) === "false", "another browser sees the same folded group: not a device setting");
     await other.close();
-    await p1.goto(`${base}/offers`);
-    must((await build.getAttribute("data-open")) === "true", "the group holding the current page (Offers, in Build) always shows open");
+    await p1.goto(`${base}/my-board`);
+    must((await build.getAttribute("data-open")) === "true", "the group holding the current page (My Board, in Board and agents) always shows open");
     must((await daily.getAttribute("data-open")) === "true", "Daily is still open");
     // H-499: both controls sit in one row at the bottom left of the sidebar, above Settings; nothing of them at the top.
     const foot = p1.locator('[data-testid="sidebar-foot"]');
@@ -177,7 +179,7 @@ async function main() {
     for (let i = 0; i < n; i++) {
       const g = groups.nth(i);
       const label = await g.getAttribute("data-group");
-      must((await g.getAttribute("data-open")) === (label === "Build" ? "true" : "false"), `Collapse all shuts ${label} (the current page's group stays open)`);
+      must((await g.getAttribute("data-open")) === (label === "Board and agents" ? "true" : "false"), `Collapse all shuts ${label} (the current page's group stays open)`);
     }
     must((await collapseAll.innerText()).trim() === "Expand all", "once everything is shut it reads Expand all");
     await p1.waitForTimeout(700);

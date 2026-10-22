@@ -63,6 +63,21 @@ async function openConfirm(page: Page, opener: Locator) {
   }
   throw new Error("the confirm dialog never opened");
 }
+/**
+ * Open a confirm dialog and press its Yes, waiting for the POST. On a server fresh for this section the dialog can close again
+ * before the press (21 Oct: the Yes was there, then gone, one gate on main), so open it again and press again, up to three times.
+ */
+async function confirmThrough(page: Page, opener: Locator) {
+  for (let attempt = 1; ; attempt++) {
+    await openConfirm(page, opener);
+    const posted = page.waitForResponse((r) => r.request().method() === "POST", { timeout: 10000 }).then(() => true, () => false);
+    const pressed = await page.locator('[data-testid="confirm-delete-yes"]:visible').first().click({ timeout: 5000 }).then(() => true, () => false);
+    if (pressed && (await posted)) break;
+    if (attempt >= 3) throw new Error("the confirm dialog closed before its Yes was pressed, three times");
+  }
+  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
+  await page.waitForTimeout(300);
+}
 const must = (ok: unknown, msg: string) => {
   if (!ok) throw new Error(msg);
 };
@@ -225,7 +240,7 @@ async function main() {
     console.log("✓ a stranger joins through the link: their own login, Maya's HelixOS, the banner, the team home, the short menu");
 
     // ── 3. Closed, on the server. ──
-    const closedPages = ["/body", "/body/foods", "/body/weight", "/body/training/health", "/rewards", "/offers", "/intentions", "/numbers", "/brain", "/essence", "/pathway", "/courses", "/integrations", "/connect", "/coach", `/coach/${mayaM.id}`, "/community", "/proof", "/magnets", "/avatars", "/socrates/scripts", "/groups", "/recordings", "/evidence", "/doctrine", "/certification"];
+    const closedPages = ["/body", "/body/foods", "/body/weight", "/body/training/health", "/rewards", "/offers", "/intentions", "/numbers", "/my-bot", "/my-bot/connection", "/essence", "/pathway", "/courses", "/integrations", "/connect", "/coach", `/coach/${mayaM.id}`, "/community", "/proof", "/magnets", "/avatars", "/socrates/scripts", "/groups", "/recordings", "/evidence", "/doctrine", "/certification"];
     // Office Hours opened to a team member in H-413 (scripts/smoke-ooh.ts walks it); it is no longer on the closed list.
     must(await opens(sam, "/office-hours"), "Office Hours opens for a team member (H-413)");
     for (const p of closedPages) {
@@ -324,6 +339,10 @@ async function main() {
     must(!(await sam.locator('[data-testid="leaderboard-state"], [data-testid="leaderboard-hidden"]').count()), "a team member's Settings has no leaderboard card or hide list");
 
     // ── 5. Isolation: Jordan's records read as missing. ──
+    // The closed-page sweep and the open pages above compile most of the app, and the dev server now reaches the container's
+    // 13 GB here (21 Oct: next-server killed at 12.9 GB on GET /conversations/<id>, three gates running). A fresh server, as
+    // before sections 7 and 8; the sessions live in the database, so every signed-in browser and request context carries on.
+    if (base === "http://localhost:3000") execSync("scripts/dev-server.sh fresh", { stdio: "inherit" });
     const rnd = randomUUID();
     for (const [pattern, bId] of [
       ["/content/", jordanContent.id],
@@ -379,9 +398,17 @@ async function main() {
       await tess.waitForURL(/\/today/);
     }
     await whenFree("the cap set to 2", () => db.update(schema.memberships).set({ teamCap: 2 }).where(eq(schema.memberships.id, mayaM.id)));
-    await owner.goto(`${base}/settings`);
+    // The seats line reads the cap just written; a render that began before the write (21 Oct, one gate) still shows the old
+    // cap, so read the page again, up to ten times, until it says 2 of 2.
+    let seatsText = "";
+    for (let i = 0; i < 10; i++) {
+      await owner.goto(`${base}/settings`);
+      seatsText = await owner.locator('[data-testid="team-seats"]').innerText();
+      if (seatsText.includes("2 of 2 seats used (1 invite open)")) break;
+      await owner.waitForTimeout(500);
+    }
+    must(seatsText.includes("2 of 2 seats used (1 invite open)"), `the seats line says 2 of 2 with 1 invite open: ${seatsText}`);
     must(await owner.locator('[data-testid="team-full"]').count() && !(await owner.locator('[data-testid="team-invite-form"]').count()), "at the cap (2 members, 1 invite open against 2 seats) there is no invite form");
-    must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("2 of 2 seats used (1 invite open)"), "the seats line says so");
     // The coach: sees the team on the client page, raises the cap, removes Tess.
     // By here the dev server has compiled the closed-page sweep and the team pages, and with the app's growth it now reaches
     // the container's 13 GB in this section (18 Oct: next-server killed at 12.7 GB on main too). A fresh server, as before
@@ -400,8 +427,7 @@ async function main() {
     await coachPage.goto(`${base}/coach/${mayaM.id}`);
     must((await coachPage.locator('[data-testid="client-team-seats"]').innerText()).includes("2 of 6 seats used"), "the client page shows the new cap");
     const tessRow = coachPage.locator('[data-testid="client-team-member"]', { hasText: "Tess Lane" });
-    await openConfirm(coachPage, tessRow.locator('[data-testid="client-team-remove"]'));
-    await submit(coachPage, '[data-testid="confirm-delete-yes"]:visible');
+    await confirmThrough(coachPage, tessRow.locator('[data-testid="client-team-remove"]'));
     const tessUser = (await db.query.users.findFirst({ where: eq(schema.users.email, tessEmail) }))!;
     const tessDb = (await db.query.teamMembers.findFirst({ where: eq(schema.teamMembers.teamUserId, tessUser.id) }))!;
     must(tessDb.removedAt && tessDb.removedBy === coach.id, "the coach's removal is recorded with who did it");
@@ -415,8 +441,7 @@ async function main() {
     // The owner removes Sam from Settings; Sam's next request ends the same way.
     await owner.goto(`${base}/settings`);
     must((await owner.locator('[data-testid="team-seats"]').innerText()).includes("1 of 6 seats used"), "Tess's seat is free again");
-    await openConfirm(owner, owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" }).locator('[data-testid="team-remove"]'));
-    await submit(owner, '[data-testid="confirm-delete-yes"]:visible');
+    await confirmThrough(owner, owner.locator('[data-testid="team-member"]', { hasText: "Sam Vale" }).locator('[data-testid="team-remove"]'));
     must((await db.query.teamMembers.findFirst({ where: eq(schema.teamMembers.id, samRow.id) }))!.removedAt, "Sam is removed");
     must((await db.query.teamChanges.findMany({ where: and(eq(schema.teamChanges.teamMemberId, samRow.id), eq(schema.teamChanges.kind, "removed")) })).length === 1, "the removal is on the log");
     await sam.goto(`${base}/content`);

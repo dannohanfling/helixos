@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { SCOPE_WORDS } from "@/lib/engine/mcp";
 import { issuerFor, resourceFor } from "@/lib/mcp/oauth";
-import { formatDate, formatDateTime } from "@/lib/dates";
+import { formatDateTime, stampDate } from "@/lib/dates";
 import { Card, PageHeader } from "@/components/ui";
 import { CopyButton } from "@/components/copy-button";
 
@@ -30,7 +30,6 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
   const closed = v.role === "client" && !v.workspace.connectedAppsOpen;
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const latest = apps[0] ?? null;
-  const since = (iso: string) => (iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
   const step = (n: number, text: React.ReactNode, aside?: React.ReactNode) => (
     <li key={n} className="flex gap-3" data-testid="connect-step">
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-semibold text-surface">{n}</span>
@@ -49,7 +48,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
       ) : null}
       <p className={`mb-4 rounded-lg px-3 py-2 text-sm font-medium ${latest ? "bg-good-soft" : "bg-surface-2 text-ink-2"}`} data-testid="connect-status" data-connected={latest ? "1" : "0"}>
         {latest
-          ? `Connected ✓ on ${formatDate(since(latest.createdAt).slice(0, 10), { month: "short", day: "numeric" })}${latest.lastUsedAt ? `, last used ${formatDateTime(latest.lastUsedAt, v.tz)}` : ", not used yet"}.`
+          ? `Connected ✓ on ${stampDate(latest.createdAt, v.tz, { month: "short", day: "numeric" })}${latest.lastUsedAt ? `, last used ${formatDateTime(latest.lastUsedAt, v.tz)}` : ", not used yet"}.`
           : "Not connected yet."}{" "}
         {latest ? (
           <Link href="/settings#connected-apps" className="font-normal underline">Settings → Connected apps</Link>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLOSSEUM_HREF, NAV, NAV_GROUPS, VERIFY_HREF, navActive, navVisible, visibleGroups, withColosseum } from "@/components/nav-groups";
+import { COLOSSEUM_HREF, NAV, NAV_GROUPS, VERIFY_HREF, navActive, navVisible, toolsOpenedAt, toolsPhaseOf, visibleGroups, withColosseum } from "@/components/nav-groups";
 import { colosseumHref } from "@/components/colosseum-view";
 
 /** The menu after cleanup slice 1 (H-164 §5 and §7). */
@@ -15,7 +15,7 @@ describe("the menu: subtitles and the coach's three groups", () => {
   });
   it("the coach's links sit in People, Agents and Your content; a client sees none of them", () => {
     const hrefs = (g: string) => NAV_GROUPS.find((x) => x.label === g)!.items.map((i) => i.href);
-    expect(hrefs("People")).toEqual(["/coach", "/coach#verify", "/coach/office-hours", "/hermes/calendars", "/coach/community", "/coach/move", "/coach/import"]);
+    expect(hrefs("People")).toEqual(["/coach", "/coach#verify", "/coach/office-hours", "/hermes/calendars", "/coach/community", "/coach/move", "/coach/import", "/coach/partners"]);
     // Submissions to verify (H-1280, plan H-1296): coach only, right after Clients, never lit as a page of its own (Clients is).
     const verify = NAV.find((n) => n.href === VERIFY_HREF)!;
     expect(verify).toMatchObject({ label: "Submissions to verify", coachOnly: true, hint: "clients' work to approve" });
@@ -28,11 +28,11 @@ describe("the menu: subtitles and the coach's three groups", () => {
     expect(hrefs("Agents")).toEqual(["/coach/inbox", "/coach/agents", "/forum", "/coach/reports", "/coach/feedback"]);
     expect(hrefs("Your content")).toEqual(["/coach/board", "/coach/board-seats", "/coach/glossary", "/coach/frameworks", "/coach/horizon", "/coach/helix", "/coach/setup", "/coach/recordings", "/integrations"]);
     for (const g of ["People", "Agents", "Your content"]) for (const i of NAV_GROUPS.find((x) => x.label === g)!.items) expect(navVisible(i, client), i.href).toBe(false);
-    // The Forum once for each role: under Agents for the coach, under Build for a client.
+    // The Forum once for each role: under Agents for the coach, under Board and agents for a client.
     expect(NAV.filter((n) => n.href === "/forum" && navVisible(n, coach))).toHaveLength(1);
     expect(NAV.filter((n) => n.href === "/forum" && navVisible(n, client))).toHaveLength(1);
-    // Grow holds no coach link any more.
-    expect(NAV_GROUPS.find((x) => x.label === "Grow")!.items.some((i) => i.coachOnly)).toBe(false);
+    // The client's groups hold no coach link.
+    for (const g of ["Daily", "My business", "Get leads", "My bot", "Learn", "Board and agents"]) expect(NAV_GROUPS.find((x) => x.label === g)!.items.some((i) => i.coachOnly), g).toBe(false);
   });
   it("Rewards and the Colosseum are one link (H-164 §4)", () => {
     expect(NAV.some((n) => n.href === "/colosseum")).toBe(false);
@@ -60,8 +60,8 @@ describe("the menu: subtitles and the coach's three groups", () => {
     expect(navActive("/body/foods", "/body")).toBe(true);
   });
 
-  it("the Agent inbox (H-727): right after The Forum in Build, a member's own once they have an agent, never the coach's or a team member's", () => {
-    const build = NAV_GROUPS.find((g) => g.label === "Build")!.items.map((i) => i.href);
+  it("the Agent inbox (H-727): right after The Forum in Board and agents, a member's own once they have an agent, never the coach's or a team member's", () => {
+    const build = NAV_GROUPS.find((g) => g.label === "Board and agents")!.items.map((i) => i.href);
     expect(build.indexOf("/forum/inbox")).toBe(build.indexOf("/forum") + 1);
     const item = NAV.find((n) => n.href === "/forum/inbox")!;
     expect(item).toMatchObject({ label: "Agent inbox", icon: "📥", line: "your agents' plans for your OK", clientOnly: true, agentsOnly: true });
@@ -90,5 +90,38 @@ describe("Ask your coach in the menu (H-693)", () => {
   it("the coach sees what members see; a team member never sees it", () => {
     expect(ask({ role: "coach", passEnabled: false, bodyEnabled: false, chatOn: true })).toMatchObject({ label: "Ask your coach", line: "what members see" });
     expect(ask({ ...client, chatOn: true, team: true })).toBeUndefined();
+  });
+});
+
+/** Cleanup slice 2a (H-164 §10 to §12, plan H-209): the client's five groups and the tools that open as they reach them. */
+describe("the menu: five groups and tools by stage", () => {
+  const client = { role: "client" as const, passEnabled: false, bodyEnabled: false };
+  const hrefs = (g: string) => NAV_GROUPS.find((x) => x.label === g)!.items.map((i) => i.href);
+  it("holds the five groups in the plan's order, with My Helix, What's new and Connect to Claude out of the menu", () => {
+    const labels = NAV_GROUPS.map((g) => g.label);
+    for (const [a, b] of [["Daily", "My business"], ["My business", "Get leads"], ["Get leads", "My bot"], ["My bot", "Learn"]]) expect(labels.indexOf(a)).toBeLessThan(labels.indexOf(b));
+    expect(hrefs("My business")).toEqual(["/essence", "/offers", "/pathway", "/proof", "/goals", "/numbers", "/clients"]);
+    expect(hrefs("Learn")).toEqual(["/courses", "/recordings", "/library", "/doctrine", "/evidence", "/glossary"]);
+    for (const h of ["/my-helix", "/whats-new", "/connect", "/avatars"]) expect(NAV.some((n) => n.href === h), h).toBe(false);
+  });
+  it("a new client sees Daily, Learn and Essence; each phase opens its pages, and nothing closes again", () => {
+    const at = (phase: number) => visibleGroups({ ...client, toolsPhase: phase }).flatMap((g) => g.items).map((n) => n.href);
+    expect(at(0)).toEqual(expect.arrayContaining(["/today", "/content", "/courses", "/essence"]));
+    for (const h of ["/offers", "/pathway", "/magnets", "/my-bot", "/clients", "/library", "/my-board", "/socrates/foundations"]) expect(at(0), h).not.toContain(h);
+    expect(at(1)).toContain("/offers");
+    expect(at(2)).toEqual(expect.arrayContaining(["/pathway", "/proof", "/goals", "/numbers"]));
+    expect(at(3)).toEqual(expect.arrayContaining(["/images", "/library", "/my-board"]));
+    expect(at(4)).toEqual(expect.arrayContaining(["/magnets", "/webinars", "/aqueduct"]));
+    expect(at(5)).toContain("/socrates/foundations");
+    expect(at(6)).toContain("/clients");
+    expect(at(7)).toEqual(expect.arrayContaining(["/my-bot", "/my-bot/skills"]));
+    expect(toolsOpenedAt(1).map((n) => n.href)).toEqual(["/offers"]);
+  });
+  it("the coach, a team member and Show all tools see every tool", () => {
+    expect(toolsPhaseOf({ role: "coach", showAllTools: false, toolsPhase: 0 })).toBeNull();
+    expect(toolsPhaseOf({ role: "client", team: true, showAllTools: false, toolsPhase: 0 })).toBeNull();
+    expect(toolsPhaseOf({ role: "client", showAllTools: true, toolsPhase: 0 })).toBeNull();
+    expect(toolsPhaseOf({ role: "client", showAllTools: false, toolsPhase: 3 })).toBe(3);
+    expect(visibleGroups({ ...client, toolsPhase: null }).flatMap((g) => g.items).some((n) => n.href === "/my-bot")).toBe(true);
   });
 });

@@ -37,7 +37,9 @@ export async function saveWeekIntention(m: { workspaceId: string; userId: string
   // One saved as written though it reads like a task is marked for the coach (rev 158: the nudge asks, it never blocks).
   const keyResults = value.keyResults.map((text, i) => {
     const same = existing?.keyResults[i]?.text === text ? existing.keyResults[i] : null;
-    return { text, done: same ? same.done : null, actual: same?.actual ?? null, ...(soundsLikeTask(text) ? { kept: true } : {}) };
+    // A key result's link to Business goals (H-198) stays with its slot through an edit.
+    const krId = existing?.keyResults[i]?.krId ?? null;
+    return { text, done: same ? same.done : null, actual: same?.actual ?? null, ...(soundsLikeTask(text) ? { kept: true } : {}), ...(krId ? { krId } : {}) };
   });
   if (existing) {
     await db

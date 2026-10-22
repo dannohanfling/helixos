@@ -50,10 +50,13 @@ async function main() {
   const { hourInTz } = await import("@/lib/dates");
   if (hourInTz("America/Los_Angeles") < LATE_CLOSE_UNTIL_HOUR) await db.update(schema.memberships).set({ timezone: "Europe/London" }).where(eq(schema.memberships.userId, maya.id));
 
+  const mayaTz0 = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))?.timezone || "America/Los_Angeles";
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
-    const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+    // Maya's browser sits in her own zone (H-457): a member with no zone takes the browser's once, and the harness's own zone
+    // is the container's UTC, inside the late close-out window after midnight UTC, which would make the close yesterday's.
+    const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: mayaTz0 })).newPage();
     page.on("response", (r) => {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
@@ -192,7 +195,14 @@ async function main() {
     });
     const dmsPrefill = await page.locator('input[name="dmsStarted"]').inputValue();
     if (Number(dmsPrefill) < 1) throw new Error(`dmsStarted should be pre-filled, got ${dmsPrefill}`);
-    console.log(`✓ close pre-filled (DMs started = ${dmsPrefill})`);
+    // H-164 §16: what HelixOS saw is a check above the win line, and the boxes fold away until a correction.
+    const checkLines = await page.locator('[data-testid="close-check-line"]').allInnerTexts();
+    if (!checkLines.some((l) => /DMs? started/.test(l))) throw new Error(`the close's check names the DMs started, got ${JSON.stringify(checkLines)}`);
+    const numbers = page.locator('[data-testid="close-numbers"]');
+    if (await numbers.evaluate((d) => (d as HTMLDetailsElement).open)) throw new Error("with a check to confirm, the number boxes start folded");
+    if (!(await page.locator('[data-testid="close-win"]').isVisible())) throw new Error("the win line shows beside the check");
+    await numbers.locator("summary").click();
+    console.log(`✓ close pre-filled (DMs started = ${dmsPrefill}): a check plus the win line, the boxes folded`);
 
     // First close, then an edit that adds a booked call and cash: +25 points and the goal moves by the cash delta
     await page.fill('input[name="callsBooked"]', "0");
@@ -227,12 +237,12 @@ async function main() {
 
     // Member timezone
     await page.goto(`${base}/settings`);
-    await page.selectOption('select[name="timezone"]', "America/New_York");
-    await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
+    await page.fill('[data-testid="zone-picker"]', "America/New_York");
+    await submit(page, 'form:has([data-testid="zone-picker"]) button:has-text("Save")');
     const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
     if (m?.timezone !== "America/New_York") throw new Error(`member timezone not saved: ${m?.timezone}`);
-    await page.selectOption('select[name="timezone"]', "America/Los_Angeles");
-    await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
+    await page.fill('[data-testid="zone-picker"]', "America/Los_Angeles");
+    await submit(page, 'form:has([data-testid="zone-picker"]) button:has-text("Save")');
     console.log("✓ member timezone saved and restored");
 
     // Late close-outs (rev 731, Danno's answers at rev 746). Maya goes to a timezone where it is 01:00 now, with yesterday open:
@@ -268,6 +278,10 @@ async function main() {
       if (await page.locator('[data-testid="close-early"]').count()) throw new Error("the late close isn't folded away as 'not evening yet'");
       if (await page.locator('[data-testid="streak-broken"]').count()) throw new Error("yesterday isn't a missed day while it can still be closed");
       await page.fill('input[name="win"]', "Closed after midnight");
+      // Docket #9 (H-195): the "Also today" counters ride the close; outreach counts toward DMs started on the Aqueduct.
+      await page.locator('[data-testid="close-also"] > summary').click();
+      await page.fill('[data-testid="close-outreachMessages"]', "3");
+      await page.fill('[data-testid="close-videosPosted"]', "1");
       await submit(page, '[data-testid="close-form"] button[type="submit"]');
       // The evening close (H-327) plays after the first close of the day: jump to its end and close it.
       if (await page.locator('[data-testid="evening-close"]').waitFor({ timeout: 2500 }).then(() => true, () => false)) {
@@ -277,6 +291,7 @@ async function main() {
       const yLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, y)) });
       const tLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mt)) });
       if (!yLog?.eveningDoneAt || yLog.win !== "Closed after midnight") throw new Error("the close at 01:00 lands on yesterday");
+      if (yLog.outreachMessages !== 3 || yLog.videosPosted !== 1) throw new Error(`the Also today counters are saved on the close's day: ${yLog.outreachMessages}/${yLog.videosPosted}`);
       if (tLog?.eveningDoneAt) throw new Error("the new day stays open");
       const paid = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), inArray(schema.pointsLedger.type, ["close", "streak"])) });
       if (!paid.some((p) => p.type === "close" && p.refId === y) || paid.some((p) => p.refId === mt)) throw new Error("yesterday's points, none for the new day");

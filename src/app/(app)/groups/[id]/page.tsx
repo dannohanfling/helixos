@@ -8,7 +8,7 @@ import { requireViewer } from "@/lib/auth";
 import { deleteGroupAction, markPostedInGroupAction, updateGroupAction } from "@/lib/actions/groups";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { alignPost, groupReadiness, readRules } from "@/lib/engine/groups";
-import { formatDate } from "@/lib/dates";
+import { stampDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { ItemGone } from "@/components/item-gone";
 
@@ -151,7 +151,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                 {variants.map((x) => (
                   <li key={x.id} className="flex items-center justify-between gap-2 py-1.5">
                     <Link href={`/content/${x.contentItemId}/repurpose`} className="min-w-0 truncate hover:underline">{titleOf.get(x.contentItemId) ?? "Post"}</Link>
-                    <span className="shrink-0 text-xs text-ink-3">{x.status}{x.postedAt ? ` · ${formatDate(x.postedAt.slice(0, 10))}` : ""}{x.status === "posted" ? ` · 💬 ${x.comments} · 📨 ${x.dms}` : ""}</span>
+                    <span className="shrink-0 text-xs text-ink-3">{x.status}{x.postedAt ? ` · ${stampDate(x.postedAt, v.tz)}` : ""}{x.status === "posted" ? ` · 💬 ${x.comments} · 📨 ${x.dms}` : ""}</span>
                   </li>
                 ))}
               </ul>

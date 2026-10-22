@@ -9,8 +9,10 @@
  * - The video sits over it, invisible, and fades in only once it fires `playing`. If it never plays (Low Power Mode, a slow
  *   connection, autoplay refused), the poster simply stays.
  * - A phone gets the light copies (MP4 only); a computer the full loops, MP4 first then WebM.
- * - Nothing is drawn on the video itself: no blend mode, no filter. The waiting ember is a dark layer over the flame at 0.7x
- *   speed; the surge scales the wrapper and brightens a soft glow layer behind it.
+ * - The fire is filmed on true black (crushed to 0, H-952), so the layer holding the poster, the video and the dim blends with
+ *   `screen` (black drops out, only the light shows) under a soft radial mask, so no edge of the clip can show (H-1487). The
+ *   waiting ember is a dark layer over the flame at 0.7x speed, inside that same layer; the surge scales the wrapper and
+ *   brightens a soft glow layer behind it.
  * - A video loads once its box is laid out and on screen (a pill hidden by the layout loads nothing), and pauses while the tab
  *   is hidden or the box is off screen. Only play() starts it (no autoplay attribute), so a refused play() leaves the poster.
  *   Reduced motion: the tier's still, and no video at all.
@@ -45,6 +47,13 @@ export function warmStage(look: FlameLook): void {
   img.src = clip.poster;
   void fetch(clip.mp4).catch(() => undefined);
 }
+
+/**
+ * The clip's black blends away and its edges fade (H-1487), the same on the poster, the video and the still. The fire stands
+ * on the clip's bottom edge, so the mask is an ellipse anchored there: the embers stay whole, the sides and the top fade.
+ */
+const MASK = "radial-gradient(ellipse 62% 105% at 50% 100%, #000 60%, transparent 100%)";
+const BLEND = { mixBlendMode: "screen" as const, WebkitMaskImage: MASK, maskImage: MASK };
 
 /** Laid out: the layout shows it (a `hidden` pill has no boxes). */
 const laidOut = (el: Element) => el.getClientRects().length > 0;
@@ -160,7 +169,7 @@ export function Fire({ look, place, width, height, surgeAt = null, className = "
         style={{ opacity: 0, transform: "scale(1.25)", background: "radial-gradient(closest-side, rgba(255, 170, 70, 0.75), rgba(255, 120, 40, 0.25) 60%, transparent)" }}
         data-flame-glow="true"
       />
-      <span ref={inner} className="relative block h-full w-full origin-bottom">
+      <span ref={inner} className="relative block h-full w-full origin-bottom" style={BLEND} data-flame-blend="screen">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={still ? clip.still : clip.poster} alt="" style={fill} decoding="async" data-flame-poster="true" data-flame-still={still ? "true" : undefined} />
         {still ? null : (

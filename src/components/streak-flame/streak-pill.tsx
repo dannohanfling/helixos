@@ -99,9 +99,9 @@ export function StreakPill({ state, place, afterWelcome = false }: { state: Flam
         data-waiting={state.waiting ? "true" : "false"}
         data-late={state.late ? "true" : "false"}
         data-surge={surgeAt !== null ? "playing" : state.surge ? "due" : "none"}
-        className={`sf-pill shrink-0 overflow-hidden max-w-full rounded-full border ${rail ? "flex w-11 flex-col items-center px-0 py-1" : "flex min-h-11 items-center gap-1 py-0.5 pl-1.5 pr-3"}`}
+        className={`sf-pill shrink-0 overflow-hidden max-w-full rounded-full border ${rail ? "flex w-11 flex-col items-center px-0 py-1" : "flex min-h-11 items-center gap-1 py-0 pl-1.5 pr-3"}`}
       >
-        <Fire look={look} place="bar" width={rail ? 24 : 30} height={rail ? 30 : 38} surgeAt={surgeAt} />
+        <Fire look={look} place="bar" width={rail ? 26 : 34} height={rail ? 32 : 42} surgeAt={surgeAt} />
         <span className={`inline-flex items-center overflow-hidden ${rail ? "h-4" : "h-5"}`}>
           <span key={shown} className={`tabular font-bold ${rail ? "text-xs leading-4" : "text-base leading-5"} ${state.waiting ? "sf-muted" : ""} ${ticking ? "sf-tick" : ""}`} data-testid="streak-count">
             {shown}

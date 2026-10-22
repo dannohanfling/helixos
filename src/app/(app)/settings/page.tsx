@@ -1,13 +1,15 @@
 import { siteUrl } from "@/lib/app-url";
+import { ZonePicker } from "@/components/zone-picker";
+import { allZones } from "@/lib/engine/zones";
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { after } from "next/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { formatDate, formatDateTime } from "@/lib/dates";
+import { formatDateTime, stampDate } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
-import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, setShowAllToolsAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { BrandKitEditor } from "@/components/brand-kit-editor";
@@ -39,7 +41,7 @@ import { appUrl as appBase } from "@/lib/branded-email";
 import { MoneyInput } from "@/components/money-input";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 import { setHumanosAction } from "@/lib/actions/body";
-import { setSoundsOnAction } from "@/lib/actions/scene";
+import { setSoundsOnAction, setSceneMotionAction } from "@/lib/actions/scene";
 import { linkedChats } from "@/lib/chat";
 import { setChatProgressShareAction, unlinkChatAction } from "@/lib/actions/chat";
 import { CHANNEL_LABELS } from "@/lib/engine/chat";
@@ -65,15 +67,21 @@ import { REASON_LABEL, reasonOf, reportStatus, shortName } from "@/lib/engine/bl
 import { KIND_SHORT } from "@/lib/engine/reports";
 import { setupFor } from "@/lib/setup-card";
 import { SetupList } from "@/components/setup-card";
+import { ClaudeDraftCard, ClaudeDraftHistory, DRAFT_NOTES } from "@/components/claude-draft-card";
+import { changesFor, pendingDrafts, redLinesFor } from "@/lib/claude-drafts";
+import { rowsFor } from "@/lib/engine/claude-drafts";
 import { CallsSettingsCard } from "@/components/calls-settings";
 import { callsWithSkips } from "@/lib/calls";
+import { AppRow } from "@/components/pwa/app-row";
+import { appLinks, appLinksOn } from "@/lib/app-links";
+import { hasAppFor } from "@/lib/queries/app-devices";
 
 export const metadata = { title: "Settings" };
 
-const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string; humanos?: string; calls?: string; callsError?: string; call?: string; botDraft?: string; draftNote?: string }> }) {
   const v = await requireViewer({ team: "allow" });
+  const appHas = v.team ? null : await hasAppFor(v.membership.id);
   // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
   const ownMedia = v.switchedInto ? [] : await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), columns: { id: true, caption: true, kind: true }, orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 96 });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
@@ -86,7 +94,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError, humanos: humanosNotice, calls: callsNotice, callsError, call: callsOpen, field: refusedField, botDraft, draftNote } = await searchParams;
+  // Claude's draft of what the bot says (H-184): the one waiting, the one being edited in the form, and what happened to drafts here.
+  const meBot = { workspaceId: v.workspace.id, userId: v.user.id };
+  const [botWaiting, botChanges] = v.team ? [[], []] : await Promise.all([pendingDrafts(meBot, "bot_profile", v.membership.id), changesFor(meBot, "bot_profile", v.membership.id)]);
+  const botDraftRow = botWaiting[0] ?? null;
+  const botEditing = botDraftRow && botDraft === botDraftRow.id ? botDraftRow : null;
+  const botRed = botDraftRow && !botEditing ? await redLinesFor(meBot, botDraftRow) : [];
+  const bot = { ...v.membership, ...((botEditing?.fields ?? {}) as Partial<typeof v.membership>) };
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -162,12 +177,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // Switch to client (rev 216): what the coach changed while working in this member's HelixOS, for the member to see.
   const coachChangeRows = v.role === "client" ? await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, v.membership.id), eq(schema.coachChanges.kind, "change")), orderBy: [desc(schema.coachChanges.createdAt)], limit: 50 }) : [];
   const coachNames = new Map((coachChangeRows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(coachChangeRows.map((c) => c.coachUserId))]) }) : []).map((u) => [u.id, u.name]));
+  // H-1385: a change an agent made as the client names the agent, as the coach's.
+  const agentIds = [...new Set(coachChangeRows.map((c) => c.agentId).filter((x): x is string => Boolean(x)))];
+  const agentNames = new Map((agentIds.length ? await db.query.forumAgents.findMany({ where: inArray(schema.forumAgents.id, agentIds), columns: { id: true, name: true } }) : []).map((a) => [a.id, a.name]));
   const changesList = coachChangeRows.length ? (
     <ul className="mt-2 space-y-1 text-sm" data-testid="coach-changes">
       {coachChangeRows.map((c) => (
         <li key={c.id} data-testid="coach-change">
           <span className="font-medium">{c.action}</span>
-          {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {coachNames.get(c.coachUserId) ?? "your coach"} (coach) · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
+          {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {c.agentId ? <span data-testid="coach-change-agent">{agentNames.get(c.agentId) ?? "an agent"} ({(coachNames.get(c.coachUserId) ?? "your coach").split(" ")[0]}&apos;s agent)</span> : <>{coachNames.get(c.coachUserId) ?? "your coach"} (coach)</>} · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
         </li>
       ))}
     </ul>
@@ -255,6 +273,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {/* Account (H-331): the pages the app stores point at, the export, and the two deletions a member can run alone. */}
         <Card id="account" className="min-w-0" title="Account">
           <ul className="space-y-2 text-sm" data-testid="account-links">
+            {/* The HelixOS app (H-655): Get the app, Coming soon, or which phone has it. Not for a team member. */}
+            {v.team ? null : <AppRow hasApp={appHas} linksOn={appLinksOn(appLinks())} />}
             <li>
               <Link href="/privacy" className="underline">Privacy Policy</Link> · <Link href="/terms" className="underline">Terms of Service</Link> · <Link href="/support" className="underline">Support</Link>
             </li>
@@ -309,8 +329,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
           </Card>
         )}
+        {v.role === "client" && !v.team ? (
+          <Card id="menu" className="min-w-0" title="Your menu">
+            {/* Tools open as a client reaches them (H-164 §12); "Show all tools" puts every one in the menu now. */}
+            <form action={setShowAllToolsAction} className="flex flex-wrap items-center gap-2 text-sm">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="showAllTools" defaultChecked={v.membership.showAllTools} data-testid="show-all-tools" /> Show all tools
+              </label>
+              <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="show-all-tools-save">Save</SubmitButton>
+            </form>
+            <p className="mt-2 text-xs text-ink-3">Off: your menu opens each tool as you reach its stage in My Helix, and Today says when one opens. On: every tool is there from now.</p>
+          </Card>
+        ) : null}
         {v.team ? null : (
-          <Card id="sounds" className="min-w-0" title="Sounds">
+          <Card id="sounds" className="min-w-0" title="Sounds and motion">
             {/* The living scenes' sounds (H-400): one switch for the crowd, the applause and the fire, on by default, the member's own. */}
             {v.switchedInto ? (
               <p className="text-sm text-ink-3" data-testid="sounds-theirs">{v.membership.soundsOn ? "On." : "Off."} The client sets this.</p>
@@ -323,6 +355,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </form>
             )}
             <p className="mt-2 text-xs text-ink-3">Nothing plays until you have tapped or typed on the page, and nothing plays when your device asks for reduced motion.</p>
+            {/* Scene motion (Roma Vivit 2 PR 6, H-1060): off draws every living scene still, as reduced motion does. The member's own. */}
+            <div className="mt-4 border-t border-line pt-4">
+              <p className="text-sm font-medium">Scene motion</p>
+              {v.switchedInto ? (
+                <p className="text-sm text-ink-3" data-testid="scene-motion-theirs">{v.membership.sceneMotion ? "On." : "Off."} The client sets this.</p>
+              ) : (
+                <form action={setSceneMotionAction} className="flex flex-wrap items-center gap-2 text-sm">
+                  <label className="flex min-h-[44px] items-center gap-2">
+                    <input type="checkbox" name="sceneMotion" defaultChecked={v.membership.sceneMotion} data-testid="scene-motion-on" /> Let the scenes move: the flames, the water, the birds and the circling arena
+                  </label>
+                  <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="scene-motion-save">Save</SubmitButton>
+                </form>
+              )}
+              <p className="mt-2 text-xs text-ink-3">Off, every scene stays still, the same as when your device asks for reduced motion.</p>
+            </div>
           </Card>
         )}
         {v.role === "client" ? (
@@ -398,12 +445,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Field label="Audience">
               <input className="field" name="audience" defaultValue={v.membership.audience ?? ""} data-testid="audience-field" />
             </Field>
-            <Field label="Your timezone" hint="Sets what 'today' means for your lock-in, close, streak and reminders.">
-              <select className="field" name="timezone" defaultValue={v.membership.timezone ?? v.workspace.timezone}>
-                {Array.from(new Set([v.workspace.timezone, ...(v.membership.timezone ? [v.membership.timezone] : []), ...TIMEZONES])).map((tz) => (
-                  <option key={tz}>{tz}</option>
-                ))}
-              </select>
+            <Field label="Your time zone" hint="Every date and time in HelixOS shows in it, and it sets what 'today' means for your lock-in, close, streak and reminders. Type a city or region.">
+              <ZonePicker saved={v.membership.timezone} workspaceTz={v.workspace.timezone} zones={allZones(v.membership.timezone)} />
             </Field>
             <Field label="My work days" hint="Every day: a day with nothing done breaks the streak, weekends too, and an active Saturday or Sunday pays +40. Monday to Friday: weekends never count, either way.">
               <select className="field" name="workDays" defaultValue={v.membership.workDays} data-testid="work-days">
@@ -439,12 +482,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </p>
         </Card>
         <Card id="your-bot" title="What your bot says about your business">
-          <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/brain" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>
-          <form action={updateBotFactsAction} className="space-y-3">
+          <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/my-bot" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>
+          {draftNote ? <p className="mb-3 rounded-lg bg-surface-2 p-3 text-sm" role="status" data-testid="claude-draft-note">{DRAFT_NOTES[draftNote] ?? draftNote}</p> : null}
+          {botEditing ? (
+            <p className="mb-3 rounded-lg border border-accent bg-accent-soft/40 p-3 text-sm" data-testid="claude-draft-editing">
+              The form below is filled with Claude&apos;s draft. Change what you like, then save; the draft is settled as edited.{" "}
+              <a href="/settings#your-bot" className="underline">Back to the draft</a>
+            </p>
+          ) : botDraftRow ? (
+            <div className="mb-3">
+              <ClaudeDraftCard draft={botDraftRow} rows={rowsFor("bot_profile", v.membership as unknown as Record<string, unknown>, botDraftRow.fields)} red={botRed} tz={v.tz} editHref={`/settings?botDraft=${botDraftRow.id}#your-bot`} back="/settings#your-bot" />
+            </div>
+          ) : null}
+          <form key={botEditing ? `draft-${botEditing.id}` : "saved"} action={updateBotFactsAction} className="space-y-3">
+            {botEditing ? <input type="hidden" name="draftId" value={botEditing.id} /> : null}
             <Field label="What I do" hint="One paragraph, the first thing your bot knows about you.">
-              <textarea className="field" name="whatIDo" rows={4} defaultValue={v.membership.whatIDo ?? ""} data-testid="what-i-do" />
+              <textarea className="field" name="whatIDo" rows={4} defaultValue={bot.whatIDo ?? ""} data-testid="what-i-do" />
             </Field>
-            {[v.membership.botQuestion1, v.membership.botQuestion2, v.membership.botQuestion3].map((q, i) => (
+            {[bot.botQuestion1, bot.botQuestion2, bot.botQuestion3].map((q, i) => (
               <Field key={i} label={`Question ${i + 1} your bot asks before booking`} hint="Blank uses the house question shown.">
                 <input className="field" name={`botQuestion${i + 1}`} defaultValue={q ?? ""} placeholder={QUALIFYING_DEFAULTS[i]} data-testid={`bot-question-${i + 1}`} />
               </Field>
@@ -458,7 +513,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <input className="field" name="bookingUrl" type="url" maxLength={500} placeholder="https://" defaultValue={v.membership.bookingUrl ?? ""} data-testid="booking-url" />
             </Field>
             <Field label="What to expect when you book" hint="A few lines your bot can say about the call: how long, what you'll cover, what to bring.">
-              <textarea className="field" name="bookingExpect" rows={3} maxLength={500} defaultValue={v.membership.bookingExpect ?? ""} data-testid="booking-expect" />
+              <textarea className="field" name="bookingExpect" rows={3} maxLength={500} defaultValue={bot.bookingExpect ?? ""} data-testid="booking-expect" />
             </Field>
             <details className="rounded-lg border p-3">
               <summary className="cursor-pointer text-sm font-medium">Your guarantee&apos;s full terms</summary>
@@ -498,6 +553,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               Save
             </SubmitButton>
           </form>
+          {v.team ? null : (
+            <div className="mt-4">
+              <ClaudeDraftHistory rows={botChanges} tz={v.tz} back="/settings#your-bot" />
+            </div>
+          )}
         </Card>
         {v.switchedInto || v.team ? null : <BotConnectionCard workspaceId={v.workspace.id} userId={v.user.id} membershipId={v.membership.id} tz={v.membership.timezone ?? v.workspace.timezone} />}
         {v.switchedInto || v.team || !mfAvailable(v.membership) ? null : (
@@ -596,7 +656,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </p>
           </Card>
         ) : null}
-        <Card id="connected-apps" title="Connected apps">
+        <Card id="connected-apps" title="Connected apps" action={<Link href="/connect" className="text-xs text-ink-2 hover:underline" data-testid="settings-connect-claude">Connect to Claude, step by step →</Link>}>
           {/* The MCP server (rev 224): the apps this member let act as them, and the way to cut each one. */}
           {appsNote ? <p className="mb-2 text-sm text-good" data-testid="apps-note">{appsNote}</p> : null}
           {v.role === "coach" ? (
@@ -722,7 +782,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <span>
                     <span className="font-medium">{t.name}</span> <span className="text-ink-3">· {t.email}</span>
                     <span className="block text-xs text-ink-3">
-                      added by {t.addedByName} on {formatDate(t.member.createdAt.slice(0, 10))} · last active {lastActiveWords(t.member.lastActiveAt)}
+                      added by {t.addedByName} on {stampDate(t.member.createdAt, v.tz)} · last active {lastActiveWords(t.member.lastActiveAt)}
                     </span>
                   </span>
                   <form action={removeTeamMemberAction}>
@@ -913,9 +973,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="Name">
                   <input className="field" name="name" defaultValue={v.workspace.name} />
                 </Field>
-                <Field label="Timezone" hint="Controls what 'today' means for streaks and reminders.">
+                <Field label="Timezone" hint="The workspace's zone: a member's times use it only until they have their own.">
                   <select className="field" name="timezone" defaultValue={v.workspace.timezone}>
-                    {TIMEZONES.map((tz) => (
+                    {allZones(v.workspace.timezone).map((tz) => (
                       <option key={tz}>{tz}</option>
                     ))}
                   </select>
@@ -923,6 +983,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="HelixOS Airtable base ID" hint="The base the Pathway, curriculum and DM templates are refreshed from.">
                   <input className="field" name="airtableBaseId" defaultValue={v.workspace.airtableBaseId ?? ""} placeholder="appXXXXXXXXXXXXXX" />
                 </Field>
+                <label className="flex items-start gap-2 text-sm" data-testid="auto-done-label">
+                  <input type="checkbox" name="autoDoneAfterMerge" defaultChecked={v.workspace.autoDoneAfterMerge} className="mt-1" data-testid="auto-done" />
+                  <span>
+                    Send Done messages automatically after merge
+                    <span className="block text-xs text-ink-3">When an agent&apos;s fix for a member&apos;s report merges, its Done message goes to the member at once, from your account, marked as drafted by that agent. Off: it waits on Issues and ideas as a draft until you press Send.</span>
+                  </span>
+                </label>
                 <fieldset className="space-y-2" data-testid="platform-links">
                   <legend className="label">Platforms menu links</legend>
                   <p className="text-xs text-ink-3">Where the Platforms section of everyone&apos;s menu points. Leave one blank for the address shown; Community appears once it has a link (a client&apos;s own community link on Community wins for them).</p>

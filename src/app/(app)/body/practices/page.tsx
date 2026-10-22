@@ -7,7 +7,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { archiveHabitAction, deleteHabitAction, logHabitAction, restoreHabitAction, saveHabitAction } from "@/lib/actions/body";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { formatDate } from "@/lib/dates";
+import { formatDate, stampDate } from "@/lib/dates";
 import { DAY_LETTERS, DAY_NAMES, KIND_LABEL, STARTER_HABITS, fmtDays, fmtTarget, type Dot } from "@/lib/engine/body-habits";
 import { bodySettingsFor, habitsDay, habitsRange, requireBodyEnabled, type HabitsDayView, archivedHabits } from "@/lib/queries/body";
 import { StreakCalendar } from "@/components/charts";
@@ -306,7 +306,7 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
                 <span className="min-w-0 break-words">
                   <span className="font-medium">{h.name}</span>{" "}
                   <span className="text-xs text-ink-3">
-                    archived {formatDate(h.archivedAt.slice(0, 10), { month: "short", day: "numeric" })} · {h.loggedDays} logged day{h.loggedDays === 1 ? "" : "s"}
+                    archived {stampDate(h.archivedAt, v.tz, { month: "short", day: "numeric" })} · {h.loggedDays} logged day{h.loggedDays === 1 ? "" : "s"}
                   </span>
                 </span>
                 <span className="flex gap-2">

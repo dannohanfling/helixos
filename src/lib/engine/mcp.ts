@@ -30,16 +30,25 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   // Webinar drafts (H-181): drafts sit beside the webinar until you approve each step in the wizard.
   "webinars:write": { label: "Webinars: draft", line: "Start a webinar and write Claude's draft of a step beside it. Nothing changes until you approve it in the wizard." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
+  // Claude's drafts (H-184): a lead magnet's words, drafted beside it until you approve. Never published.
+  bot: { label: "Your bot", line: "Read what your bot says about your business and write Claude's drafts of it, for you to approve. Nothing is sent to your bot from here." },
+  magnets: { label: "Lead magnets", line: "Read your lead magnets and write Claude's drafts of them, for you to approve. Never published." },
   // The Forum (rev 765): an agent reports what it's doing to the member's own Forum and reads it back. Nothing else.
   forum: { label: "The Forum", line: "Report what your AI agents are doing to your Forum, and read your Forum back." },
   // The Handoff inbox (rev 769; every member's own since H-727): never pre-ticked. Agents post and read; only you approve, by hand in HelixOS.
   inbox: { label: "Handoff inbox", line: "Your agents pass briefs, plans, status and files to each other through your inbox. Only you approve anything, by hand in HelixOS." },
   body: { label: "HumanOS", line: "Your HumanOS numbers and meal log. Only with HumanOS's own AI switch on, and never pre-ticked." },
+  // The Partner Program (H-1307, plan H-1361): the coach's restaurants, touches, payments and the monthly statement; never pre-ticked.
+  partner: { label: "Partner Program", line: "Read and update the restaurants in your Partner Program, log touches and payments, and build the month's statement for your approval. Business names only in lists." },
+  // An agent in a client's HelixOS (H-1385): only on an agent token the coach granted for a client; never on the consent screen.
+  clients: { label: "Clients' HelixOS", line: "Switch this agent into a client's HelixOS the coach granted it, and back out. While in, its client tools act as that client and every change is logged for them." },
 };
 
 export const SCOPE_NAMES: readonly Scope[] = MCP_SCOPES;
 /** Never pre-ticked on the consent screen: HumanOS (rev 247, B3), publishing (rev 638) and the Handoff inbox (rev 769). */
-export const OPT_IN_SCOPES: readonly Scope[] = ["body", "content:publish", "inbox"];
+export const OPT_IN_SCOPES: readonly Scope[] = ["body", "content:publish", "inbox", "partner", "clients"];
+/** Never on the consent screen at all (H-1385): the coach grants it per agent and client, and the agent token carries it. */
+export const AGENT_ONLY_SCOPES: readonly Scope[] = ["clients"];
 export const isScope = (s: string): s is Scope => (MCP_SCOPES as readonly string[]).includes(s);
 
 /** A space-separated scope string, as OAuth sends it, into known scopes and the rest. */

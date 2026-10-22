@@ -66,6 +66,18 @@ describe("claimability", () => {
     expect(EARNED_SOON).not.toBe(OPENING_SOON);
     expect(claimability(byName(items, "Custom Chatbot Strategy Blueprint"), base)).toMatchObject({ ok: false, reason: "not-earnable" });
   });
+  it("lets the two 30-day access rewards be claimed with no link, every other rule still applying (H-1596 A)", () => {
+    const academy = byName(items, "30 Days Access to Evolve Omega Academy"); // Sentinel, 10 a quarter, no link
+    const elite = byName(items, "30 Days Access to Evolve Omega Elite"); // Centurion, 5 a quarter, no link
+    expect(academy.bookingUrl).toBeNull();
+    expect(claimability(academy, base)).toEqual({ ok: true });
+    expect(claimability(academy, { ...base, tierLevel: 3, points: 0 })).toMatchObject({ ok: false, reason: "tier", message: "Unlocks at Sentinel" });
+    expect(claimability(elite, { ...base, tierLevel: 4, points: 0 })).toMatchObject({ ok: false, reason: "tier", message: "Unlocks at Centurion" });
+    expect(claimability(academy, { ...base, claimed: new Set([academy.name]) })).toMatchObject({ ok: false, reason: "claimed" });
+    expect(claimability(academy, { ...base, claimDates: Array(10).fill(today) })).toMatchObject({ ok: false, reason: "cap" });
+    // Every other reward with no link is still not claimable.
+    expect(claimability(byName(items, "Limited Edition Evolve Omega Swag Box"), base)).toMatchObject({ ok: false, reason: "earned-soon" });
+  });
   it("enforces tier, balance, one-per-client and the workspace cap, in that order", () => {
     expect(claimability(vip, { ...base, points: 400, tierLevel: 2 })).toMatchObject({ reason: "tier", message: "Unlocks at Sage" });
     expect(claimability(vip, { ...base, points: 700, tierLevel: 3 })).toMatchObject({ reason: "points", message: "50 more points" });

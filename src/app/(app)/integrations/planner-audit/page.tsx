@@ -63,9 +63,9 @@ export default async function PlannerAuditPage() {
                         <td className="py-1.5 pr-3"><Badge tone={TONE[r.verdict]}>{VERDICT_LABEL[r.verdict]}</Badge></td>
                         <td className="py-1.5 pr-3 font-mono">{r.ghlPostId}</td>
                         <td className="py-1.5 pr-3">{c.accountName(r.accountId ?? r.live?.accountIds[0] ?? null)}{r.channel ? <span className="text-ink-3"> · {label(r.channel)}</span> : null}</td>
-                        <td className="py-1.5 pr-3">{r.live?.scheduleDate ? formatDateTime(r.live.scheduleDate, v.workspace.timezone) : "—"}</td>
+                        <td className="py-1.5 pr-3">{r.live?.scheduleDate ? formatDateTime(r.live.scheduleDate, v.tz) : "—"}</td>
                         <td className="py-1.5 pr-3">{r.twin ? <>{r.twin.itemTitle} <span className="font-mono text-ink-3">{r.twin.externalId}</span>{r.twin.sameText ? " · same text" : " · different text"}{r.twin.sameTime ? " · same time" : ""}</> : "—"}</td>
-                        <td className="py-1.5 pr-3">{r.seenIn.join(" + ")}{r.loggedAt ? <span className="block text-ink-3">logged {formatDateTime(r.loggedAt, v.workspace.timezone)}</span> : null}</td>
+                        <td className="py-1.5 pr-3">{r.seenIn.join(" + ")}{r.loggedAt ? <span className="block text-ink-3">logged {formatDateTime(r.loggedAt, v.tz)}</span> : null}</td>
                         <td className="py-1.5">{r.why}{r.live?.summary ? <span className="mt-1 block max-w-md truncate text-ink-3" title={r.live.summary}>“{r.live.summary}”</span> : null}</td>
                       </tr>
                     ))}
