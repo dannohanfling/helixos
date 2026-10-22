@@ -218,6 +218,8 @@ export const memberships = sqliteTable(
     eoTierSent: text("eo_tier_sent"),
     eoOffersSent: text("eo_offers_sent", { mode: "json" }).$type<string[]>().notNull().default([]),
     eoPassLastPushAt: text("eo_pass_last_push_at"),
+    /** The pass shows template prompt text in its name (H-1699): flagged on Coach until a fix lands. */
+    eoNameNeedsFix: integer("eo_name_needs_fix", { mode: "boolean" }).notNull().default(false),
     /** The coach's Community Loyalty inbound webhook for the Rung Dripper: the URL is the credential (no auth on it), sealed at rest, never rendered, never logged. */
     clDripWebhookUrl: text("cl_drip_webhook_url"),
     /** Ship's rungs-only inbound webhook on Community Loyalty (rev 625): the rungs and the two posts' ids, never the post. Sealed. */
@@ -1132,6 +1134,13 @@ export const leaderboardFeeds = sqliteTable(
      * Rewards). Off until the coach's own live test has passed; the coach can always get their own.
      */
     issuePasses: integer("issue_passes", { mode: "boolean" }).notNull().default(false),
+    /**
+     * Fix my pass (H-1699, plan H-1701, 0244): whether a name written to a pass in place shows on the phone, ticked by the
+     * coach after their own test; until then "Fix this pass" on a client's row stays shut. And the coach's switch to fix a
+     * member's pass when they change their name in Settings (off by default; only once in-place is proven).
+     */
+    nameFixProven: integer("name_fix_proven", { mode: "boolean" }).notNull().default(false),
+    fixNamesOnChange: integer("fix_names_on_change", { mode: "boolean" }).notNull().default(false),
     /** The loyalty health view (H-622 §2): the program's Pass Type ID and its certificate's expiry, typed in from the portal. */
     passTypeId: text("pass_type_id"),
     certExpiresAt: text("cert_expires_at"),
