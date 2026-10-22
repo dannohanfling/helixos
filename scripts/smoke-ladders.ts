@@ -24,7 +24,9 @@ mkdirSync("screenshots", { recursive: true });
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
   // A page answers at once with its loading skeleton; it must clear within 3 seconds, then the text must be there.
-  await page.locator('[data-testid="page-loading"]').waitFor({ state: "hidden", timeout: 3000 }).catch(async () => {
+  // Every outline, not one: while React's short reveal queue runs, the outline shown and one inside the content about to be
+  // revealed are both in the page, and a single-element wait throws at once on two (read as "still showing").
+  await page.waitForFunction(() => [...document.querySelectorAll<HTMLElement>('[data-testid="page-loading"]')].every((e) => !e.checkVisibility()), undefined, { timeout: 3000 }).catch(async () => {
     await page.screenshot({ path: `screenshots/fail-stuck-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
     throw new Error(`[${label}] loading skeleton still showing after 3s on ${page.url()}: a client would see no page`);
   });
