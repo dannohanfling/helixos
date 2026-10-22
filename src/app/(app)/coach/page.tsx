@@ -40,6 +40,8 @@ import { OwnProgramCard } from "@/components/leaderboard/own-program";
 import { certsToFlag } from "@/lib/engine/loyalty-health";
 import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
+import { fixMemberPassAction } from "@/lib/actions/pass-fix";
+import { fixWords } from "@/lib/engine/pass-fix";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
@@ -51,7 +53,7 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string }> }) {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string; passFix?: string; passFixRow?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const claimsShown = sp.claims === "done" ? "done" : "open";
@@ -100,6 +102,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const featuresWaiting = featureRows.filter((r) => r.state === "requested");
   const featuresOn = featureRows.filter((r) => r.state === "on").slice(0, 8);
   const linkOf = new Map(catalogue(rewards, prizes, loadRewardsConfig()).map((i) => [i.name, i.bookingUrl]));
+  // Fix this pass (H-1699): shut on clients' rows until the coach has proven names update in place on their own pass.
+  const ownFeed = feedOf.get(v.membership.id) ?? null;
   // Rewards with no link are delivered by hand (H-1586): a line at the top once one has waited over a day.
   const openRows = claimsShown === "open" ? claimRows : await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, wsId), eq(schema.rewardClaims.status, "requested")), columns: { rewardName: true, createdAt: true } });
   const claimsOverdue = overdueNoLinkClaims(openRows, (n) => linkOf.get(n), new Date());
@@ -353,7 +357,12 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
             ) : null}
           </p>
         ) : null}
-        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt), addressed: Boolean(v.membership.eoPassSerial && v.membership.eoPassTypeId), lastMessageAt: v.membership.eoPassLastPushAt }} passMessage={sp.passMessage} /> : null}
+        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt), addressed: Boolean(v.membership.eoPassSerial && v.membership.eoPassTypeId), lastMessageAt: v.membership.eoPassLastPushAt }} passMessage={sp.passMessage} passFix={sp.passFix} /> : null}
+        {fixWords(sp.passFixRow) ? (
+          <p className={`mb-2 text-sm ${fixWords(sp.passFixRow)!.good ? "text-good" : "text-danger"}`} data-testid="member-pass-fix-result">
+            {fixWords(sp.passFixRow)!.text}
+          </p>
+        ) : null}
         <Card className="mb-4" title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href={allOpen ? "/coach" : "/coach?connections=open"} className="underline" data-testid="connections-all">{allOpen ? "Close all" : "Open all"}</Link><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
         {rows.length ? (
             <ul className="divide-y">
@@ -406,6 +415,15 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                     <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
+                  {r.m.eoPassSerial && r.m.eoPassTypeId ? (
+                    <form action={fixMemberPassAction} className="flex items-center gap-1" data-testid="member-pass-fix">
+                      <input type="hidden" name="membershipId" value={r.m.id} />
+                      {r.m.eoNameNeedsFix ? <span className="text-[11px] text-danger" data-testid="name-needs-fix">Name needs fixing</span> : null}
+                      <SubmitButton className="btn btn-ghost btn-xs" pendingText="Fixing…" disabled={!ownFeed?.nameFixProven} title={ownFeed?.nameFixProven ? "Writes this client's HelixOS name onto their pass" : "Fix your own pass first and tick Names update in place"} data-testid="member-pass-fix-run">
+                        Fix this pass
+                      </SubmitButton>
+                    </form>
+                  ) : null}
                   <details className="basis-full text-xs" data-testid="leaderboard-row" open={Boolean(feedOf.get(r.m.id))}>
                     <summary className="cursor-pointer text-ink-3">Loyalty leaderboard{feedOf.get(r.m.id)?.keyEncrypted ? ` · key …${feedOf.get(r.m.id)!.keyLast4}` : ""}</summary>
                     <form action={saveLeaderboardAction} className="mt-1 flex flex-wrap items-center gap-1">

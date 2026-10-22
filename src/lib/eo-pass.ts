@@ -8,6 +8,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { address, parseCreatedPass } from "@/lib/engine/eloyalty";
+import { answerHasPlaceholder } from "@/lib/engine/pass-fix";
 import { type PassProgram, createFailureWords, passNames, refusalReason, safePassUrl } from "@/lib/engine/eo-pass";
 import { postJson } from "@/lib/points-outbox";
 import { queueMemberMoves } from "@/lib/points-sync";
@@ -52,7 +53,7 @@ export async function createMemberPass(m: schema.Membership, user: { name: strin
   }
   const res = await db
     .update(schema.memberships)
-    .set({ eoCustomerId: parsed.pass.customerId, eoPassSerial: parsed.pass.serial, eoPassTypeId: parsed.pass.passTypeId, eoPassUrl: safePassUrl(parsed.pass.downloadUrl) })
+    .set({ eoCustomerId: parsed.pass.customerId, eoPassSerial: parsed.pass.serial, eoPassTypeId: parsed.pass.passTypeId, eoPassUrl: safePassUrl(parsed.pass.downloadUrl), eoNameNeedsFix: answerHasPlaceholder(r.json) })
     .where(and(eq(schema.memberships.id, m.id), isNull(schema.memberships.eoCustomerId)));
   if ((res.rowsAffected ?? 0) === 0) console.log("[eo-pass] a second pass was created for a member who already had one: look in eLoyalty");
   else if (modeReaches(feed.syncMode as SyncMode, m.role === "coach")) {
