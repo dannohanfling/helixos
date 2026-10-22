@@ -156,7 +156,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
             <source srcSet={`/colosseum/colosseum-${look}.avif`} type="image/avif" />
             <source srcSet={`/colosseum/colosseum-${look}.webp`} type="image/webp" />
             {/* A picture that fails to load hides itself (H-96): the dark fallback shows, never a broken-image icon. */}
-            <img ref={photo} className="co-bg" src={`/colosseum/colosseum-${look}.jpg`} alt="" width={1680} height={944} decoding="async" onError={() => setBroken((b) => new Set(b).add(look))} data-testid="arena-photo" />
+            <img ref={photo} className="co-bg" src={`/colosseum/colosseum-${look}.jpg`} alt="" width={1680} height={944} fetchPriority="high" decoding="async" onError={() => setBroken((b) => new Set(b).add(look))} data-testid="arena-photo" />
           </picture>
         )}
         {broken.has(look) || !birds ? null : <SceneBirds sprites={COLOSSEUM_BIRDS} held={paused} className="co-bg co-loop" testId="arena-birds" />}

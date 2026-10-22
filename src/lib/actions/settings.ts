@@ -20,6 +20,8 @@ import { syncFieldTasks } from "@/lib/queries/pathway";
 import { syncPrimaryKpi } from "@/lib/queries/kpi";
 import { isOneEmoji } from "@/lib/engine/emoji";
 import { markDraftEdited } from "@/lib/claude-drafts";
+import { ownProgram } from "@/lib/eo-pass";
+import { fixPassName } from "@/lib/pass-fix";
 
 /** A picked logo's id when it is one of this member's own images of kind logo; otherwise null, so the kit keeps no logo. */
 async function ownLogo(workspaceId: string, userId: string, picked: string): Promise<string | null> {
@@ -48,6 +50,7 @@ async function updateProfile(formData: FormData): Promise<void> {
   const { v, userId } = await ctx();
   const name = str(formData, "name");
   const emoji = str(formData, "avatarEmoji");
+  const before = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { name: true } });
   await db.update(schema.users).set({ ...(name ? { name } : {}), ...(emoji ? { avatarEmoji: emoji.slice(0, 4) } : {}) }).where(eq(schema.users.id, userId));
   await db
     .update(schema.memberships)
@@ -68,7 +71,23 @@ async function updateProfile(formData: FormData): Promise<void> {
       profileSavedAt: nowIso(),
     })
     .where(eq(schema.memberships.id, v.membership.id));
+  if (name && before && name !== before.name) await fixNameOnChange(v.membership, name);
   refresh();
+}
+
+/**
+ * A new name reaches the member's pass (H-1699, plan H-1701): only when they have one, and only when the coach has proven names
+ * update in place and switched this on. Best effort: the profile is saved either way, and the log carries the outcome only.
+ */
+async function fixNameOnChange(m: schema.Membership, name: string): Promise<void> {
+  if (!m.eoPassSerial || !m.eoPassTypeId) return;
+  try {
+    const feed = await ownProgram(m.workspaceId);
+    if (!feed?.fixNamesOnChange || !feed.nameFixProven) return;
+    await fixPassName(feed, m, name);
+  } catch (e) {
+    console.log(`[pass-fix] name change fix failed (${e instanceof Error ? e.name : "error"})`);
+  }
 }
 
 /**
