@@ -182,7 +182,7 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
           <picture key={k}>
             <source type="image/avif" srcSet={`/forum/forum-${k}.avif`} />
             <source type="image/webp" srcSet={`/forum/forum-${k}.webp`} />
-            <img src={`/forum/forum-${k}.jpg`} alt="" className="fo-photo" style={{ opacity: look === k ? 1 : 0 }} loading={k === look ? "eager" : "lazy"} decoding="async" data-testid={`forum-photo-${k}`} />
+            <img src={`/forum/forum-${k}.jpg`} alt="" className="fo-photo" style={{ opacity: look === k ? 1 : 0 }} loading={k === look ? "eager" : "lazy"} fetchPriority={k === look ? "high" : "low"} decoding="async" data-testid={`forum-photo-${k}`} />
           </picture>
         ))}
         {/* Golden hour, filmed (H-1253): the plaza's own loop over its photo, held at night; the drawn cloud stays off while it plays. */}
