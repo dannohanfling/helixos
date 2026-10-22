@@ -20,6 +20,11 @@
  *   3. One createPass: confirm customerId, serialNumber and passTypeIdentifier are in the response as parseCreatedPass expects.
  *   4. One v1 pushNotification with a stale serial: confirm the 404, then refresh-then-retry.
  */
+/** Text a pass template shows as a prompt, never a name: "Enter Your Last Name Here", "Last Name", "First name". */
+export function isPlaceholderName(v: string): boolean {
+  return /^(enter\b.*|your\s+(first|last)\s+name.*|(first|last)\s*name(\s+here)?)$/i.test(v.trim());
+}
+
 export type Generation = "v1" | "v3";
 export type Needs = "customerId" | "passTypeId+serial" | "templateId";
 export type PassIdentity = { customerId?: string | null; serial?: string | null; passTypeId?: string | null };
@@ -34,7 +39,7 @@ export const ELOYALTY_CALLS: Record<CallKey, CallSpec> = {
   customerEvents: { generation: "v3", method: "GET", needs: "customerId", note: "GET /api/public/admin/customers/{id}/events: the read that makes a retry safe" },
   pushNotification: { generation: "v1", method: "PUT", needs: "passTypeId+serial", note: "PUT /api/external/v1/passes/{passTypeId}/{serial}/values/Push_Notification { value }" },
   passField: { generation: "v1", method: "PUT", needs: "passTypeId+serial", note: "PUT /api/external/v1/passes/{passTypeId}/{serial}/values/{Field} { value }; never the field Points" },
-  createPass: { generation: "v1", method: "POST", needs: "templateId", note: "POST /api/external/v1/templates/{templateId}/pass { Email, First_Name, Last_Name, MEMBER_ID }: only the template's own placeholders (H-798), or eLoyalty refuses with a 400, does not match any template placeholder (H-1235); the response carries customerId, serialNumber, passTypeIdentifier" },
+  createPass: { generation: "v1", method: "POST", needs: "templateId", note: "POST /api/external/v1/templates/{templateId}/pass { Email, MEMBER_ID, First_Name and Last_Name when real (H-1640) }: only the template's own placeholders (H-798), or eLoyalty refuses with a 400, does not match any template placeholder (H-1235); the response carries customerId, serialNumber, passTypeIdentifier" },
 };
 
 export type Addressed = { ok: true; generation: Generation; method: CallSpec["method"]; path: string; body?: Record<string, unknown> } | { ok: false; missing: "customerId" | "serial" | "passTypeId" | "templateId" };
@@ -62,7 +67,18 @@ export function address(call: CallKey, id: PassIdentity, args: Args = {}): Addre
   if (spec.needs === "templateId") {
     const t = (args.templateId ?? "").trim();
     if (!t) return { ok: false, missing: "templateId" };
-    return { ok: true, generation: "v1", method: "POST", path: `/api/external/v1/templates/${enc(t)}/pass`, body: { Email: args.email ?? "", First_Name: args.firstName ?? "", Last_Name: args.lastName ?? "", MEMBER_ID: args.externalId ?? "" } };
+    // A name field goes only when it holds a real name (H-1640): an empty Last_Name made the pass show the template's own
+    // placeholder ("Enter Your Last Name Here"), so an empty or placeholder-looking value is left out of the request.
+    const name = (v: string | undefined) => {
+      const t2 = (v ?? "").replace(/\s+/g, " ").trim();
+      return t2 && !isPlaceholderName(t2) ? t2 : null;
+    };
+    const first = name(args.firstName);
+    const last = name(args.lastName);
+    const body: Record<string, string> = { Email: args.email ?? "", MEMBER_ID: args.externalId ?? "" };
+    if (first) body.First_Name = first;
+    if (last) body.Last_Name = last;
+    return { ok: true, generation: "v1", method: "POST", path: `/api/external/v1/templates/${enc(t)}/pass`, body };
   }
   const p = (id.passTypeId ?? "").trim();
   const s = (id.serial ?? "").trim();

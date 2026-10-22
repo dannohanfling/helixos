@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFailureWords, passNames, passOffer, refusalReason, safePassUrl } from "../eo-pass";
-import { address } from "../eloyalty";
+import { address, isPlaceholderName } from "../eloyalty";
 
 // The placeholders on the live Evolve Omega template (H-798, H-817).
 const EVOLVE_OMEGA_PLACEHOLDERS = ["First_Name", "Last_Name", "Email", "MEMBER_ID", "Push_Notification", "Points", "Tier", "Current_Offer"];
@@ -57,5 +57,17 @@ describe("a refused pass says why (H-923)", () => {
     // Only the Evolve Omega template's placeholders (H-798): an unknown field such as Id is refused with a 400 (H-1235).
     expect(a.ok && a.body).toEqual({ Email: "e@x.test", First_Name: "A", Last_Name: "B", MEMBER_ID: "m1" });
     expect(Object.keys(a.ok ? (a.body as object) : {}).every((k) => EVOLVE_OMEGA_PLACEHOLDERS.includes(k))).toBe(true);
+  });
+  it("never sends an empty or placeholder name, so the pass never shows the template's prompt (H-1640)", () => {
+    const one = address("createPass", {}, { templateId: "t1", email: "e@x.test", ...passNames("Danno"), externalId: "m1" });
+    expect(one.ok && one.body).toEqual({ Email: "e@x.test", First_Name: "Danno", MEMBER_ID: "m1" });
+    const prompt = address("createPass", {}, { templateId: "t1", email: "e@x.test", firstName: "Maya", lastName: "Enter Your Last Name Here", externalId: "m1" });
+    expect(prompt.ok && prompt.body).toEqual({ Email: "e@x.test", First_Name: "Maya", MEMBER_ID: "m1" });
+    const blank = address("createPass", {}, { templateId: "t1", email: "e@x.test", firstName: "  ", lastName: "", externalId: "m1" });
+    expect(blank.ok && blank.body).toEqual({ Email: "e@x.test", MEMBER_ID: "m1" });
+    expect(isPlaceholderName("Last Name")).toBe(true);
+    expect(isPlaceholderName("your first name")).toBe(true);
+    expect(isPlaceholderName("Torres")).toBe(false);
+    expect(isPlaceholderName("Lastname-Smith")).toBe(false);
   });
 });

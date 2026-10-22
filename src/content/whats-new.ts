@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 344,
+    date: "2026-10-22",
+    title: "Your Evolve Omega pass shows your name, and knows when it's added",
+    lines: [
+      "A new pass carries your name as it is in HelixOS. If you go by one name, that's all it shows.",
+      "After you add the pass to your wallet, you come back to Rewards and it says Pass added ✓. No need to press I added it, though it's still there if you need it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 343,
     date: "2026-10-22",
     title: "30 Days in the Arena: tap I'm in",
