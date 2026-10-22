@@ -36,7 +36,7 @@ import { fmtBedtime, fmtHours, fmtWake, parseHours, recoveryInRange, sleepReadin
 import { startOfWeek } from "@/lib/dates";
 import { goalKey, goalsFor, setGoal } from "@/lib/body-goals";
 import { storedTarget } from "@/lib/engine/body-goals";
-import { planLine, planSpoken, typeLabel } from "@/lib/engine/body-plan";
+import { liftedSpoken, planLine, planSpoken, typeLabel } from "@/lib/engine/body-plan";
 import { feelingReply, helpLines, matchName, needsFor, numbered, resolveSets, warmupCandidates, type SaidSet } from "@/lib/engine/body-voice";
 import { ACTIVITY_TYPES, logActivity, type ActivityType } from "@/lib/body-activities";
 import { saveFeeling } from "@/lib/body-feelings";
@@ -292,6 +292,7 @@ export const bodyTraining = defineTool({
     }
     for (const x of t.exercises) lines.push(`${x.exercise.name}${x.target ? ` (plan ${x.target.sets} × ${x.target.reps || "?"})` : ""}: ${x.today.length ? x.today.map((s) => `${fmtSet(s, t.unit, x.exercise.kind)}${s.pr ? " (PR)" : ""}`).join(", ") : "no sets yet"}${x.last.length ? `; last time ${x.lastDate}: ${x.last.join(", ")}` : ""}${x.pr ? `; PR ${x.pr.text}` : ""}.`);
     if (weeks) lines.push(`This week: ${weeks.tally.done}${weeks.tally.planned != null ? ` of ${weeks.tally.planned}` : ""} session${weeks.tally.done === 1 && weeks.tally.planned == null ? "" : "s"}.`);
+    if (weeks) lines.push(liftedSpoken(weeks.lifted));
     // Phase 16b: the device's workouts that day, under the session.
     if (activities.length) lines.push(`Recorded by the device: ${activities.map((a) => `${a.sport} ${Math.round(a.minutes)} min${a.strain != null ? `, strain ${a.strain}` : ""}${a.avgHr != null ? `, ${a.avgHr} bpm` : ""}${fmtDistanceIn(a.distanceM, isMeasures(t.measures) ? t.measures : "us") ? `, ${fmtDistanceIn(a.distanceM, isMeasures(t.measures) ? t.measures : "us")}` : ""}${zonesText(a.zones) ? `, zones ${zonesText(a.zones)}` : ""}`).join("; ")}.`);
     return { text: lines.join("\n"), data: { date, off: t.off, routine: t.routineName, finished: !!t.completedAt, plan: t.plan, planned: planned ? { routine: planned.day.name, dayType: typeLabel(planned.day), lift: planned.day.lift, minutes: planned.day.minutes, exercises: planned.preview?.map((x) => ({ name: x.exercise.name, sets: x.sets, reps: x.reps, weight: x.weight, last: x.last, pr: x.pr })) ?? [] } : null, exercises: t.exercises.map((x) => ({ name: x.exercise.name, kind: x.exercise.kind, target: x.target, today: x.today.map((s) => ({ weight: s.weight, unit: s.unit, reps: s.reps, pr: s.pr })), last: x.last, pr: x.pr })), week: weeks?.tally ?? null, activities: activities.map((a) => ({ sport: a.sport, minutes: a.minutes, strain: a.strain, avgHr: a.avgHr, maxHr: a.maxHr, distanceM: a.distanceM, zones: a.zones, underSession: !!a.sessionId })) } };
@@ -560,6 +561,7 @@ export const bodyWeekTool = defineTool({
     const lines = [`${w.isCurrent ? "This week" : `Week of ${monday}`} (${monday} to ${w.sunday}).`];
     lines.push(`Nutrition: ${n.daysLogged} of ${n.daysPassed} days logged${n.daysJudged ? `, ${n.daysInBand} of ${n.daysJudged} finished days in band` : ""}; average ${num(n.avgCal, 0)} cal, ${num(n.avgP)} g protein${n.avgPFloor != null ? ` (floor ${num(n.avgPFloor)})` : ""}, ${num(n.avgF)} g fat${n.avgFCeiling != null ? ` (ceiling ${num(n.avgFCeiling)})` : ""}, ${num(n.avgC)} g carbs.`);
     lines.push(`Training: ${w.training.sessions}${w.training.planned != null ? ` of ${w.training.planned}` : ""} sessions, ${w.training.sets} sets, ${w.training.prs} PR${w.training.prs === 1 ? "" : "s"} (last week ${w.prevTraining.sessions} sessions, ${w.prevTraining.sets} sets).`);
+    lines.push(liftedSpoken(w.training.lifted));
     lines.push(w.weigh.avg != null ? `Weight: average ${fmtMetric("weight", w.weigh.avg, u)} over ${w.weigh.days} weigh-in${w.weigh.days === 1 ? "" : "s"}${w.weigh.change != null ? `, ${w.weigh.change > 0 ? "+" : ""}${fmtMetric("weight", w.weigh.change, u)} vs last week` : ""}.` : "Weight: no weigh-ins this week.");
     if (w.pace) lines.push(`Goal: ${fmtMetric("weight", w.pace.target, u)}${w.pace.by ? ` by ${w.pace.by}` : ""}, ${fmtMetric("weight", Math.abs(w.pace.toGo), u)} to go${w.pace.needPerWeek != null ? `, needs ${fmtMetric("weight", Math.abs(w.pace.needPerWeek), u)} a week` : ""}${w.pace.actualPerWeek != null ? `, doing ${w.pace.actualPerWeek > 0 ? "+" : "-"}${fmtMetric("weight", Math.abs(w.pace.actualPerWeek), u)} a week` : ""}: ${w.pace.onPace == null ? "pace unknown yet" : w.pace.onPace ? "on pace" : "behind"}.`);
     return { text: lines.join("\n"), data: { monday, sunday: w.sunday, nutrition: n, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weight: { unit: u, avg: w.weigh.avg, days: w.weigh.days, change: w.weigh.change }, pace: w.pace } };

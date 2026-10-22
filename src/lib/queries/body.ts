@@ -25,7 +25,7 @@ import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor
 import { goalsNow } from "@/lib/body-goals";
 import { goalTomorrow } from "@/lib/engine/body-goals";
 import { feelingLine } from "@/lib/engine/body-voice";
-import { EMPTY_PLAN, liftTypeIds, mainMuscles, planDays, planLine, planSetUp, roughLength, typeLabel, type PlanDay, type TrainingPlanSettings } from "@/lib/engine/body-plan";
+import { EMPTY_PLAN, liftTypeIds, liftedName, mainMuscles, planDays, planSetUp, roughLength, todayWorkoutLine, type PlanDay, type TrainingPlanSettings } from "@/lib/engine/body-plan";
 
 /**
  * Body ships dark (rev 195): a member whose Body is off gets a 404 from every Body page and from the Body export, as if Body did
@@ -206,10 +206,11 @@ export async function todayBody(v: Viewer) {
   // The one-tap chips (B7, placed by rev 201): only the habits due today, done-type ones toggle in place, measured ones open Practices.
   const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak, difficulty: h.difficulty }));
   // Rev 648: "Lift · Back Day · 6 exercises" once a training plan is set up.
+  // H-1546 §2: Today's one line from the training plan, or the ask to set one up.
   const plan = await trainingPlanView(v.workspace.id, v.user.id, v.today);
   const day = plan?.setUp ? plan.days[0] : null;
-  const training = day ? planLine({ ...day, typeName: typeLabel(day) }) : null;
-  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag, meds, training };
+  const workout = todayWorkoutLine(day ? { ...day, refeed: !!d.settings.refeedDayTypeId && day.dayTypeId === d.settings.refeedDayTypeId } : null, !!plan?.setUp);
+  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag, meds, workout };
 }
 
 /* ───────── B2, workouts (rev 182) ───────── */
@@ -346,7 +347,7 @@ export async function trainingWeeks(workspaceId: string, userId: string, today: 
     }),
   }));
   const thisWeek = rangeDays(weekStart, addDays(weekStart, 6));
-  return { weeks, weekStart, tally: weekTally(thisWeek, (d) => (setsOn.get(d) ?? 0) > 0, offered) };
+  return { weeks, weekStart, tally: weekTally(thisWeek, (d) => (setsOn.get(d) ?? 0) > 0, offered), lifted: await liftedDays(workspaceId, userId, weekStart, addDays(weekStart, 6)) };
 }
 
 /* ───────── The training plan (rev 648) ───────── */
@@ -690,6 +691,23 @@ export async function daysInRange(workspaceId: string, userId: string, from: str
 
 /* ───────── The weekly rollup (rev 237 phase 6) ───────── */
 
+/**
+ * The days lifted between two dates (H-1546): a day counts when it has a working set; its name is the session's routine, else the
+ * main muscle groups of its exercises, else "Workout". Oldest first.
+ */
+export async function liftedDays(workspaceId: string, userId: string, from: string, to: string): Promise<{ date: string; name: string }[]> {
+  const [sets, sessions, exercises] = await Promise.all([
+    db.query.bodySets.findMany({ columns: { date: true, exerciseId: true }, where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from), lte(schema.bodySets.date, to)) }),
+    db.query.bodySessions.findMany({ columns: { date: true, routineName: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, from), lte(schema.bodySessions.date, to)) }),
+    db.query.bodyExercises.findMany({ columns: { id: true, name: true }, where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) }),
+  ]);
+  const nameOf = new Map(exercises.map((e) => [e.id, e.name]));
+  const routineOn = new Map(sessions.map((x) => [x.date, x.routineName]));
+  const byDate = new Map<string, string[]>();
+  for (const x of sets) byDate.set(x.date, [...(byDate.get(x.date) ?? []), nameOf.get(x.exerciseId) ?? ""]);
+  return [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, names]) => ({ date, name: liftedName(routineOn.get(date), [...new Set(names.filter(Boolean))]) }));
+}
+
 /** One week's training, for the rollup: days with a set logged, of the days a routine was offered; the sets; the PRs. */
 async function trainingWeek(workspaceId: string, userId: string, monday: string, settings: schema.BodySettings) {
   const sunday = addDays(monday, 6);
@@ -712,7 +730,7 @@ async function trainingWeek(workspaceId: string, userId: string, monday: string,
     const flags = prFlags(own, settings.weightUnit);
     prs += own.filter((s, i) => flags[i] && s.date >= monday && s.date <= sunday).length;
   }
-  return { sessions: tally.done, planned: tally.planned, sets: sets.length, prs };
+  return { sessions: tally.done, planned: tally.planned, sets: sets.length, prs, lifted: await liftedDays(workspaceId, userId, monday, sunday) };
 }
 
 /**
