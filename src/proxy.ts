@@ -9,9 +9,10 @@ import { safeNext } from "@/lib/engine/next-path";
 // /api/public holds feeds made to be read by anyone (a client's loyalty leaderboard, rev 639): no member data beyond what they show.
 // /lb is the hosted leaderboard page itself (H-28): the same data as its feed, rendered; shared and embedded by the client.
 // H-626: /sw.js and /offline load signed out: the browser installs the worker, and the worker keeps the offline screen, without a session.
+// H-1824: /app-opening holds the app's opening video and its still, played on a cold start before anyone has signed in.
 // H-331: the six legal and support pages are read signed out (the app stores and Google's deletion check open them that way).
 const LEGAL = ["/privacy", "/terms", "/support", "/delete-account", "/ai-and-the-board", "/community-guidelines"];
-const PUBLIC = [...LEGAL, "/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/email-change", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/api/bot-mcp", "/api/mf", "/mf", "/start", "/api/body/health-weigh-in", "/api/forum/report", "/api/handoff/files", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files", "/api/public", "/lb", "/pass/new", "/sw.js", "/offline"];
+const PUBLIC = [...LEGAL, "/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/email-change", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/api/bot-mcp", "/api/mf", "/mf", "/start", "/api/body/health-weigh-in", "/api/forum/report", "/api/handoff/files", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files", "/api/public", "/lb", "/pass/new", "/sw.js", "/offline", "/app-opening"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

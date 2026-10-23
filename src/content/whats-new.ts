@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 364,
+    date: "2026-10-23",
+    title: "The HelixOS app opens with the medallion forged in gold",
+    lines: [
+      "In the HelixOS app, the logo screen is now the gold medallion in golden-hour light. On a fresh start it flashes white-hot, a ribbon of liquid gold sweeps around it, and HelixOS fades in. It takes about four seconds, and a tap skips it.",
+      "With reduced motion on, or on a slow connection, you get the short gold light instead.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 363,
     date: "2026-10-23",
     title: "Your pass shows your rank as its Level",

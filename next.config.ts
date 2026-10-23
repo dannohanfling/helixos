@@ -87,6 +87,8 @@ const nextConfig: NextConfig = {
       { source: "/colosseum/:file(.*-loop.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
       // The birds' sprite sheets (H-1367) carry a version tag too.
       { source: "/colosseum/birds/:file*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      // The app's opening video and its still (H-1824) carry a version in their names (forged-v1-…).
+      { source: "/app-opening/:file(forged-v.*)", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
     ];
   },
 };
