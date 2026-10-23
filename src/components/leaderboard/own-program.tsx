@@ -6,7 +6,7 @@ import { checkLeaderboardAction, saveLeaderboardAction, setIssuePassesAction } f
 import { sendPassMessageAction, setInvitesAction, setSyncModeAction } from "@/lib/actions/points-sync";
 import { PASS_MESSAGE_DEFAULT, PASS_MESSAGE_MAX, passMessageWords } from "@/lib/engine/pass-message";
 import { fixMyPassAction, setNameFixAction } from "@/lib/actions/pass-fix";
-import { fixWords } from "@/lib/engine/pass-fix";
+import { CLIENT_NAME_FIX_OPEN, fixWords } from "@/lib/engine/pass-fix";
 import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
 
 /**
@@ -137,7 +137,7 @@ function PassMessage({ lastMessageAt, outcome }: { lastMessageAt: string | null;
     <form action={sendPassMessageAction} className="mt-2 flex flex-wrap items-center gap-1" data-testid="own-message">
       <span>Message on your own pass:</span>
       <input className="field min-w-40 flex-1 py-1 text-xs" name="message" defaultValue={PASS_MESSAGE_DEFAULT} maxLength={PASS_MESSAGE_MAX} required aria-label="Message on your own pass" data-testid="own-message-text" />
-      <SubmitButton className="btn btn-ghost btn-xs" pendingText="Sending…" data-testid="own-message-send">
+      <SubmitButton className="btn btn-primary min-h-11" pendingText="Sending…" data-testid="own-message-send">
         Send to my pass
       </SubmitButton>
       <span className="w-full text-ink-3">Writes the Latest Message on your pass only, once per press. Your phone shows it on the lock screen.{lastMessageAt ? ` Last sent ${lastMessageAt.slice(0, 16).replace("T", " ")} UTC.` : ""}</span>
@@ -151,35 +151,39 @@ function PassMessage({ lastMessageAt, outcome }: { lastMessageAt: string | null;
 }
 
 /**
- * Fix my pass (H-1699, plan H-1701): rewrite the name on the coach's own pass from HelixOS, then tick "Names update in place" once
- * it shows on the phone. Until that tick, "Fix this pass" on clients' rows stays shut and names are never fixed on a change.
+ * Fix my pass (H-1699, plan H-1701): rewrite the name on the coach's own pass from HelixOS. Danno's test showed the phone may take
+ * the pass out of Wallet, so the card says so and clients' fixes stay shut in code (H-1802, CLIENT_NAME_FIX_OPEN).
  */
 function PassFix({ feed, outcome }: { feed: schema.LeaderboardFeed; outcome?: string }) {
   const said = fixWords(outcome);
   return (
     <div className="mt-2 text-xs" data-testid="own-pass-fix">
       <form action={fixMyPassAction} className="flex flex-wrap items-center gap-1">
-        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Fixing…" data-testid="own-pass-fix-run">
+        <SubmitButton className="btn btn-soft min-h-11" pendingText="Fixing…" data-testid="own-pass-fix-run">
           Fix my pass
         </SubmitButton>
-        <span className="text-ink-3">Writes your name, as it is in HelixOS, onto your pass. Nothing else.</span>
+        <span className="text-ink-3">Writes your name, as it is in HelixOS, onto your pass. Nothing else. Your phone may take the pass out of Wallet; add it again from Rewards.</span>
       </form>
       {said ? (
         <p className={`mt-1 ${said.good ? "text-good" : "text-danger"}`} data-testid="own-pass-fix-result">
           {said.text}
         </p>
       ) : null}
-      <form action={setNameFixAction} className="mt-1 flex flex-wrap items-center gap-2">
-        <label>
-          <input type="checkbox" name="nameFixProven" defaultChecked={feed.nameFixProven} data-testid="name-fix-proven" /> Names update in place (my pass showed the fix)
-        </label>
-        <label className={feed.nameFixProven ? undefined : "text-ink-3"}>
-          <input type="checkbox" name="fixNamesOnChange" defaultChecked={feed.fixNamesOnChange} disabled={!feed.nameFixProven} data-testid="fix-names-on-change" /> Fix a member&apos;s pass when they change their name
-        </label>
-        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…" data-testid="name-fix-save">
-          Save
-        </SubmitButton>
-      </form>
+      {CLIENT_NAME_FIX_OPEN ? (
+        <form action={setNameFixAction} className="mt-1 flex flex-wrap items-center gap-2">
+          <label>
+            <input type="checkbox" name="nameFixProven" defaultChecked={feed.nameFixProven} data-testid="name-fix-proven" /> Names update in place (my pass showed the fix)
+          </label>
+          <label className={feed.nameFixProven ? undefined : "text-ink-3"}>
+            <input type="checkbox" name="fixNamesOnChange" defaultChecked={feed.fixNamesOnChange} disabled={!feed.nameFixProven} data-testid="fix-names-on-change" /> Fix a member&apos;s pass when they change their name
+          </label>
+          <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…" data-testid="name-fix-save">
+            Save
+          </SubmitButton>
+        </form>
+      ) : (
+        <p className="mt-1 text-ink-3" data-testid="client-fix-locked">Fixing clients&apos; passes is shut for now: a fix can take the pass out of their Wallet.</p>
+      )}
     </div>
   );
 }

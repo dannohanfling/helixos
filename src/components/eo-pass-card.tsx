@@ -56,13 +56,13 @@ export async function EoPassCard({ v, ready, added, error }: { v: Viewer; ready?
             </form>
           ) : null}
           {m.eoPassUrl ? (
-            <a href={m.eoPassUrl} target="_blank" rel="noreferrer" className="btn btn-accent btn-sm" data-testid="eo-pass-add">
+            <a href={m.eoPassUrl} target="_blank" rel="noreferrer" className="btn btn-accent min-h-11" data-testid="eo-pass-add">
               Add to wallet ↗
             </a>
           ) : null}
           {m.eoPassUrl && !m.eoPassInstalledAt && canAct ? (
             <form action={markPassInstalledAction}>
-              <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…">I added it</SubmitButton>
+              <SubmitButton className="btn btn-soft min-h-11" pendingText="Saving…">I added it</SubmitButton>
             </form>
           ) : null}
           {m.eoPassSerial && passWired("walletpush") ? (
