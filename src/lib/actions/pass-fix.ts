@@ -6,7 +6,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { refresh, str } from "@/lib/action-helpers";
 import { nowIso } from "@/lib/dates";
-import type { FixOutcome } from "@/lib/engine/pass-fix";
+import { CLIENT_NAME_FIX_OPEN, type FixOutcome } from "@/lib/engine/pass-fix";
 import { ownProgram } from "@/lib/eo-pass";
 import { fixPassName } from "@/lib/pass-fix";
 
@@ -29,6 +29,7 @@ export async function fixMyPassAction(): Promise<void> {
 export async function fixMemberPassAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
   const back = (code: FixOutcome) => redirect(`/coach?passFixRow=${code}&connections=open`);
+  if (!CLIENT_NAME_FIX_OPEN) back("locked");
   if (coach.switchedInto) back("notready");
   const feed = await ownProgram(coach.workspace.id);
   if (!feed) back("notready");
@@ -42,7 +43,7 @@ export async function fixMemberPassAction(formData: FormData): Promise<void> {
 /** The coach's two switches: names update in place (ticked after their own test), and fix on a member's name change (only once proven). */
 export async function setNameFixAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
-  if (coach.switchedInto) return;
+  if (!CLIENT_NAME_FIX_OPEN || coach.switchedInto) return;
   const feed = await db.query.leaderboardFeeds.findFirst({ where: and(eq(schema.leaderboardFeeds.membershipId, coach.membership.id), eq(schema.leaderboardFeeds.workspaceId, coach.workspace.id)) });
   if (!feed) return;
   const proven = formData.get("nameFixProven") === "on";

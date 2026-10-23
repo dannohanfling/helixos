@@ -28,12 +28,13 @@ describe("fixOutcome", () => {
 
 describe("fixWords", () => {
   it("says each outcome without naming the provider", () => {
-    for (const code of ["updated", "busy", "nopass", "notready", "proving", "failed-400", "failed-404", "failed-0", "failed-503"]) {
+    for (const code of ["updated", "busy", "nopass", "notready", "proving", "locked", "failed-400", "failed-404", "failed-0", "failed-503"]) {
       const w = fixWords(code);
       expect(w).not.toBeNull();
       expect(w!.text).not.toMatch(/eloyalty|walletpush/i);
     }
     expect(fixWords("failed-400")!.text).toMatch(/reissue/);
+    expect(fixWords("updated")!.text).toMatch(/add it again from Rewards/);
     expect(fixWords("<x>")).toBeNull();
   });
 });

@@ -419,64 +419,58 @@ async function main() {
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaPass.id) }))!.eoCustomerId === "cus_eo_2", "the client's pass is made once passes are on");
     must(!(await page.content()).includes("cus_eo_") && !(await page.content()).includes("SER-eo-"), "no customer id or serial on the member's page");
     must((await mockCalls()).writes.length === writes3 + 2 + msgWrites.length, "two creates in all, one per pass, besides the one message");
-    // Fix my pass (H-1699, plan H-1701): the coach's own press writes First_Name and Last_Name from HelixOS onto their own pass;
-    // a client's pass waits until the coach ticks "Names update in place"; a name change reaches the pass only when switched on.
-    // Never a Points write.
+    // Fix my pass (H-1699, plan H-1701; safety H-1802): the coach's own press writes First_Name and Last_Name from HelixOS onto
+    // their own pass and says the phone may drop the pass. Clients' fixes are shut in code (H-1802): no Fix this pass, no tick,
+    // and a name change sends nothing, even with both switches set in the database. Never a Points write.
     await logout(page);
     await login(page, "As the coach");
     const fixStart = (await mock0()).writes.length;
     const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.id, coachM.userId) }))!;
     const coachWant = fixFields(coachUser.name);
     await page.goto(`${base}/coach?connections=open`);
-    must((await page.locator('[data-testid="member-pass-fix-run"]').first().isDisabled()), "Fix this pass is shut until the coach's own fix is proven");
+    must((await page.locator('[data-testid="member-pass-fix-run"]').count()) === 0 && (await page.locator('[data-testid="name-fix-proven"]').count()) === 0, "no Fix this pass and no Names update in place tick while clients' fixes are shut");
+    must((await page.locator('[data-testid="client-fix-locked"]').count()) === 1, "Coach says clients' fixes are shut");
+    // The height once the page's styles have applied: a fresh dev server can paint before its CSS arrives, so wait up to 5 s.
+    const height = async (sel: string) => {
+      await page.locator(sel).first().waitFor({ state: "visible", timeout: 15000 });
+      let h = 0;
+      for (let i = 0; i < 20 && h < 44; i++) {
+        h = Math.round((await page.locator(sel).first().boundingBox())?.height ?? 0);
+        if (h < 44) await page.waitForTimeout(250);
+      }
+      return h;
+    };
+    const [fixH, sendH] = [await height('[data-testid="own-pass-fix-run"]'), await height('[data-testid="own-message-send"]')];
+    must(fixH >= 44 && sendH >= 44, `Fix my pass and Send are real buttons, 44 px tall (H-1794): ${fixH} and ${sendH}`);
+    await page.goto(`${base}/rewards`);
+    const addH = await height('[data-testid="eo-pass-add"]');
+    must(addH >= 44, `Add to wallet is a real button, 44 px tall (H-1794): ${addH}`);
+    await page.goto(`${base}/coach?connections=open`);
     await submit(page, '[data-testid="own-pass-fix-run"]');
     await page.locator('[data-testid="own-pass-fix-result"]').waitFor({ timeout: 20000 });
-    must((await page.locator('[data-testid="own-pass-fix-result"]').innerText()).startsWith("Name sent to the pass."), "the card says the name was sent");
+    must((await page.locator('[data-testid="own-pass-fix-result"]').innerText()).includes("add it again from Rewards"), "the card says the phone may drop the pass and how to add it again");
     let fx = await mock0();
     must(JSON.stringify(fx.writes.slice(fixStart)) === JSON.stringify(["First_Name", "Last_Name"].map((f) => `PUT /api/external/v1/passes/pass.com.evolveomega/SER-eo-1/values/${f}`)), `two writes, First_Name then Last_Name, on the coach's own pass: ${fx.writes.slice(fixStart).join(", ")}`);
     must(fx.fields["SER-eo-1/First_Name"] === coachWant[0].value && fx.fields["SER-eo-1/Last_Name"] === coachWant[1].value && !/enter your/i.test(fx.fields["SER-eo-1/Last_Name"]), "the coach's pass carries the HelixOS name, never the prompt");
-    const mayaRowFix = page.locator(`[data-testid="member-pass-fix"]:has(input[value="${mayaPass.id}"])`);
-    await page.goto(`${base}/coach?connections=open`);
-    must(await mayaRowFix.locator('[data-testid="member-pass-fix-run"]').isDisabled(), "the client's Fix this pass is still shut before the tick");
-    await page.locator('[data-testid="name-fix-proven"]').check();
-    await submit(page, '[data-testid="name-fix-save"]');
-    await page.goto(`${base}/coach?connections=open`);
-    must((await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, coachM.id) }))!.nameFixProven, "Names update in place is kept");
+    // Even with both switches stored as on, a client's name change sends nothing.
+    await db.update(schema.leaderboardFeeds).set({ nameFixProven: true, fixNamesOnChange: true }).where(eq(schema.leaderboardFeeds.membershipId, coachM.id));
     const mayaUser = (await db.query.users.findFirst({ where: eq(schema.users.id, mayaPass.userId) }))!;
-    const fix2 = (await mock0()).writes.length;
-    await submit(page, `[data-testid="member-pass-fix"]:has(input[value="${mayaPass.id}"]) [data-testid="member-pass-fix-run"]`);
-    await page.locator('[data-testid="member-pass-fix-result"]').waitFor({ timeout: 20000 });
-    fx = await mock0();
-    must(fx.writes.slice(fix2).length === 2 && fx.writes.slice(fix2).every((w) => w.includes("/SER-eo-2/values/") && !w.endsWith("/Points")), `Fix this pass writes the client's two name fields only: ${fx.writes.slice(fix2).join(", ")}`);
-    must(fx.fields["SER-eo-2/First_Name"] === fixFields(mayaUser.name)[0].value, "the client's pass carries her HelixOS first name");
-    // The name change: off, nothing is sent; on, the new name goes to her pass. Her name is put back afterwards.
-    const changeName = async (to: string) => {
-      await logout(page);
-      await login(page, "As a client");
-      await page.goto(`${base}/settings`);
-      await fillExact(page, '#you input[name="name"]', to);
-      await submit(page, '#you form:has(input[name="name"]) button[type="submit"]');
-      await page.waitForLoadState("networkidle");
-    };
     const fix3 = (await mock0()).writes.length;
-    await changeName("Smoke Rename");
-    must((await mock0()).writes.length === fix3, "with fix on change off, a new name sends nothing");
     await logout(page);
-    await login(page, "As the coach");
-    await page.goto(`${base}/coach?connections=open`);
-    await page.locator('[data-testid="fix-names-on-change"]').check();
-    await submit(page, '[data-testid="name-fix-save"]');
-    must((await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, coachM.id) }))!.fixNamesOnChange, "Fix on a name change is kept");
-    await changeName("Smoke Again");
+    await login(page, "As a client");
+    await page.goto(`${base}/settings`);
+    await fillExact(page, '#you input[name="name"]', "Smoke Again");
+    await submit(page, '#you form:has(input[name="name"]) button[type="submit"]');
+    await page.waitForLoadState("networkidle");
+    must((await mock0()).writes.length === fix3, "a client's name change sends nothing while clients' fixes are shut");
     fx = await mock0();
-    must(fx.writes.slice(fix3).length === 2 && fx.fields["SER-eo-2/First_Name"] === "Smoke" && fx.fields["SER-eo-2/Last_Name"] === "Again", `a new name reaches her pass: ${fx.writes.slice(fix3).join(", ")}`);
     must(!fx.writes.slice(fixStart).some((w) => w.endsWith("/Points") || w.includes("/points/")), "no Points write and no points move from any fix");
-    const fixWrites = (await mock0()).writes.slice(fixStart);
+    const fixWrites = fx.writes.slice(fixStart);
     await db.update(schema.users).set({ name: mayaUser.name }).where(eq(schema.users.id, mayaUser.id));
-    await db.update(schema.leaderboardFeeds).set({ fixNamesOnChange: false }).where(eq(schema.leaderboardFeeds.membershipId, coachM.id));
+    await db.update(schema.leaderboardFeeds).set({ nameFixProven: false, fixNamesOnChange: false }).where(eq(schema.leaderboardFeeds.membershipId, coachM.id));
     await logout(page);
     await login(page, "As the coach");
-    console.log("✓ fix my pass: own press writes the two name fields, clients wait for the tick, a name change follows only when on, never Points");
+    console.log("✓ fix my pass: own press writes the two name fields and says the phone may drop the pass; clients' fixes shut in code; real buttons; never Points");
     // The points sync and the invitations (H-867 parts 3 and 4): off until the coach turns them on; "own" reaches only the
     // coach's pass; each member's first sync is one opening move of their HelixOS total, then one move per new ledger row; the
     // Level and the kept rank (as Tier, H-1098) go to the pass when they change; an invitation is written once, only with a
@@ -649,7 +643,7 @@ async function main() {
     const writes = (await mockCalls()).writes;
     // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
     const create = `POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`;
-    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...fixWrites, ...syncWrites, ...ownCheckWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, the one message, the six name writes of Fix my pass, the sync's moves and fields, and the check on the coach's own pass: ${writes.join(", ")}`);
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...fixWrites, ...syncWrites, ...ownCheckWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, the one message, the two name writes of Fix my pass, the sync's moves and fields, and the check on the coach's own pass: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {

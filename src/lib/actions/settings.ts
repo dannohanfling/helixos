@@ -22,6 +22,7 @@ import { isOneEmoji } from "@/lib/engine/emoji";
 import { markDraftEdited } from "@/lib/claude-drafts";
 import { ownProgram } from "@/lib/eo-pass";
 import { fixPassName } from "@/lib/pass-fix";
+import { CLIENT_NAME_FIX_OPEN } from "@/lib/engine/pass-fix";
 
 /** A picked logo's id when it is one of this member's own images of kind logo; otherwise null, so the kit keeps no logo. */
 async function ownLogo(workspaceId: string, userId: string, picked: string): Promise<string | null> {
@@ -80,7 +81,7 @@ async function updateProfile(formData: FormData): Promise<void> {
  * update in place and switched this on. Best effort: the profile is saved either way, and the log carries the outcome only.
  */
 async function fixNameOnChange(m: schema.Membership, name: string): Promise<void> {
-  if (!m.eoPassSerial || !m.eoPassTypeId) return;
+  if (!CLIENT_NAME_FIX_OPEN || !m.eoPassSerial || !m.eoPassTypeId) return;
   try {
     const feed = await ownProgram(m.workspaceId);
     if (!feed?.fixNamesOnChange || !feed.nameFixProven) return;
