@@ -12,13 +12,22 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 353,
+    n: 354,
     date: "2026-10-23",
     title: "Every page starts sooner, and you stay signed in",
     lines: [
       "Every page starts about twice as fast: the menu's numbers are now looked up all at once instead of one after another.",
       "Using HelixOS keeps you signed in: the 30 days now count from your last visit, not from when you signed in.",
       "A tab left open while HelixOS updates moves to the new version on your next click instead of getting stuck loading.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 353,
+    date: "2026-10-23",
+    title: "A form brought back after a reload always shows",
+    lines: [
+      "When a reload brings back what you were typing, the form now always opens where you can see it. Before, on Nutrition, it could open looking empty until you left the page.",
     ],
     audience: "everyone",
   },

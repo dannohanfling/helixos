@@ -51,6 +51,26 @@ const PENDING = "helix.draft.pending";
 /** "ooh.<who>.new" and "ooh.<who>.<id>" are one family: the same form for the same member. */
 const familyOf = (key: string) => key.slice(0, key.lastIndexOf("."));
 
+/**
+ * A fold opened from script can stay shut on screen in Chrome: `open` is set and `:open` matches, yet the fold's content keeps
+ * its closed style (`::details-content` stays `content-visibility: hidden`), and neither a click nor resetting `open` redraws
+ * it. Seen on Nutrition's "New food" after a reload brought a draft back (H-1752). Taking the fold out and putting it straight
+ * back makes the browser style it afresh, so when the form still isn't showing a frame later, each open fold around it is put
+ * back where it was. It is the same element, so React keeps it.
+ */
+function unstickFolds(form: HTMLFormElement) {
+  requestAnimationFrame(() => {
+    if (!form.isConnected || typeof form.checkVisibility !== "function" || form.checkVisibility()) return;
+    for (let d = form.closest("details"); d; d = d.parentElement?.closest("details") ?? null) {
+      const parent = d.parentNode;
+      if (!d.open || !parent) continue;
+      const next = d.nextSibling;
+      parent.removeChild(d);
+      parent.insertBefore(d, next);
+    }
+  });
+}
+
 /** `legacyId`: the name a draft of this form was kept under before, read once and moved, so renaming a draft never loses one. */
 /**
  * `confirms`: a draft the page knows was just saved, though its form isn't here (saving a webinar section moves on to the next
@@ -149,6 +169,7 @@ export function DraftKeeper({ id, legacyId, confirms }: { id: string; legacyId?:
       if (restore(form, draft.snap) > 0) {
         // A form folded away ("Edit this month") is opened, so what came back is in sight, not hidden behind a summary.
         for (let d = form.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
+        unstickFolds(form);
         setRestored(draft.sent ? "failed" : "draft");
       }
     }, 0);
