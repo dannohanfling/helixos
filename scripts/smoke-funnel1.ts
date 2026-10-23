@@ -6,6 +6,7 @@
  *     no "Book a call" and no call page.
  *  3. No price or currency sign anywhere in the page's text; the only audience figure is the approved line.
  *  3b. The proof strip (approved quotes, no figures, still with reduced motion) and the reading bar (H-1725).
+ *  3c. The 3D carousel, the aurora gold phrase and Danno's photo (H-1743).
  *  4. Every picture loads; the Open Graph image is a 1200x630 JPEG.
  *  5. At 1440, 390 and 360: nothing wider than the screen, every control 44px tall or more.
  *  6. No Meta Pixel beacon without FUNNEL_PIXEL_ID (the walk's server has none); no other tracker on the page.
@@ -14,7 +15,7 @@
  * `npx tsx scripts/smoke-funnel1.ts http://localhost:3000`
  */
 import { chromium, type Page } from "@playwright/test";
-import { PROOF } from "@/lib/hermes/funnel";
+import { HERO, LETTER_PHOTO, PROOF } from "@/lib/hermes/funnel";
 import { hasNumbers } from "@/lib/hermes/rules";
 
 const base = process.argv[2] ?? "http://localhost:3000";
@@ -118,6 +119,39 @@ async function main() {
     must((await still.locator('[data-testid="fn-proof"] ul[aria-hidden="true"]').evaluate((e) => getComputedStyle(e).display)) === "none", "reduced motion shows one copy");
     await still.close();
     console.log(`✓ the proof strip: ${quotes.length} approved quotes, no figures, still with reduced motion; the reading bar fills on scroll`);
+
+    // 3c. H-1743: the carousel (the same quotes; flat on phones and with reduced motion, a ring that turns at 1440), the aurora
+    // gold on the headline's gold phrase, and Danno's photo with its alt text and set size.
+    const carQuotes = await page.locator('[data-testid="fn-carousel"] .fn-proof-quote').allInnerTexts();
+    must(carQuotes.length === PROOF.length && carQuotes.every((q) => !hasNumbers(q)), `the carousel shows the same ${PROOF.length} quotes, no figures`);
+    const gold = page.locator('[data-testid="fn-hero-gold"]');
+    must((await gold.innerText()) === HERO.gold, "the headline's gold phrase");
+    must((await gold.evaluate((e) => getComputedStyle(e).animationName)) === "fn-aurora", "the gold phrase moves");
+    const photo = page.locator('[data-testid="fn-letter-photo"]');
+    must((await photo.getAttribute("alt")) === LETTER_PHOTO.alt, "the photo's alt text");
+    must((await photo.getAttribute("width")) === String(LETTER_PHOTO.width) && (await photo.getAttribute("height")) === String(LETTER_PHOTO.height), "the photo has its width and height, so nothing shifts");
+    must((await photo.getAttribute("loading")) === "lazy", "the photo loads lazily");
+    for (const [w, flatWanted] of [[1440, false], [390, true]] as const) {
+      const p2 = await browser.newPage({ viewport: { width: w, height: 900 } });
+      await p2.goto(`${base}/start`);
+      await p2.waitForFunction(() => document.querySelector(".fn-car")?.getAttribute("data-flat") !== null);
+      await p2.waitForTimeout(300);
+      const isFlat = (await p2.locator(".fn-car").getAttribute("data-flat")) === "true";
+      must(isFlat === flatWanted, `the carousel is ${flatWanted ? "a flat row" : "a ring"} at ${w}px`);
+      if (!flatWanted) {
+        const before = await p2.locator(".fn-car-ring").evaluate((e) => (e as HTMLElement).style.transform);
+        await p2.getByRole("button", { name: "Next quote" }).click();
+        must(before !== (await p2.locator(".fn-car-ring").evaluate((e) => (e as HTMLElement).style.transform)), "Next turns the ring");
+      }
+      await p2.close();
+    }
+    const still2 = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+    await still2.goto(`${base}/start`);
+    await still2.waitForTimeout(500);
+    must((await still2.locator(".fn-car").getAttribute("data-flat")) === "true", "reduced motion keeps the carousel flat");
+    must((await still2.locator('[data-testid="fn-hero-gold"]').evaluate((e) => getComputedStyle(e).animationName)) === "none", "reduced motion holds the gold still");
+    await still2.close();
+    console.log("✓ the carousel: same quotes, a ring at 1440 that turns, flat at 390 and with reduced motion; the gold phrase moves and holds still with reduced motion; the photo has its alt, size and lazy loading");
 
     // 4. Pictures.
     await page.evaluate(async () => {

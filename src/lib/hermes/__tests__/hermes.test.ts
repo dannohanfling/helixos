@@ -157,6 +157,12 @@ describe("Funnel 1 at /start (H-674, H-721, H-841)", () => {
     }
     expect(f.funnelCopy()).not.toMatch(/WalletPush|eloyalty/i);
   });
+  it("keeps the headline as it was, with its one gold phrase at the end (H-1743)", async () => {
+    const f = await import("@/lib/hermes/funnel");
+    expect(f.HERO.title).toBe("Your whole business, in your pocket.");
+    expect(f.HERO.title.endsWith(f.HERO.gold)).toBe(true);
+    expect(f.LETTER_PHOTO.alt).toBe("Danno Hanfling speaking on stage");
+  });
   it("has one call to action, to the existing checkout, and no call page", async () => {
     const f = await import("@/lib/hermes/funnel");
     expect(f.CHECKOUT_URL).toBe("https://evolveomega.com/partner");
