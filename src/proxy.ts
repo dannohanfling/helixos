@@ -11,7 +11,7 @@ import { safeNext } from "@/lib/engine/next-path";
 // H-626: /sw.js and /offline load signed out: the browser installs the worker, and the worker keeps the offline screen, without a session.
 // H-331: the six legal and support pages are read signed out (the app stores and Google's deletion check open them that way).
 const LEGAL = ["/privacy", "/terms", "/support", "/delete-account", "/ai-and-the-board", "/community-guidelines"];
-const PUBLIC = [...LEGAL, "/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/email-change", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/api/bot-mcp", "/api/mf", "/mf", "/start", "/api/body/health-weigh-in", "/api/forum/report", "/api/handoff/files", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files", "/api/public", "/lb", "/sw.js", "/offline"];
+const PUBLIC = [...LEGAL, "/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/email-change", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/api/bot-mcp", "/api/mf", "/mf", "/start", "/api/body/health-weigh-in", "/api/forum/report", "/api/handoff/files", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files", "/api/public", "/lb", "/pass/new", "/sw.js", "/offline"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

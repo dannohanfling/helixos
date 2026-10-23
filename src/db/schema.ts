@@ -1228,6 +1228,41 @@ export const loyaltyPointsMoves = sqliteTable(
 );
 export type LoyaltyPointsMove = typeof loyaltyPointsMoves.$inferSelect;
 
+/**
+ * Moving a program's members to its new pass (H-1859, plan H-1861 approved in H-1868, 0248): one row per member of the old
+ * template, made when the coach makes their private link. Opening the link makes their pass on the feed's second template
+ * (templateIdAlt) once, and carries their old balance with one outbox add (source "switch:<id>"), never a second. Only the
+ * pass service's ids are kept here, never a name or an email: those are read from the service when the pass is made.
+ */
+export const passSwitches = sqliteTable(
+  "pass_switches",
+  {
+    id: id(),
+    feedId: text("feed_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    /** The private link's secret part: /pass/new/<token>. */
+    token: text("token").notNull(),
+    /** The member on the old template. */
+    fromCustomerId: text("from_customer_id").notNull(),
+    /** link (made, not opened yet), making (a create is under way), made. */
+    status: text("status", { enum: ["link", "making", "made"] }).notNull().default("link"),
+    toCustomerId: text("to_customer_id"),
+    toSerial: text("to_serial"),
+    toPassTypeId: text("to_pass_type_id"),
+    toPassUrl: text("to_pass_url"),
+    /** The old balance read when the pass was made, and the outbox move that carries it (null when it was 0). */
+    carryPoints: integer("carry_points"),
+    carryMoveId: text("carry_move_id"),
+    lastNote: text("last_note"),
+    byUserId: text("by_user_id").notNull(),
+    madeAt: text("made_at"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("pass_switches_token").on(t.token), uniqueIndex("pass_switches_member").on(t.feedId, t.fromCustomerId), index("pass_switches_feed").on(t.feedId, t.status)],
+);
+export type PassSwitch = typeof passSwitches.$inferSelect;
+
 /** Bot Features (rev 618): how each feature unlocks in this workspace, one rule per feature, changed by the coach without code. */
 export const botFeatureRules = sqliteTable(
   "bot_feature_rules",

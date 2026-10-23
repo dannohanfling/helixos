@@ -46,6 +46,8 @@ type Route = Owned | { kind: "public"; why: string } | { kind: "coach" };
 const ROUTES: Record<string, Route> = {
   "/api/public/leaderboard/[slug]": { kind: "public", why: "a client's loyalty leaderboard feed, public by design (rev 639): first names, initials, points and tiers only, read by their own landing page with no session" },
   "/lb/[slug]": { kind: "public", why: "the same leaderboard as a hosted page (H-28): the held board, their pasted export or the design's samples, rendered with the client's own words; first names, initials, points and tiers only; shared and framed by the client" },
+  "/pass/new/[token]": { kind: "public", why: "a member's private link to their program's new pass (H-1861): the unguessable token is the key; shows only Get my new pass or Add to wallet and the carried points, no name, email, provider or price; opening it writes nothing" },
+  "/pass/new/[token]/make": { kind: "public", why: "the press on that link (H-1861), a plain POST: makes that one member's new pass once and carries their points, only for the token's own row; nothing else is reachable" },
   "/clients/[id]": { kind: "owned", table: "clientRecords" },
   "/bot-features/[key]": { kind: "public", why: "a Bot Features catalogue key (one of eight, in code); the page shows only the signed-in member's own state and setup" },
   "/coach/[clientId]": { kind: "coach" },
