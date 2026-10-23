@@ -57,6 +57,27 @@ export function sniffImage(bytes: Uint8Array): { mime: string; ext: string } | n
   return null;
 }
 
+export const SCREENSHOT_TOO_LARGE = "That picture is too large. Try a smaller one, or send it without.";
+
+/** A sent screenshot's bytes, checked by size and by what they are, never by the file's name or the browser's claim. */
+export function checkScreenshot(bytes: Uint8Array): { ok: true; mime: string; ext: string } | { ok: false; error: string } {
+  if (bytes.length > SCREENSHOT_MAX_BYTES) return { ok: false, error: SCREENSHOT_TOO_LARGE };
+  const kind = sniffImage(bytes);
+  if (!kind) return { ok: false, error: "The screenshot has to be a picture (PNG, JPEG, WebP or GIF)." };
+  return { ok: true, ...kind };
+}
+
+/**
+ * A picture sent as a data address in a hidden field (the Office Hours form, H-1706): its bytes, or null when the field is
+ * empty or isn't a base64 data address. Anything longer than the largest allowed picture could encode to is refused unread.
+ */
+export function dataUrlBytes(value: string): { bytes: Buffer } | { tooLarge: true } | null {
+  if (!value) return null;
+  if (value.length > Math.ceil(SCREENSHOT_MAX_BYTES / 3) * 4 + 100) return { tooLarge: true };
+  const m = /^data:[a-z/+.-]*;base64,([A-Za-z0-9+/=]+)$/.exec(value);
+  return m ? { bytes: Buffer.from(m[1], "base64") } : null;
+}
+
 /** Where a report's screenshot lives in the private store: its own tree, outside proofs/ and deck/, which their sweeps reconcile. */
 export const reportScreenshotKey = (workspaceId: string, reportId: string, ext: string) => `reports/${workspaceId}/${reportId}.${ext}`;
 

@@ -12,13 +12,23 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 351,
-    date: "2026-10-22",
+    n: 352,
+    date: "2026-10-23",
     title: "Every page starts sooner, and you stay signed in",
     lines: [
       "Every page starts about twice as fast: the menu's numbers are now looked up all at once instead of one after another.",
       "Using HelixOS keeps you signed in: the 30 days now count from your last visit, not from when you signed in.",
       "A tab left open while HelixOS updates moves to the new version on your next click instead of getting stuck loading.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 351,
+    date: "2026-10-22",
+    title: "Add a screenshot to your Office Hours request",
+    lines: [
+      "When you ask for help on Office Hours, you can add a screenshot: upload a picture or capture your screen, so your coach sees the problem before the call.",
+      "You can replace or remove it while you can still change the request. Your coach sees it with your request; nobody else can open it.",
     ],
     audience: "everyone",
   },

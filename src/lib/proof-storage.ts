@@ -63,6 +63,16 @@ export async function putReportObject(key: string, bytes: Buffer, contentType: s
   return { key, url: blob.url, size: bytes.length, contentType };
 }
 
+/**
+ * An Office Hours request's screenshot (H-1706): private, the proof store's token, a key under ooh/ only. It goes with its
+ * request: replaced or removed when the member changes it, and with the account in deletion on request.
+ */
+export async function putOohObject(key: string, bytes: Buffer, contentType: string): Promise<ProofObject> {
+  if (!/^ooh\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(key)) throw new Error("refusing to write an Office Hours object outside the ooh tree");
+  const blob = await put(key, bytes, { access: "private", token: proofToken(), contentType, addRandomSuffix: false });
+  return { key, url: blob.url, size: bytes.length, contentType };
+}
+
 /** What the store says about an object, from the store, by its pathname: size, type and URL, never the browser's claim. */
 export async function headProofObject(key: string): Promise<ProofObject> {
   const blob = await head(key, { token: proofToken() });
