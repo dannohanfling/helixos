@@ -6,6 +6,9 @@
  */
 export const SCENE_LOOPS: Readonly<Record<string, number>> = {
   "/aqueduct/aqueduct-day-none": 1,
+  // The filmed leaks (H-1734): the stream falls where the arch leaks, in place of the drawn waterfall. Night and days 2-5 follow.
+  "/aqueduct/aqueduct-day-0": 1,
+  "/aqueduct/aqueduct-day-1": 1,
   "/forum/forum-day": 1,
   // The Colosseum has no loop since H-1367: filmed birds fly over its still photo (src/lib/engine/scene-birds.ts).
 };

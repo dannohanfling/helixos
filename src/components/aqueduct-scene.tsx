@@ -38,7 +38,10 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
   // A picture with a filmed loop (H-1180) plays it over the photo instead of the drawn water and fountain, which sat beside the
   // painted water rather than on it. A repair keeps the drawing: its moment is drawn on that water.
   const loop = repair ? null : loopFor(picture);
-  const fill = filling && !quiet && !loop;
+  // The intact aqueduct's loop films its water, so nothing is drawn over it. A leak's loop (H-1734) films only the stream at the
+  // leak and its pool: the drawn waterfall goes, and the channel, its fill and the tags stay.
+  const filmedWater = Boolean(loop) && !leak;
+  const fill = filling && !quiet && !filmedWater;
   const [card, setCard] = useState(Boolean(repair));
   const oldPicture = repair ? pictureFor(look, { step: repair.step, nowRate: 0, wasRate: 0, drop: 0 }) : null;
   const stamped = useRef(false);
@@ -109,7 +112,7 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
                 </mask>
               ) : null}
             </defs>
-            {loop ? null : (
+            {filmedWater ? null : (
             <g className="aq-water" style={{ mixBlendMode: water.blend }} mask={fill ? "url(#aq-front)" : undefined} data-testid="aqueduct-water" data-filling={fill ? "1" : "0"}>
               {SEGMENTS.map((seg) => {
                 const w = waterWidth(now[seg.stage], now[1]);
@@ -145,7 +148,7 @@ export function AqueductScene({ initialLook, initialPaused, ownLook, now, leak, 
               })}
             </g>
             )}
-            {fall ? (
+            {fall && !loop ? (
               <g className={`aq-fall${repair ? " aq-rep-new" : ""}${fill ? " aq-after" : ""}`} style={fill ? ({ "--at": `${frontReaches(fall[0])}s` } as React.CSSProperties) : undefined} data-testid="aqueduct-fall" data-step={leak!.step} data-x={fall[0]}>
                 <FallingSheet f={fall} color={water.dash} />
                 <Splash f={fall} color={water.dash} />

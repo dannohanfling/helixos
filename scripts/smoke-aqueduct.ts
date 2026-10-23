@@ -29,7 +29,7 @@ const url = (q = "") => `${base}/aqueduct?w=${++visit}${q}`;
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq, gte } = await import("drizzle-orm");
-  const { FALLS, STEP_TOOLS, waterWidth, leakOf, slipped } = await import("@/lib/engine/aqueduct");
+  const { FALLS, STEP_TOOLS, waterWidth, leakOf, loopFor, slipped } = await import("@/lib/engine/aqueduct");
   const { newId } = await import("@/lib/ids");
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
@@ -90,10 +90,19 @@ async function main() {
       must((await scene.getAttribute("data-picture")) === `/aqueduct/aqueduct-day-${b}`, `fixture ${b}: the day picture is aqueduct-day-${b}`);
       must((await page.locator('[data-testid="aqueduct-photo"]').evaluate((el) => (el as HTMLImageElement).naturalWidth)) === 1680, `fixture ${b}: the picture loads`);
       const fall = page.locator('[data-testid="aqueduct-fall"]');
-      must((await fall.getAttribute("data-step")) === String(b) && Number(await fall.getAttribute("data-x")) === FALLS.day[b][0], `fixture ${b}: the waterfall sits on the painted one (x ${FALLS.day[b][0]})`);
-      if (b === 0) {
-        // H-966: a falling sheet with five streaks, and a splash (mist, spray, ripples) where it lands; not a single stroke.
-        must((await fall.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1 && (await fall.locator('[data-testid="aqueduct-fall-streak"]').count()) === 5 && (await fall.locator('[data-testid="aqueduct-mist"]').count()) === 1 && (await fall.locator(".aq-spray").count()) === 4 && (await fall.locator(".aq-ripple").count()) === 2, "the leak falls as a sheet with five streaks and lands in a splash");
+      if (loopFor(`/aqueduct/aqueduct-day-${b}`)) {
+        // H-1734: a filmed leak plays over the photo in place of the drawn waterfall; the channel and the tags stay. A repair
+        // moment (the previous fixture's arch healed) draws its own water first, so reload until it has been seen.
+        for (let i = 0; i < 20 && (await scene.getAttribute("data-loop")) !== "1"; i++) {
+          await page.waitForTimeout(500);
+          await page.goto(url(), { waitUntil: "networkidle" });
+        }
+        must((await scene.getAttribute("data-loop")) === "1" && (await page.locator('[data-testid="aqueduct-loop"]').count()) === 1 && (await fall.count()) === 0 && (await page.locator('[data-testid="aqueduct-water"]').count()) === 1, `fixture ${b}: Golden hour plays the filmed leak, keeps the channel, and draws no waterfall`);
+        await page.waitForFunction(() => document.querySelector('[data-testid="aqueduct-loop"]')?.getAttribute("data-loop-mode") === "video", null, { timeout: 15000 });
+        const src = await page.locator('[data-testid="aqueduct-loop"]').evaluate((v: HTMLVideoElement) => v.currentSrc);
+        must(new RegExp(`/aqueduct/aqueduct-day-${b}-loop\\.(mp4|webm)\\?v=\\d+$`).test(src), `fixture ${b}: the clip is this arch's (${src})`);
+      } else {
+        must((await fall.getAttribute("data-step")) === String(b) && Number(await fall.getAttribute("data-x")) === FALLS.day[b][0], `fixture ${b}: the waterfall sits on the painted one (x ${FALLS.day[b][0]})`);
       }
       must((await page.locator(`[data-testid="aqueduct-step-${b}"]`).getAttribute("data-kind")) === "leak" && (await page.locator('[data-testid^="aqueduct-step-"][data-kind="leak"]').count()) === 1, `fixture ${b}: only the leak's tag is amber`);
       const { n, expected } = slipped(now, leak);
@@ -107,6 +116,10 @@ async function main() {
       await page.click('[data-testid="aqueduct-look-night"]');
       await page.waitForTimeout(300);
       must((await scene.getAttribute("data-picture")) === `/aqueduct/aqueduct-night-${b}` && Number(await fall.getAttribute("data-x")) === FALLS.night[b][0], `fixture ${b}: the night picture and its waterfall`);
+      if (b === 0) {
+        // H-966: a falling sheet with five streaks, and a splash (mist, spray, ripples) where it lands; not a single stroke.
+        must((await fall.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1 && (await fall.locator('[data-testid="aqueduct-fall-streak"]').count()) === 5 && (await fall.locator('[data-testid="aqueduct-mist"]').count()) === 1 && (await fall.locator(".aq-spray").count()) === 4 && (await fall.locator(".aq-ripple").count()) === 2, "the leak falls as a sheet with five streaks and lands in a splash");
+      }
       await page.click('[data-testid="aqueduct-look-day"]');
       await page.waitForTimeout(200);
     }

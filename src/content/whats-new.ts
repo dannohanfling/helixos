@@ -12,12 +12,21 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 352,
+    n: 353,
     date: "2026-10-23",
     title: "Every page starts sooner, and you stay signed in",
     lines: [
       "Every page starts about twice as fast: the menu's numbers are now looked up all at once instead of one after another.",
       "Using HelixOS keeps you signed in: the 30 days now count from your last visit, not from when you signed in.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 352,
+    date: "2026-10-23",
+    title: "Filmed water at the first two arches of the Aqueduct",
+    lines: [
+      "In Golden hour, a leak at the first or second arch now shows filmed water falling into its pool instead of a drawn stream. The other arches and Night follow.",
     ],
     audience: "everyone",
   },
