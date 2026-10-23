@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 365,
+    date: "2026-10-23",
+    title: "The HelixOS app only says you're offline when you are",
+    lines: [
+      "The app no longer shows \"You're offline\" when your connection is fine. If a page is slow or a load is interrupted, it keeps the logo up and tries once more on its own.",
+      "When you really are offline, the screen is now dark like the logo, with a big gold Try again button. It also comes back by itself when your connection returns.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 364,
     date: "2026-10-23",
     title: "The HelixOS app opens with the medallion forged in gold",
