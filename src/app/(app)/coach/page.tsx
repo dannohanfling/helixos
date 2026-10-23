@@ -41,7 +41,7 @@ import { certsToFlag } from "@/lib/engine/loyalty-health";
 import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { fixMemberPassAction } from "@/lib/actions/pass-fix";
-import { fixWords } from "@/lib/engine/pass-fix";
+import { CLIENT_NAME_FIX_OPEN, fixWords } from "@/lib/engine/pass-fix";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
@@ -415,7 +415,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                     <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
-                  {r.m.eoPassSerial && r.m.eoPassTypeId ? (
+                  {CLIENT_NAME_FIX_OPEN && r.m.eoPassSerial && r.m.eoPassTypeId ? (
                     <form action={fixMemberPassAction} className="flex items-center gap-1" data-testid="member-pass-fix">
                       <input type="hidden" name="membershipId" value={r.m.id} />
                       {r.m.eoNameNeedsFix ? <span className="text-[11px] text-danger" data-testid="name-needs-fix">Name needs fixing</span> : null}

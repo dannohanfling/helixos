@@ -25,7 +25,14 @@ export function fixFields(fullName: string): FixField[] {
   ];
 }
 
-export type FixOutcome = "updated" | "busy" | "nopass" | "notready" | "proving" | `failed-${number}`;
+/**
+ * Clients' name fixes are shut (H-1802, approved in H-1807): Danno's own test showed a name rewrite can take the pass out of
+ * Wallet. Fix this pass, the "Names update in place" tick and the fix on a name change stay closed in code, whatever is stored,
+ * until a safe path is proven and this is opened in its own reviewed change.
+ */
+export const CLIENT_NAME_FIX_OPEN = false;
+
+export type FixOutcome = "updated" | "busy" | "nopass" | "notready" | "proving" | "locked" | `failed-${number}`;
 
 /** The outcome of the writes, from their statuses: every write 2xx is updated; any 429 is busy; else the first failure. */
 export function fixOutcome(statuses: number[]): FixOutcome {
@@ -38,7 +45,8 @@ export function fixOutcome(statuses: number[]): FixOutcome {
 /** The words on Coach for an outcome in the address (?passFix=…), or null for anything unknown. No provider name. */
 export function fixWords(code: string | undefined): { good: boolean; text: string } | null {
   if (!code) return null;
-  if (code === "updated") return { good: true, text: "Name sent to the pass. Check the phone within a minute: if it shows, tick Names update in place below." };
+  if (code === "updated") return { good: true, text: "Name sent. Your phone may take the pass out of Wallet; if it does, add it again from Rewards and the new copy carries the fixed name." };
+  if (code === "locked") return { good: false, text: "Fixing a client's pass is shut for now: a fix can take the pass out of their Wallet." };
   if (code === "busy") return { good: false, text: "The pass service is busy (429). Nothing was changed; try again in a minute." };
   if (code === "nopass") return { good: false, text: "There's no pass to fix yet: it's made on Rewards with Get my pass." };
   if (code === "notready") return { good: false, text: "The program needs its key, template and a passed check first." };

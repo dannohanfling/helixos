@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 357,
+    date: "2026-10-23",
+    title: "Pass buttons you can find, and safer name fixes",
+    lines: [
+      "Add to wallet, I added it, Fix my pass and Send to my pass are now full-size buttons, easy to tap on a phone.",
+      "After Fix my pass, Coach tells you your phone may take the pass out of Wallet, and that adding it again from Rewards gives you the fixed copy. Fixing clients' passes is shut for now.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 356,
     date: "2026-10-22",
     title: "Turn on notifications from Settings in the app",
