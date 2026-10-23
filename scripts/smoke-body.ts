@@ -49,12 +49,18 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   const isOpen = () => page.evaluate((sel) => Boolean(document.querySelector(sel)?.closest("details")?.open), inside);
   // Let the page's scripts arrive first: hydration shuts a Disclosure opened before it.
   await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => undefined);
-  // Click only a closed Disclosure: a restored draft opens it on its own, and a dev server can hold the next frame for seconds
-  // after a reload (the form's open animation waits at its first frame), so "not visible yet" must never mean "click again".
-  // Open but still not showing after 2 s: shut and open it again, which starts its open animation afresh (a restored draft can
-  // open it while the page isn't drawing yet, and the animation then waits at its first frame, opacity 0).
-  const until = Date.now() + 25000;
+  // Click only a closed Disclosure: a restored draft opens it on its own, so "not visible yet" must never mean "click again".
+  // Open but still not showing: in this test browser a fold a restored draft opened can keep its content slot hidden
+  // (::details-content stays content-visibility: hidden with [open] set, and no click or attribute reset brings it back; seen
+  // on main too). A reload brings the draft back on a fresh page, so after 4 s stuck the walk reloads, up to three times, and
+  // says so each time: a stuck fold is reported, never passed over silently.
+  const until = Date.now() + 60000;
   let openSince = 0;
+  let reloads = 0;
+  const slotHidden = () => page.evaluate((sel) => {
+    const d = document.querySelector(sel)?.closest("details");
+    return Boolean(d?.open && getComputedStyle(d, "::details-content").contentVisibility === "hidden");
+  }, inside);
   while (!(await field.isVisible())) {
     if (Date.now() > until) {
       // Why it isn't showing: a hidden ancestor (a streamed part not revealed yet), its box, and whether the page still draws.
@@ -81,13 +87,20 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
         }
         return { slotCV: slot?.contentVisibility ?? null, slotDisplay: slot?.display ?? null, attr, outer, anims, afterReset, found: Boolean(el), count: document.querySelectorAll(`${sel} input[name="name"]`).length, box: r ? [r.width, r.height] : null, check: el?.checkVisibility() ?? null, hiddenBy, drew, state: document.visibilityState, loading: document.querySelectorAll('[data-testid="page-loading"]').length };
       }, inside);
-      throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()}): ${JSON.stringify(why)}`);
+      throw new Error(`[${summary}] the form didn't show within 60 s (open: ${await isOpen()}): ${JSON.stringify(why)}`);
     }
     if (!(await isOpen())) {
       await sum.click();
       openSince = Date.now();
     } else if (!openSince) openSince = Date.now();
-    else if (Date.now() - openSince > 2000) {
+    else if (Date.now() - openSince > 4000 && reloads < 3 && (await slotHidden())) {
+      reloads++;
+      console.log(`  note: [${summary}] the fold is open but its content stays hidden; reloading (${reloads} of 3)`);
+      await page.reload();
+      await sum.waitFor({ timeout: 30000 });
+      await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => undefined);
+      openSince = 0;
+    } else if (Date.now() - openSince > 2000 && !(await slotHidden())) {
       await sum.click();
       await page.waitForTimeout(200);
       await sum.click();
