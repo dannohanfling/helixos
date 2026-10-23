@@ -506,3 +506,101 @@ body:has(.fn-root) {
     padding-right: 16px;
   }
 }
+
+/* The reading bar (H-1725): fills as the page scrolls, CSS only. Hidden where scroll-driven animation isn't supported. */
+.fn-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 3px;
+  background: var(--fn-gold);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  display: none;
+  pointer-events: none;
+}
+@supports (animation-timeline: scroll()) {
+  .fn-progress {
+    display: block;
+    animation: fn-progress linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+@keyframes fn-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* The proof strip under the letter (H-1725): approved quotes drifting left, two copies of the list for a loop with no jump.
+   Hover, focus or a tap pauses it; reduced motion makes it a swipe row of one copy. */
+.fn-proof {
+  padding: 40px 0;
+  background: var(--fn-ink);
+}
+.fn-proof-view {
+  overflow: hidden;
+  outline: none;
+}
+.fn-proof-view:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--fn-gold-light);
+}
+.fn-proof-track {
+  display: flex;
+  width: max-content;
+  animation: fn-proof 70s linear infinite;
+}
+.fn-proof-view:hover .fn-proof-track,
+.fn-proof-view:focus-within .fn-proof-track {
+  animation-play-state: paused;
+}
+.fn-proof-list {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0 8px;
+  list-style: none;
+}
+.fn-proof-card {
+  flex: 0 0 300px;
+  padding: 20px 22px;
+  border: 1px solid var(--fn-edge);
+  border-radius: 14px;
+  background: var(--fn-card);
+}
+.fn-proof-quote {
+  margin: 0;
+  color: var(--fn-cream);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.fn-proof-who {
+  margin: 12px 0 0;
+  color: var(--fn-gold);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+@keyframes fn-proof {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fn-proof-view {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+  .fn-proof-track {
+    animation: none;
+  }
+  .fn-proof-list[aria-hidden] {
+    display: none;
+  }
+  .fn-proof-card {
+    scroll-snap-align: start;
+    flex-basis: min(300px, 80vw);
+  }
+}

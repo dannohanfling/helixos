@@ -139,6 +139,24 @@ describe("Funnel 1 at /start (H-674, H-721, H-841)", () => {
     expect(figures.sort()).toEqual(["2026", "30", "30"]);
     expect(copy).toContain("About 101,000 people");
   });
+  it("shows only approved quotes with no figure, first name and last initial (H-1725, H-21 A)", async () => {
+    const f = await import("@/lib/hermes/funnel");
+    // Word for word from the approved testimonials in the evolve-omega-ladders skill (Danno, 20 Oct 2026).
+    const approved = [
+      "You save so much time... and you don't need a VA.",
+      "It wasn't even a call, it was just conversation.",
+      "I closed, I had the biggest month of closing sales that I've ever had, ever... It was built on consistency.",
+      "...that's the most appointments I've ever had from a webinar.",
+      "My history resonate with so many people that someone just sent me a DM and I just close today, so I have a brand new client today.",
+    ];
+    expect(f.PROOF.length).toBeGreaterThanOrEqual(3);
+    for (const p of f.PROOF) {
+      expect(approved, p.quote).toContain(p.quote);
+      expect(hasNumbers(p.quote), p.quote).toBe(false);
+      expect(p.who).toMatch(/^[A-Z][a-z]+ [A-Z]\.$/);
+    }
+    expect(f.funnelCopy()).not.toMatch(/WalletPush|eloyalty/i);
+  });
   it("has one call to action, to the existing checkout, and no call page", async () => {
     const f = await import("@/lib/hermes/funnel");
     expect(f.CHECKOUT_URL).toBe("https://evolveomega.com/partner");
