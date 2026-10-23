@@ -8,6 +8,9 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { forumStateFor, reportToForum } from "@/lib/forum";
+import { speakerFor } from "@/lib/handoff";
+import { reportSchedule } from "@/lib/schedule";
+import { SCHEDULE_STATUSES } from "@/lib/engine/schedule";
 import { FORUM_BUILDINGS, FORUM_MAX } from "@/lib/engine/forum";
 
 const line = (what: string) => z.string().max(2000).optional().describe(`${what}, up to ${FORUM_MAX.line} characters; send "" to clear it`);
@@ -30,11 +33,20 @@ defineTool({
     queue: z.array(z.object({ name: z.string().max(200), state: z.enum(["done", "now", "queued"]).optional(), rev: z.string().max(40).optional() })).max(20).optional(),
     headline: z.string().max(500).optional().describe("One line for the top of the Forum"),
     at: z.string().max(40).optional().describe("When this happened, as a UTC time (2026-10-12T05:35:00Z); leave out to use now"),
+    as: z.string().max(100).optional().describe("Only on the owner's own connector: speak as one of their Claude Cowork agents on the Forum, by name (e.g. \"Pictor\"). Agent tokens can't use it."),
   },
   handler: async (v, input, call): Promise<ToolResult> => {
+    const { as, ...report } = input;
+    // `as` (H-1843): the owner's own connector speaking as one of their Cowork agents, recorded as via their connector.
+    if (typeof as === "string" && as.trim()) {
+      const { agent, via } = await speakerFor(v, call, as);
+      const r = await reportToForum({ workspaceId: v.workspace.id, userId: v.user.id }, { ...report, agent: agent.name }, "connector", via);
+      if (!r.ok) throw new Error(r.text);
+      return { text: r.text, data: { agent_id: r.agentId, agent: r.agent, created: r.created, removed: r.removed } };
+    }
     // A connection that speaks as one agent (rev 769) reports as that agent, whatever name it sends.
     const own = call?.agentId ? await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, v.workspace.id), eq(schema.forumAgents.userId, v.user.id), eq(schema.forumAgents.id, call.agentId)), columns: { name: true } }) : null;
-    const r = await reportToForum({ workspaceId: v.workspace.id, userId: v.user.id }, own ? { ...input, agent: own.name } : input, "connector");
+    const r = await reportToForum({ workspaceId: v.workspace.id, userId: v.user.id }, own ? { ...report, agent: own.name } : report, "connector");
     if (!r.ok) throw new Error(r.text);
     return { text: r.text, data: { agent_id: r.agentId, agent: r.agent, created: r.created, removed: r.removed } };
   },
@@ -51,5 +63,30 @@ defineTool({
     if (!s.agents.length) return { text: "The Forum is empty: no agent has reported yet.", data: s };
     const lines = s.agents.map((a) => `${a.name} (${a.plot ? FORUM_BUILDINGS[a.plot].place : "in the Outer districts"}): ${a.status}${a.now ? `, now: ${a.now}` : ""}`);
     return { text: `${s.headline ? `${s.headline}\n` : ""}${lines.join("\n")}${s.waiting.length ? `\nWaiting on the member: ${s.waiting.length}.` : ""}`, data: s };
+  },
+});
+
+defineTool({
+  name: "schedule_report",
+  scope: "forum",
+  kind: "write",
+  description:
+    "Report a scheduled or recurring job to the Forum's Schedule board (H-1843): call it when a run starts (status started) and when it ends (done, failed or skipped). Name the job; say when it runs in plain words (\"Daily 12:50 PM PT\"); give a short reason when it failed or was skipped (\"Flow limit\", \"Mac offline\"), never a key; next_at is the next run as a UTC time. needs_you: true when the failure is the member's to fix. A job whose next run passes by over an hour with no report shows as missed.",
+  input: {
+    job: z.string().min(1).max(100).describe("The job's name, e.g. \"Daily triage\""),
+    status: z.enum(SCHEDULE_STATUSES),
+    when: z.string().max(100).optional().describe("When it runs, in plain words"),
+    reason: z.string().max(200).optional().describe("Why it failed or was skipped, in a few words"),
+    next_at: z.string().max(40).optional().describe("The next run, as a UTC time (2026-10-24T19:50:00Z)"),
+    needs_you: z.boolean().optional().describe("true when the member has to fix it"),
+    as: z.string().max(100).optional().describe("Only on the owner's own connector: report for one of their Claude Cowork agents, by name. Agent tokens can't use it."),
+  },
+  handler: async (v, input, call): Promise<ToolResult> => {
+    const { agent, via } = await speakerFor(v, call, input.as);
+    const r = await reportSchedule({ workspaceId: v.workspace.id, userId: v.user.id }, agent, input, via);
+    return {
+      text: `${r.created ? "Added to" : "Updated on"} the Schedule board: ${r.job.name} (${agent.name}), ${r.job.lastStatus}${r.job.nextAt ? `, next ${r.job.nextAt}` : ""}.${r.removed ? " A value that looked like a key was removed from the reason." : ""}`,
+      data: { job: r.job.name, agent: agent.name, status: r.job.lastStatus, next_at: r.job.nextAt, created: r.created },
+    };
   },
 });

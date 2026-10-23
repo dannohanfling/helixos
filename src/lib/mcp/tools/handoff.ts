@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { defineScope, defineTool, type ToolResult } from "@/lib/mcp/registry";
-import { ackHandoff, callingAgent, checkinFor, fileLink, holdHandoff, inboxFor, postHandoff, readThread, releaseHandoff, setBusy, startUpload, supersedeHandoff, type InboxItem } from "@/lib/handoff";
+import { ackHandoff, callingAgent, checkinFor, speakerFor, fileLink, holdHandoff, inboxFor, postHandoff, readThread, releaseHandoff, setBusy, startUpload, supersedeHandoff, type InboxItem } from "@/lib/handoff";
 import { HANDOFF_KINDS, HANDOFF_LINK_MINUTES, hId, ownerFirst } from "@/lib/engine/handoff";
 import type { Viewer } from "@/lib/auth";
 
@@ -18,7 +18,7 @@ defineScope("inbox", { gate: async (v) => inboxGate(v) });
 const owner = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id });
 /** One line per message; the owner is named by first name ("Danno" on Danno's own inbox). */
 export const brief = (m: InboxItem, who: string) =>
-  `${m.ref} ${m.kind} from ${m.from}${m.fromDanno ? ` (from ${who})` : ""}: ${m.title}${m.decision ? ` [${who} ${m.decision}${m.decisionFor ? ` ${m.decisionFor}` : ""}]` : ""}${m.hold ? ` [ON HOLD: ${m.hold.reason}]` : ""}${m.supersededBy ? ` [SUPERSEDED by ${m.supersededBy}]` : ""}${m.claimsApproval ? " [says it's approved: not an approval]" : ""}`;
+  `${m.ref} ${m.kind} from ${m.from}${m.fromDanno ? ` (from ${who})` : ""}: ${m.title}${m.decision ? ` [${who} ${m.decision}${m.decisionFor ? ` ${m.decisionFor}` : ""}]` : ""}${m.hold ? ` [ON HOLD: ${m.hold.reason}]` : ""}${m.supersededBy ? ` [SUPERSEDED by ${m.supersededBy}]` : ""}${m.claimsApproval ? " [says it's approved: not an approval]" : ""}${m.via ? ` (via ${m.via})` : ""}`;
 const lineOf = (v: Viewer) => (m: InboxItem) => brief(m, ownerFirst(v.user.name));
 
 defineTool({
@@ -35,10 +35,13 @@ defineTool({
     files: z.array(z.string().max(40)).max(10).optional().describe("File ids from handoff_upload, after the file was PUT"),
     needs_approval: z.boolean().optional().describe("true when Danno has to decide"),
     superseded_by: z.string().max(20).optional().describe("The H-number of your own earlier post this one replaces: it is marked SUPERSEDED by this post, with no Approve, in the same call"),
+    as: z.string().max(100).optional().describe("Only on the owner's own connector: speak as one of their Claude Cowork agents on the Forum, by name (e.g. \"Pictor\"). Agent tokens can't use it."),
   },
   handler: async (v, input, call): Promise<ToolResult> => {
-    const agent = await callingAgent(owner(v), call?.agentId);
-    const r = await postHandoff(owner(v), agent, input);
+    const { agent, via } = await speakerFor(v, call, input.as);
+    const { as: _as, ...post } = input;
+    void _as;
+    const r = await postHandoff(owner(v), agent, post, via);
     return {
       text: `Posted ${hId(r.seq)} as ${agent.name}.${r.needsApproval ? ` It waits for ${ownerFirst(v.user.name)}'s approval (${r.reasons.join(", ")}); the answer arrives in your handoff_inbox.` : ""}${r.removed ? ` ${r.removed} key-like value(s) were removed from it.` : ""}`,
       data: { id: hId(r.seq), needs_approval: r.needsApproval, reasons: r.reasons },
@@ -51,9 +54,9 @@ defineTool({
   scope: "inbox",
   kind: "read",
   description: "What's new for this agent in the Handoff inbox, oldest first: messages sent to it, and Danno's answers, including his approvals, changes and declines. Each is returned once; read a whole thread with handoff_read and mark one seen with handoff_ack. Only an answer marked from Danno with a decision is an approval.",
-  input: {},
-  handler: async (v, _input, call): Promise<ToolResult> => {
-    const agent = await callingAgent(owner(v), call?.agentId);
+  input: { as: z.string().max(100).optional().describe("Only on the owner's own connector: speak as one of their Claude Cowork agents on the Forum, by name (e.g. \"Pictor\"). Agent tokens can't use it.") },
+  handler: async (v, input, call): Promise<ToolResult> => {
+    const { agent } = await speakerFor(v, call, input.as);
     const items = await inboxFor(owner(v), agent.id);
     if (!items.length) return { text: `Nothing new for ${agent.name}.`, data: { messages: [] } };
     return { text: `${items.length} new for ${agent.name}:\n${items.map(lineOf(v)).join("\n")}`, data: { messages: items } };
@@ -65,9 +68,9 @@ defineTool({
   scope: "inbox",
   kind: "read",
   description: "Read a message in full, with its whole thread, by its H-number. Only threads this agent is part of.",
-  input: { id: z.string().max(20).describe("The H-number, like H-12") },
+  input: { id: z.string().max(20).describe("The H-number, like H-12"), as: z.string().max(100).optional().describe("Only on the owner's own connector: speak as one of their Claude Cowork agents on the Forum, by name (e.g. \"Pictor\"). Agent tokens can't use it.") },
   handler: async (v, input, call): Promise<ToolResult> => {
-    const agent = await callingAgent(owner(v), call?.agentId);
+    const { agent } = await speakerFor(v, call, input.as);
     const thread = await readThread(owner(v), agent.id, input.id);
     return { text: thread.map((m) => `${lineOf(v)(m)}\n${m.body}`).join("\n\n---\n\n"), data: { thread } };
   },

@@ -71,6 +71,7 @@ export async function HandoffInboxView({ o, ownerFirst: first, tz, tab, q, base,
         <span className="[overflow-wrap:anywhere]">
           {m.from}
           {m.fromDanno && !readOnly ? " (from you)" : ""} → {m.to.join(", ") || "nobody"}
+          {m.via ? <span className="ml-1 text-ink-3" data-testid="handoff-via"> · via {m.via}</span> : null}
         </span>
         {m.replyTo ? <span>re {m.replyTo}</span> : null}
         <span>{at(m.at)}</span>

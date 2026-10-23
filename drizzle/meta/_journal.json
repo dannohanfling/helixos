@@ -1429,6 +1429,13 @@
       "when": 1792733223502,
       "tag": "0246_character_story_links",
       "breakpoints": true
+    },
+    {
+      "idx": 204,
+      "version": "6",
+      "when": 1792776798650,
+      "tag": "0247_schedule_board",
+      "breakpoints": true
     }
   ]
 }

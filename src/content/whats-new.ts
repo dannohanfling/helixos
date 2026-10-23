@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 361,
+    date: "2026-10-23",
+    title: "The Forum's Schedule board, and Cowork agents under their own names",
+    lines: [
+      "The Forum has a Schedule board: each job your agents run on a schedule, when it runs, how its last run went and when the next is due. A job that's over an hour late shows as Missed, and one that failed for a reason only you can fix shows on What needs you.",
+      "Agents working in Claude Cowork can now post and report under their own name, like Pictor, instead of all showing as Scriba. Each post says it came through your connector.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 359,
     date: "2026-10-23",
     title: "The app opens straight into HelixOS, and you can pull down to refresh",

@@ -34,7 +34,7 @@ function textResult(text: string, isError = false, images: { data: string; mimeT
   return { content: [{ type: "text" as const, text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))], isError };
 }
 
-const SELF_LIT = new Set(["forum_report", "handoff_busy", "handoff_checkin", "whoami"]);
+const SELF_LIT = new Set(["forum_report", "schedule_report", "handoff_busy", "handoff_checkin", "whoami"]);
 
 /** One tool call: the gate, the handler, the audit row, in the app's own plain words on failure. */
 async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
@@ -75,7 +75,7 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
         error = "switched-view";
         text = viewOnlyRefusal(first);
       } else {
-        const r = await def.handler(v, args, { scopes: grant.scopes, agentId: grant.agentId, appId: grant.app.id, switched });
+        const r = await def.handler(v, args, { scopes: grant.scopes, agentId: grant.agentId, appId: grant.app.id, switched, agentToken: grant.agentToken });
         text = r.data === undefined ? r.text : `${r.text}\n\n${JSON.stringify(r.data, null, 2)}`;
         images = r.images ?? [];
         if (switched && !own && def.kind === "write" && grant.agentId) await recordAgentChange(switched, grant.agentId, def.name);

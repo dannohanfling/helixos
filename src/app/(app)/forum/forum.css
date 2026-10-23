@@ -163,3 +163,17 @@
 .fo-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--fo-gold); color: inherit; font-size: 14px; font-weight: 600; text-decoration: none; align-self: center; }
 .fo-pill:hover, .fo-pill:focus-visible { background: color-mix(in srgb, var(--fo-gold) 18%, transparent); }
 .fo-pill-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--fo-gold); color: #1b1408; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+
+/* The Schedule board (H-1843): one row per job; on a phone each row stacks into a small card. */
+.fo-jobs { display: grid; gap: 0; margin-top: 10px; }
+.fo-job { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--fo-line); }
+.fo-job[data-hidden="1"] { opacity: 0.6; }
+.fo-job-last { display: grid; gap: 2px; }
+.fo-job-last .fo-meta { margin-top: 0; }
+.fo-job-done { color: var(--fo-done); }
+.fo-job-failed, .fo-job-missed { color: var(--fo-wait); }
+.fo-jobs-toggle { margin-top: 10px; }
+@media (max-width: 640px) {
+  .fo-job { grid-template-columns: 1fr; border: 1px solid var(--fo-line); border-radius: 14px; padding: 12px; margin-top: 8px; }
+  .fo-job form .fo-btn { width: 100%; }
+}
