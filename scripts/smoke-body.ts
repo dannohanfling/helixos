@@ -46,6 +46,9 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   const sum = page.locator("summary", { hasText: summary });
   await sum.waitFor({ timeout: 30000 });
   const field = page.locator(`${inside} input[name="name"]`).first();
+  // Let the page's scripts arrive first: on a cold dev server a reload can take longer to hydrate than the retries below wait,
+  // and hydration shuts a Disclosure opened before it.
+  await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => undefined);
   // A click that lands before the page hydrates can be undone by it (right after a reload on a busy server): try again.
   for (let i = 0; i < 4 && !(await field.isVisible()); i++) {
     await sum.click();
