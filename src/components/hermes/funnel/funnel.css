@@ -604,3 +604,132 @@ body:has(.fn-root) {
     flex-basis: min(300px, 80vw);
   }
 }
+
+/* Aurora gold on the headline's gold phrase (H-1743): block 7's slow-moving gold, kept in the headline's own font. Solid
+   gold where text can't take a background, and still with reduced motion. */
+.fn-aurora {
+  color: var(--fn-gold);
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .fn-aurora {
+    background: linear-gradient(110deg, #c8902f 0%, #dda338 18%, #f6e3b0 30%, #f0c76a 40%, #c8902f 55%, #fff1cf 68%, #dda338 82%, #c8902f 100%);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: fn-aurora 12s ease-in-out infinite alternate;
+  }
+}
+@keyframes fn-aurora {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+/* Danno's photo beside the signature (H-1743). Width and height come from the image, so nothing shifts as it loads. */
+.fn-sign-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 8px;
+}
+.fn-sign-photo {
+  width: 240px;
+  height: auto;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(3, 1, 0, 0.18);
+}
+@media (max-width: 600px) {
+  .fn-sign-photo {
+    width: 160px;
+  }
+}
+
+/* The 3D proof carousel above Start (H-1743). Flat (a swipe row) until the script says the screen can take the ring. */
+.fn-carousel {
+  padding: 48px 0 8px;
+  background: var(--fn-ink);
+  overflow: hidden;
+}
+.fn-car-stage {
+  height: 280px;
+  perspective: 1100px;
+  touch-action: pan-y;
+}
+.fn-car-ring {
+  position: relative;
+  width: 300px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.fn-car-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 22px;
+  border: 1px solid var(--fn-edge);
+  border-radius: 16px;
+  background: var(--fn-card);
+  backface-visibility: hidden;
+  transition: opacity 0.7s;
+}
+.fn-car-nav {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+.fn-car-btn {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--fn-gold);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fn-gold);
+  font-size: 22px;
+  cursor: pointer;
+}
+.fn-car-btn:focus-visible {
+  outline: 2px solid var(--fn-gold-light);
+  outline-offset: 3px;
+}
+.fn-car-flat .fn-car-stage {
+  height: auto;
+  perspective: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 0 16px;
+}
+.fn-car-flat .fn-car-ring {
+  display: flex;
+  gap: 14px;
+  width: max-content;
+  transform: none;
+  transition: none;
+}
+.fn-car-flat .fn-car-card {
+  position: static;
+  flex: 0 0 min(300px, 80vw);
+  scroll-snap-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fn-aurora {
+    animation: none;
+    background-position: 35% 50%;
+  }
+  .fn-car-ring,
+  .fn-car-card {
+    transition: none;
+  }
+}
