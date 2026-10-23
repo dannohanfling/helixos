@@ -67,7 +67,19 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
         }
         const drew = await Promise.race([new Promise<boolean>((r) => requestAnimationFrame(() => r(true))), new Promise<boolean>((r) => setTimeout(() => r(false), 1000))]);
         const r = el?.getBoundingClientRect();
-        return { found: Boolean(el), count: document.querySelectorAll(`${sel} input[name="name"]`).length, box: r ? [r.width, r.height] : null, check: el?.checkVisibility() ?? null, hiddenBy, drew, state: document.visibilityState, loading: document.querySelectorAll('[data-testid="page-loading"]').length };
+        const det = el?.closest("details") ?? null;
+        const slot = det ? getComputedStyle(det, "::details-content") : null;
+        const outer: string[] = [];
+        for (let d = det?.parentElement?.closest("details") ?? null; d; d = d.parentElement?.closest("details") ?? null) outer.push(d.open ? "open" : "shut");
+        const anims = el ? document.getAnimations().filter((a) => a.effect && (a.effect as KeyframeEffect).target && det?.contains((a.effect as KeyframeEffect).target as Node)).map((a) => `${(a as CSSAnimation).animationName ?? "?"}:${a.playState}:${Math.round(Number(a.currentTime ?? -1))}`) : [];
+        const attr = det?.hasAttribute("open") ?? null;
+        let afterReset: boolean | null = null;
+        if (det && el) {
+          det.removeAttribute("open");
+          det.setAttribute("open", "");
+          afterReset = el.checkVisibility();
+        }
+        return { slotCV: slot?.contentVisibility ?? null, slotDisplay: slot?.display ?? null, attr, outer, anims, afterReset, found: Boolean(el), count: document.querySelectorAll(`${sel} input[name="name"]`).length, box: r ? [r.width, r.height] : null, check: el?.checkVisibility() ?? null, hiddenBy, drew, state: document.visibilityState, loading: document.querySelectorAll('[data-testid="page-loading"]').length };
       }, inside);
       throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()}): ${JSON.stringify(why)}`);
     }
