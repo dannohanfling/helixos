@@ -3400,6 +3400,8 @@ export const storyItems = sqliteTable(
     sourceCall: text("source_call"),
     sourceDate: text("source_date"),
     fathomUrl: text("fathom_url"),
+    /** A character story's source articles (H-1441), shown as links on its card; empty for Danno's own material. */
+    sourceLinks: text("source_links", { mode: "json" }).$type<string[]>().notNull().default([]),
     hasPrice: integer("has_price", { mode: "boolean" }).notNull().default(false),
     digest: text("digest").notNull(),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
