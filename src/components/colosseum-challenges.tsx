@@ -67,7 +67,7 @@ export async function ColosseumChallenges({ v, joined }: { v: Viewer; joined: bo
                   </form>
                 ) : null}
                 {card.section !== "upcoming" || v.role === "coach" || entry ? (
-                  <Link href="/arena" className="co-btn" data-testid="challenge-arena">
+                  <Link href={card.section === "upcoming" ? "/arena" : "/arena#board"} className="co-btn" data-testid="challenge-arena">
                     {card.section === "upcoming" ? "The Arena page →" : "See the leaderboard →"}
                   </Link>
                 ) : null}

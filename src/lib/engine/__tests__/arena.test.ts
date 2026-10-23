@@ -96,3 +96,77 @@ describe("the challenge card on Colosseum → Challenges (H-1840, plan H-1844)",
     expect(c.finish).toBe("Close your day on 24 of the 30 days.");
   });
 });
+
+describe("Arena PR B: pods, the leaderboard and the Huddle check-in (H-1563)", () => {
+  it("fills pods of five in join order, making a new pod when all are full", async () => {
+    const { fillPods } = await import("@/lib/engine/arena");
+    const entries = Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, podId: null, joinedAt: `2026-11-0${i + 1}T00:00:00Z` }));
+    const plan = fillPods(entries, []);
+    expect(plan.create).toEqual(["Pod 1", "Pod 2"]);
+    expect(plan.assign.filter((a) => a.pod === "new:0").map((a) => a.entryId)).toEqual(["e0", "e1", "e2", "e3", "e4"]);
+    expect(plan.assign.filter((a) => a.pod === "new:1").map((a) => a.entryId)).toEqual(["e5", "e6"]);
+  });
+
+  it("keeps placed members where they are and fills the first pod with room", async () => {
+    const { fillPods } = await import("@/lib/engine/arena");
+    const entries = [
+      { id: "a", podId: "p1", joinedAt: "1" },
+      { id: "b", podId: "p1", joinedAt: "2" },
+      { id: "c", podId: "gone", joinedAt: "3" },
+      { id: "d", podId: null, joinedAt: "4" },
+    ];
+    const plan = fillPods(entries, [{ id: "p1" }], 3);
+    expect(plan.assign).toEqual([
+      { entryId: "c", pod: "p1" },
+      { entryId: "d", pod: "new:0" },
+    ]);
+    expect(plan.create).toEqual(["Pod 2"]);
+    expect(fillPods([{ id: "a", podId: "p1", joinedAt: "1" }], [{ id: "p1" }]).assign).toEqual([]);
+  });
+
+  it("opens the Huddle check-in 30 minutes before and closes it 90 minutes after the start", async () => {
+    const { huddleLive, huddleOpensWords } = await import("@/lib/engine/arena");
+    const h = [{ id: "h1", startsAt: "2026-12-02T16:00:00.000Z" }];
+    expect(huddleLive(new Date("2026-12-02T15:29:59Z"), h)).toBeNull();
+    expect(huddleLive(new Date("2026-12-02T15:30:00Z"), h)?.id).toBe("h1");
+    expect(huddleLive(new Date("2026-12-02T17:30:00Z"), h)?.id).toBe("h1");
+    expect(huddleLive(new Date("2026-12-02T17:30:01Z"), h)).toBeNull();
+    expect(huddleOpensWords("2026-12-02T16:00:00.000Z")).toBe("7:30 AM Pacific");
+  });
+
+  it("splits the window into Monday-to-Sunday weeks and names last week's leader from Mon 30 Nov", async () => {
+    const { arenaWeeks, leaderWeek, weekInstants, weekWords } = await import("@/lib/engine/arena");
+    expect(arenaWeeks(ARENA)).toEqual([
+      { from: "2026-11-27", to: "2026-11-29" },
+      { from: "2026-11-30", to: "2026-12-06" },
+      { from: "2026-12-07", to: "2026-12-13" },
+      { from: "2026-12-14", to: "2026-12-20" },
+      { from: "2026-12-21", to: "2026-12-26" },
+    ]);
+    expect(leaderWeek(ARENA, "2026-11-29")).toBeNull();
+    expect(leaderWeek(ARENA, "2026-11-30")).toEqual({ from: "2026-11-27", to: "2026-11-29" });
+    expect(leaderWeek(ARENA, "2026-12-09")).toEqual({ from: "2026-11-30", to: "2026-12-06" });
+    expect(leaderWeek(ARENA, "2027-01-05")).toEqual({ from: "2026-12-21", to: "2026-12-26" });
+    expect(weekInstants({ from: "2026-11-27", to: "2026-11-29" })).toEqual({ from: ARENA_STARTS_AT, to: "2026-11-30T07:59:59.999Z" });
+    expect(weekInstants({ from: "2026-12-21", to: "2026-12-26" }).to).toBe(ARENA_ENDS_AT);
+    expect(weekWords({ from: "2026-11-27", to: "2026-11-29" })).toBe("27 to 29 Nov");
+    expect(weekWords({ from: "2026-11-30", to: "2026-12-06" })).toBe("30 Nov to 6 Dec");
+  });
+
+  it("places the board by points, then days closed, then calls booked, sharing a place on a full tie", async () => {
+    const { placed, ordinal } = await import("@/lib/engine/arena");
+    const rows = [
+      { id: "a", points: 50, daysClosed: 3, callsBooked: 0 },
+      { id: "b", points: 80, daysClosed: 1, callsBooked: 0 },
+      { id: "c", points: 50, daysClosed: 3, callsBooked: 0 },
+      { id: "d", points: 50, daysClosed: 4, callsBooked: 0 },
+    ];
+    expect(placed(rows).map((r) => [r.id, r.place])).toEqual([
+      ["b", 1],
+      ["d", 2],
+      ["a", 3],
+      ["c", 3],
+    ]);
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 101].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st"]);
+  });
+});
