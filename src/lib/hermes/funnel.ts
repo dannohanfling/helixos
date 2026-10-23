@@ -90,6 +90,20 @@ export const LETTER = {
   signature: "Danno",
 };
 
+/**
+ * The proof strip under the letter (H-1725, approved in H-1727). Word for word from the approved testimonials (the
+ * evolve-omega-ladders list), first name and last initial. Only quotes with no figure in them, words or digits, since a public
+ * page hides those (H-21 A, hasNumbers).
+ */
+export const PROOF: readonly { quote: string; who: string }[] = [
+  { quote: "You save so much time... and you don't need a VA.", who: "Flavie B." },
+  { quote: "It wasn't even a call, it was just conversation.", who: "Shawna M." },
+  { quote: "I closed, I had the biggest month of closing sales that I've ever had, ever... It was built on consistency.", who: "Christian R." },
+  { quote: "...that's the most appointments I've ever had from a webinar.", who: "Randy M." },
+  { quote: "My history resonate with so many people that someone just sent me a DM and I just close today, so I have a brand new client today.", who: "Flavie B." },
+];
+export const PROOF_LABEL = "What clients say";
+
 export const START = {
   eyebrow: "Start with me",
   title: "Everything you need to run it, every day.",
@@ -130,6 +144,7 @@ export function funnelCopy(): string {
     CHAMBER.eyebrow, CHAMBER.title, CHAMBER.alt,
     ...DAY_STEPS.flatMap((s) => [s.title, s.body]),
     LETTER.eyebrow, LETTER.title, ...LETTER.paragraphs, LETTER.signature,
+    PROOF_LABEL, ...PROOF.flatMap((p) => [p.quote, p.who]),
     START.eyebrow, START.title, ...START.included, START.button,
     ...FAQ.flatMap((f) => [f.q, f.a]),
     CLOSING.title, FOOTER.owner, FUNNEL_TITLE, FUNNEL_DESCRIPTION,
