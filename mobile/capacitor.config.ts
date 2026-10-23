@@ -23,6 +23,9 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   backgroundColor: "#111318",
+  // Tells the web app which logo screen this build shows (H-1824): build 7 and later carry the Golden hour still, so the
+  // opening can start on that exact frame (src/components/pwa/app-opening.tsx, SPLASH_MARK). Raise it with a new still.
+  appendUserAgent: "HelixSplash/2",
   ios: {
     // The web app pads itself with env(safe-area-inset-*) (Phase 1), so the web view runs edge to edge.
     contentInset: "never",
@@ -33,8 +36,9 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
-    // The medallion on the dark field (H-1612). It stays until HelixOS has drawn its first screen: the web app hides it
-    // (native-bridge.tsx, H-1759), under the opening's identical first frame. 8 s is only the safety cap, never the plan.
+    // iPhone: the Golden hour still (H-1824), full height and centred. Android draws its own system splash, the app's icon on
+    // the dark field, and fades it out over the opening's first frame. It stays until HelixOS has drawn its first screen: the
+    // web app hides it (native-bridge.tsx, H-1759). 8 s is only the safety cap, never the plan.
     SplashScreen: {
       launchShowDuration: 8000,
       launchFadeOutDuration: 300,

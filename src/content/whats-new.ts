@@ -12,13 +12,33 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 364,
+    n: 366,
     date: "2026-10-23",
     title: "30 Days in the Arena: the leaderboard, your pod and Huddle check-ins",
     lines: [
       "The Arena page now has the leaderboard: points from 27 Nov to 26 Dec only, your own row marked, and from Mon 30 Nov last week's leader at the top.",
       "Everyone who's in goes into a pod of five with a captain. Your pod card is on the Arena page, and a captain sees their pod's days closed.",
       "On Huddle days, tap I'm here on the Arena page from 30 minutes before the start for 10 points.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 365,
+    date: "2026-10-23",
+    title: "The HelixOS app only says you're offline when you are",
+    lines: [
+      "The app no longer shows \"You're offline\" when your connection is fine. If a page is slow or a load is interrupted, it keeps the logo up and tries once more on its own.",
+      "When you really are offline, the screen is now dark like the logo, with a big gold Try again button. It also comes back by itself when your connection returns.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 364,
+    date: "2026-10-23",
+    title: "The HelixOS app opens with the medallion forged in gold",
+    lines: [
+      "In the HelixOS app, the logo screen is now the gold medallion in golden-hour light. On a fresh start it flashes white-hot, a ribbon of liquid gold sweeps around it, and HelixOS fades in. It takes about four seconds, and a tap skips it.",
+      "With reduced motion on, or on a slow connection, you get the short gold light instead.",
     ],
     audience: "everyone",
   },

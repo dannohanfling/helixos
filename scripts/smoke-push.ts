@@ -257,13 +257,19 @@ async function main() {
     console.log("✓ Settings → Notifications: no Allow row on the website; in the app Off → Allow → On, the token recorded and the card answered; a phone that said no is sent to its settings");
 
     // ── 4e. The app's start and pull to refresh (H-1759, H-1761, plan H-1768), with a fake bridge that records calls. ──
-    const appCtx = async (opts: { reducedMotion?: "reduce" | "no-preference" } = {}) => {
-      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: opts.reducedMotion ?? "no-preference" });
+    // golden: a build 7 app, whose logo screen is the Golden hour still and whose user agent says so (H-1824).
+    const appCtx = async (opts: { reducedMotion?: "reduce" | "no-preference"; golden?: boolean; platform?: "ios" | "android" } = {}) => {
+      const ctx = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        reducedMotion: opts.reducedMotion ?? "no-preference",
+        ...(opts.golden ? { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 HelixSplash/2" } : {}),
+      });
       await ctx.addInitScript({
         content: `(() => {
           window.__calls = [];
           const rec = (n) => async (o) => { window.__calls.push(n); return {}; };
-          window.Capacitor = { isNativePlatform: () => true, getPlatform: () => "ios", Plugins: {
+          window.Capacitor = { isNativePlatform: () => true, getPlatform: () => ${JSON.stringify(opts.platform ?? "ios")}, Plugins: {
             SplashScreen: { hide: rec("splash.hide") },
             Haptics: { impact: rec("haptic") },
             PushNotifications: { checkPermissions: async () => ({ receive: "granted" }), requestPermissions: async () => ({ receive: "granted" }),
@@ -352,10 +358,61 @@ async function main() {
       must(anim === "none", `reduced motion: no sweep or settle (${anim})`);
       await ctx.close();
     }
+    {
+      // Build 7 (H-1824): the opening starts on the Golden hour still, plays Forged in gold once, and a tap skips it.
+      // Android takes the VP9 cut, which the walk's browser plays.
+      const { ctx, p } = await appCtx({ golden: true, platform: "android" });
+      await p.evaluate(() => sessionStorage.clear());
+      await p.goto(`${base}/today`);
+      const opening = p.getByTestId("app-opening");
+      await opening.waitFor({ timeout: 10_000 });
+      must((await opening.getAttribute("data-look")) === "golden", "a build 7 app opens on the Golden hour still");
+      must((await calls(p)).includes("splash.hide"), "the native splash hides under the identical first frame");
+      const src = await p.getByTestId("app-opening-video").getAttribute("src");
+      must(src === "/app-opening/forged-v1.webm", `Android plays the VP9 cut (${src})`);
+      await p.waitForFunction('(() => { const v = document.querySelector("[data-testid=app-opening-video]"); return !!v && v.currentTime > 0.2; })()', undefined, { timeout: 5_000 });
+      must((await opening.getAttribute("data-mode")) === "video", "the video is playing, muted and inline");
+      const res = await p.request.get(`${base}/app-opening/forged-v1.webm`);
+      must((res.headers()["cache-control"] ?? "").includes("immutable"), "the video is cached for a year");
+      await p.mouse.click(195, 400);
+      await opening.waitFor({ state: "detached", timeout: 1_500 });
+      // Left alone, it ends by itself: the clip, then a short fade, never past the cap.
+      await p.evaluate(() => sessionStorage.clear());
+      await p.reload();
+      await opening.waitFor({ timeout: 10_000 });
+      const t0 = Date.now();
+      await opening.waitFor({ state: "detached", timeout: 6_000 });
+      must(Date.now() - t0 <= 4_800, `the opening never holds the app past its cap (${Date.now() - t0} ms)`);
+      await ctx.close();
+    }
+    {
+      // A video that hasn't started within a second: the drawn sweep over the same still instead, and gone soon after.
+      const { ctx, p } = await appCtx({ golden: true, platform: "ios" });
+      await p.route("**/app-opening/forged-v1.mp4", () => undefined);
+      await p.evaluate(() => sessionStorage.clear());
+      await p.goto(`${base}/today`);
+      const opening = p.getByTestId("app-opening");
+      await opening.waitFor({ timeout: 10_000 });
+      must((await p.getByTestId("app-opening-video").getAttribute("src")) === "/app-opening/forged-v1.mp4", "the iPhone plays the H.264 cut");
+      await p.waitForFunction('document.querySelector("[data-testid=app-opening]")?.getAttribute("data-mode") === "drawn"', undefined, { timeout: 2_500 });
+      await opening.waitFor({ state: "detached", timeout: 2_500 });
+      await ctx.close();
+    }
+    {
+      // Reduced motion on a build 7 app: no video, a plain fade from the still.
+      const { ctx, p } = await appCtx({ golden: true, reducedMotion: "reduce" });
+      await p.evaluate(() => sessionStorage.clear());
+      await p.goto(`${base}/today`);
+      await p.getByTestId("app-opening").waitFor({ timeout: 10_000 });
+      must((await p.getByTestId("app-opening-video").count()) === 0, "reduced motion: no video");
+      const anim = await p.evaluate('getComputedStyle(document.querySelector("[data-testid=app-opening] .g")).animationName');
+      must(anim === "none", `reduced motion: no sweep or settle over the still (${anim})`);
+      await ctx.close();
+    }
     // The website never shows either.
     await page.goto(`${base}/today`);
     must((await page.getByTestId("app-opening").count()) === 0 && (await page.getByTestId("pull-refresh").count()) === 0, "the website has no opening and no pull");
-    console.log("✓ the app's start: the splash hides when HelixOS has drawn, the opening plays once per cold start (a fade with reduced motion); pull to refresh ticks and refreshes in place, stays off under a dialog and keeps unsaved typing; none of it on the website");
+    console.log("✓ the app's start: the splash hides when HelixOS has drawn, the opening plays once per cold start (a fade with reduced motion); on build 7 Forged in gold plays from the Golden hour still, a tap skips it, it ends within its cap, and the sweep takes over when the video doesn't start; pull to refresh ticks and refreshes in place, stays off under a dialog and keeps unsaved typing; none of it on the website");
 
     // ── 5. The cron needs its secret. ──
     must((await page.request.get(`${base}/api/cron/push`)).status() === 401, "the push cron answers only with the cron secret");
