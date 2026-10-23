@@ -12,12 +12,23 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 356,
+    n: 357,
     date: "2026-10-23",
     title: "The things you need to find are buttons now",
     lines: [
       "Links you need to find are proper buttons now, big enough to tap on a phone: Your road and See rewards on Today, Add to calendar, Join the call, your next pathway step, the Connect guides in Settings and more.",
       "Notifications has its own row on More, and Settings has a My reports button.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 356,
+    date: "2026-10-22",
+    title: "Turn on notifications from Settings in the app",
+    lines: [
+      "In the HelixOS app, Settings → Notifications now says whether notifications are on for your phone, with an Allow button when they're off.",
+      "If your phone said no before, it shows where to turn them on in your phone's own settings.",
+      "The app now opens on the Evolve Omega medallion on a dark screen.",
     ],
     audience: "everyone",
   },
