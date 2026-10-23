@@ -453,7 +453,9 @@ async function main() {
   } finally {
     await browser.close();
     await reset();
-    process.kill(-blob.pid!);
+    try {
+      process.kill(-blob.pid!);
+    } catch {} // the mock store may already have exited
   }
   if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
   console.log("The Handoff inbox walk passed");
