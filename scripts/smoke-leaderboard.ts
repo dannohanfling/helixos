@@ -473,7 +473,7 @@ async function main() {
     console.log("✓ fix my pass: own press writes the two name fields and says the phone may drop the pass; clients' fixes shut in code; real buttons; never Points");
     // The points sync and the invitations (H-867 parts 3 and 4): off until the coach turns them on; "own" reaches only the
     // coach's pass; each member's first sync is one opening move of their HelixOS total, then one move per new ledger row; the
-    // Level and the kept rank (as Tier, H-1098) go to the pass when they change; an invitation is written once, only with a
+    // kept rank goes to the pass as its Level when it changes (H-1890; no Tier field any more); an invitation is written once, only with a
     // booking link, and follows the kept rank; never Points.
     await logout(page);
     await login(page, "As the coach");
@@ -502,11 +502,11 @@ async function main() {
     await runCron();
     let sa = await mock();
     must(sa.balances["cus_eo_1"]?.balance === coachTotal, `the coach's pass got one opening move of the HelixOS total (${coachTotal}), saw ${sa.balances["cus_eo_1"]?.balance}`);
-    must(sa.fields["SER-eo-1/Level"] === "Coach", "the coach's Level is on the pass");
     const coachTier = rankOf((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!, coachTotal).name;
-    must(sa.fields["SER-eo-1/Tier"] === coachTier, `the coach's kept rank is the pass's Tier (${coachTier}), saw ${sa.fields["SER-eo-1/Tier"]}`);
+    must(sa.fields["SER-eo-1/Level"] === coachTier, `the coach's kept rank is the pass's Level (${coachTier}), saw ${sa.fields["SER-eo-1/Level"]}`);
+    must(!sa.fields["SER-eo-1/Tier"], "no Tier is written: the template has no Tier field");
     must((sa.balances["cus_eo_2"]?.balance ?? 0) === 0 && !sa.fields["SER-eo-2/Level"], "nothing reaches a client while the sync is on your own pass only");
-    must(JSON.stringify(sa.writes.slice(sb.writes.length).sort()) === JSON.stringify(["POST /api/public/admin/points/add", "PUT /api/external/v1/passes/pass.com.evolveomega/SER-eo-1/values/Level", "PUT /api/external/v1/passes/pass.com.evolveomega/SER-eo-1/values/Tier"].sort()), `one add, one Level and one Tier: ${sa.writes.slice(sb.writes.length).join(", ")}`);
+    must(JSON.stringify(sa.writes.slice(sb.writes.length).sort()) === JSON.stringify(["POST /api/public/admin/points/add", "PUT /api/external/v1/passes/pass.com.evolveomega/SER-eo-1/values/Level"].sort()), `one add and one Level: ${sa.writes.slice(sb.writes.length).join(", ")}`);
     sb = sa;
     await runCron();
     must((await mock()).writes.length === sb.writes.length, "a second run sends nothing again");
@@ -517,12 +517,13 @@ async function main() {
     const mayaTotal = await totalOf(mayaM.userId);
     await runCron();
     sa = await mock();
-    must(sa.balances["cus_eo_2"]?.balance === mayaTotal && sa.fields["SER-eo-2/Level"] === mayaM.programTier, `the client's opening move (${mayaTotal}) and Level (${mayaM.programTier}) once the sync is on for everyone`);
+    const mayaRank = rankOf(mayaM, mayaTotal).name;
+    must(sa.balances["cus_eo_2"]?.balance === mayaTotal && sa.fields["SER-eo-2/Level"] === mayaRank, `the client's opening move (${mayaTotal}) and her rank as Level (${mayaRank}) once the sync is on for everyone`);
     await award(mayaM.userId, 15);
     await runCron();
     must((await mock()).balances["cus_eo_2"]?.balance === mayaTotal + 15, "a new award goes as one move of its own");
     // The invitation: an Accelerator member at Sentinel gets the Academy call once, only with its link. She reached Sentinel
-    // before the 19 Oct table (H-1088): her points are below 5,000, but her kept rank is Sentinel, so the call and the Tier
+    // before the 19 Oct table (H-1088): her points are below 5,000, but her kept rank is Sentinel, so the call and the Level
     // follow the kept rank.
     const sentinel = TIERS.find((t) => t.name === "Sentinel")!.level;
     must(mayaTotal + 15 < 5000, `the client is below the new Sentinel line (${mayaTotal + 15})`);
@@ -534,7 +535,7 @@ async function main() {
     await runCron();
     sa = await mock();
     must(!sa.fields["SER-eo-2/Current_Offer"], "with no booking link, no invitation is written");
-    must(sa.fields["SER-eo-2/Tier"] === "Sentinel", `the client's kept rank, Sentinel, is the pass's Tier, saw ${sa.fields["SER-eo-2/Tier"]}`);
+    must(sa.fields["SER-eo-2/Level"] === "Sentinel", `the client's kept rank, Sentinel, is the pass's Level, saw ${sa.fields["SER-eo-2/Level"]}`);
     const academyLink = "https://book.example/academy";
     await page.goto(`${base}/coach`);
     await page.locator('[data-testid="own-invite-academy"]').fill(academyLink);
@@ -548,8 +549,8 @@ async function main() {
     must((await mock()).writes.length === sb.writes.length, "the invitation goes once");
     sa = await mock();
     must(!sa.writes.slice(syncStart).some((w) => /\/values\/Points$/.test(w)), "the sync never writes Points");
-    const tierWrites = sa.writes.slice(syncStart).filter((w) => /\/values\/Tier$/.test(w));
-    must(tierWrites.length === 3, `Tier is written once per change: the coach's, the client's first, then her kept Sentinel (${tierWrites.length})`);
+    const levelWrites = sa.writes.slice(syncStart).filter((w) => /\/values\/Level$/.test(w));
+    must(levelWrites.length === 3 && !sa.writes.slice(syncStart).some((w) => /\/values\/Tier$/.test(w)), `Level is written once per change (the coach's, the client's first, then her kept Sentinel) and Tier never (${levelWrites.length})`);
     const syncWrites = sa.writes.slice(syncStart);
     // Step E (H-734) again, once the sync has sent the coach's points: 1 off and 1 back on the coach's own pass, read back.
     const ownBefore = sa.balances["cus_eo_1"]?.balance ?? 0;
@@ -564,7 +565,7 @@ async function main() {
     await db.update(schema.memberships).set({ programTier: mayaM.programTier, rankKeptLevel: mayaM.rankKeptLevel, eoLevelSent: null, eoTierSent: null, eoOffersSent: [] }).where(eq(schema.memberships.id, mayaM.id));
     await db.update(schema.memberships).set({ eoLevelSent: null, eoTierSent: null, eoOffersSent: [] }).where(eq(schema.memberships.id, coachM.id));
     await db.delete(schema.pointsLedger).where(inArray(schema.pointsLedger.id, added));
-    console.log(`✓ the points sync and invitations: off by default and the cron writes nothing; your own pass first (one opening move of the total, the Level), then everyone; a new award is one move; the Academy invitation once, only with its link, never to the coach; the kept rank as Tier, once per change; never Points (${syncWrites.length} writes)`);
+    console.log(`✓ the points sync and invitations: off by default and the cron writes nothing; your own pass first (one opening move of the total, the Level), then everyone; a new award is one move; the Academy invitation once, only with its link, never to the coach; the kept rank as Level, once per change; never Tier, never Points (${syncWrites.length} writes)`);
 
     await db.update(schema.memberships).set({ eoPassUrl: mayaPass.eoPassUrl, eoPassSerial: mayaPass.eoPassSerial, eoPassTypeId: mayaPass.eoPassTypeId, eoPassInstalledAt: mayaPass.eoPassInstalledAt, eoCustomerId: mayaPass.eoCustomerId }).where(eq(schema.memberships.id, mayaPass.id));
     await logout(page);

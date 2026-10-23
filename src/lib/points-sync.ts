@@ -21,7 +21,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { address } from "@/lib/engine/eloyalty";
 import { tagFor, taggedReason } from "@/lib/engine/points-outbox";
-import { INVITES, type InviteKey, inviteDue, levelFor, modeReaches, syncReason, tierWords } from "@/lib/engine/points-sync";
+import { INVITES, type InviteKey, inviteDue, modeReaches, syncReason, tierWords } from "@/lib/engine/points-sync";
 import { allPaused } from "@/lib/points-outbox";
 import { recordRateLimit } from "@/lib/loyalty-rate";
 
@@ -104,8 +104,10 @@ export async function syncFeed(feed: schema.LeaderboardFeed, now = new Date()): 
     if (syncs) out.queued += await queueMemberMoves(feed, m);
     const pass = { passTypeId: m.eoPassTypeId, serial: m.eoPassSerial };
     if (!pass.passTypeId || !pass.serial) continue;
-    // Level, when it changed.
-    const level = levelFor(m.role, m.programTier);
+    const points = (await db.select({ total: schema.pointsLedger.points }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, feed.workspaceId), eq(schema.pointsLedger.userId, m.userId)))).reduce((n, r) => n + r.total, 0);
+    // Level: the kept rank by name (Sage, Alchemist…), when it changed (H-1890, replacing the program level and the separate
+    // Tier field, which the template no longer has). Never lower than the highest reached.
+    const level = tierWords(points, m.rankKeptLevel);
     if (syncs && m.eoLevelSent !== level) {
       const a = address("passField", pass, { field: "Level", value: level });
       const status = a.ok ? await putField(feed.host, key, a.path, a.body) : -1;
@@ -115,22 +117,6 @@ export async function syncFeed(feed: schema.LeaderboardFeed, now = new Date()): 
       }
       if (status >= 200 && status < 300) {
         await db.update(schema.memberships).set({ eoLevelSent: level }).where(eq(schema.memberships.id, m.id));
-        out.fields++;
-      } else out.failed++;
-      await sleep(PACE_MS);
-    }
-    const points = (await db.select({ total: schema.pointsLedger.points }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, feed.workspaceId), eq(schema.pointsLedger.userId, m.userId)))).reduce((n, r) => n + r.total, 0);
-    // Tier: the kept rank by name, when it changed (H-1098). Never lower than the highest reached.
-    const tier = tierWords(points, m.rankKeptLevel);
-    if (syncs && m.eoTierSent !== tier) {
-      const a = address("passField", pass, { field: "Tier", value: tier });
-      const status = a.ok ? await putField(feed.host, key, a.path, a.body) : -1;
-      if (status === 429) {
-        out.busy = true;
-        break;
-      }
-      if (status >= 200 && status < 300) {
-        await db.update(schema.memberships).set({ eoTierSent: tier }).where(eq(schema.memberships.id, m.id));
         out.fields++;
       } else out.failed++;
       await sleep(PACE_MS);

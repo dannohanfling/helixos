@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 363,
+    date: "2026-10-23",
+    title: "Your pass shows your rank as its Level",
+    lines: [
+      "When Sync points is on, the Evolve Omega pass's LEVEL shows your rank (Sage, Alchemist and up), the same rank HelixOS shows, and it updates when you rise.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 362,
     date: "2026-10-23",
     title: "Move a program's members to its new pass",
