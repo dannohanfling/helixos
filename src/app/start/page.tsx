@@ -13,14 +13,16 @@ import {
   HERO,
   LETTER,
   PROBLEM,
+  PROOF,
+  PROOF_LABEL,
   START,
   funnelPixelId,
 } from "@/lib/hermes/funnel";
 
 /**
  * Funnel 1 at /start (H-674, plan H-721, Danno's answers H-841): one page, one call to action, Start with me, to the existing
- * checkout. No prices, no proof until the Proof Bank has stories with permission, sample data only in the phone pictures. The
- * Meta Pixel's PageView beacon only when Vercel has FUNNEL_PIXEL_ID.
+ * checkout. No prices, sample data only in the phone pictures. The Meta Pixel's PageView beacon only when Vercel has
+ * FUNNEL_PIXEL_ID. Since H-1725 (approved in H-1727): a strip of approved quotes under the letter, and a gold reading bar.
  */
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,7 @@ export default function FunnelPage() {
   const pixelId = funnelPixelId();
   return (
     <div className="fn-root" data-testid="fn-root">
+      <div className="fn-progress" aria-hidden="true" data-testid="fn-progress" />
       <div className="fn-bar" data-testid="fn-bar">{BAR}</div>
 
       <header className="fn-wrap fn-nav">
@@ -125,6 +128,23 @@ export default function FunnelPage() {
               <p key={p.slice(0, 24)} className="fn-p">{p}</p>
             ))}
             <p className="fn-sign">{LETTER.signature}</p>
+          </div>
+        </section>
+
+        <section className="fn-proof" aria-label={PROOF_LABEL} data-testid="fn-proof">
+          <div className="fn-proof-view" tabIndex={0} aria-label={`${PROOF_LABEL}: focus or tap to pause`}>
+            <div className="fn-proof-track">
+              {[false, true].map((copy) => (
+                <ul key={String(copy)} className="fn-proof-list" aria-hidden={copy || undefined}>
+                  {PROOF.map((p) => (
+                    <li key={p.quote.slice(0, 24)} className="fn-proof-card">
+                      <p className="fn-proof-quote">&ldquo;{p.quote}&rdquo;</p>
+                      <p className="fn-proof-who">{p.who}</p>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            </div>
           </div>
         </section>
 
