@@ -307,7 +307,7 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   // H-351: a replacement marks the post it replaces in the same call (the agent's own post only).
   if (p.supersedes !== null) await supersedeHandoff(o, from.id, hId(p.supersedes), hId(row.seq));
   // A status message updates the sender's Forum building.
-  if (p.kind === "status") await reportToForum(o, { agent: from.name, status: "working", now: p.title }, "agent");
+  if (p.kind === "status") await reportToForum(o, { agent: from.name, status: "working", now: p.title }, "agent", via);
   // The road lights on its own (H-19): a flow to each recipient, the title as its label; a reply walks back the same road.
   const names = [...new Set(to)].map((id) => (id === DANNO ? "you" : (agents.find((a) => a.id === id)?.name ?? null))).filter((n): n is string => Boolean(n));
   await drawFlows(o, from, names, p.title, p.replyTo !== null, hId(row.seq));
