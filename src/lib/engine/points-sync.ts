@@ -3,8 +3,9 @@ import { keptTier, TIERS } from "@/lib/engine/tiers";
 /**
  * The points sync and the invitations on the coach's own program (H-867 parts 3 and 4, H-890, H-898): the pure rules.
  * HelixOS points are the one currency. The rank is HelixOS's kept rank (H-1088): the higher of the highest rank a member
- * has reached and the rank their points earn, so it never drops. The sync sends point moves, the member's Level, the kept
- * rank as Tier (H-1098, replacing H-890's "never Tier"), and each invitation once. It never writes Points.
+ * has reached and the rank their points earn, so it never drops. The sync sends point moves, the kept rank as the pass's
+ * Level (H-1890: the template's LEVEL shows Sage, Alchemist…; there is no Tier field any more), and each invitation once.
+ * It never writes Points.
  */
 
 export type SyncMode = "off" | "own" | "all";
@@ -14,11 +15,6 @@ export const INVITE_KEYS: readonly InviteKey[] = ["academy", "elite", "lux"];
 /** Whether a mode reaches this member: "own" is the coach's own pass only (the first test), "all" is everyone with a pass. */
 export function modeReaches(mode: SyncMode, isCoach: boolean): boolean {
   return mode === "all" || (mode === "own" && isCoach);
-}
-
-/** The Level on the back of the pass: the member's program, or "Coach" for the coach's own pass. */
-export function levelFor(role: string, programTier: string): string {
-  return role === "coach" ? "Coach" : programTier.trim() || "Academy";
 }
 
 const PROGRAMS = ["Accelerator", "Academy", "Elite", "Luxe"] as const;
@@ -35,7 +31,7 @@ export const INVITES: Record<InviteKey, { below: (typeof PROGRAMS)[number]; rank
   lux: { below: "Luxe", rank: "Olympian", text: "Your Lux Partnership Conversation" },
 };
 
-/** The Tier on the pass (H-1098): the member's kept rank by name, the same rank HelixOS shows. */
+/** The Level on the pass (H-1890; Tier before, H-1098): the member's kept rank by name, the same rank HelixOS shows. */
 export function tierWords(points: number, rankKeptLevel: number | null | undefined): string {
   return keptTier(points, rankKeptLevel).name;
 }

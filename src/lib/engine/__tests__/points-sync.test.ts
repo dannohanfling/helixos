@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inviteDue, levelFor, modeReaches, readInviteLink, tierWords } from "@/lib/engine/points-sync";
+import { inviteDue, modeReaches, readInviteLink, tierWords } from "@/lib/engine/points-sync";
 import { TIERS } from "@/lib/engine/tiers";
 
 describe("the sync's modes (H-867 steps G and H)", () => {
@@ -8,11 +8,6 @@ describe("the sync's modes (H-867 steps G and H)", () => {
     expect(modeReaches("own", true)).toBe(true);
     expect(modeReaches("own", false)).toBe(false);
     expect(modeReaches("all", false)).toBe(true);
-  });
-  it("puts the program on the back, or Coach for the coach", () => {
-    expect(levelFor("client", "Accelerator")).toBe("Accelerator");
-    expect(levelFor("client", " ")).toBe("Academy");
-    expect(levelFor("coach", "Academy")).toBe("Coach");
   });
 });
 
