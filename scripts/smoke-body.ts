@@ -56,7 +56,21 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   const until = Date.now() + 25000;
   let openSince = 0;
   while (!(await field.isVisible())) {
-    if (Date.now() > until) throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()})`);
+    if (Date.now() > until) {
+      // Why it isn't showing: a hidden ancestor (a streamed part not revealed yet), its box, and whether the page still draws.
+      const why = await page.evaluate(async (sel) => {
+        const el = document.querySelector(`${sel} input[name="name"]`) as HTMLElement | null;
+        const hiddenBy: string[] = [];
+        for (let a = el?.parentElement; a; a = a.parentElement) {
+          const cs = getComputedStyle(a);
+          if (a.hidden || cs.display === "none" || cs.visibility === "hidden" || cs.contentVisibility === "hidden") hiddenBy.push(`${a.tagName.toLowerCase()}${a.id ? `#${a.id}` : ""}${a.hidden ? "[hidden]" : ""} ${cs.display}/${cs.visibility}/${cs.contentVisibility}`);
+        }
+        const drew = await Promise.race([new Promise<boolean>((r) => requestAnimationFrame(() => r(true))), new Promise<boolean>((r) => setTimeout(() => r(false), 1000))]);
+        const r = el?.getBoundingClientRect();
+        return { found: Boolean(el), count: document.querySelectorAll(`${sel} input[name="name"]`).length, box: r ? [r.width, r.height] : null, check: el?.checkVisibility() ?? null, hiddenBy, drew, state: document.visibilityState, loading: document.querySelectorAll('[data-testid="page-loading"]').length };
+      }, inside);
+      throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()}): ${JSON.stringify(why)}`);
+    }
     if (!(await isOpen())) {
       await sum.click();
       openSince = Date.now();
