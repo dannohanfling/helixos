@@ -132,3 +132,27 @@
 @media (prefers-reduced-motion: reduce) {
   .co-champ { animation: none; }
 }
+
+/* Challenges (H-1840, plan H-1844): Upcoming, Active and Past, one card per challenge in the page's light palette. */
+.co-ch-section { margin-top: 18px; }
+.co-ch-card { margin-top: 8px; border: 1px solid var(--co-line); border-radius: 14px; padding: 16px; background: color-mix(in srgb, var(--co-ground) 70%, white); }
+.co-ch-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.co-ch-name { margin: 0; font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: 24px; }
+.co-ch-count { font-size: 13px; font-weight: 700; color: var(--co-gold-text); }
+.co-ch-promise { margin: 6px 0 0; font-size: 16px; }
+.co-ch-facts { display: grid; gap: 8px; margin: 12px 0 0; font-size: 14px; }
+.co-ch-facts > div { display: grid; grid-template-columns: 6.5rem 1fr; gap: 8px; }
+.co-ch-facts dt { color: var(--co-muted); font-weight: 600; }
+.co-ch-facts dd { margin: 0; }
+.co-ch-line { display: block; }
+.co-ch-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.co-ch-actions .co-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.co-ch-actions form .co-btn { min-width: 9rem; font-size: 15px; }
+@media (max-width: 480px) {
+  .co-ch-facts > div { grid-template-columns: 1fr; gap: 2px; }
+  .co-ch-actions > * { flex: 1 1 100%; }
+  .co-ch-actions form .co-btn, .co-ch-actions .co-btn { width: 100%; }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .co-ch-card { background: var(--surface-2); }
+}

@@ -12,11 +12,14 @@ import { ARENA, canEnter, dateIn, joinOpen } from "@/lib/engine/arena";
 
 export async function joinArenaAction(formData: FormData): Promise<void> {
   const { v } = await ctx({ whileSwitched: "refuse", reason: "Joining the Arena is the member's own choice." });
-  const back = formData.get("from") === "today" ? "/today" : "/arena";
-  if (!canEnter({ role: v.role, programTier: v.membership.programTier, team: Boolean(v.team) })) redirect(`${back}?arena=not-yours`);
+  // Where "I'm in" was pressed: Today, Colosseum → Challenges (H-1844), or the Arena page.
+  const from = formData.get("from");
+  const back = (arena: string) =>
+    from === "today" ? `/today?arena=${arena}#arena` : from === "colosseum" ? `/rewards?tab=colosseum&section=challenges&arena=${arena}` : `/arena?arena=${arena}#arena`;
+  if (!canEnter({ role: v.role, programTier: v.membership.programTier, team: Boolean(v.team) })) redirect(back("not-yours"));
   const c = await arenaFor(v.workspace.id);
-  if (!joinOpen(c, dateIn(ARENA.timezone, new Date()))) redirect(`${back}?arena=closed`);
+  if (!joinOpen(c, dateIn(ARENA.timezone, new Date()))) redirect(back("closed"));
   await enroll({ challengeId: c.id, workspaceId: v.workspace.id, userId: v.user.id, membershipId: v.membership.id });
   revalidatePath("/today");
-  redirect(`${back}?arena=in#arena`);
+  redirect(back("in"));
 }

@@ -7,9 +7,10 @@ import { TIERS } from "@/lib/engine/tiers";
 import { ColosseumArena } from "@/components/colosseum-arena";
 import { ShareWin, WinList } from "@/components/colosseum-bits";
 import { ModerateMenu } from "@/components/colosseum-moderate";
+import { ColosseumChallenges } from "@/components/colosseum-challenges";
 import "@/components/colosseum.css";
 
-export type ColosseumParams = { section?: string; tier?: string; kind?: string };
+export type ColosseumParams = { section?: string; tier?: string; kind?: string; arena?: string };
 
 /** The Colosseum's own address (H-164 §4): the Rewards page's second tab, with its section and filters. */
 export function colosseumHref(section: Tab | "arena" = "arena", extra: Record<string, string> = {}): string {
@@ -131,10 +132,7 @@ export async function ColosseumView({ v, sp }: { v: Viewer; sp: ColosseumParams 
         </section>
       ) : null}
       {tab === "challenges" ? (
-        <section data-testid="tab-challenges-body">
-          <h2 className="co-h2">Challenges</h2>
-          <p className="co-quiet">No challenge running, and none past yet.</p>
-        </section>
+        <ColosseumChallenges v={v} joined={sp.arena === "in"} />
       ) : null}
       {tab === "week" ? (
         <section data-testid="tab-week-body">

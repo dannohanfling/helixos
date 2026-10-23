@@ -22,6 +22,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "coach",
   },
   {
+    n: 360,
+    date: "2026-10-23",
+    title: "30 Days in the Arena is on the Colosseum's Challenges tab",
+    lines: [
+      "Rewards → Colosseum → Challenges now shows 30 Days in the Arena under Upcoming: the dates, how to finish, the rewards and the Huddle times, with a countdown.",
+      "Tap I'm in there to join. Once it starts on 27 Nov, the card moves to Active and shows your days closed.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 359,
     date: "2026-10-23",
     title: "The app opens straight into HelixOS, and you can pull down to refresh",
