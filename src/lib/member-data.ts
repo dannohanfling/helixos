@@ -67,6 +67,7 @@ export const MEMBER_TABLES = {
   forum_agents: schema.forumAgents,
   forum_events: schema.forumEvents,
   forum_needs: schema.forumNeeds,
+  schedule_jobs: schema.scheduleJobs,
   forum_settings: schema.forumSettings,
   // The Handoff inbox (rev 769): the owner's agent tokens (hashes stripped), messages, files and their history: theirs.
   agent_tokens: schema.agentTokens,

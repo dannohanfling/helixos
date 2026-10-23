@@ -5078,11 +5078,47 @@ export const forumEvents = sqliteTable(
     payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
     /** When it happened: the report's own time when it sent one (UTC), otherwise when it arrived. */
     at: text("at").notNull(),
+    /** H-1843: a Cowork agent reporting through the owner's own connector with `as` ("Danno's connector"); null otherwise. */
+    via: text("via"),
     createdAt: createdAt(),
   },
   (t) => [index("forum_events_member").on(t.workspaceId, t.userId, t.at)],
 );
 export type ForumEvent = typeof forumEvents.$inferSelect;
+
+/**
+ * The Forum's Schedule board (H-1838, plan H-1843): one row per recurring or scheduled job an agent runs, fed by the agent's
+ * own schedule_report at the start and end of each run (the scheduler lives outside HelixOS). "Missed" is never stored: it is
+ * a next run more than an hour past with no report since, worked out when the board is read.
+ */
+export const scheduleJobs = sqliteTable(
+  "schedule_jobs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    /** The job's name lowercased and trimmed: one name is one job per agent. */
+    jobKey: text("job_key").notNull(),
+    name: text("name").notNull(),
+    /** When it runs, in the agent's plain words ("Daily 12:50 PM PT"). */
+    whenText: text("when_text").notNull().default(""),
+    lastStatus: text("last_status", { enum: ["started", "done", "failed", "skipped"] }),
+    lastReason: text("last_reason"),
+    lastAt: text("last_at"),
+    /** The next run as a UTC instant, when the agent knows it. */
+    nextAt: text("next_at"),
+    /** The last failure is the owner's to fix ("Mac offline"): it counts on What needs you. */
+    needsYou: integer("needs_you", { mode: "boolean" }).notNull().default(false),
+    /** The owner hid the row; a new report never unhides it. */
+    hiddenAt: text("hidden_at"),
+    via: text("via"),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [uniqueIndex("schedule_jobs_key").on(t.workspaceId, t.userId, t.agentId, t.jobKey)],
+);
+export type ScheduleJob = typeof scheduleJobs.$inferSelect;
 
 /** "What needs you": stays until the member ticks it done or the agent reports it cleared. Ticking sends nothing back. */
 export const forumNeeds = sqliteTable(
@@ -5209,6 +5245,8 @@ export const handoffMessages = sqliteTable(
     heldAt: text("held_at"),
     /** H-351: replaced by a newer post; the post never leaves, it moves to the Superseded tab. */
     supersededById: text("superseded_by_id"),
+    /** H-1843: a Cowork agent posting through the owner's own connector with `as` ("Danno's connector"); null otherwise. */
+    via: text("via"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("handoff_messages_seq").on(t.workspaceId, t.userId, t.seq), index("handoff_messages_thread").on(t.threadId)],

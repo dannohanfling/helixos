@@ -15,7 +15,8 @@ export type ToolResult = { text: string; data?: unknown; images?: { data: string
  * `appId`: the connection the call came through; `switched`: on an agent token inside a client's HelixOS (H-1385), the
  * client's viewer the client tools act as, while `v` for the agent's own tools stays the coach's own.
  */
-export type ToolCall = { scopes: readonly Scope[]; agentId?: string | null; appId?: string; switched?: Viewer | null };
+/** `agentToken`: the call came on an agent token (hxa_), not a connection the owner signed in with (H-1843: `as` is refused on one). */
+export type ToolCall = { scopes: readonly Scope[]; agentId?: string | null; appId?: string; switched?: Viewer | null; agentToken?: boolean };
 export type ToolDef = {
   name: string;
   /** Null for the one tool every grant has (whoami). */

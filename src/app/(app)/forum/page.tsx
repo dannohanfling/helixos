@@ -8,7 +8,9 @@ import { markGlossary } from "@/lib/engine/glossary";
 import { FORUM_BUILDINGS, FORUM_PLATFORMS, type ForumPlot, type ForumStateAgent } from "@/lib/engine/forum";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { formatDateTime } from "@/lib/dates";
-import { confirmForumAgentAction, editForumAgentAction, removeForumAgentAction, setForumAgentMutedAction, setForumShareAction, tickForumNeedAction } from "@/lib/actions/forum";
+import { confirmForumAgentAction, editForumAgentAction, removeForumAgentAction, setForumAgentMutedAction, setForumShareAction, setScheduleHiddenAction, tickForumNeedAction } from "@/lib/actions/forum";
+import { scheduleBoard } from "@/lib/schedule";
+import { STATE_WORDS } from "@/lib/engine/schedule";
 import { watchForum } from "@/lib/forum-watch";
 import { stallWords } from "@/lib/engine/forum-watch";
 import { ForumMap } from "@/components/forum-map";
@@ -33,7 +35,7 @@ const CHIP: Record<ForumStateAgent["status"], string> = { working: "Working", wa
  * ledger and the latest news. Every time shows in the viewer's own zone with its short label (rev 779). Agent text is plain
  * text, with glossary words underlined (rev 768).
  */
-export default async function ForumPage({ searchParams }: { searchParams: Promise<{ member?: string; road?: string }> }) {
+export default async function ForumPage({ searchParams }: { searchParams: Promise<{ member?: string; road?: string; jobs?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   if (v.switchedInto) {
@@ -89,13 +91,17 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
   // The Nudge and a stalled agent's item open its saved session link (13 Oct, H-495), when there is one.
   const sessions = own ? new Map((await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, m.workspaceId), eq(schema.handoffAgents.userId, m.userId)), columns: { agentId: true, sessionUrl: true } })).map((r) => [r.agentId, r.sessionUrl])) : new Map<string, string | null>();
   const approvals = inbox?.waiting ?? [];
+  // The Schedule board (H-1843): the jobs the agents report; a failed or missed one that's the owner's to fix is on What needs you.
+  const showHidden = sp.jobs === "all";
+  const jobs = await scheduleBoard(m, { hidden: showHidden });
+  const jobNeeds = jobs.filter((j) => j.needsOwner);
   // Connect this agent (H-727 PR 2): a member's own agents' live tokens, last four only; the coach's are on Coach → Agents.
   const memberTokens = canEdit && v.role !== "coach" && !v.switchedInto
     ? new Map((await db.query.agentTokens.findMany({ where: and(eq(schema.agentTokens.workspaceId, m.workspaceId), eq(schema.agentTokens.userId, m.userId), isNull(schema.agentTokens.revokedAt)), columns: { agentId: true, last4: true, createdAt: true } })).map((t) => [t.agentId, t]))
     : null;
   const at = (iso: string) => formatDateTime(iso, v.tz, { zone: true });
   const firstName = (owner?.name ?? "This member").split(" ")[0];
-  const rostra = state.waiting.length ? "waiting" : state.agents.some((a) => a.status === "working") ? "working" : "idle";
+  const rostra = state.waiting.length || jobNeeds.length ? "waiting" : state.agents.some((a) => a.status === "working") ? "working" : "idle";
   const roadAgent = sp.road && state.queue.some((q) => q.agentId === sp.road) ? sp.road : null;
   const road = roadAgent ? state.queue.filter((q) => q.agentId === roadAgent) : state.queue;
   const roadAgents = [...new Map(state.queue.map((q) => [q.agentId, q.agent])).entries()];
@@ -203,9 +209,24 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                     </div>
                   </div>
                 ))
-              ) : approvals.length ? null : (
+              ) : approvals.length || jobNeeds.length ? null : (
                 <div className="fo-empty">Nothing is waiting on you.</div>
               )}
+              {jobNeeds.map((j, i) => (
+                <div key={j.id} className="fo-need" data-testid="forum-job-need">
+                  <div className="fo-n">{approvals.length + state.waiting.length + i + 1}</div>
+                  <div>
+                    <div className="fo-t">
+                      {j.name}: {STATE_WORDS[j.state].toLowerCase()}
+                    </div>
+                    {j.reason ? <div className="fo-d">{j.reason}</div> : null}
+                    <div className="fo-meta">
+                      <span className="fo-w">On the Schedule board</span>
+                      <span>From {j.agent}{j.lastAt ? `, ${at(j.lastAt)}` : ""}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
               {canEdit && state.waiting.length ? <p className="fo-fine">Ticking one done only clears it here. Nothing is sent back to the agent.</p> : null}
             </div>
           </section>
@@ -243,6 +264,55 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
             </div>
           </section>
         </div>
+
+        <section aria-labelledby="fo-h-schedule" data-testid="forum-schedule">
+          <h2 id="fo-h-schedule" className="fo-h2">
+            The Schedule board
+          </h2>
+          <p className="fo-fine">Jobs your agents run on a schedule, as they report them. A job more than an hour late with no report shows as Missed.</p>
+          {jobs.length ? (
+            <div className="fo-jobs">
+              {jobs.map((j) => (
+                <div key={j.id} className="fo-job" data-testid="forum-job" data-state={j.state} data-hidden={j.hidden ? "1" : "0"}>
+                  <div className="fo-job-main">
+                    <div className="fo-t">{j.name}</div>
+                    <div className="fo-meta">
+                      <span>{j.agent}</span>
+                      {j.when ? <span>{j.when}</span> : null}
+                      {j.via ? <span>via {j.via}</span> : null}
+                    </div>
+                  </div>
+                  <div className="fo-job-last">
+                    <span className={`fo-w fo-job-${j.state}`} data-testid="forum-job-state">
+                      {STATE_WORDS[j.state]}
+                    </span>
+                    <span className="fo-meta">
+                      {j.lastAt ? `Last ${at(j.lastAt)}` : "No run yet"}
+                      {j.reason ? ` · ${j.reason}` : ""}
+                    </span>
+                    <span className="fo-meta">{j.nextAt ? `Next ${at(j.nextAt)}` : "Next run not given"}</span>
+                  </div>
+                  {canEdit ? (
+                    <form action={setScheduleHiddenAction}>
+                      <input type="hidden" name="id" value={j.id} />
+                      <input type="hidden" name="hidden" value={j.hidden ? "0" : "1"} />
+                      <SubmitButton className="fo-btn fo-small-btn" pendingText="…" data-testid="forum-job-hide">
+                        {j.hidden ? "Show" : "Hide"}
+                      </SubmitButton>
+                    </form>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="fo-empty" data-testid="forum-jobs-empty">No scheduled jobs yet. An agent adds one with schedule_report.</div>
+          )}
+          {canEdit ? (
+            <Link href={join(showHidden ? "" : "jobs=all").replace(/[?&]$/, "")} className="fo-btn fo-linkbtn fo-jobs-toggle" data-testid="forum-jobs-toggle">
+              {showHidden ? "Hide hidden rows" : "Show hidden"}
+            </Link>
+          ) : null}
+        </section>
 
         <section aria-labelledby="fo-h-ledger">
           <h2 id="fo-h-ledger" className="fo-h2">

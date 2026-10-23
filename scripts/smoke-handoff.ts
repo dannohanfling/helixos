@@ -4,8 +4,10 @@
  * and a .env, a key inside a text file and a .env inside a zip are refused; no tool can approve, and a message saying "Danno
  * approved" stays unapproved with its tag; Danno's Approve (Coach → Inbox) and Change (The Forum) each arrive once in the
  * sender's next inbox read; a status message moves the sender's building; a revoked token is refused at once; the 61st post in
- * a minute is refused; Cowork's own connection, once tied, speaks as Cowork; and a client can't reach any of it (their own
- * inbox is theirs, H-727: scripts/smoke-memberinbox.ts walks it).
+ * a minute is refused; Cowork's own connection, once tied, speaks as Cowork; with `as` the owner's connector speaks as a
+ * Cowork agent (H-1843) while an agent token never can; the Schedule board shows a failed job, works out a missed one, puts the
+ * owner's failure on What needs you, and hides a row; and a client can't reach any of it (their own inbox is theirs, H-727:
+ * scripts/smoke-memberinbox.ts walks it).
  */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
@@ -46,6 +48,7 @@ async function main() {
   const { registerClient, issueCode, exchangeCode } = await import("@/lib/mcp/oauth");
   const { makeAgentToken, revokeAgentTokens } = await import("@/lib/handoff");
   const { seedCoachForum } = await import("@/lib/forum");
+  const { newId } = await import("@/lib/ids");
   const { createHash, randomBytes } = await import("node:crypto");
   const coach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
@@ -55,7 +58,7 @@ async function main() {
   const reset = async () => {
     const msgs = await db.query.handoffMessages.findMany({ where: and(eq(schema.handoffMessages.workspaceId, ws), eq(schema.handoffMessages.userId, coach.id)), columns: { id: true } });
     if (msgs.length) await db.delete(schema.handoffDeliveries).where(inArray(schema.handoffDeliveries.messageId, msgs.map((m) => m.id)));
-    for (const t of [schema.handoffMessages, schema.handoffFiles, schema.handoffAudit, schema.agentTokens, schema.forumAgents, schema.forumEvents, schema.forumNeeds, schema.forumSettings]) await db.delete(t).where(and(eq(t.workspaceId, ws), eq(t.userId, coach.id)));
+    for (const t of [schema.handoffMessages, schema.handoffFiles, schema.handoffAudit, schema.agentTokens, schema.forumAgents, schema.forumEvents, schema.forumNeeds, schema.forumSettings, schema.scheduleJobs]) await db.delete(t).where(and(eq(t.workspaceId, ws), eq(t.userId, coach.id)));
     await db.delete(schema.agentAuthFailures).where(and(eq(schema.agentAuthFailures.workspaceId, ws), eq(schema.agentAuthFailures.userId, coach.id)));
     await db.delete(schema.connectedApps).where(and(eq(schema.connectedApps.workspaceId, ws), eq(schema.connectedApps.userId, coach.id)));
   };
@@ -152,7 +155,7 @@ async function main() {
     // ── No tool can approve. ──
     const tools = await listTools(mainToken);
     const names = tools.map((t) => t.name).sort();
-    must(JSON.stringify(names) === JSON.stringify(["forum_read", "forum_report", "handoff_ack", "handoff_busy", "handoff_checkin", "handoff_file", "handoff_hold", "handoff_inbox", "handoff_post", "handoff_read", "handoff_release", "handoff_supersede", "handoff_upload", "report_done_draft", "whoami"]), `an agent token sees only The Forum, the inbox and its own Done draft: ${names}`);
+    must(JSON.stringify(names) === JSON.stringify(["forum_read", "forum_report", "handoff_ack", "handoff_busy", "handoff_checkin", "handoff_file", "handoff_hold", "handoff_inbox", "handoff_post", "handoff_read", "handoff_release", "handoff_supersede", "handoff_upload", "report_done_draft", "schedule_report", "whoami"]), `an agent token sees only The Forum, the inbox, the Schedule board and its own Done draft: ${names}`);
     must(!tools.some((t) => /approv|decid|declin/i.test(t.name) || Object.keys(t.inputSchema?.properties ?? {}).some((k) => /decision|approved|decided/i.test(k))), "no tool takes a decision, by name or by field");
 
     // ── Main posts to Body; Medicus's inbox shows it once; ack; the thread. ──
@@ -435,6 +438,54 @@ async function main() {
     await tool(cowork, "forum_report", { agent: "Architectus", status: "done", now: "Pretending to be Main" });
     must((await db.query.forumAgents.findFirst({ where: eq(schema.forumAgents.id, agent("Architectus").id) }))!.now !== "Pretending to be Main", "a tied connection reports only as its own agent");
     console.log("✓ Cowork's connection, tied on Coach → Agents, posts as Cowork and reports only as Cowork");
+
+    // ── H-1843: the owner's own connector speaks as a Cowork agent with `as`; an agent token never can. ──
+    await db.insert(schema.forumAgents).values({ id: newId(), workspaceId: ws, userId: coach.id, name: "Pictor", nameKey: "pictor", platform: "Claude Cowork", role: "Media: Flow, Gemini, images" });
+    r = await tool(cowork, "handoff_post", { to: "Architectus", kind: "status", title: "Day-2 clip ready", as: "Pictor" });
+    must(!r.isError, `as Pictor, the owner's connector posts: ${r.text}`);
+    r = await tool(mainToken, "handoff_inbox");
+    const fromPictor = (r.data?.messages as { from: string; via: string | null; title: string }[]).find((m) => m.title === "Day-2 clip ready");
+    must(fromPictor?.from === "Pictor" && /connector$/.test(fromPictor.via ?? ""), `it arrives from Pictor, via the owner's connector: ${JSON.stringify(fromPictor)}`);
+    r = await tool(cowork, "forum_report", { agent: "Anyone", status: "working", now: "Making the day-2 clip", as: "Pictor" });
+    const pictor = (await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, ws), eq(schema.forumAgents.userId, coach.id), eq(schema.forumAgents.nameKey, "pictor")) }))!;
+    must(!r.isError && pictor.now === "Making the day-2 clip" && pictor.status === "working", `the report lands on Pictor's own building: ${r.text}`);
+    const viaEvent = await db.query.forumEvents.findFirst({ where: and(eq(schema.forumEvents.agentId, pictor.id), eq(schema.forumEvents.kind, "status")) });
+    must(/connector$/.test(viaEvent?.via ?? ""), "the Forum's log records it as via the owner's connector");
+    r = await tool(mainToken, "handoff_post", { to: "Medicus", kind: "brief", title: "Not mine to send", as: "Pictor" });
+    must(r.isError && /agent token/.test(r.text), `an agent token can't use as: ${r.text}`);
+    r = await tool(cowork, "handoff_post", { to: "Medicus", kind: "brief", title: "Not a Cowork agent", as: "Architectus" });
+    must(r.isError && /isn't a Claude Cowork agent/.test(r.text), `as names only a Cowork agent: ${r.text}`);
+    r = await tool(cowork, "handoff_post", { to: "Medicus", kind: "brief", title: "Nobody", as: "Nobody" });
+    must(r.isError && /no agent called "Nobody"/.test(r.text), `as names only an agent on the Forum: ${r.text}`);
+    console.log("✓ as: the owner's connector posts and reports as Pictor, recorded via the connector; an agent token, a non-Cowork agent and an unknown name are refused");
+
+    // ── H-1843: the Schedule board. ──
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    r = await tool(cowork, "schedule_report", { job: "Aqueduct video run", status: "failed", when: "Daily 9:20 AM PT", reason: "Mac offline", next_at: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(), needs_you: true, as: "Pictor" });
+    must(!r.isError && /Added to the Schedule board/.test(r.text), `Pictor's job is added: ${r.text}`);
+    r = await tool(mainToken, "schedule_report", { job: "Hourly check-in", status: "done", when: "Hourly", next_at: hourAgo });
+    must(!r.isError, `Architectus reports its own job: ${r.text}`);
+    r = await tool(mainToken, "schedule_report", { job: "Hourly check-in", status: "started", as: "Pictor" });
+    must(r.isError && /agent token/.test(r.text), "an agent token can't report a job as someone else");
+    // The check-in's last report is moved back two hours, so its next run is an hour and more late: missed.
+    await db.update(schema.scheduleJobs).set({ lastAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), nextAt: new Date(Date.now() - 61 * 60 * 1000 - 60_000).toISOString() }).where(and(eq(schema.scheduleJobs.workspaceId, ws), eq(schema.scheduleJobs.jobKey, "hourly check-in")));
+    await page.goto(`${base}/forum`, { waitUntil: "networkidle" });
+    const jobRow = (name: string) => page.locator('[data-testid="forum-job"]', { hasText: name });
+    must((await jobRow("Aqueduct video run").getAttribute("data-state")) === "failed" && (await jobRow("Aqueduct video run").innerText()).includes("Mac offline"), "the failed run shows Failed with its reason");
+    must((await jobRow("Hourly check-in").getAttribute("data-state")) === "missed", "a job over an hour late with no report shows Missed");
+    must((await page.locator('[data-testid="forum-job-need"]', { hasText: "Aqueduct video run" }).count()) === 1, "the failure that's the owner's to fix is on What needs you");
+    must((await page.locator('[data-testid="forum-job-need"]', { hasText: "Hourly check-in" }).count()) === 0, "a missed job that didn't say it's the owner's to fix is not");
+    await submit(page, '[data-testid="forum-job"]:has-text("Aqueduct video run") [data-testid="forum-job-hide"]');
+    await page.goto(`${base}/forum`, { waitUntil: "networkidle" });
+    must((await jobRow("Aqueduct video run").count()) === 0 && (await page.locator('[data-testid="forum-job-need"]').count()) === 0, "Hide takes the row off the board and off What needs you");
+    await page.goto(`${base}/forum?jobs=all`, { waitUntil: "networkidle" });
+    must((await jobRow("Aqueduct video run").getAttribute("data-hidden")) === "1", "Show hidden brings it back, marked hidden");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/forum`, { waitUntil: "networkidle" });
+    const [sw, cw] = await page.evaluate(() => [document.scrollingElement!.scrollWidth, document.scrollingElement!.clientWidth]);
+    must(sw <= cw + 1, `the Forum doesn't scroll sideways at 390 (${sw} > ${cw})`);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    console.log("✓ the Schedule board: a failed job with its reason, a missed one worked out, the owner's failure on What needs you, Hide and Show hidden, 390 px");
 
     // ── A member can't reach any of it. ──
     await signIn("client@demo.helixos.app");

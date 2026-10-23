@@ -21,6 +21,8 @@ import { headProofObject, deleteProofObject, presignHandoffUpload, putHandoffObj
 import { drawFlows, reportToForum } from "@/lib/forum";
 import { heardFrom } from "@/lib/forum-watch";
 import { forumNameKey, looksLikeSecret } from "@/lib/engine/forum";
+import { asRefusal, asTargetRefusal, viaOwnersConnector } from "@/lib/engine/schedule";
+import type { Viewer } from "@/lib/auth";
 import { minuteOf, PING_TITLE } from "@/lib/engine/agent-connection";
 import {
   DANNO,
@@ -230,6 +232,22 @@ export async function callingAgent(o: Owner, agentId: string | null | undefined)
   return agent;
 }
 
+/**
+ * Who a connector call speaks as (H-1843): the connection's own agent, or with `as` one of the owner's Claude Cowork agents,
+ * only on the owner's own connection (never an agent token, a switched coach or a team member). `via` records it.
+ */
+export async function speakerFor(v: Pick<Viewer, "workspace" | "user" | "role" | "switchedInto" | "team">, call: { agentId?: string | null; agentToken?: boolean } | undefined, as: unknown): Promise<{ agent: schema.ForumAgent; via: string | null }> {
+  const o = { workspaceId: v.workspace.id, userId: v.user.id };
+  const name = typeof as === "string" ? as.trim() : "";
+  if (!name) return { agent: await callingAgent(o, call?.agentId), via: null };
+  const refused = asRefusal({ agentToken: Boolean(call?.agentToken), role: v.role, switched: Boolean(v.switchedInto), team: Boolean(v.team) });
+  if (refused) throw new Error(refused);
+  const agent = (await agentsOf(o)).find((a) => a.nameKey === forumNameKey(name)) ?? null;
+  const bad = asTargetRefusal(name, agent);
+  if (bad || !agent) throw new Error(bad ?? `There's no agent called "${name}".`);
+  return { agent, via: viaOwnersConnector(ownerFirst(v.user.name)) };
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------
 // Messages.
 
@@ -255,7 +273,7 @@ async function insertMessage(o: Owner, values: Omit<typeof schema.handoffMessage
 export type PostOutcome = { id: string; seq: number; needsApproval: boolean; reasons: string[]; removed: number };
 
 /** handoff_post: from the calling agent, never anyone else. */
-export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record<string, unknown>): Promise<PostOutcome> {
+export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record<string, unknown>, via: string | null = null): Promise<PostOutcome> {
   if (!(await allow(`handoff:post:${from.id}`, HANDOFF_POSTS_PER_MINUTE, 60_000))) throw new Error(`At most ${HANDOFF_POSTS_PER_MINUTE} posts a minute per agent. Wait a minute and post again.`);
   const parsed = parseHandoffPost(raw);
   if (!parsed.ok) throw new Error(parsed.error);
@@ -281,7 +299,7 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   const text = `${p.title}\n${p.body}`;
   const reasons = approvalNeeds(p.kind, p.needsApproval, text);
   const who = await ownerOf(o);
-  const row = await insertMessage(o, { fromAgentId: from.id, toIds: [...new Set(to)], kind: p.kind, title: p.title, body: p.body, replyToId, threadId, fileIds: p.files, needsApproval: reasons.length > 0, approvalReasons: reasons, claimsApproval: claimsApproval(text, who.first) }, [...new Set(to)]);
+  const row = await insertMessage(o, { fromAgentId: from.id, toIds: [...new Set(to)], kind: p.kind, title: p.title, body: p.body, replyToId, threadId, fileIds: p.files, needsApproval: reasons.length > 0, approvalReasons: reasons, claimsApproval: claimsApproval(text, who.first), via }, [...new Set(to)]);
   await audit(o, from.id, "post", hId(row.seq), p.title);
   // H-1494: a "Merged PR #N" post settles every open "needs you" item that names that PR.
   const mergedPr = /^Merged PR #(\d+)\b/i.exec(p.title);
@@ -289,7 +307,7 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   // H-351: a replacement marks the post it replaces in the same call (the agent's own post only).
   if (p.supersedes !== null) await supersedeHandoff(o, from.id, hId(p.supersedes), hId(row.seq));
   // A status message updates the sender's Forum building.
-  if (p.kind === "status") await reportToForum(o, { agent: from.name, status: "working", now: p.title }, "agent");
+  if (p.kind === "status") await reportToForum(o, { agent: from.name, status: "working", now: p.title }, "agent", via);
   // The road lights on its own (H-19): a flow to each recipient, the title as its label; a reply walks back the same road.
   const names = [...new Set(to)].map((id) => (id === DANNO ? "you" : (agents.find((a) => a.id === id)?.name ?? null))).filter((n): n is string => Boolean(n));
   await drawFlows(o, from, names, p.title, p.replyTo !== null, hId(row.seq));
@@ -312,7 +330,7 @@ export async function alertOwner(o: Owner, row: schema.HandoffMessage, fromName:
   await sendEmail(u.email, `${hId(row.seq)} needs your approval`, `${fromName} posted ${hId(row.seq)}, "${row.title}", and it needs your approval (${row.approvalReasons.join(", ")}).\n\nOpen your inbox: ${appUrl()}${inboxHref(true)}\n\nTurn these emails off on Coach → Inbox.`);
 }
 
-export type InboxItem = { id: string; ref: string; kind: string; from: string; to: string[]; title: string; body: string; replyTo: string | null; files: { id: string; name: string; size: number }[]; needsApproval: boolean; reasons: string[]; claimsApproval: boolean; decision: string | null; decisionFor: string | null; decidedAt: string | null; fromDanno: boolean; at: string; /** H-351 */ hold: { reason: string; at: string } | null; supersededBy: string | null; /** H-356: when the agent's inbox read took Danno's decision on this post; null until then. */ decisionReadAt: string | null; /** H-356: more than three minutes since the decision with no read. */ decisionLate: boolean; /** H-356: the deciding agent's last inbox read and its session link, for "not read yet" and Nudge. */ agentSeenAt: string | null; agentSessionUrl: string | null };
+export type InboxItem = { id: string; ref: string; kind: string; from: string; to: string[]; title: string; body: string; replyTo: string | null; files: { id: string; name: string; size: number }[]; needsApproval: boolean; reasons: string[]; claimsApproval: boolean; decision: string | null; decisionFor: string | null; decidedAt: string | null; fromDanno: boolean; at: string; /** H-351 */ hold: { reason: string; at: string } | null; supersededBy: string | null; /** H-356: when the agent's inbox read took Danno's decision on this post; null until then. */ decisionReadAt: string | null; /** H-356: more than three minutes since the decision with no read. */ decisionLate: boolean; /** H-356: the deciding agent's last inbox read and its session link, for "not read yet" and Nudge. */ agentSeenAt: string | null; agentSessionUrl: string | null; /** H-1843: "Danno's connector" when a Cowork agent posted with `as`. */ via: string | null };
 
 async function describe(o: Owner, rows: schema.HandoffMessage[], owner?: string): Promise<InboxItem[]> {
   if (!rows.length) return [];
@@ -367,6 +385,7 @@ async function describe(o: Owner, rows: schema.HandoffMessage[], owner?: string)
     decisionLate: !readAt.has(r.id) && !!r.decidedAt && Date.now() - new Date(r.decidedAt).getTime() > 3 * 60 * 1000,
     agentSeenAt: r.fromAgentId ? (seenAt.get(r.fromAgentId) ?? settings.find((x) => x.agentId === r.fromAgentId)?.lastCheckinAt ?? null) : null,
     agentSessionUrl: r.fromAgentId ? (settings.find((x) => x.agentId === r.fromAgentId)?.sessionUrl ?? null) : null,
+    via: r.via ?? null,
     at: r.createdAt,
   }));
 }

@@ -63,7 +63,7 @@ export type ReportOutcome = { ok: true; agentId: string; agent: string; created:
  * lines, a flow (which clears on its next report), a "needs you" item, cleared items, its road, the headline, and one event
  * per part. A dropped secret is one "removed" event, never the value.
  */
-export async function reportToForum(member: ForumMember, raw: unknown, source: Source): Promise<ReportOutcome> {
+export async function reportToForum(member: ForumMember, raw: unknown, source: Source, via: string | null = null): Promise<ReportOutcome> {
   // Only the owner's two keys go on: a caller's object may carry more (the webhook's settings row id), and every row below spreads it.
   const m: ForumMember = { workspaceId: member.workspaceId, userId: member.userId };
   if (!(await allow(`forum:report:${m.workspaceId}:${m.userId}`, FORUM_REPORTS_PER_MINUTE, 60_000))) return { ok: false, status: 429, text: `At most ${FORUM_REPORTS_PER_MINUTE} reports a minute reach a Forum. Wait a minute and send again.` };
@@ -72,8 +72,8 @@ export async function reportToForum(member: ForumMember, raw: unknown, source: S
   const r = parsed.report;
   const { agent, created } = await agentByName(m, r.agent, source);
   const at = r.at ?? nowIso();
-  await applyReport(m, agent, r, source, at);
-  if (parsed.removed.length) await db.insert(schema.forumEvents).values({ id: newId(), ...m, agentId: agent.id, kind: "removed", source, payload: { count: parsed.removed.length }, at });
+  await applyReport(m, agent, r, source, at, via);
+  if (parsed.removed.length) await db.insert(schema.forumEvents).values({ id: newId(), ...m, agentId: agent.id, kind: "removed", source, payload: { count: parsed.removed.length }, at, via });
   await pruneForum(m);
   const bits = [r.status ? `status ${r.status}` : null, r.needsYou ? "an item for What needs you" : null, r.flow ? `a message to ${r.flow.to}` : null].filter(Boolean);
   return {
@@ -86,7 +86,7 @@ export async function reportToForum(member: ForumMember, raw: unknown, source: S
   };
 }
 
-async function applyReport(m: ForumMember, agent: schema.ForumAgent, r: ForumReport, source: Source, at: string): Promise<void> {
+async function applyReport(m: ForumMember, agent: schema.ForumAgent, r: ForumReport, source: Source, at: string, via: string | null = null): Promise<void> {
   const set: Partial<typeof schema.forumAgents.$inferInsert> = { reportedAt: at, updatedAt: nowIso(), flowTo: null, flowLabel: null, flowAt: null, lastCallAt: at };
   // A status the agent reports itself is the truth: it ends any automatic light (H-19).
   if (r.status) Object.assign(set, { status: r.status, restStatus: null });
@@ -99,7 +99,7 @@ async function applyReport(m: ForumMember, agent: schema.ForumAgent, r: ForumRep
   // A report is a sign of life: a stall the watch flagged ends here (H-495).
   if (agent.stalledAt) await heardFrom(m, agent);
   const events: (typeof schema.forumEvents.$inferInsert)[] = [];
-  const ev = (kind: schema.ForumEvent["kind"], payload: Record<string, unknown>) => events.push({ id: newId(), ...m, agentId: agent.id, kind, source, payload, at });
+  const ev = (kind: schema.ForumEvent["kind"], payload: Record<string, unknown>) => events.push({ id: newId(), ...m, agentId: agent.id, kind, source, payload, at, via });
   if (r.status || r.has.now || r.has.last || r.has.next) ev("status", { status: r.status, now: r.now, last: r.last, next: r.next });
   if (r.flow) ev("flow", { to: r.flow.to, label: r.flow.label });
   if (r.queue) ev("queue", { count: r.queue.length });

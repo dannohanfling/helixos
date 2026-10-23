@@ -5,6 +5,7 @@
  * the share switch and the webhook secret are all the member's own: refused while a coach is switched in, and closed to a
  * team member. Ticking an item sends nothing back to the agent.
  */
+import { setScheduleHidden } from "@/lib/schedule";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { ctx, refresh, str } from "@/lib/action-helpers";
@@ -108,6 +109,13 @@ export async function tickForumNeedAction(fd: FormData): Promise<void> {
     .update(schema.forumNeeds)
     .set({ doneAt: nowIso(), doneBy: "member" })
     .where(and(eq(schema.forumNeeds.workspaceId, m.workspaceId), eq(schema.forumNeeds.userId, m.userId), eq(schema.forumNeeds.id, str(fd, "id")), isNull(schema.forumNeeds.doneAt)));
+  refresh();
+}
+
+/** The Schedule board (H-1843): hide a job's row, or show it again. Nothing is sent to the agent. */
+export async function setScheduleHiddenAction(fd: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: THEIRS });
+  await setScheduleHidden({ workspaceId, userId }, str(fd, "id"), str(fd, "hidden") === "1");
   refresh();
 }
 
