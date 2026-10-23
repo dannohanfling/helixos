@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ftsQuery, hasPrice, libraryBlock, momentOf, originRungs, rank, readFooter, readLibrary, readSource, readStoryBank, searchWords, statusOf, usedIds } from "../teaching";
+import { CHARACTER_RULE, STORY_TYPE_WORDS, ftsQuery, hasPrice, libraryBlock, momentOf, originRungs, rank, readFooter, readLibrary, readSource, readStoryBank, searchWords, statusOf, usedIds } from "../teaching";
 
 const LIBRARY = `# Accelerator answers
 
@@ -120,5 +120,51 @@ describe("Danno's teaching library and story bank (rev 615, answered at rev 618)
     // Everyday words are not a retelling: a Tuesday, some minutes and a friend in both are only a coincidence.
     const everyday = "Every Tuesday for ten minutes I already called one friend from the nightclub about promoter work.";
     expect(originRungs(everyday, ["On Tuesday it took minutes; I already told a friend.", "Ten minutes, already done, Tuesday again, ask a friend."])).toEqual([]);
+  });
+});
+
+describe("character stories (H-1441)", () => {
+  const BANK = `### Michael Jordan left off varsity
+
+Type: Character story
+What: As a high school sophomore he was left off the varsity team and played junior varsity that year. Careful: he was not "cut from the team"; he made JV.
+Exact words: "I've failed over and over and over again in my life. And that is why I succeed."
+Good for: Comment ladder, Webinar origin
+Publish status: Public facts, ok to use (fact-checked 21 Oct 2026)
+Source: https://www.biography.com/athletes/michael-jordan, https://www.nike.com/example. Also https://fathom.video/share/x?timestamp=10
+
+### Danno's first webinar
+
+Type: Story
+What: Three people came, and one of them was Danno.
+Publish status: Danno's own
+`;
+
+  it("reads Type: Character story as its own type, Ready by the usual rule, with its article links", () => {
+    const { entries, unreadable } = readStoryBank(BANK);
+    expect(unreadable).toEqual([]);
+    const jordan = entries.find((e) => e.title === "Michael Jordan left off varsity")!;
+    expect(jordan.type).toBe("character");
+    expect(jordan.status).toBe("ready");
+    expect(jordan.what).toContain("Careful: he was not");
+    expect(jordan.sourceLinks).toEqual(["https://www.biography.com/athletes/michael-jordan", "https://www.nike.com/example"]);
+    const own = entries.find((e) => e.title === "Danno's first webinar")!;
+    expect(own.type).toBe("story");
+    expect(own.sourceLinks).toEqual([]);
+  });
+
+  it("tells the writer to tell a character story in the third person, and only that kind", () => {
+    const block = libraryBlock([], [
+      { type: "character", title: "Michael Jordan left off varsity", what: "Left off varsity.", exactWords: null, numbers: null },
+      { type: "story", title: "Danno's first webinar", what: "Three people came.", exactWords: null, numbers: null },
+    ]);
+    expect(block).toContain("[S1] (character story) Michael Jordan left off varsity");
+    expect(block.match(new RegExp(CHARACTER_RULE.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))?.length).toBe(1);
+    expect(CHARACTER_RULE).toMatch(/third person/);
+    expect(CHARACTER_RULE).toMatch(/never as your own experience/);
+  });
+
+  it("labels the type for the Teaching library", () => {
+    expect(STORY_TYPE_WORDS.character).toBe("Character stories");
   });
 });

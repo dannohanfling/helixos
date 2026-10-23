@@ -95,6 +95,8 @@ defineTool({
         const a = assets.find((x) => x.id === id);
         const b = bank.find((x) => x.id === id);
         if (a) added.push({ name: a.name, summary: a.summary ?? a.body, when_to_use: a.useWhen ?? "" });
+        // A character story (H-1441) is someone else's: never one of the member's own representative stories.
+        else if (b && b.type === "character") notes.push(`"${b.title}" is a character story about someone else, so it can't be one of their own stories; it was left out.`);
         else if (b && b.status === "ready") added.push({ name: b.title, summary: b.what, when_to_use: "" });
         else if (b) notes.push(`Needs permission first: "${b.title}" is marked ${b.status === "check" ? "Check before using" : "Needs permission"}, so it was left out.`);
         else notes.push(`${id} isn't one of their stories, so it was left out.`);

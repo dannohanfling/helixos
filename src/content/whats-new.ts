@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 354,
+    n: 355,
     date: "2026-10-23",
     title: "Every page starts sooner, and you stay signed in",
     lines: [
@@ -21,6 +21,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "A tab left open while HelixOS updates moves to the new version on your next click instead of getting stuck loading.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 354,
+    date: "2026-10-23",
+    title: "Character stories in your Teaching library",
+    lines: [
+      "Your story bank now keeps true stories about other people, like a famous athlete's setback, as their own type: Character stories, under Other people's stories in the Type filter.",
+      "Each shows its source articles. The writer tells them about that person, never as your own story, and they stay out of All your material.",
+    ],
+    audience: "coach",
   },
   {
     n: 353,

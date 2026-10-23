@@ -2,12 +2,13 @@
  * The teaching library and story bank (rev 618): the coach uploads a library file and the story bank together, sees what was
  * added, priced and unreadable, uploads again and nothing doubles; sets a story's status and a re-upload keeps it; writes a
  * ladder that is given only ready, unpriced material and names what it used, shown on the ladder page with the call's moment.
+ * A character story (H-1441) is its own type, out of the default view, with its source links.
  * A client's ladder is never given any of it, and the page and the upload refuse a client.
  * Runs against scripts/mock-ai.ts; the dev server must be started with AI_BASE_URL=http://localhost:4020 (dev-server.sh does).
  */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
-import { LIBRARY, LIBRARY_FILE, STORIES, STORIES_FILE } from "./fixtures/teaching";
+import { CHARACTERS, CHARACTERS_FILE, LIBRARY, LIBRARY_FILE, STORIES, STORIES_FILE } from "./fixtures/teaching";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const aiPort = 4020;
@@ -155,6 +156,22 @@ async function main() {
     const kept = await db.query.storyItems.findFirst({ where: and(eq(schema.storyItems.userId, coach.id), eq(schema.storyItems.title, toClear.title)) });
     must(kept?.status === "ready" && kept.statusSetBy === coach.id, "the status Danno set stands over the file's on a re-upload");
     console.log("✓ a story cleared in the app stays cleared when the bank is uploaded again");
+
+    // A character story (H-1441): its own type, kept out of the coach's own material, told about them, with its sources
+    const charImport = await page.request.post(`${base}/api/teaching/import`, { data: { file: CHARACTERS_FILE, text: CHARACTERS } });
+    must(charImport.ok() && (await charImport.json()).added === 1, `the character story comes in, got ${charImport.status()}`);
+    const charTitle = "The lighthouse builder turned away twice";
+    await page.goto(`${base}/coach/teaching`);
+    await page.waitForLoadState("networkidle");
+    must((await page.locator('[data-testid="story-row"]').count()) === bank.entries.length && !(await page.locator('[data-testid="story-row"]').filter({ hasText: charTitle }).count()), "the default view shows the coach's own material only");
+    must((await page.locator('[data-testid="story-filter-type"] optgroup[label="Other people\'s stories"] option[value="character"]').count()) === 1, "the filter has Character stories under Other people's stories");
+    await page.goto(`${base}/coach/teaching?type=character`);
+    await page.waitForLoadState("networkidle");
+    const charRow = page.locator('[data-testid="story-row"]');
+    must((await charRow.count()) === 1 && (await charRow.innerText()).includes(charTitle) && (await charRow.innerText()).includes("Told about them, never as your own story."), "the character filter shows it, told about them");
+    const srcLinks = charRow.locator('[data-testid="story-link"]');
+    must((await srcLinks.count()) === 2 && (await srcLinks.first().getAttribute("href")) === "https://example.org/lighthouse-builder" && (await srcLinks.first().innerText()).includes("example.org"), "its two source links, named by site");
+    console.log("✓ a character story: its own filter, out of the default view, told about them, its sources linked");
 
     // A client: never given any of it, and the page and the upload refuse them
     await logout(page);

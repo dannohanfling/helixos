@@ -14,7 +14,7 @@ import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { createWebinar } from "@/lib/webinars-core";
 import { buildFor } from "@/lib/queries/webinar";
 import { subjectFor } from "@/lib/queries/subject";
-import { STATUS_WORDS } from "@/lib/engine/teaching-kinds";
+import { CHARACTER_RULE, STATUS_WORDS } from "@/lib/engine/teaching-kinds";
 import { BELIEF_COLUMN, BELIEF_FIELDS, BELIEF_TYPES, DRAFTABLE_STEPS, FOUNDATION_FIELDS, cleanFields, givenText, readDeckSlides, readDraftFields, type DraftableStep, type SlideDraft } from "@/lib/engine/webinar-drafts";
 import { slotForLine } from "@/lib/engine/deck-slot-rules";
 import { checkCitations, noteCreated, ownWebinar, pendingDrafts, saveDraft, sectionOf, type Actor } from "@/lib/webinar-drafts";
@@ -248,14 +248,14 @@ defineTool({
   name: "story_bank_list",
   scope: "webinars",
   kind: "read",
-  description: "The member's stories: those a webinar act can carry (their library's stories, and their Essence's as essence:<n>), and their story bank, each with its status. Only a story bank item marked Ready may be used; Check before using and Needs permission are held.",
+  description: "The member's stories: those a webinar act can carry (their library's stories, and their Essence's as essence:<n>), and their story bank, each with its status. Only a story bank item marked Ready may be used; Check before using and Needs permission are held. A character story (type character) is a true story about a famous person: tell it in the third person, never as the member's own, keep its facts and any \"Careful:\" note as written, and quote only its exactWords.",
   input: { limit: z.number().int().min(1).max(50).optional().describe("How many story bank items, default 25") },
   handler: async (v, input): Promise<ToolResult> => {
     const o = owner(v);
     const subject = await subjectFor(o);
     const actStories = [...subject.assets.filter((a) => a.type === "story").map((a) => ({ storyId: a.id, name: a.name, from: a.isExample ? "library (example)" : "library" })), ...subject.essenceStories.map((st, i) => ({ storyId: `essence:${i}`, name: st.name || st.summary.slice(0, 60), from: "Essence" }))];
     const bank = await db.query.storyItems.findMany({ where: and(eq(schema.storyItems.workspaceId, o.workspaceId), eq(schema.storyItems.userId, o.userId)), orderBy: [asc(schema.storyItems.status), asc(schema.storyItems.title)], limit: Number(input.limit ?? 25) });
-    const items = bank.map((s) => ({ id: s.id, title: s.title, type: s.type, what: s.what, status: STATUS_WORDS[s.status], usable: s.status === "ready", ...(s.status === "ready" ? { exactWords: s.exactWords, numbers: s.numbers } : {}) }));
+    const items = bank.map((s) => ({ id: s.id, title: s.title, type: s.type, what: s.what, status: STATUS_WORDS[s.status], usable: s.status === "ready", ...(s.status === "ready" ? { exactWords: s.exactWords, numbers: s.numbers } : {}), ...(s.type === "character" ? { tellAs: CHARACTER_RULE, sources: s.sourceLinks } : {}) }));
     const held = items.filter((i) => !i.usable).length;
     return { text: `${actStories.length} stor${actStories.length === 1 ? "y" : "ies"} a webinar act can carry (use storyId in beliefs), and ${items.length} story bank item${items.length === 1 ? "" : "s"}${held ? `, ${held} held until the member clears them` : ""}.`, data: { actStories, storyBank: items } };
   },
