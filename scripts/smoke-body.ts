@@ -57,6 +57,7 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   while (!(await field.isVisible())) {
     if (Date.now() > until) {
       // Why it isn't showing: a hidden ancestor (a streamed part not revealed yet), its box, and whether the page still draws.
+      const remedyRun = (await page.evaluate(`${"(async function(sel){\n  var el=document.querySelector(sel+' input[name=\"name\"]'); var det=el&&el.closest(\"details\"); var out=[];\n  if(!det) return [\"no fold\"];\n  function frame(){return new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(function(){r()})})})}\n  function cv(d){return getComputedStyle(d,\"::details-content\").contentVisibility}\n  out.push(\"tag=\"+det.outerHTML.slice(0,det.outerHTML.indexOf(\">\")+1).slice(0,120));\n  out.push(\"matchesOpenAttr=\"+det.matches(\"[open]\"));\n  try{out.push(\"matchesOpenClass=\"+det.matches(\":open\"))}catch(e){out.push(\"matchesOpenClass=n/a\")}\n  async function tryIt(name,fn){fn();await frame();out.push(name+\"=\"+el.checkVisibility()+\":\"+cv(det));return el.checkVisibility()}\n  if(await tryIt(\"frameOnly\",function(){})) return out;\n  await tryIt(\"close\",function(){det.open=false});\n  if(await tryIt(\"reopen\",function(){det.open=true})) return out;\n  if(await tryIt(\"displayToggle\",function(){det.style.display=\"none\";void det.offsetHeight;det.style.display=\"\"})) return out;\n  if(await tryIt(\"classToggle\",function(){det.classList.add(\"probe-x\");void det.offsetHeight;det.classList.remove(\"probe-x\")})) return out;\n  if(await tryIt(\"reinsert\",function(){var par=det.parentNode,nx=det.nextSibling;par.removeChild(det);par.insertBefore(det,nx)})) return out;\n  var c=det.cloneNode(true);det.after(c);await frame();var ci=c.querySelector('input[name=\"name\"]');out.push(\"clone=\"+(ci&&ci.checkVisibility())+\":\"+cv(c));c.remove();\n  return out;\n})"}(${JSON.stringify(inside)})`)) as string[];
       const why = await page.evaluate(async (sel) => {
         const el = document.querySelector(`${sel} input[name="name"]`) as HTMLElement | null;
         const hiddenBy: string[] = [];
@@ -72,31 +73,15 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
         for (let d = det?.parentElement?.closest("details") ?? null; d; d = d.parentElement?.closest("details") ?? null) outer.push(d.open ? "open" : "shut");
         const anims = el ? document.getAnimations().filter((a) => a.effect && (a.effect as KeyframeEffect).target && det?.contains((a.effect as KeyframeEffect).target as Node)).map((a) => `${(a as CSSAnimation).animationName ?? "?"}:${a.playState}:${Math.round(Number(a.currentTime ?? -1))}`) : [];
         const attr = det?.hasAttribute("open") ?? null;
-        // Probe: what brings a stuck fold back? Each remedy is tried in turn and the first that shows the field is named.
-        const frame = () => new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res())));
-        const remedies: string[] = [];
-        if (det && el) {
-          remedies.push(`tag=${det.outerHTML.slice(0, det.outerHTML.indexOf(">") + 1).slice(0, 120)}`);
-          remedies.push(`matchesOpenAttr=${det.matches("[open]")}`);
-          try { remedies.push(`matchesOpenClass=${det.matches(":open")}`); } catch { remedies.push("matchesOpenClass=n/a"); }
-          const tryIt = async (name: string, fn: () => void) => { fn(); await frame(); const ok = el.isConnected ? el.checkVisibility() : false; remedies.push(`${name}=${ok}:${getComputedStyle(det, "::details-content").contentVisibility}`); return ok; };
-          await tryIt("frameOnly", () => undefined);
-          if (!el.checkVisibility()) await tryIt("close", () => { det.open = false; });
-          if (!el.checkVisibility()) { det.open = true; await frame(); remedies.push(`reopenAfterFrame=${el.checkVisibility()}:${getComputedStyle(det, "::details-content").contentVisibility}`); }
-          if (!el.checkVisibility()) await tryIt("displayToggle", () => { det.style.display = "none"; void det.offsetHeight; det.style.display = ""; });
-          if (!el.checkVisibility()) await tryIt("classToggle", () => { det.classList.add("probe-x"); void det.offsetHeight; det.classList.remove("probe-x"); });
-          if (!el.checkVisibility()) await tryIt("reinsert", () => { const par = det.parentNode!; const nx = det.nextSibling; par.removeChild(det); par.insertBefore(det, nx); });
-          if (!el.checkVisibility()) { const c = det.cloneNode(true) as HTMLDetailsElement; det.after(c); await frame(); const ci = c.querySelector('input[name="name"]') as HTMLElement | null; remedies.push(`clone=${ci?.checkVisibility()}:${getComputedStyle(c, "::details-content").contentVisibility}`); c.remove(); }
-        }
         let afterReset: boolean | null = null;
         if (det && el) {
           det.removeAttribute("open");
           det.setAttribute("open", "");
           afterReset = el.checkVisibility();
         }
-        return { remedies, slotCV: slot?.contentVisibility ?? null, slotDisplay: slot?.display ?? null, attr, outer, anims, afterReset, found: Boolean(el), count: document.querySelectorAll(`${sel} input[name="name"]`).length, box: r ? [r.width, r.height] : null, check: el?.checkVisibility() ?? null, hiddenBy, drew, state: document.visibilityState, loading: document.querySelectorAll('[data-testid="page-loading"]').length };
+        return { slotCV: slot?.contentVisibility ?? null, slotDisplay: slot?.display ?? null, attr, outer, anims, afterReset, found: Boolean(el), count: document.querySelectorAll(`${sel} input[name="name"]`).length, box: r ? [r.width, r.height] : null, check: el?.checkVisibility() ?? null, hiddenBy, drew, state: document.visibilityState, loading: document.querySelectorAll('[data-testid="page-loading"]').length };
       }, inside);
-      throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()}): ${JSON.stringify(why)}`);
+      throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()}): ${JSON.stringify(why)} remedies: ${JSON.stringify(remedyRun)}`);
     }
     if (!(await isOpen())) {
       await sum.click();
