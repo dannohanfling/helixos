@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 355,
+    n: 354,
     date: "2026-10-23",
     title: "Character stories in your Teaching library",
     lines: [
@@ -20,6 +20,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "Each shows its source articles. The writer tells them about that person, never as your own story, and they stay out of All your material.",
     ],
     audience: "coach",
+  },
+  {
+    n: 353,
+    date: "2026-10-23",
+    title: "A form brought back after a reload always shows",
+    lines: [
+      "When a reload brings back what you were typing, the form now always opens where you can see it. Before, on Nutrition, it could open looking empty until you left the page.",
+    ],
+    audience: "everyone",
   },
   {
     n: 352,

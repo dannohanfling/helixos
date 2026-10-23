@@ -46,12 +46,54 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   const sum = page.locator("summary", { hasText: summary });
   await sum.waitFor({ timeout: 30000 });
   const field = page.locator(`${inside} input[name="name"]`).first();
-  // A click that lands before the page hydrates can be undone by it (right after a reload on a busy server): try again.
-  for (let i = 0; i < 4 && !(await field.isVisible()); i++) {
-    await sum.click();
-    await field.waitFor({ state: "visible", timeout: 3000 }).catch(() => undefined);
+  const isOpen = () => page.evaluate((sel) => Boolean(document.querySelector(sel)?.closest("details")?.open), inside);
+  // Let the page's scripts arrive first: hydration shuts a Disclosure opened before it.
+  await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => undefined);
+  // Click only a closed Disclosure: a restored draft opens it on its own, so "not visible yet" must never mean "click again".
+  // Open but still not showing after 2 s: shut and open it again. If it never shows, the error says why (a hidden ancestor, the
+  // fold's own content slot, whether the page still draws), so a stuck fold is reported, never passed over.
+  const until = Date.now() + 25000;
+  let openSince = 0;
+  while (!(await field.isVisible())) {
+    if (Date.now() > until) {
+      // Why it isn't showing: a hidden ancestor (a streamed part not revealed yet), its box, and whether the page still draws.
+      const why = await page.evaluate(async (sel) => {
+        const el = document.querySelector(`${sel} input[name="name"]`) as HTMLElement | null;
+        const hiddenBy: string[] = [];
+        for (let a = el?.parentElement; a; a = a.parentElement) {
+          const cs = getComputedStyle(a);
+          if (a.hidden || cs.display === "none" || cs.visibility === "hidden" || cs.contentVisibility === "hidden") hiddenBy.push(`${a.tagName.toLowerCase()}${a.id ? `#${a.id}` : ""}${a.hidden ? "[hidden]" : ""} ${cs.display}/${cs.visibility}/${cs.contentVisibility}`);
+        }
+        const drew = await Promise.race([new Promise<boolean>((r) => requestAnimationFrame(() => r(true))), new Promise<boolean>((r) => setTimeout(() => r(false), 1000))]);
+        const r = el?.getBoundingClientRect();
+        const det = el?.closest("details") ?? null;
+        const slot = det ? getComputedStyle(det, "::details-content") : null;
+        const outer: string[] = [];
+        for (let d = det?.parentElement?.closest("details") ?? null; d; d = d.parentElement?.closest("details") ?? null) outer.push(d.open ? "open" : "shut");
+        const anims = el ? document.getAnimations().filter((a) => a.effect && (a.effect as KeyframeEffect).target && det?.contains((a.effect as KeyframeEffect).target as Node)).map((a) => `${(a as CSSAnimation).animationName ?? "?"}:${a.playState}:${Math.round(Number(a.currentTime ?? -1))}`) : [];
+        const attr = det?.hasAttribute("open") ?? null;
+        let afterReset: boolean | null = null;
+        if (det && el) {
+          det.removeAttribute("open");
+          det.setAttribute("open", "");
+          afterReset = el.checkVisibility();
+        }
+        return { slotCV: slot?.contentVisibility ?? null, slotDisplay: slot?.display ?? null, attr, outer, anims, afterReset, found: Boolean(el), count: document.querySelectorAll(`${sel} input[name="name"]`).length, box: r ? [r.width, r.height] : null, check: el?.checkVisibility() ?? null, hiddenBy, drew, state: document.visibilityState, loading: document.querySelectorAll('[data-testid="page-loading"]').length };
+      }, inside);
+      throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()}): ${JSON.stringify(why)}`);
+    }
+    if (!(await isOpen())) {
+      await sum.click();
+      openSince = Date.now();
+    } else if (!openSince) openSince = Date.now();
+    else if (Date.now() - openSince > 2000) {
+      await sum.click();
+      await page.waitForTimeout(200);
+      await sum.click();
+      openSince = Date.now();
+    }
+    await page.waitForTimeout(300);
   }
-  await field.waitFor({ state: "visible", timeout: 10000 });
 }
 const entryCount = (page: Page) => page.locator('[data-testid="body-entry"]').count();
 async function noSideScroll(page: Page, where: string) {
@@ -233,7 +275,8 @@ async function main() {
         await fillExact(client, '[data-testid="body-new-food"] input[name="p"]', String(f.p));
       }
       if (key === FOODS[1]) {
-        // A long form keeps a draft: the page reloaded before Save brings back what was typed.
+        // A long form keeps a draft: the page reloaded before Save brings back what was typed, with the form in sight (the
+        // fold the draft opens used to stay shut on screen in Chrome now and then, H-1752).
         await client.waitForTimeout(500);
         await client.reload();
         await openDisclosure(client, "New food", '[data-testid="body-new-food"]');
@@ -250,7 +293,7 @@ async function main() {
     }
     await client.reload();
     if (await client.locator('[data-testid="draft-restored"]:visible').count()) throw new Error("a saved food leaves no draft behind");
-    console.log("✓ rev 444 on Foods: protein typed as a word is refused with only that box marked and the rest kept; a reloaded form brings its draft back; a save drops it");
+    console.log("✓ rev 444 on Foods: protein typed as a word is refused with only that box marked and the rest kept; a reloaded form brings its draft back, in sight; a save drops it");
     const foods = await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) });
     if ((await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, fx("white-cheddar").name)) }))?.capTag !== "cheese") throw new Error("the tag field saves a cap tag");
     if ((await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, fx("egg").name)) }))?.sodium !== EGG_SODIUM) throw new Error("sodium saves on the food");
