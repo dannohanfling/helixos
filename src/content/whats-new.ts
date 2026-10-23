@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 355,
+    date: "2026-10-23",
+    title: "Character stories in your Teaching library",
+    lines: [
+      "Your story bank now keeps true stories about other people, like a famous athlete's setback, as their own type: Character stories, under Other people's stories in the Type filter.",
+      "Each shows its source articles. The writer tells them about that person, never as your own story, and they stay out of All your material.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 352,
     date: "2026-10-23",
     title: "Filmed water at the first two arches of the Aqueduct",

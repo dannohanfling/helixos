@@ -45,3 +45,14 @@ Publish status: Danno's own, ok to use
 ## Nothing to say
 Type: Story
 `;
+
+/** A character story (H-1441): someone else's true story, told about them, with its article links. Invented for the walk. */
+export const CHARACTERS_FILE = "Story Bank characters.md";
+export const CHARACTERS = `# Story bank: characters
+
+## The lighthouse builder turned away twice
+Type: Character story
+What: The harbour board turned the builder's plan away twice before the third was taken. Careful: it was the plan that was refused, not the builder.
+Publish status: Public facts, ok to use
+Source: https://example.org/lighthouse-builder, https://example.com/harbour-history
+`;

@@ -1,0 +1,1 @@
+ALTER TABLE `story_items` ADD `source_links` text DEFAULT '[]' NOT NULL;

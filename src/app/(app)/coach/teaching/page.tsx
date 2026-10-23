@@ -1,16 +1,26 @@
 import Link from "next/link";
-import { and, count, desc, eq, like, or } from "drizzle-orm";
+import { and, count, desc, eq, like, ne, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { setStoryStatusAction } from "@/lib/actions/teaching";
-import { STATUS_WORDS, STORY_STATUSES, STORY_TYPES, momentOf, type StoryStatus } from "@/lib/engine/teaching";
+import { STATUS_WORDS, STORY_STATUSES, STORY_TYPES, STORY_TYPE_WORDS, momentOf, type StoryStatus } from "@/lib/engine/teaching";
 import { TeachingUpload } from "@/components/teaching-upload";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Teaching library" };
 
-const TYPE_WORDS: Record<string, string> = { story: "Story", framework: "Framework", number: "Number", line: "Line", client_result: "Client result", analogy: "Analogy" };
+const TYPE_WORDS: Record<string, string> = STORY_TYPE_WORDS;
+/** Danno's own material, and other people's stories in their own group (H-1441) so they never mix with his. */
+const OWN_TYPES = STORY_TYPES.filter((t) => t !== "character");
+/** "www.biography.com" from a source address, for its link's words. */
+const siteOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url.slice(0, 40);
+  }
+};
 const PAGE = 50;
 
 /**
@@ -25,7 +35,8 @@ export default async function TeachingPage({ searchParams }: { searchParams: Pro
   const q = (sp.q ?? "").trim().slice(0, 80);
   const page = Math.max(1, Number(sp.page) || 1);
   const mine = eq(schema.storyItems.userId, v.user.id);
-  const where = and(mine, type ? eq(schema.storyItems.type, type as (typeof STORY_TYPES)[number]) : undefined, status ? eq(schema.storyItems.status, status) : undefined, q ? or(like(schema.storyItems.title, `%${q}%`), like(schema.storyItems.what, `%${q}%`)) : undefined);
+  // No type picked shows Danno's own material; character stories only when that type is picked (H-1441).
+  const where = and(mine, type ? eq(schema.storyItems.type, type as (typeof STORY_TYPES)[number]) : ne(schema.storyItems.type, "character"), status ? eq(schema.storyItems.status, status) : undefined, q ? or(like(schema.storyItems.title, `%${q}%`), like(schema.storyItems.what, `%${q}%`)) : undefined);
   const [library, byStatus, stories, total] = await Promise.all([
     db.select({ n: count() }).from(schema.teachingEntries).where(eq(schema.teachingEntries.userId, v.user.id)),
     db.select({ status: schema.storyItems.status, n: count() }).from(schema.storyItems).where(mine).groupBy(schema.storyItems.status),
@@ -50,8 +61,13 @@ export default async function TeachingPage({ searchParams }: { searchParams: Pro
         <form method="get" className="mb-3 flex flex-wrap items-end gap-2" data-testid="story-filters">
           <label className="text-xs">Type
             <select name="type" defaultValue={type} className="field mt-1 py-1 text-xs" data-testid="story-filter-type">
-              <option value="">Every type</option>
-              {STORY_TYPES.map((t) => <option key={t} value={t}>{TYPE_WORDS[t]}</option>)}
+              <option value="">All your material</option>
+              <optgroup label="Your material">
+                {OWN_TYPES.map((t) => <option key={t} value={t}>{TYPE_WORDS[t]}</option>)}
+              </optgroup>
+              <optgroup label="Other people's stories">
+                <option value="character">{TYPE_WORDS.character}</option>
+              </optgroup>
             </select>
           </label>
           <label className="text-xs">Status
@@ -77,11 +93,22 @@ export default async function TeachingPage({ searchParams }: { searchParams: Pro
                   </div>
                   <p className="mt-1 line-clamp-3 whitespace-pre-line text-ink-2">{s.what}</p>
                   {s.goodFor ? <p className="mt-1 text-xs text-ink-3">Good for: {s.goodFor}</p> : null}
+                  {s.type === "character" ? <p className="mt-1 text-xs text-ink-3">Told about them, never as your own story.</p> : null}
+                  {s.sourceLinks.length ? (
+                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs" data-testid="story-links">
+                      <span className="text-ink-3">Sources:</span>
+                      {s.sourceLinks.map((u) => (
+                        <a key={u} href={u} target="_blank" rel="noreferrer" className="text-accent underline" data-testid="story-link">
+                          {siteOf(u)} ↗
+                        </a>
+                      ))}
+                    </p>
+                  ) : null}
                   {s.fathomUrl ? (
                     <a href={s.fathomUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-accent underline" data-testid="story-source">
                       {[s.sourceCall, s.sourceDate].filter(Boolean).join(", ") || "The call"}{momentOf(s.fathomUrl) ? ` at ${momentOf(s.fathomUrl)}` : ""} ↗
                     </a>
-                  ) : s.sourceCall || s.sourceDate ? <p className="mt-1 text-xs text-ink-3">{[s.sourceCall, s.sourceDate].filter(Boolean).join(", ")}</p> : null}
+                  ) : (s.sourceCall || s.sourceDate) && !s.sourceLinks.length ? <p className="mt-1 text-xs text-ink-3">{[s.sourceCall, s.sourceDate].filter(Boolean).join(", ")}</p> : null}
                 </div>
                 <form action={setStoryStatusAction} className="flex items-center gap-2">
                   <input type="hidden" name="id" value={s.id} />

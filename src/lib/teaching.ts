@@ -53,10 +53,10 @@ async function importStories(workspaceId: string, userId: string, text: string):
   const existing = new Map(rows.map((r) => [r.key, r]));
   for (const e of read.entries) {
     if (e.hasPrice) counts.priced++;
-    const h = sum([e.title, e.type, e.what, e.exactWords, e.numbers, e.goodFor, e.rawStatus, e.sourceCall, e.sourceDate, e.fathomUrl]);
+    const h = sum([e.title, e.type, e.what, e.exactWords, e.numbers, e.goodFor, e.rawStatus, e.sourceCall, e.sourceDate, e.fathomUrl, ...(e.sourceLinks.length ? [e.sourceLinks] : [])]);
     const was = existing.get(e.key);
     if (was && was.digest === h) { counts.unchanged++; continue; }
-    const row = { title: e.title, type: e.type, what: e.what, exactWords: e.exactWords, numbers: e.numbers, goodFor: e.goodFor, rawStatus: e.rawStatus, sourceCall: e.sourceCall, sourceDate: e.sourceDate, fathomUrl: e.fathomUrl, hasPrice: e.hasPrice, digest: h, updatedAt: nowIso() };
+    const row = { title: e.title, type: e.type, what: e.what, exactWords: e.exactWords, numbers: e.numbers, goodFor: e.goodFor, rawStatus: e.rawStatus, sourceCall: e.sourceCall, sourceDate: e.sourceDate, fathomUrl: e.fathomUrl, sourceLinks: e.sourceLinks, hasPrice: e.hasPrice, digest: h, updatedAt: nowIso() };
     const id = was?.id ?? newId();
     // A status Danno set in the app stands over the file's on a re-upload.
     if (was) { await db.update(schema.storyItems).set({ ...row, ...(was.statusSetBy ? {} : { status: e.status }) }).where(and(eq(schema.storyItems.id, id), eq(schema.storyItems.userId, userId))); counts.updated++; }

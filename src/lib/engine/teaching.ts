@@ -10,11 +10,11 @@
  */
 import { createHash } from "node:crypto";
 
-import { STORY_TYPES, type StoryStatus, type StoryType } from "./teaching-kinds";
-export { STATUS_WORDS, STORY_STATUSES, STORY_TYPES, type StoryStatus, type StoryType } from "./teaching-kinds";
+import { CHARACTER_RULE, STORY_TYPES, type StoryStatus, type StoryType } from "./teaching-kinds";
+export { CHARACTER_RULE, STATUS_WORDS, STORY_STATUSES, STORY_TYPES, STORY_TYPE_WORDS, type StoryStatus, type StoryType } from "./teaching-kinds";
 
 export type TeachingEntry = { key: string; question: string; answer: string; topic: string | null; category: string | null; taughtOn: string | null; callType: string | null; hasPrice: boolean };
-export type StoryItem = { key: string; title: string; type: StoryType; what: string; exactWords: string | null; numbers: string | null; goodFor: string | null; status: StoryStatus; rawStatus: string | null; sourceCall: string | null; sourceDate: string | null; fathomUrl: string | null; hasPrice: boolean };
+export type StoryItem = { key: string; title: string; type: StoryType; what: string; exactWords: string | null; numbers: string | null; goodFor: string | null; status: StoryStatus; rawStatus: string | null; sourceCall: string | null; sourceDate: string | null; fathomUrl: string | null; sourceLinks: string[]; hasPrice: boolean };
 export type ReadResult<T> = { entries: T[]; unreadable: string[] };
 
 const hash = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 24);
@@ -36,6 +36,7 @@ export function statusOf(raw: string | null | undefined): StoryStatus {
 export function typeOf(raw: string | null | undefined): StoryType | null {
   const r = norm(raw ?? "");
   if (r.startsWith("client result")) return "client_result";
+  if (r.startsWith("character")) return "character";
   return (STORY_TYPES as readonly string[]).includes(r) ? (r as StoryType) : null;
 }
 
@@ -82,6 +83,12 @@ export function readLibrary(text: string): ReadResult<TeachingEntry> {
 }
 
 const FIELD = /^(type|what|exact words|numbers|good for|publish status|source)\s*:\s*(.*)$/i;
+
+/** Every web address in a Source line other than a Fathom recording, in order, once each (a character story's articles, H-1441). */
+export function sourceLinksOf(raw: string | null): string[] {
+  const urls = (raw ?? "").match(/https?:\/\/[^\s)>\]"']+/g) ?? [];
+  return [...new Set(urls.map((u) => u.replace(/[.,;:]+$/, "")).filter((u) => !/^https:\/\/(?:[\w-]+\.)?fathom\.video\//.test(u)))].slice(0, 8);
+}
 
 /** "Accelerator call, 2026-08-14, https://fathom.video/share/x?timestamp=724" → its call, date and Fathom link. */
 export function readSource(raw: string | null): { sourceCall: string | null; sourceDate: string | null; fathomUrl: string | null } {
@@ -149,6 +156,7 @@ export function readStoryBank(text: string): ReadResult<StoryItem> {
       status: statusOf(f["publish status"]),
       rawStatus: f["publish status"]?.trim() || null,
       ...readSource(f.source ?? null),
+      sourceLinks: sourceLinksOf(f.source ?? null),
       hasPrice: hasPrice(what, exact, f.numbers),
     });
   }
@@ -189,7 +197,7 @@ export const TAKE = { teaching: 12, stories: 8 } as const;
 export function libraryBlock(teaching: Pick<TeachingEntry, "question" | "answer">[], stories: Pick<StoryItem, "type" | "title" | "what" | "exactWords" | "numbers">[], frameworks: string[] = []): string {
   if (!teaching.length && !stories.length && !frameworks.length) return "";
   const t = teaching.map((e, i) => `[T${i + 1}] Q: ${e.question}\nA: ${e.answer.slice(0, 1200)}`);
-  const s = stories.map((e, i) => `[S${i + 1}] (${e.type.replace("_", " ")}) ${e.title}\nWhat: ${e.what.slice(0, 800)}${e.exactWords ? `\nExact words: ${e.exactWords}` : ""}${e.numbers ? `\nNumbers: ${e.numbers}` : ""}`);
+  const s = stories.map((e, i) => `[S${i + 1}] (${e.type === "character" ? "character story" : e.type.replace("_", " ")}) ${e.title}\nWhat: ${e.what.slice(0, 800)}${e.exactWords ? `\nExact words: ${e.exactWords}` : ""}${e.numbers ? `\nNumbers: ${e.numbers}` : ""}${e.type === "character" ? `\n${CHARACTER_RULE}` : ""}`);
   return [
     `FROM YOUR TEACHING LIBRARY, STORY BANK${frameworks.length ? " AND FRAMEWORKS" : ""} (use what fits; quote Exact words exactly; numbers only as written; never a price; a framework's steps in their order; name the ids you used in MATERIAL_USED):`,
     ...t,
