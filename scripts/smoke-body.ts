@@ -51,11 +51,23 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => undefined);
   // Click only a closed Disclosure: a restored draft opens it on its own, and a dev server can hold the next frame for seconds
   // after a reload (the form's open animation waits at its first frame), so "not visible yet" must never mean "click again".
+  // Open but still not showing after 2 s: shut and open it again, which starts its open animation afresh (a restored draft can
+  // open it while the page isn't drawing yet, and the animation then waits at its first frame, opacity 0).
   const until = Date.now() + 25000;
+  let openSince = 0;
   while (!(await field.isVisible())) {
     if (Date.now() > until) throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()})`);
-    if (!(await isOpen())) await sum.click();
-    await page.waitForTimeout(500);
+    if (!(await isOpen())) {
+      await sum.click();
+      openSince = Date.now();
+    } else if (!openSince) openSince = Date.now();
+    else if (Date.now() - openSince > 2000) {
+      await sum.click();
+      await page.waitForTimeout(200);
+      await sum.click();
+      openSince = Date.now();
+    }
+    await page.waitForTimeout(300);
   }
 }
 const entryCount = (page: Page) => page.locator('[data-testid="body-entry"]').count();
