@@ -63,7 +63,7 @@ async function main() {
     await page.getByTestId("arena-page").waitFor({ timeout: 30000 });
     must((await page.getByTestId("arena-huddle").count()) === 0, "no Huddle check-in before Maya is in");
     if (await page.getByTestId("arena-join").count()) {
-      await Promise.all([page.waitForURL(/arena=in/, { timeout: 30000 }), page.getByTestId("arena-join").first().click()]);
+      await Promise.all([page.waitForURL(/arena=in/, { timeout: 30000 }), page.locator('[data-testid="arena-join"]:visible').first().click()]);
     } else {
       // After Thu 26 Nov joining is closed: the walk puts Maya in directly.
       await db.insert(schema.arenaEntries).values({ id: newId(), workspaceId: W, userId: maya.id, membershipId: mm.id, challengeId: c.id, joinedAt: new Date().toISOString() });
@@ -99,7 +99,7 @@ async function main() {
     must((await coach.getByTestId("coach-arena-pod-member").filter({ hasText: maya.name }).getAttribute("data-captain")) === "1", "Maya is marked Captain");
     console.log("✓ the coach sees the pods and names Maya captain");
 
-    await page.goto(`${base}/arena#pods`);
+    await page.goto(`${base}/arena?look=pod#pods`);
     const myPod = page.getByTestId("arena-my-pod");
     await myPod.waitFor({ timeout: 20000 });
     must((await myPod.getAttribute("data-captain")) === "1", "Maya's pod card is the captain's view");
@@ -107,22 +107,26 @@ async function main() {
     must((await page.getByTestId("arena-pod-member").first().innerText()).match(/days closed/), "with their days closed and last close");
     console.log("✓ as captain, Maya sees her pod's days closed and last close");
 
-    if (pods.length > 1) {
+    {
+      if (pods.length === 1) {
+        // A small database fills one pod: the coach adds a second, as they would to split one.
+        await Promise.all([coach.waitForURL(/pods=new/, { timeout: 30000 }), coach.getByTestId("coach-arena-newpod").click()]);
+        must((await coach.getByTestId("coach-arena-pod").count()) === 2, "New pod adds an empty pod");
+      }
+      const all = await db.query.arenaPods.findMany({ where: eq(schema.arenaPods.challengeId, c.id) });
       const row = coach.getByTestId("coach-arena-pod-member").filter({ hasText: maya.name });
-      const other = pods.find((p) => p.id !== entry!.podId)!;
+      const other = all.find((p) => p.id !== entry!.podId)!;
       await row.getByTestId("coach-arena-move-to").selectOption(other.id);
       await Promise.all([coach.waitForURL(/pods=moved/, { timeout: 30000 }), row.getByTestId("coach-arena-move").click()]);
       must((await mine())?.podId === other.id, "Maya is in the other pod");
       const was = await db.query.arenaPods.findFirst({ where: eq(schema.arenaPods.id, entry!.podId!) });
       must(was?.captainMembershipId !== mm.id, "moving her ends her captaincy of the old pod");
       console.log("✓ the coach moves Maya to another pod, and she stops being the old pod's captain");
-    } else {
-      console.log("· one pod only in this database: the move is checked by the unit tests");
     }
 
     // A test Huddle that starts in ten minutes: its check-in is live now.
     await db.insert(schema.arenaHuddles).values({ id: testHuddle, workspaceId: W, challengeId: c.id, startsAt: new Date(Date.now() + 10 * 60_000).toISOString(), label: "Walk test" });
-    await page.goto(`${base}/arena#huddles`);
+    await page.goto(`${base}/arena?look=huddle#huddles`);
     const here = page.getByTestId("arena-huddle-here");
     await here.waitFor({ timeout: 20000 });
     await Promise.all([page.waitForURL(/huddle=here/, { timeout: 30000 }), here.click()]);
