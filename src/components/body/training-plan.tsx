@@ -3,6 +3,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/dates";
 import { fmtTarget } from "@/lib/engine/body-training";
 import { typeLabel } from "@/lib/engine/body-plan";
+import { LastSessionLine, LastSetsLine } from "@/components/body/last-time";
 import type { PlannedDay, routinePreview } from "@/lib/queries/body";
 import { setDayOffAction, setPlanDayAction, startSessionAction, swapPlanDaysAction } from "@/lib/actions/body";
 
@@ -29,7 +30,7 @@ export function TodayPlanCard({ day, preview, unit, prs, habits }: { day: Planne
       ) : null}
       {done ? (
         <p className="mt-1 text-sm">
-          <a href="#workout-read" className="underline" data-testid="training-today-read">
+          <a href="#workout-read" className="btn btn-soft min-h-11" data-testid="training-today-read">
             The post-workout read ↓
           </a>
         </p>
@@ -67,6 +68,7 @@ export function TodayPlanCard({ day, preview, unit, prs, habits }: { day: Planne
         </div>
       ) : day.routine && preview ? (
         <div className="mt-2 space-y-3">
+          <LastSessionLine last={preview[0]?.lastSession ?? null} routineName={day.name} />
           <p className="text-xs text-ink-3" data-testid="training-today-meta">
             {day.exercises} exercise{day.exercises === 1 ? "" : "s"}
             {day.muscles.length ? ` · ${day.muscles.join(" · ")}` : ""}
@@ -84,9 +86,9 @@ export function TodayPlanCard({ day, preview, unit, prs, habits }: { day: Planne
                     {x.weight != null ? <span data-testid="training-today-weight"> · next {x.weight} {unit}</span> : null}
                   </span>
                 </div>
-                <div className="mt-0.5 text-xs text-ink-3">
-                  {x.last.length ? `Last time (${formatDate(x.lastDate!, { month: "short", day: "numeric" })}): ${x.last.join(" · ")}` : "First time"}
-                  {x.pr ? ` · PR ${x.pr}` : ""}
+                <div className="mt-0.5 text-xs text-ink-2" data-testid="training-today-last">
+                  <LastSetsLine last={x.lastSets} testId="training-today-last" />
+                  {x.pr ? <span className="text-ink-3"> · PR {x.pr}</span> : null}
                 </div>
               </li>
             ))}
@@ -100,12 +102,12 @@ export function TodayPlanCard({ day, preview, unit, prs, habits }: { day: Planne
           </form>
         </div>
       ) : (
-        <p className="mt-1 text-sm text-ink-2">
-          Nothing in the rotation for today.{" "}
-          <Link href="/body/settings#training-plan" className="underline">
-            Training plan
+        <div className="mt-2 space-y-2 text-sm">
+          <p className="text-ink-2">Nothing in the rotation for today.</p>
+          <Link href="/body/settings#training-plan" className="btn btn-soft min-h-11" data-testid="training-today-plan-link">
+            Set your training plan
           </Link>
-        </p>
+        </div>
       )}
     </section>
   );
@@ -124,7 +126,7 @@ export function WeekPlanList({ days, routines }: { days: PlannedDay[]; routines:
     <section className="card mb-3 p-4" id="week-plan">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h2 className="font-semibold">Next 7 days</h2>
-        <Link href="/body/settings#training-plan" className="text-xs text-ink-2 hover:underline" data-testid="training-plan-settings">
+        <Link href="/body/settings#training-plan" className="btn btn-soft btn-sm min-h-11" data-testid="training-plan-settings">
           Training plan
         </Link>
       </div>

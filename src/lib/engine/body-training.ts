@@ -144,3 +144,44 @@ export function weekTally(dates: string[], hasSets: (date: string) => boolean, r
   const planned = dates.filter(routineOffered).length;
   return { done, planned: planned > 0 ? planned : null };
 }
+
+/* ───────── H-1790: last time = the last finished session of the same workout, warm-ups first ───────── */
+
+export type SessionLike = { id: string; date: string; routineId: string | null; routineName: string | null; completedAt: string | null };
+export type LoggedSet = SetLike & { sessionId: string; exerciseId: string; warmup: boolean };
+/** One exercise's last time: from the same workout's last session ("same") or, missing there, its own last day ("other"). */
+export type LastSets<S> = { from: "same" | "other"; date: string; routineName: string | null; warmups: S[]; working: S[] };
+
+/**
+ * Last time for a workout (H-1790). The session is the routine's last finished one before `date` with sets in it. Each exercise
+ * shows every set it had there, warm-ups first; an exercise with no working set there falls back to its own last day with working
+ * sets, labelled by that day's routine. Working sets alone feed PRs, up / held / down and next weight. Sets in logged order.
+ */
+export function lastSameWorkout<S extends LoggedSet>(sessions: SessionLike[], sets: S[], routineId: string | null, date: string) {
+  const withSets = new Set(sets.map((s) => s.sessionId));
+  const prior = routineId
+    ? (sessions.filter((s) => s.routineId === routineId && s.date < date && s.completedAt && withSets.has(s.id)).sort((a, b) => b.date.localeCompare(a.date))[0] ?? null)
+    : null;
+  const nameOf = (sessionId: string) => sessions.find((s) => s.id === sessionId)?.routineName ?? null;
+  const pack = (from: LastSets<S>["from"], d: string, routineName: string | null, ss: S[]): LastSets<S> => ({ from, date: d, routineName, warmups: ss.filter((s) => s.warmup), working: ss.filter((s) => !s.warmup) });
+  return {
+    session: prior ? { id: prior.id, date: prior.date, routineName: prior.routineName } : null,
+    forExercise(exerciseId: string): LastSets<S> | null {
+      const mine = sets.filter((s) => s.exerciseId === exerciseId && s.date < date);
+      if (prior) {
+        const there = mine.filter((s) => s.sessionId === prior.id);
+        if (there.some((s) => !s.warmup)) return pack("same", prior.date, prior.routineName, there);
+      }
+      const working = lastTime(mine.filter((s) => !s.warmup), date);
+      if (!working.length) return null;
+      const day = working[0].date;
+      return pack("other", day, nameOf(working[0].sessionId), mine.filter((s) => s.date === day));
+    },
+  };
+}
+
+/** The set from last time that matches today's next one (H-1790's "Same as last"): warm-ups first, then working, by position. */
+export function sameAsLast<S>(last: LastSets<S> | null, loggedToday: number): S | null {
+  if (!last) return null;
+  return [...last.warmups, ...last.working][loggedToday] ?? null;
+}

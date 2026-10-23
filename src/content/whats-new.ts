@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 375,
+    date: "2026-10-23",
+    title: "Last time shows your last session of the same workout, warm-ups first",
+    lines: [
+      "On Training, the top of your workout says when you last did it, like \"Last Shoulder Day: Wed, Oct 14\", and each exercise shows every set from that day: your warm-ups first, muted, then your working sets. An exercise you didn't do that day shows its own last day and routine.",
+      "Tap \"Same as last\" to fill the next set with the matching one from last time, warm-up mark included, then Log set. Warm-ups still count toward no PR and no next weight.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 374,
     date: "2026-10-23",
     title: "HumanOS names each workout, and Today says what today is",

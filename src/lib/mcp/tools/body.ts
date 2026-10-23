@@ -23,6 +23,15 @@ import { addPantryItem, consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
 import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, trainingPlanView, routinePreview, exerciseContext, nextUp, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayReadFor, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
+
+/** H-1790: "Last Shoulder Day was 2026-10-14." for body_training. */
+const lastSessionSpoken = (l: { date: string; routineName: string | null }, name: string | null) => `Last ${l.routineName ?? name ?? "time"} was ${l.date}.`;
+/** H-1790: "; last Shoulder Day: warm-up 70 × 10, 90 × 8; 130 × 10, 130 × 10", or the fallback day with its date and routine. */
+function lastSetsSpoken(l: { from: "same" | "other"; date: string; routineName: string | null; warmups: string[]; working: string[] } | null): string {
+  if (!l) return "";
+  const where = l.from === "same" ? `last ${l.routineName ?? "time"}` : `last done ${l.date}${l.routineName ? ` (${l.routineName})` : ""}`;
+  return `; ${where}: ${l.warmups.length ? `warm-up ${l.warmups.join(", ")}; ` : ""}${l.working.join(", ")}`;
+}
 import { zonesText } from "@/lib/engine/body-whoop";
 import { fmtDistanceIn, habitShown, isMeasures, storedFromShown, weightUnitWord } from "@/lib/engine/body-measures";
 import { fillBoxes, refill, takesFromBottle } from "@/lib/engine/body-meds";
@@ -288,9 +297,11 @@ export const bodyTraining = defineTool({
     // Rev 648: today's planned routine and its exercises, before a set is logged, from the same plan Training shows.
     if (planned) {
       lines.unshift(`Today: ${planLine({ ...planned.day, typeName: typeLabel(planned.day) })}${planned.day.minutes ? `, about ${planned.day.minutes} min` : ""}${planned.day.carried ? " (legs missed last weekend)" : ""}.`);
-      planned.preview?.forEach((x, i) => lines.push(`${i + 1}. ${x.exercise.name}: ${x.sets} × ${x.reps || "?"}${x.weight != null ? ` at ${x.weight} ${t.unit}` : ""}${x.last.length ? `; last time ${x.lastDate}: ${x.last.join(", ")}` : ""}${x.pr ? `; PR ${x.pr}` : ""}.`));
+      if (planned.preview?.[0]?.lastSession) lines.push(lastSessionSpoken(planned.preview[0].lastSession, planned.day.name));
+      planned.preview?.forEach((x, i) => lines.push(`${i + 1}. ${x.exercise.name}: ${x.sets} × ${x.reps || "?"}${x.weight != null ? ` at ${x.weight} ${t.unit}` : ""}${lastSetsSpoken(x.lastSets)}${x.pr ? `; PR ${x.pr}` : ""}.`));
     }
-    for (const x of t.exercises) lines.push(`${x.exercise.name}${x.target ? ` (plan ${x.target.sets} × ${x.target.reps || "?"})` : ""}: ${x.today.length ? x.today.map((s) => `${fmtSet(s, t.unit, x.exercise.kind)}${s.pr ? " (PR)" : ""}`).join(", ") : "no sets yet"}${x.last.length ? `; last time ${x.lastDate}: ${x.last.join(", ")}` : ""}${x.pr ? `; PR ${x.pr.text}` : ""}.`);
+    if (t.session && t.lastSession) lines.push(lastSessionSpoken(t.lastSession, t.routineName));
+    for (const x of t.exercises) lines.push(`${x.exercise.name}${x.target ? ` (plan ${x.target.sets} × ${x.target.reps || "?"})` : ""}: ${x.today.length ? x.today.map((s) => `${s.warmup ? "warm-up " : ""}${fmtSet(s, t.unit, x.exercise.kind)}${s.pr ? " (PR)" : ""}`).join(", ") : "no sets yet"}${lastSetsSpoken(x.lastSets)}${x.pr ? `; PR ${x.pr.text}` : ""}.`);
     if (weeks) lines.push(`This week: ${weeks.tally.done}${weeks.tally.planned != null ? ` of ${weeks.tally.planned}` : ""} session${weeks.tally.done === 1 && weeks.tally.planned == null ? "" : "s"}.`);
     if (weeks) lines.push(liftedSpoken(weeks.lifted));
     // Phase 16b: the device's workouts that day, under the session.
