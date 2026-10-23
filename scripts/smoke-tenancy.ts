@@ -93,6 +93,7 @@ const ROUTES: Record<string, Route> = {
   "/body/training/[exerciseId]": { kind: "owned", table: "bodyExercises" },
   "/api/proofs/attachments/[id]": { kind: "owned", table: "proofAttachments" },
   "/api/reports/[id]/screenshot": { kind: "owned", table: "memberReports" },
+  "/api/office-hours/[id]/screenshot": { kind: "owned", table: "officeHoursRequests" },
   "/api/webinars/[id]/deck": { kind: "owned", table: "webinars" },
   "/api/webhooks/fathom/[connectionId]": { kind: "public", why: "Fathom's signed delivery for one workspace connection: POST only, verified against the connection's sealed secret, 401 unsigned; a GET answers 405 for every id" },
   "/files/[...key]": { kind: "public", why: "the public object store; a private proof file is served by /api/proofs/attachments/[id]" },
@@ -261,6 +262,16 @@ async function main() {
     }
     return r;
   };
+  // An Office Hours request B sent with a screenshot (H-1706): to another client its picture reads exactly as a missing one.
+  const ensureOohRequest = async () => {
+    let r = await db.query.officeHoursRequests.findFirst({ where: eq(schema.officeHoursRequests.userId, B.id) });
+    if (!r) {
+      const id = newId();
+      await db.insert(schema.officeHoursRequests).values({ id, workspaceId: ws, userId: B.id, friday: "2026-10-30", description: "B's private Office Hours issue.", triedSelf: "B's own try.", goal: "B's goal.", category: "other", screenshotKey: `ooh/${ws}/${id}-t.png`, screenshotUrl: `http://localhost:4050/ooh/${ws}/${id}-t.png`, screenshotType: "image/png" });
+      r = (await db.query.officeHoursRequests.findFirst({ where: eq(schema.officeHoursRequests.id, id) }))!;
+    }
+    return r;
+  };
   // Avatars (rev 501): a B-owned buyer avatar for /avatars/[id].
   const ensureAvatar = async () => {
     if (!(await db.query.avatars.findFirst({ where: eq(schema.avatars.userId, B.id) }))) await db.insert(schema.avatars).values({ id: newId(), workspaceId: ws, userId: B.id, name: "B's Private Avatar", pains: "B only." });
@@ -315,6 +326,7 @@ async function main() {
     bodyHealth: (await ensureHealth()).id,
     recordings: (await ensureRecording()).id,
     memberReports: (await ensureReport()).id,
+    officeHoursRequests: (await ensureOohRequest()).id,
     planRecords: (await ensurePlanRecord()).id,
     kpis: (await ensureKpi()).id,
     avatarInterviews: (await ensureInterview()).id,

@@ -1,8 +1,10 @@
 import Image from "next/image";
 import { Pixel } from "@/components/hermes/pixel";
+import { ProofCarousel } from "@/components/hermes/funnel/proof-carousel";
 import {
   AUDIENCE_LINE,
   BAR,
+  CAROUSEL_LABEL,
   CHAMBER,
   CHECKOUT_URL,
   CLOSING,
@@ -12,6 +14,7 @@ import {
   FOOTER,
   HERO,
   LETTER,
+  LETTER_PHOTO,
   PROBLEM,
   PROOF,
   PROOF_LABEL,
@@ -23,6 +26,8 @@ import {
  * Funnel 1 at /start (H-674, plan H-721, Danno's answers H-841): one page, one call to action, Start with me, to the existing
  * checkout. No prices, sample data only in the phone pictures. The Meta Pixel's PageView beacon only when Vercel has
  * FUNNEL_PIXEL_ID. Since H-1725 (approved in H-1727): a strip of approved quotes under the letter, and a gold reading bar.
+ * Since H-1743 (approved in H-1745): the same quotes on a 3D carousel above Start, aurora gold on the headline's gold
+ * phrase, and Danno's stage photo beside the signature.
  */
 export const dynamic = "force-dynamic";
 
@@ -66,7 +71,8 @@ export default function FunnelPage() {
           <div className="fn-hero-copy">
             <div className="fn-eyebrow">{HERO.eyebrow}</div>
             <h1 id="fn-hero-title" className="fn-h1" data-testid="fn-hero-title">
-              {HERO.title}
+              {HERO.title.slice(0, HERO.title.length - HERO.gold.length)}
+              <span className="fn-aurora" data-testid="fn-hero-gold">{HERO.gold}</span>
             </h1>
             <p className="fn-lead">{HERO.lead}</p>
             <StartButton testId="fn-start-hero" />
@@ -127,7 +133,19 @@ export default function FunnelPage() {
             {LETTER.paragraphs.map((p) => (
               <p key={p.slice(0, 24)} className="fn-p">{p}</p>
             ))}
-            <p className="fn-sign">{LETTER.signature}</p>
+            <div className="fn-sign-row">
+              <p className="fn-sign">{LETTER.signature}</p>
+              <Image
+                className="fn-sign-photo"
+                src={LETTER_PHOTO.src}
+                alt={LETTER_PHOTO.alt}
+                width={LETTER_PHOTO.width}
+                height={LETTER_PHOTO.height}
+                sizes="(max-width: 600px) 160px, 240px"
+                loading="lazy"
+                data-testid="fn-letter-photo"
+              />
+            </div>
           </div>
         </section>
 
@@ -146,6 +164,10 @@ export default function FunnelPage() {
               ))}
             </div>
           </div>
+        </section>
+
+        <section className="fn-carousel" aria-label={CAROUSEL_LABEL} data-testid="fn-carousel">
+          <ProofCarousel quotes={PROOF} />
         </section>
 
         <section id="start" className="fn-wrap fn-start" aria-labelledby="fn-start-title" data-testid="fn-start">

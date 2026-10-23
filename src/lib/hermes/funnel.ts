@@ -21,6 +21,8 @@ export const BAR = "HelixOS is coming to iPhone and Android. Members get it firs
 export const HERO = {
   eyebrow: "For coaches and service businesses",
   title: "Your whole business, in your pocket.",
+  /** The headline's one gold phrase, in moving aurora gold (H-1743, approved in H-1745). The end of the title. */
+  gold: "in your pocket.",
   lead: "HelixOS tells you the three moves that matter today, shows you where your leads are leaking, and gives you a board of advisors to think with. You open it with your coffee and close the day before bed.",
   imageAlt: "HelixOS on two iPhones: the Today screen and the Colosseum",
 };
@@ -103,6 +105,10 @@ export const PROOF: readonly { quote: string; who: string }[] = [
   { quote: "My history resonate with so many people that someone just sent me a DM and I just close today, so I have a brand new client today.", who: "Flavie B." },
 ];
 export const PROOF_LABEL = "What clients say";
+export const CAROUSEL_LABEL = "Client results";
+
+/** Danno's stage photo beside the letter's signature (H-1743): cropped, the screen behind him blurred so no text reads. */
+export const LETTER_PHOTO = { src: "/hermes/funnel1/danno-speaking-stage.webp", alt: "Danno Hanfling speaking on stage", width: 480, height: 530 };
 
 export const START = {
   eyebrow: "Start with me",
@@ -145,6 +151,7 @@ export function funnelCopy(): string {
     ...DAY_STEPS.flatMap((s) => [s.title, s.body]),
     LETTER.eyebrow, LETTER.title, ...LETTER.paragraphs, LETTER.signature,
     PROOF_LABEL, ...PROOF.flatMap((p) => [p.quote, p.who]),
+    CAROUSEL_LABEL, LETTER_PHOTO.alt,
     START.eyebrow, START.title, ...START.included, START.button,
     ...FAQ.flatMap((f) => [f.q, f.a]),
     CLOSING.title, FOOTER.owner, FUNNEL_TITLE, FUNNEL_DESCRIPTION,
