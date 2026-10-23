@@ -46,15 +46,17 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   const sum = page.locator("summary", { hasText: summary });
   await sum.waitFor({ timeout: 30000 });
   const field = page.locator(`${inside} input[name="name"]`).first();
-  // Let the page's scripts arrive first: on a cold dev server a reload can take longer to hydrate than the retries below wait,
-  // and hydration shuts a Disclosure opened before it.
+  const isOpen = () => page.evaluate((sel) => Boolean(document.querySelector(sel)?.closest("details")?.open), inside);
+  // Let the page's scripts arrive first: hydration shuts a Disclosure opened before it.
   await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => undefined);
-  // A click that lands before the page hydrates can be undone by it (right after a reload on a busy server): try again.
-  for (let i = 0; i < 4 && !(await field.isVisible()); i++) {
-    await sum.click();
-    await field.waitFor({ state: "visible", timeout: 3000 }).catch(() => undefined);
+  // Click only a closed Disclosure: a restored draft opens it on its own, and a dev server can hold the next frame for seconds
+  // after a reload (the form's open animation waits at its first frame), so "not visible yet" must never mean "click again".
+  const until = Date.now() + 25000;
+  while (!(await field.isVisible())) {
+    if (Date.now() > until) throw new Error(`[${summary}] the form didn't show within 25 s (open: ${await isOpen()})`);
+    if (!(await isOpen())) await sum.click();
+    await page.waitForTimeout(500);
   }
-  await field.waitFor({ state: "visible", timeout: 10000 });
 }
 const entryCount = (page: Page) => page.locator('[data-testid="body-entry"]').count();
 async function noSideScroll(page: Page, where: string) {
