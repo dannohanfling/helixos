@@ -36,6 +36,7 @@ import { setFeatureOnAction } from "@/lib/actions/bot-features";
 import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
 import { PointsCheck } from "@/components/leaderboard/points-check";
 import { DeskSettings } from "@/components/leaderboard/desk-settings";
+import { PassMove } from "@/components/leaderboard/pass-move";
 import { OwnProgramCard } from "@/components/leaderboard/own-program";
 import { certsToFlag } from "@/lib/engine/loyalty-health";
 import { featureOf } from "@/lib/engine/bot-features";
@@ -53,7 +54,7 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string; passFix?: string; passFixRow?: string }> }) {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string; passFix?: string; passFixRow?: string; moveLink?: string; moveFeed?: string; moveToken?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const claimsShown = sp.claims === "done" ? "done" : "open";
@@ -446,6 +447,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                         <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/lb/{feedOf.get(r.m.id)!.slug} · /api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
                         {feedOf.get(r.m.id)!.keyEncrypted ? <PointsCheck feed={feedOf.get(r.m.id)!} error={sp.pointsCheckError} tz={v.tz} /> : null}
                         {feedOf.get(r.m.id)!.keyEncrypted ? <DeskSettings feed={feedOf.get(r.m.id)!} /> : null}
+                        {feedOf.get(r.m.id)!.keyEncrypted && feedOf.get(r.m.id)!.templateIdAlt ? <PassMove feed={feedOf.get(r.m.id)!} said={sp.moveFeed === feedOf.get(r.m.id)!.id ? sp.moveLink : undefined} token={sp.moveFeed === feedOf.get(r.m.id)!.id ? sp.moveToken : undefined} /> : null}
                         <a href={`/lb/${feedOf.get(r.m.id)!.slug}`} target="_blank" rel="noreferrer" className="text-[11px] underline" data-testid="leaderboard-open-page">Open their leaderboard page →</a>
                       </div>
                     ) : null}

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 362,
+    date: "2026-10-23",
+    title: "Move a program's members to its new pass",
+    lines: [
+      "When a client's program gets a new pass, put its template in the 2nd template box on their Coach row. Move members to the new pass then makes a member's private link from their email, a test member first.",
+      "The member taps Get my new pass: it's made once, with their old level and their points carried over, and their old pass keeps working. Coach counts who has moved and checks every balance arrived whole. Nothing is sent to anyone's old pass.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 361,
     date: "2026-10-23",
     title: "The Forum's Schedule board, and Cowork agents under their own names",

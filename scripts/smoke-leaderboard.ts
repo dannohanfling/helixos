@@ -616,6 +616,51 @@ async function main() {
     await db.update(schema.leaderboardFeeds).set({ passTypeId: null, certExpiresAt: null }).where(eq(schema.leaderboardFeeds.id, ownFeed.id));
     console.log("✓ Loyalty health: both programs listed, the coach's own first, the earlier 429 counted, no key shown; a typed certificate saved, a bad one refused, Coach names it under 30 days; Check all now stops at a 429 after one read, then passes both, writing nothing");
 
+    // The pass move (H-1859, plan H-1861): the 2nd template is the new pass. The coach makes one member's private link by
+    // their email (nothing written); opening it writes nothing; the member's press makes their new pass once, writes their old
+    // level on it before they add it, and carries their old available balance with one add. A second visit makes nothing.
+    const mvRow = 'li:has(input[name="eoPassUrl"][value*="maya-torres"])';
+    must((await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feedRow.id) }))!.deskCheckOk, "the client's points check passed earlier, so a move can open");
+    await db.update(schema.leaderboardFeeds).set({ templateIdAlt: TEMPLATES[1].id, movesPaused: false }).where(eq(schema.leaderboardFeeds.id, feedRow.id));
+    const mvStart = (await mock0()).writes.length;
+    await page.goto(`${base}/coach?connections=open`);
+    must((await page.locator(`${mvRow} [data-testid="pass-move"]`).count()) === 1, "the client's row offers the pass move once a 2nd template is set");
+    await fillExact(page, `${mvRow} [data-testid="pass-move-email"]`, "nobody@example.com");
+    await submit(page, `${mvRow} [data-testid="pass-move-link"]`);
+    must((await page.locator(`${mvRow} [data-testid="pass-move-said"]`).innerText()).startsWith("No member on the old pass"), "an email nobody on the old pass has makes no link");
+    const ben = CUSTOMERS.find((c) => c.id === "cus_002")!;
+    await fillExact(page, `${mvRow} [data-testid="pass-move-email"]`, ben.email.toUpperCase());
+    await submit(page, `${mvRow} [data-testid="pass-move-link"]`);
+    const mvHref = (await page.locator(`${mvRow} [data-testid="pass-move-url"]`).getAttribute("href")) ?? "";
+    must(/^\/pass\/new\/[\w-]{20,}$/.test(mvHref), `a private link is made: ${mvHref ? "a /pass/new link" : "none"}`);
+    must((await mock0()).writes.length === mvStart, "making the link writes nothing");
+    const visitor = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+    await visitor.goto(`${base}${mvHref}`);
+    await visitor.locator('[data-testid="new-pass-get"]').waitFor({ timeout: 20000 });
+    must((await mock0()).writes.length === mvStart, "opening the link writes nothing, so a link preview can't make a pass");
+    const benBalance = (await mock()).balances[ben.id]?.balance ?? -1;
+    await visitor.locator('[data-testid="new-pass-get"]').click();
+    await visitor.locator('[data-testid="new-pass-add"]').waitFor({ timeout: 30000 });
+    const mvSwitch = (await db.query.passSwitches.findFirst({ where: eq(schema.passSwitches.fromCustomerId, ben.id) }))!;
+    must(mvSwitch.status === "made" && mvSwitch.carryPoints === benBalance && benBalance > 0 && Boolean(mvSwitch.toCustomerId), `the new pass is made and the old live balance (${benBalance}) is kept as the carry: ${mvSwitch.status}, ${mvSwitch.carryPoints}`);
+    const mvAfter = await mock();
+    const mvWrites = mvAfter.writes.slice(mvStart);
+    must(JSON.stringify(mvWrites) === JSON.stringify([`POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`, `PUT /api/external/v1/passes/pass.com.evolveomega/${mvSwitch.toSerial}/values/Level`, "POST /api/public/admin/points/add"]), `one create on the new template, the old level, one add: ${mvWrites.join(", ")}`);
+    must(mvAfter.balances[mvSwitch.toCustomerId!]?.balance === benBalance && mvAfter.fields[`${mvSwitch.toSerial}/Level`] === ben.membership_tier, "the new pass holds the old balance and level");
+    must((await visitor.locator('[data-testid="new-pass-add"]').innerText()).includes("Add to wallet") && (await visitor.locator("main").innerText()).includes(benBalance.toLocaleString("en-US")), "the member sees Add to wallet and their carried points");
+    must(!/okafor|ben\.|eloyalty|walletpush/i.test(await visitor.content()), "no name, email or provider on the member's page");
+    await visitor.goto(`${base}${mvHref}`);
+    await visitor.locator('[data-testid="new-pass-add"]').waitFor({ timeout: 20000 });
+    must((await visitor.locator('[data-testid="new-pass-get"]').count()) === 0 && (await mock0()).writes.length === mvStart + mvWrites.length, "a second visit makes nothing again");
+    await visitor.goto(`${base}/pass/new/not-a-real-token-at-all-000`);
+    must((await visitor.locator('[data-testid="new-pass-said"]').innerText()).startsWith("This link isn't valid"), "an unknown link says so");
+    await visitor.context().close();
+    await page.goto(`${base}/coach?connections=open`);
+    must((await page.locator(`${mvRow} [data-testid="pass-move-counts"]`).innerText()).startsWith("Links 1 · new passes 1 · points carried 1") && (await page.locator(`${mvRow} [data-testid="pass-move-mismatch"]`).count()) === 0, "Coach counts one link, one new pass, one carry, all whole");
+    const moveWrites = mvWrites;
+    await db.update(schema.leaderboardFeeds).set({ templateIdAlt: null }).where(eq(schema.leaderboardFeeds.id, feedRow.id));
+    console.log("✓ pass move: a link by email writes nothing; opening writes nothing; the press makes one pass on the new template, its old level and one add of the old balance; a second visit makes nothing; Coach counts it whole");
+
     // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
     await page.goto(`${base}/coach?connections=open`);
     must((await page.locator('li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-row"]').getAttribute("open")) !== null, "a client with a feed shows the block open");
@@ -643,7 +688,7 @@ async function main() {
     const writes = (await mockCalls()).writes;
     // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
     const create = `POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`;
-    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...fixWrites, ...syncWrites, ...ownCheckWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, the one message, the two name writes of Fix my pass, the sync's moves and fields, and the check on the coach's own pass: ${writes.join(", ")}`);
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...fixWrites, ...syncWrites, ...ownCheckWrites, ...moveWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, the one message, the two name writes of Fix my pass, the sync's moves and fields, the check on the coach's own pass, and the pass move's create, level and add: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {
