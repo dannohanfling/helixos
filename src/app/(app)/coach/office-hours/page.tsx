@@ -136,6 +136,13 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
                         <dd className="inline whitespace-pre-line">{r.goal}</dd>
                       </div>
                     </dl>
+                    {/* The member's screenshot (H-1706), through the private route; it opens full size in a new tab. */}
+                    {r.screenshotUrl ? (
+                      <a href={`/api/office-hours/${r.id}/screenshot`} target="_blank" rel="noopener" className="mt-2 inline-block" data-testid="ooh-coach-shot">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- a member's picture through the private route, never a remote one */}
+                        <img src={`/api/office-hours/${r.id}/screenshot`} alt="The member's screenshot" loading="lazy" decoding="async" className="max-h-32 rounded-lg border" />
+                      </a>
+                    ) : null}
                   </div>
                   <form action={updateOohRequestAction} className="space-y-2" data-testid="ooh-coach-form">
                     <input type="hidden" name="requestId" value={r.id} />

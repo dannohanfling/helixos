@@ -9,6 +9,8 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 import { OOH_LOCKED_LINE, OOH_OUTCOMES, readList } from "@/lib/engine/office-hours";
 import { oohAccessFor } from "@/lib/office-hours-access";
 import { saveOohRequest } from "@/lib/office-hours-core";
+import { applyOohScreenshot, type OohShotChange } from "@/lib/ooh-screenshot";
+import { checkScreenshot, dataUrlBytes, SCREENSHOT_TOO_LARGE as TOO_LARGE } from "@/lib/engine/reports";
 import { hostToday, oohSchedule, readOohSession } from "@/lib/engine/ooh-session";
 import { teamOf } from "@/lib/team";
 
@@ -29,6 +31,17 @@ export async function saveOohRequestAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write.", team: "allow" });
   // Office Hours by program level (H-470): enforced here, not only in the menu; the team path answers for its owner.
   if (!(await oohAccessFor(v)).open) redirect(`/office-hours?error=${encodeURIComponent(OOH_LOCKED_LINE)}#mine`);
+  // The optional screenshot (H-1706): checked before anything is saved, by size and by what the bytes are, never the name.
+  // A refusal keeps the typing (the form's draft) and says why on the field.
+  let shot: OohShotChange = { kind: "none" };
+  const sent = dataUrlBytes(str(formData, "screenshotData"));
+  if (sent && "tooLarge" in sent) redirect(`/office-hours?error=${encodeURIComponent(TOO_LARGE)}&field=screenshot#request`);
+  if (sent) {
+    const bytes = sent.bytes;
+    const checked = checkScreenshot(bytes);
+    if (!checked.ok) redirect(`/office-hours?error=${encodeURIComponent(checked.error)}&field=screenshot#request`);
+    shot = { kind: "new", bytes, mime: checked.mime, ext: checked.ext };
+  } else if (str(formData, "requestId") && formData.get("screenshotRemove") === "yes") shot = { kind: "remove" };
   const team = await teamOf(v.membership.id);
   // The session's dates are the host's (H-457): counted from the host's today, on the workspace's session day.
   const session = oohSchedule(v.workspace);
@@ -53,8 +66,9 @@ export async function saveOohRequestAction(formData: FormData): Promise<void> {
   if (!saved.ok) redirect(`/office-hours?error=${encodeURIComponent(saved.error)}${saved.field ? `&field=${saved.field}` : ""}#request`);
   // The owner's notice (H-413): a new request a team member booked for them, until they open Office Hours. Push comes later.
   if (v.team && !saved.edited) await db.update(schema.memberships).set({ oohNotice: { teamUserId: v.actor.id, friday: saved.value.friday, requestId: saved.id, at: nowIso() } }).where(and(eq(schema.memberships.id, v.membership.id), eq(schema.memberships.workspaceId, workspaceId)));
+  const kept = await applyOohScreenshot(workspaceId, saved.id, shot);
   refresh();
-  redirect(`/office-hours?saved=1#mine`);
+  redirect(`/office-hours?saved=1${kept === "not-stored" ? "&shot=not-kept" : ""}#mine`);
 }
 
 /** The coach's side of one request: who takes it (from the workspace's list), covered or no-show, and notes. */

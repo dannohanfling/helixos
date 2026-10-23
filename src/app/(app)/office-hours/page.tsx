@@ -13,6 +13,10 @@ import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { OohStamps } from "@/components/ooh-stamps";
+import { OohScreenshotField } from "@/components/ooh-screenshot-field";
+
+/** A request's screenshot, only ever through the private route that checks who is asking. */
+const oohShotUrl = (id: string) => `/api/office-hours/${id}/screenshot`;
 
 export const metadata = { title: "Office Hours" };
 
@@ -40,6 +44,8 @@ function RequestForm({ fridays, categories, request, owner, people, session, tz 
         Describe the issue
         <textarea className="field mt-1" name="description" rows={3} defaultValue={request?.description ?? ""} data-testid="ooh-description" />
       </label>
+      {/* A picture of the problem (H-1706), so the call starts with the coach already seeing it. */}
+      <OohScreenshotField idPrefix={request ? "ooh-edit" : "ooh"} existing={request?.screenshotUrl ? { url: oohShotUrl(request.id) } : null} />
       <label className="block text-sm font-medium">
         How did you try to solve it yourself?
         <textarea className="field mt-1" name="triedSelf" rows={2} defaultValue={request?.triedSelf ?? ""} data-testid="ooh-tried" />
@@ -102,7 +108,7 @@ function RequestForm({ fridays, categories, request, owner, people, session, tz 
  * Open Office Hours (handoff rev 124): a member asks ahead of a session (Friday unless the coach moves it) so the coach can prepare, and sees their requests,
  * each editable up to and including its session day, every time in their own zone (H-457). The Airtable "OOH Form" keeps working until members move over.
  */
-export default async function OfficeHoursPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; back?: string }> }) {
+export default async function OfficeHoursPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; back?: string; shot?: string }> }) {
   // Team access (H-413): a team member books for the owner and sees the requests they are part of; the owner sees them all.
   const v = await requireViewer({ team: "allow" });
   const sp = await searchParams;
@@ -193,6 +199,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
         <div id="mine">
           <Card title={v.team ? "Requests you're part of" : "Your requests"} action={<span className="text-xs text-ink-3">{mine.length}</span>}>
             {sp.saved ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="ooh-saved">Got it. Your request is in for that {day}. You can change it here until then.</p> : null}
+            {sp.saved && sp.shot === "not-kept" ? <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm" role="status" data-testid="ooh-shot-not-kept">The screenshot couldn&apos;t be kept, so your request went without it. Your words are all there.</p> : null}
             {mine.length ? (
               <ul className="space-y-3">
                 {mine.map((r) => (
@@ -208,6 +215,12 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                     {submittedByWords(r, nameOf, onTeam) ? <p className="text-xs text-ink-3" data-testid="ooh-submitted-by">{submittedByWords(r, nameOf, onTeam)}</p> : null}
                     <p className="text-xs text-ink-3" data-testid="ooh-attending">{attendeeWords(r, nameOf, onTeam)}</p>
                     <p className="mt-1 whitespace-pre-line text-ink-2">{r.description}</p>
+                    {r.screenshotUrl ? (
+                      <a href={oohShotUrl(r.id)} target="_blank" rel="noopener" className="mt-2 inline-block" data-testid="ooh-mine-shot">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- the member's own picture through the private route */}
+                        <img src={oohShotUrl(r.id)} alt="Your screenshot for this request" loading="lazy" decoding="async" className="max-h-24 rounded-lg border" />
+                      </a>
+                    ) : null}
                     {r.responsible ? <p className="mt-1 text-xs text-ink-3">With {r.responsible}</p> : null}
                     {/* Add to calendar (H-457): the session as UTC instants, which every calendar shows in its owner's time. */}
                     {r.friday >= hToday && sessionStart(r.friday, session) ? (
