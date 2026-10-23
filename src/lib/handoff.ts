@@ -573,13 +573,16 @@ export async function tickNeed(o: Owner, id: string): Promise<boolean> {
 
 /** The three parts of the Inbox number, each by the query the Inbox lists with. */
 export async function inboxCounts(o: Owner): Promise<{ waiting: number; needs: number; fresh: number }> {
-  const [waiting] = await db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById)));
-  const [needs] = await db.select({ n: sql<number>`count(*)` }).from(schema.forumNeeds).where(openNeedsWhere(o));
-  const [fresh] = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(schema.handoffDeliveries)
-    .innerJoin(schema.handoffMessages, eq(schema.handoffMessages.id, schema.handoffDeliveries.messageId))
-    .where(and(mine(o), eq(schema.handoffDeliveries.recipient, DANNO), isNull(schema.handoffDeliveries.deliveredAt), eq(schema.handoffMessages.needsApproval, false)));
+  // Three independent counts, read together (Speed 2): the menu waits for one read, not three in a row.
+  const [[waiting], [needs], [fresh]] = await Promise.all([
+    db.select({ n: sql<number>`count(*)` }).from(schema.handoffMessages).where(and(mine(o), eq(schema.handoffMessages.needsApproval, true), isNull(schema.handoffMessages.decision), isNull(schema.handoffMessages.holdReason), isNull(schema.handoffMessages.supersededById))),
+    db.select({ n: sql<number>`count(*)` }).from(schema.forumNeeds).where(openNeedsWhere(o)),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(schema.handoffDeliveries)
+      .innerJoin(schema.handoffMessages, eq(schema.handoffMessages.id, schema.handoffDeliveries.messageId))
+      .where(and(mine(o), eq(schema.handoffDeliveries.recipient, DANNO), isNull(schema.handoffDeliveries.deliveredAt), eq(schema.handoffMessages.needsApproval, false))),
+  ]);
   return { waiting: Number(waiting?.n ?? 0), needs: Number(needs?.n ?? 0), fresh: Number(fresh?.n ?? 0) };
 }
 

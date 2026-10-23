@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { SESSION_COOKIE } from "@/lib/session";
+import { SESSION_COOKIE, renewedSessionToken, sessionCookieOptions } from "@/lib/session";
 import { safeNext } from "@/lib/engine/next-path";
 
 // Inbound machine endpoints authenticate with their own secrets, never a browser session.
@@ -13,7 +13,7 @@ import { safeNext } from "@/lib/engine/next-path";
 const LEGAL = ["/privacy", "/terms", "/support", "/delete-account", "/ai-and-the-board", "/community-guidelines"];
 const PUBLIC = [...LEGAL, "/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/email-change", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/api/bot-mcp", "/api/mf", "/mf", "/start", "/api/body/health-weigh-in", "/api/forum/report", "/api/handoff/files", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files", "/api/public", "/lb", "/sw.js", "/offline"];
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   // Generated image routes carry a hash suffix (/opengraph-image-abc123), so those two match by prefix.
   const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/")) || /^\/(opengraph|twitter)-image/.test(pathname);
@@ -34,7 +34,15 @@ export function proxy(request: NextRequest) {
   // The path, for the app shell (H-312): the Daily welcome never shows a coach on /coach pages, and a layout can't see the URL.
   const headers = new Headers(request.headers);
   headers.set("x-helixos-path", pathname);
-  return NextResponse.next({ request: { headers } });
+  const res = NextResponse.next({ request: { headers } });
+  // Signed in stays signed in while in use (Speed 2): a page load renews the 30-day session once a day. Only a plain GET outside
+  // /api/session, so it never races a sign-in, sign-out or switch writing its own cookie.
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (token && request.method === "GET" && !pathname.startsWith("/api/session")) {
+    const fresh = await renewedSessionToken(token);
+    if (fresh) res.cookies.set(SESSION_COOKIE, fresh, sessionCookieOptions());
+  }
+  return res;
 }
 
 export const config = {

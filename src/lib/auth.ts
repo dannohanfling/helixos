@@ -44,10 +44,14 @@ export type TeamAccess = { team?: "allow" };
  * that check belongs to cookies, and a password change keeps connected apps (rev 247, B4).
  */
 export async function viewerFor(userId: string, workspaceId: string): Promise<Viewer | null> {
-  const membership = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)) });
+  // The three rows are keyed by what the caller already holds, so they are read together (Speed 2): one wait, not two.
+  const [membership, user, workspace] = await Promise.all([
+    db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)) }),
+    db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
+    db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId) }),
+  ]);
   if (!membership) return null;
   if (membership.removedAt) return null;
-  const [user, workspace] = await Promise.all([db.query.users.findFirst({ where: eq(schema.users.id, userId) }), db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId) })]);
   if (!user || !workspace) return null;
   const tz = membership.timezone || workspace.timezone;
   return { user, workspace, membership, role: membership.role, tz, today: todayInTz(tz), hour: hourInTz(tz), actor: user, switchedInto: null, team: null };
@@ -59,15 +63,25 @@ export async function viewerFor(userId: string, workspaceId: string): Promise<Vi
  * never visible to a team member, whatever the owner's own flag says.
  */
 export async function teamViewerFor(teamUserId: string, teamMemberId: string): Promise<Viewer | null> {
-  const tm = await db.query.teamMembers.findFirst({ where: and(eq(schema.teamMembers.id, teamMemberId), eq(schema.teamMembers.teamUserId, teamUserId)) });
-  if (!tm || tm.removedAt) return null;
-  const owner = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, tm.ownerMembershipId), eq(schema.memberships.workspaceId, tm.workspaceId)) });
-  if (!owner || owner.removedAt) return null;
-  const [actor, user, workspace] = await Promise.all([
+  // Read in two waits instead of three (Speed 2): the team row with the actor, then the owner with their account and workspace.
+  const [tm, actor] = await Promise.all([
+    db.query.teamMembers.findFirst({ where: and(eq(schema.teamMembers.id, teamMemberId), eq(schema.teamMembers.teamUserId, teamUserId)) }),
     db.query.users.findFirst({ where: eq(schema.users.id, teamUserId) }),
-    db.query.users.findFirst({ where: eq(schema.users.id, owner.userId) }),
+  ]);
+  if (!tm || tm.removedAt) return null;
+  const [ownerRow, workspace] = await Promise.all([
+    db
+      .select({ owner: schema.memberships, user: schema.users })
+      .from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+      .where(and(eq(schema.memberships.id, tm.ownerMembershipId), eq(schema.memberships.workspaceId, tm.workspaceId)))
+      .limit(1)
+      .then((r) => r[0]),
     db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, tm.workspaceId) }),
   ]);
+  const owner = ownerRow?.owner;
+  const user = ownerRow?.user;
+  if (!owner || owner.removedAt) return null;
   if (!actor || !user || !workspace) return null;
   const tz = owner.timezone || workspace.timezone;
   return {
@@ -110,10 +124,17 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (!session.sw || membership.role !== "coach") return own;
   // Switched into a client: checked on every request, not only at the switch. A client that is gone, removed, a coach, or in
   // another workspace ends the switch (the coach is simply back in their own account).
-  const cm = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, session.sw.m), eq(schema.memberships.workspaceId, workspace.id)) });
+  // The client and their account in one read (Speed 2).
+  const row = await db
+    .select({ cm: schema.memberships, cu: schema.users })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+    .where(and(eq(schema.memberships.id, session.sw.m), eq(schema.memberships.workspaceId, workspace.id)))
+    .limit(1)
+    .then((r) => r[0]);
+  const cm = row?.cm;
   if (!cm || cm.role !== "client" || cm.removedAt) return own;
-  const cu = await db.query.users.findFirst({ where: eq(schema.users.id, cm.userId) });
-  if (!cu) return own;
+  const cu = row.cu;
   // Work needs the client's "Let my coach work in my HelixOS"; switched off meanwhile, the coach is back to view at once.
   const mode = session.sw.mode === "work" && cm.coachCanWork ? "work" : "view";
   const ctz = cm.timezone || workspace.timezone;
