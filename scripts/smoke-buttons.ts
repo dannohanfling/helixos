@@ -43,8 +43,9 @@ async function main() {
     if (await phone.locator('[data-testid="today-next-call-week"]').count()) await isButton(phone, "today-next-call-week", "Today");
     console.log("✓ Today: Your road, See rewards and the goal, Arena and call links are buttons at 390 px");
 
+    // More's items are full-width menu rows (left as they are in H-1680); the point is that Notifications has one.
     await phone.goto(`${base}/more`);
-    await isButton(phone, "more-support", "More");
+    await phone.locator('[data-testid="more-support"]').waitFor({ timeout: 20000 });
     const notif = phone.locator('[data-testid="more-notifications"]');
     must((await notif.getAttribute("href")) === "/settings/notifications", "More has a Notifications row");
     console.log("✓ More: a Notifications row, and Help and support");
