@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { AppOpening } from "@/components/pwa/app-opening";
+import { PullRefresh } from "@/components/pwa/pull-refresh";
 
 /**
  * The web app's side of the HelixOS apps (H-877). Mounted once in the root layout; on the website it does nothing.
@@ -15,12 +17,15 @@ type PushPlugin = {
   register: () => Promise<void>;
   addListener: (event: string, cb: (e: { value?: string; notification?: { data?: { path?: string } } }) => void) => Promise<Listener>;
 };
-type Cap = { isNativePlatform: () => boolean; getPlatform: () => string; Plugins: { PushNotifications?: PushPlugin } };
+type SplashPlugin = { hide: (o?: { fadeOutDuration?: number }) => Promise<void> };
+type Cap = { isNativePlatform: () => boolean; getPlatform: () => string; Plugins: { PushNotifications?: PushPlugin; SplashScreen?: SplashPlugin } };
 
 const cap = (): Cap | null => {
   const c = (window as unknown as { Capacitor?: Cap }).Capacitor;
   return c?.isNativePlatform?.() ? c : null;
 };
+
+const noSubscribe = () => () => undefined;
 
 const INSTALL_KEY = "helix.install.id";
 function installId(): string {
@@ -45,6 +50,13 @@ async function record(c: Cap, token?: string) {
 
 export function NativeBridge() {
   const [ask, setAsk] = useState<{ hour: number } | null>(null);
+  // Inside the store app or not: fixed for the page's life, false while server-rendering.
+  const native = useSyncExternalStore(noSubscribe, () => cap() !== null, () => false);
+  // The native splash stays up until HelixOS has drawn (H-1759): it hides here, under the opening's identical first frame,
+  // or straight away when the opening doesn't play. capacitor.config.ts holds it at most 8 s as a safety cap.
+  const hideSplash = useCallback(() => {
+    void cap()?.Plugins.SplashScreen?.hide({ fadeOutDuration: 0 }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const c = cap();
@@ -78,8 +90,14 @@ export function NativeBridge() {
     };
   }, []);
 
-  if (!ask) return null;
-  return <PushAskCard hour={ask.hour} onDone={() => setAsk(null)} />;
+  if (!native) return null;
+  return (
+    <>
+      <AppOpening onFirstFrame={hideSplash} />
+      <PullRefresh />
+      {ask ? <PushAskCard hour={ask.hour} onDone={() => setAsk(null)} /> : null}
+    </>
+  );
 }
 
 function hourLabel(h: number): string {

@@ -256,6 +256,107 @@ async function main() {
     }
     console.log("✓ Settings → Notifications: no Allow row on the website; in the app Off → Allow → On, the token recorded and the card answered; a phone that said no is sent to its settings");
 
+    // ── 4e. The app's start and pull to refresh (H-1759, H-1761, plan H-1768), with a fake bridge that records calls. ──
+    const appCtx = async (opts: { reducedMotion?: "reduce" | "no-preference" } = {}) => {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, reducedMotion: opts.reducedMotion ?? "no-preference" });
+      await ctx.addInitScript({
+        content: `(() => {
+          window.__calls = [];
+          const rec = (n) => async (o) => { window.__calls.push(n); return {}; };
+          window.Capacitor = { isNativePlatform: () => true, getPlatform: () => "ios", Plugins: {
+            SplashScreen: { hide: rec("splash.hide") },
+            Haptics: { impact: rec("haptic") },
+            PushNotifications: { checkPermissions: async () => ({ receive: "granted" }), requestPermissions: async () => ({ receive: "granted" }),
+              register: async () => {}, addListener: async () => ({ remove: () => undefined }) },
+          } };
+        })();`,
+      });
+      const p = await ctx.newPage();
+      await login(p, "As a client");
+      return { ctx, p };
+    };
+    const calls = (p: Page) => p.evaluate(() => (window as unknown as { __calls: string[] }).__calls);
+    // A pull: touches from the top of the page, as a finger would make them.
+    // A plain script string again: tsx's __name helper doesn't exist inside the page.
+    const pullDown = (p: Page, from: { x: number; y: number }, by: number) =>
+      p
+        .evaluate(
+          `(async () => {
+            const from = ${JSON.stringify(from)}, by = ${by};
+            const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+            const target = document.elementFromPoint(from.x, from.y) || document.body;
+            const t = (y) => new Touch({ identifier: 1, target, clientX: from.x, clientY: y });
+            target.dispatchEvent(new TouchEvent("touchstart", { touches: [t(from.y)], bubbles: true, cancelable: true }));
+            for (let y = from.y; y <= from.y + by; y += 20) {
+              target.dispatchEvent(new TouchEvent("touchmove", { touches: [t(y)], bubbles: true, cancelable: true }));
+              await frame();
+            }
+            const el = document.querySelector('[data-testid="pull-refresh"]');
+            const ready = !!el && el.getAttribute("data-ready") === "true";
+            target.dispatchEvent(new TouchEvent("touchend", { touches: [], bubbles: true, cancelable: true }));
+            return { ready, at: target.tagName + "." + String(target.className).slice(0, 40) };
+          })()`,
+        )
+        .then((r) => {
+          const res = r as { ready: boolean; at: string };
+          if (!res.ready) console.log(`  (pull from ${res.at} did not reach the refresh point)`);
+          return res.ready;
+        });
+    {
+      // Cold start: the opening plays once and the native splash hides under its first frame; a reload doesn't replay it.
+      const { ctx, p } = await appCtx();
+      // Signing in already played it once; a cold start is a fresh web view with nothing in sessionStorage.
+      await p.evaluate(() => sessionStorage.clear());
+      await p.goto(`${base}/today`);
+      await p.getByTestId("app-opening").waitFor({ timeout: 10_000 });
+      must((await calls(p)).includes("splash.hide"), "the native splash hides once HelixOS has drawn");
+      await p.getByTestId("app-opening").waitFor({ state: "detached", timeout: 5_000 });
+      await p.reload();
+      await p.waitForTimeout(1500);
+      must((await p.getByTestId("app-opening").count()) === 0 && (await calls(p)).includes("splash.hide"), "no replay in the same run of the app; the splash still hides");
+      // Pull at the very top: past the threshold it ticks, and letting go refreshes in place (a router refresh, not a reload).
+      await p.evaluate(() => window.scrollTo(0, 0));
+      const rsc = p.waitForRequest((r) => r.headers()["rsc"] === "1" || r.url().includes("_rsc="), { timeout: 10_000 }).catch(() => null);
+      const before = await p.evaluate(() => performance.getEntriesByType("navigation").length && performance.timeOrigin);
+      must(await pullDown(p, { x: 195, y: 200 }, 260), "a long pull from the top reaches the refresh point");
+      must(await rsc, "letting go asks the server for fresh page data");
+      must((await calls(p)).includes("haptic"), "the phone ticks at the refresh point");
+      must((await p.evaluate(() => performance.timeOrigin)) === before, "the refresh stays in place, no full reload");
+      // Off with a dialog open, and kept when there's unsaved typing.
+      await p.evaluate(() => {
+        const d = document.createElement("div");
+        d.setAttribute("role", "dialog");
+        d.id = "walk-dialog";
+        document.body.appendChild(d);
+      });
+      must(!(await pullDown(p, { x: 195, y: 200 }, 260)), "no pull while a dialog is open");
+      await p.evaluate(() => {
+        document.getElementById("walk-dialog")?.remove();
+        const i = document.createElement("input");
+        i.id = "walk-input";
+        document.querySelector("main")?.prepend(i);
+        i.value = "half a thought";
+      });
+      await pullDown(p, { x: 195, y: 400 }, 260);
+      await p.getByTestId("pull-refresh-unsaved").waitFor({ timeout: 5_000 });
+      must((await p.locator("#walk-input").inputValue()) === "half a thought", "unsaved typing is kept");
+      await ctx.close();
+    }
+    {
+      // Reduced motion: a plain fade, no sweep or settle.
+      const { ctx, p } = await appCtx({ reducedMotion: "reduce" });
+      await p.evaluate(() => sessionStorage.clear());
+      await p.goto(`${base}/today`);
+      await p.getByTestId("app-opening").waitFor({ timeout: 10_000 });
+      const anim = await p.evaluate(() => getComputedStyle(document.querySelector('[data-testid="app-opening"] .m')!).animationName);
+      must(anim === "none", `reduced motion: no sweep or settle (${anim})`);
+      await ctx.close();
+    }
+    // The website never shows either.
+    await page.goto(`${base}/today`);
+    must((await page.getByTestId("app-opening").count()) === 0 && (await page.getByTestId("pull-refresh").count()) === 0, "the website has no opening and no pull");
+    console.log("✓ the app's start: the splash hides when HelixOS has drawn, the opening plays once per cold start (a fade with reduced motion); pull to refresh ticks and refreshes in place, stays off under a dialog and keeps unsaved typing; none of it on the website");
+
     // ── 5. The cron needs its secret. ──
     must((await page.request.get(`${base}/api/cron/push`)).status() === 401, "the push cron answers only with the cron secret");
     console.log("✓ the push cron refuses a call without the secret");

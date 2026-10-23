@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 359,
+    date: "2026-10-23",
+    title: "The app opens straight into HelixOS, and you can pull down to refresh",
+    lines: [
+      "In the HelixOS app, the logo now stays until your page is ready, then a gold light sweeps across it and HelixOS fades in. No more dark gap.",
+      "Pull down from the top of a page to refresh it. You stay where you are, and anything you've typed is kept.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 358,
     date: "2026-10-23",
     title: "The things you need to find are buttons now",

@@ -33,9 +33,10 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
-    // The medallion on the dark field (H-1612), held about a second while the live site loads, then a soft fade.
+    // The medallion on the dark field (H-1612). It stays until HelixOS has drawn its first screen: the web app hides it
+    // (native-bridge.tsx, H-1759), under the opening's identical first frame. 8 s is only the safety cap, never the plan.
     SplashScreen: {
-      launchShowDuration: 1000,
+      launchShowDuration: 8000,
       launchFadeOutDuration: 300,
       launchAutoHide: true,
       backgroundColor: "#111318",
