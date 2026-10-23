@@ -33,14 +33,17 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
+    // The medallion on the dark field (H-1612), held about a second while the live site loads, then a soft fade.
     SplashScreen: {
-      launchShowDuration: 600,
+      launchShowDuration: 1000,
+      launchFadeOutDuration: 300,
       launchAutoHide: true,
       backgroundColor: "#111318",
       showSpinner: false,
     },
     PushNotifications: {
-      // The app asks for permission only from the HelixOS card after the first evening close (H-767), never on open.
+      // The app never asks on open: the HelixOS card after the first evening close (H-767), or the member's own tap on
+      // Allow in Settings → Notifications (H-1612).
       presentationOptions: ["badge", "sound", "alert"],
     },
   },
