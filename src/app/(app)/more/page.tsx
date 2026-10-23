@@ -89,6 +89,10 @@ export default async function MorePage() {
           <Link href="/support" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2" data-testid="more-support">
             <span className="w-6 text-center text-lg">💬</span> Help and support
           </Link>
+          {/* H-1680 #1: notifications had no way in but a word inside an Account sentence. */}
+          <Link href="/settings/notifications" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2" data-testid="more-notifications">
+            <span className="w-6 text-center text-lg">🔔</span> Notifications
+          </Link>
           <Link href="/settings" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
             <span className="w-6 text-center text-lg">⚙️</span> Settings
           </Link>

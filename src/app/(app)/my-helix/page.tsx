@@ -44,7 +44,7 @@ export default async function MyHelixPage() {
         <div className="mt-6 grid gap-4 sm:grid-cols-2" data-testid="helix-up-next">
           {pathwayNext ? (
             <Card title="Next on your pathway" action={<Link href="/pathway" className="text-xs text-ink-2 hover:underline">Pathway →</Link>}>
-              <Link href={FIELD_TASKS[pathwayNext.key]?.href ?? `/pathway?task=${pathwayNext.key}`} className="font-semibold hover:underline" data-testid="pathway-next">
+              <Link href={FIELD_TASKS[pathwayNext.key]?.href ?? `/pathway?task=${pathwayNext.key}`} className="btn btn-accent min-h-11! max-w-full whitespace-normal! text-left" data-testid="pathway-next">
                 {pathwayNext.name}
               </Link>
               <div className="mt-1 text-xs text-ink-3">+{pathwayNext.points} pts when your coach verifies it</div>

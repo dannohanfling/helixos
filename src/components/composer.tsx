@@ -296,11 +296,11 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               />
               <div className="flex flex-wrap items-center gap-1.5">
                 {aiEnabled ? (
-                  <button type="button" onClick={polish} disabled={pending || !chosen.length || !(body || hook)} className="btn btn-accent btn-sm">
+                  <button type="button" onClick={polish} disabled={pending || !chosen.length || !(body || hook)} className="btn btn-ghost btn-sm">
                     ✨ AI: shape for every channel
                   </button>
                 ) : (
-                  <a href="/settings?tab=connections#ai" className="rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-ink-3 underline" title="Connect your own Anthropic or OpenAI key">
+                  <a href="/settings?tab=connections#ai" className="btn btn-ghost btn-sm min-h-11!" title="Connect your own Anthropic or OpenAI key" data-testid="composer-connect-ai">
                     ✨ Connect your AI key in Settings
                   </a>
                 )}

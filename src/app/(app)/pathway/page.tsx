@@ -244,14 +244,14 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 </div>
               ) : null}
               {selected.trainingUrl ? (
-                <a href={selected.trainingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm underline">
+                <a href={selected.trainingUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm mt-3 min-h-11!" data-testid="pathway-training">
                   Watch the training ↗
                 </a>
               ) : null}
               {SECTION_TASKS[selected.key] ? (
                 <div className="mt-3 rounded-lg bg-surface-2 p-3 text-sm" data-testid="section-task">
-                  {sectionCountLine(selected.key, sectionCounts[selected.key] ?? 0)}{" "}
-                  <Link href={SECTION_TASKS[selected.key].href} className="font-semibold underline">
+                  <p>{sectionCountLine(selected.key, sectionCounts[selected.key] ?? 0)}</p>
+                  <Link href={SECTION_TASKS[selected.key].href} className="btn btn-ghost btn-sm mt-2 min-h-11!" data-testid="section-task-open">
                     Open {SECTION_TASKS[selected.key].where} →
                   </Link>
                 </div>
@@ -271,8 +271,8 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 </div>
               ) : FIELD_TASKS[selected.key] ? (
                 <div className="mt-4 rounded-lg bg-surface-2 p-3 text-sm" data-testid="field-task">
-                  This one completes itself when the field is saved.{" "}
-                  <Link href={FIELD_TASKS[selected.key].href} className="font-semibold underline">
+                  <p>This one completes itself when the field is saved.</p>
+                  <Link href={FIELD_TASKS[selected.key].href} className="btn btn-accent mt-2 min-h-11!" data-testid="field-task-open">
                     Set it on {FIELD_TASKS[selected.key].where} →
                   </Link>
                 </div>

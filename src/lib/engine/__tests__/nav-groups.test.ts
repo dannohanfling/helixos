@@ -22,9 +22,9 @@ describe("the menu: subtitles and the coach's three groups", () => {
     expect(navVisible(verify, client)).toBe(false);
     expect(navVisible(verify, { ...client, team: true })).toBe(false);
     expect(navActive("/coach", VERIFY_HREF)).toBe(false);
-    // Booking calendars in the menu (H-1236, plan H-1240), and Clients says it is the Coach view.
+    // Booking calendars in the menu (H-1236, plan H-1240); the Coach view is named Coach in the menu (H-1795), as everyone calls it.
     expect(NAV.find((n) => n.href === "/hermes/calendars")?.coachOnly).toBe(true);
-    expect(NAV.find((n) => n.href === "/coach")?.hint).toBe("the Coach view");
+    expect(NAV.find((n) => n.href === "/coach")).toMatchObject({ label: "Coach", hint: "your clients and their work" });
     expect(hrefs("Agents")).toEqual(["/coach/inbox", "/coach/agents", "/forum", "/coach/reports", "/coach/feedback"]);
     expect(hrefs("Your content")).toEqual(["/coach/board", "/coach/board-seats", "/coach/glossary", "/coach/frameworks", "/coach/horizon", "/coach/helix", "/coach/setup", "/coach/recordings", "/integrations"]);
     for (const g of ["People", "Agents", "Your content"]) for (const i of NAV_GROUPS.find((x) => x.label === g)!.items) expect(navVisible(i, client), i.href).toBe(false);

@@ -27,9 +27,12 @@ export default async function HarvestPage({ searchParams }: { searchParams: Prom
       <p className="mb-4 text-sm text-ink-2">Only the recording you pick is read, and only when you press the button. Every quote comes back word for word, with who said it and a link to the moment, as a draft for you to review.</p>
       {!fk ? (
         <Card>
-          <p className="text-sm" data-testid="harvest-needs-key">
-            Fathom isn&apos;t connected yet. <Link href="/settings?tab=connections#fathom" className="underline">Paste your Fathom API key in Settings</Link> and your recordings appear here.
-          </p>
+          <div data-testid="harvest-needs-key">
+            <p className="text-sm">Fathom isn&apos;t connected yet. Paste your Fathom API key in Settings and your recordings appear here.</p>
+            <Link href="/settings?tab=connections#fathom" className="btn btn-accent mt-3 min-h-11!" data-testid="harvest-connect-fathom">
+              Connect your Fathom key
+            </Link>
+          </div>
         </Card>
       ) : null}
       {fk && !ai ? (
