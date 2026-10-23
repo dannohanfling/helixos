@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARENA, ARENA_DAYS, ARENA_ENDS_AT, ARENA_HUDDLES, ARENA_STARTS_AT, arenaCard, arenaDay, arenaPhase, canEnter, canSee, countdown, dateIn, huddleWhen, joinOpen, nextHuddle, rankEntries } from "@/lib/engine/arena";
+import { ARENA, ARENA_DAYS, CHALLENGE_COPY, challengeView, ARENA_ENDS_AT, ARENA_HUDDLES, ARENA_STARTS_AT, arenaCard, arenaDay, arenaPhase, canEnter, canSee, countdown, dateIn, huddleWhen, joinOpen, nextHuddle, rankEntries } from "@/lib/engine/arena";
 
 describe("30 Days in the Arena (H-1562)", () => {
   it("is 30 days, 27 Nov to 26 Dec, and its instants are midnight Pacific at both ends", () => {
@@ -68,5 +68,31 @@ describe("30 Days in the Arena (H-1562)", () => {
       { id: "d", points: 140, daysClosed: 10, callsBooked: 0 },
     ];
     expect(rankEntries(rows).map((r) => r.id)).toEqual(["d", "c", "b", "a"]);
+  });
+});
+
+describe("the challenge card on Colosseum → Challenges (H-1840, plan H-1844)", () => {
+  it("sits under Upcoming before the first day, with a countdown and the plan's words", () => {
+    const c = challengeView(ARENA, "2026-10-23");
+    expect(c.section).toBe("upcoming");
+    expect(c.countdown).toBe("Starts in 35 days");
+    expect(c.when).toBe("Fri 27 Nov to Sat 26 Dec. Join by Thu 26 Nov.");
+    expect(c.finish).toBe("Close your day on 24 of the 30 days.");
+    expect(c.promise).toBe("30 days. Close your day 24 times. Earn a free month.");
+    expect(challengeView(ARENA, "2026-11-26").countdown).toBe("Starts tomorrow");
+  });
+  it("moves to Active on the first day and to Past after the last", () => {
+    expect(challengeView(ARENA, "2026-11-27")).toMatchObject({ section: "active", countdown: "Day 1 of 30" });
+    expect(challengeView(ARENA, "2026-12-26")).toMatchObject({ section: "active", countdown: "Day 30 of 30" });
+    expect(challengeView(ARENA, "2026-12-27")).toMatchObject({ section: "past", countdown: "Ended Sat 26 Dec" });
+  });
+  it("says no price, no Elite reward and no internal name", () => {
+    const words = [CHALLENGE_COPY[ARENA.slug].promise, ...CHALLENGE_COPY[ARENA.slug].rewards].join(" ");
+    expect(words).not.toMatch(/\$|price|Elite|private session|Accelerator|Academy/i);
+  });
+  it("a challenge with no words of its own still has dates, a countdown and the finish line", () => {
+    const c = challengeView({ ...ARENA, slug: "later-one", name: "A later one" }, "2026-10-23");
+    expect(c).toMatchObject({ name: "A later one", promise: null, rewards: [] });
+    expect(c.finish).toBe("Close your day on 24 of the 30 days.");
   });
 });

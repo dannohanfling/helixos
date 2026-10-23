@@ -161,3 +161,49 @@ export function rankEntries<T extends { points: number; daysClosed: number; call
 export function countdownNow(): Countdown {
   return countdown(Date.now());
 }
+
+/**
+ * What a challenge says on Colosseum → Challenges (H-1840, plan H-1844): one entry per challenge, keyed by its slug, so a
+ * later challenge is a new entry and no page code. No prices and no internal names; Elite's own reward is not on the card.
+ */
+export type ChallengeCopy = { promise: string; rewards: readonly string[] };
+export const CHALLENGE_COPY: Readonly<Record<string, ChallengeCopy>> = {
+  [ARENA_SLUG]: {
+    promise: "30 days. Close your day 24 times. Earn a free month.",
+    rewards: ["Finish and you get one free month at your current level.", "The points leader gets Danno and the team's help building their webinar in January."],
+  },
+};
+
+/** "Fri 27 Nov" for a date (YYYY-MM-DD), as the card states it. */
+export function dayWords(date: string): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${date}T12:00:00Z`)).replace(",", "");
+}
+
+export type ChallengeSection = "upcoming" | "active" | "past";
+export type ChallengeView = {
+  section: ChallengeSection;
+  name: string;
+  promise: string | null;
+  when: string;
+  /** "Starts in 35 days", "Starts tomorrow", "Day 4 of 30", "Ended Sat 26 Dec". */
+  countdown: string;
+  finish: string;
+  rewards: readonly string[];
+};
+
+/** The card for a challenge on a date in its own zone: which section it sits in, and its words. */
+export function challengeView(c: Pick<ArenaConfig, "slug" | "name" | "startDate" | "endDate" | "joinBy" | "targetDays">, today: string): ChallengeView {
+  const phase = arenaPhase(c, today);
+  const days = daysBetween(c.startDate, c.endDate);
+  const until = daysBetween(today, c.startDate) - 1;
+  const copy = CHALLENGE_COPY[c.slug] ?? null;
+  return {
+    section: phase === "before" ? "upcoming" : phase === "open" ? "active" : "past",
+    name: c.name,
+    promise: copy?.promise ?? null,
+    when: `${dayWords(c.startDate)} to ${dayWords(c.endDate)}. Join by ${dayWords(c.joinBy)}.`,
+    countdown: phase === "before" ? (until === 1 ? "Starts tomorrow" : `Starts in ${until} days`) : phase === "open" ? `Day ${daysBetween(c.startDate, today)} of ${days}` : `Ended ${dayWords(c.endDate)}`,
+    finish: `Close your day on ${c.targetDays} of the ${days} days.`,
+    rewards: copy?.rewards ?? [],
+  };
+}

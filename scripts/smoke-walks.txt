@@ -96,3 +96,4 @@ areadrafts
 zones
 push
 arena
+challenges
