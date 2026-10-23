@@ -43,11 +43,12 @@ export function OwnProgramCard({ membershipId, feed, ownPass, passMessage, passF
           </div>
         ) : null}
         <p className="mt-2" data-testid="own-pass">
-          Your own pass: {ownPass.installed ? "in your wallet." : ownPass.made ? "made; add it to your wallet on Rewards." : ready ? "not made yet. Make it on Rewards with Get my pass (your test comes first)." : "connect the program and its template first."}{" "}
-          <a href="/rewards#eo-pass" className="underline">
-            Open Rewards →
-          </a>
+          Your own pass: {ownPass.installed ? "in your wallet." : ownPass.made ? "made; add it to your wallet on Rewards." : ready ? "not made yet. Make it on Rewards with Get my pass (your test comes first)." : "connect the program and its template first."}
         </p>
+        {/* H-1794: the way to the pass is a button, never a tiny link (Danno couldn't find it on his phone). */}
+        <a href="/rewards#eo-pass" className="btn btn-ghost btn-sm mt-2 min-h-11" data-testid="own-pass-open-rewards">
+          Open Rewards →
+        </a>
         {feed && ready && ownPass.addressed ? <PassMessage lastMessageAt={ownPass.lastMessageAt ?? null} outcome={passMessage} /> : null}
         {feed && ready && ownPass.addressed ? <PassFix feed={feed} outcome={passFix} /> : null}
         {feed ? (

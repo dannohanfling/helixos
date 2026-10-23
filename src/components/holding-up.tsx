@@ -13,10 +13,10 @@ export function HoldingUp({ items }: { items: { what: string; fix: { href: strin
       <div className="font-semibold">What&apos;s holding this up</div>
       <ul className="mt-1 space-y-1">
         {items.map((it, i) => (
-          <li key={it.what} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5" data-testid="holding-up-item">
+          <li key={it.what} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1" data-testid="holding-up-item">
             <span className="text-ink-2">{it.what}</span>
             {first[i] ? (
-              <Link href={it.fix.href} className="text-xs font-medium underline" data-testid="holding-up-fix">
+              <Link href={it.fix.href} className="btn btn-ghost btn-sm min-h-11" data-testid="holding-up-fix">
                 {it.fix.label} →
               </Link>
             ) : null}

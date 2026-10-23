@@ -131,7 +131,7 @@ export const NAV_GROUPS: NavGroup[] = [
     // The coach's links in three groups (H-164 §7): People, Agents, Your content. A client sees none of them, so none is drawn.
     label: "People",
     items: [
-      { href: "/coach", label: "Clients", icon: "🧑‍🏫", coachOnly: true, hint: "the Coach view" },
+      { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true, hint: "your clients and their work" },
       // Client work waiting for approval (H-1280, plan H-1296): lands on the Verify submissions card; the count is the menu badge.
       { href: VERIFY_HREF, label: "Submissions to verify", icon: "✅", coachOnly: true, hint: "clients' work to approve" },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },

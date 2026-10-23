@@ -187,9 +187,9 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
               />
             </div>
             <p className="text-xs text-ink-3">The page you&apos;re on goes with it: {pathname}</p>
-            <p className="text-xs text-ink-3">
-              Need a person?{" "}
-              <Link href="/support" className="underline" data-testid="report-support">
+            <p className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
+              Need a person?
+              <Link href="/support" className="btn btn-ghost btn-sm min-h-11" data-testid="report-support">
                 Help and support
               </Link>
             </p>

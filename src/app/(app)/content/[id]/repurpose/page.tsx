@@ -322,7 +322,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <SubmitButton className="btn btn-accent" pendingText="Generating…">Generate drafts</SubmitButton>
-            {ai ? <SubmitButton className="btn btn-soft" name="ai" value="1" pendingText="Drafting…">✨ With AI</SubmitButton> : <span className="text-xs text-ink-3"><Link href="/settings?tab=connections#ai" className="underline">Connect your AI key in Settings</Link> to have each draft polished in your voice.</span>}
+            {ai ? <SubmitButton className="btn btn-soft" name="ai" value="1" pendingText="Drafting…">✨ With AI</SubmitButton> : <><Link href="/settings?tab=connections#ai" className="btn btn-ghost min-h-11" data-testid="repurpose-connect-ai">✨ Connect your AI key in Settings</Link><span className="text-xs text-ink-3">to have each draft polished in your voice.</span></>}
           </div>
           <AiFormStatus feature="repurpose" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
           <AiPromise enabled={ai}>With AI returns one draft per channel you tick, rewritten for that format inside its length and link rules.</AiPromise>

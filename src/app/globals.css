@@ -171,6 +171,8 @@ textarea::placeholder {
   border-radius: var(--radius-card);
 }
 
+/* Important actions are buttons, never small links (H-1794, docs/design-rules.md): gold (.btn-accent) for the one main
+   action, outline (.btn-ghost) for the rest, each with min-h-11 for a 44 px tap target. */
 .btn {
   display: inline-flex;
   align-items: center;

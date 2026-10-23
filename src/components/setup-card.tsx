@@ -133,7 +133,7 @@ export function SetupList({ steps, video, canTick, coach }: { steps: SetupStep[]
                       </form>
                     ) : null}
                     {!s.done && s.key !== "s1a" ? (
-                      <Link href={s.href} className="text-xs underline">
+                      <Link href={s.href} className="btn btn-ghost btn-xs min-h-11" data-testid="setup-row-open">
                         Open →
                       </Link>
                     ) : null}

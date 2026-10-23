@@ -20,7 +20,7 @@ export function AppRow({ hasApp, linksOn }: { hasApp: "ios" | "android" | null; 
       {hasApp ? (
         <>
           <span data-testid="account-app-have">you have it on {hasApp === "ios" ? "iPhone" : "Android"}.</span>{" "}
-          <Link href="/settings/notifications" className="underline" data-testid="account-app-notifications">
+          <Link href="/settings/notifications" className="btn btn-ghost btn-sm ml-1 min-h-11" data-testid="account-app-notifications">
             Notifications
           </Link>
         </>
@@ -31,12 +31,12 @@ export function AppRow({ hasApp, linksOn }: { hasApp: "ios" | "android" | null; 
       ) : home ? (
         <span data-testid="account-app-home">
           you&apos;re using HelixOS from your home screen. The store app adds reminders.{" "}
-          <Link href="/get-the-app" className="underline">
+          <Link href="/get-the-app" className="btn btn-ghost btn-sm ml-1 min-h-11" data-testid="account-app-get-home">
             Get the app
           </Link>
         </span>
       ) : (
-        <Link href="/get-the-app" className="underline" data-testid="account-app-get">
+        <Link href="/get-the-app" className="btn btn-ghost btn-sm min-h-11" data-testid="account-app-get">
           Get the app →
         </Link>
       )}

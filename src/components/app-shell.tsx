@@ -108,7 +108,7 @@ export function AppShell({ viewer, chatOn = false, points, flame = null, flameAf
           </div>
           )}
           {!team && choices > 1 ? (
-            <Link href="/choose" className="block text-xs font-medium text-ink-2 hover:text-ink" data-testid="choose-link">
+            <Link href="/choose" className="btn btn-ghost btn-sm min-h-11 w-full" data-testid="choose-link">
               Switch HelixOS →
             </Link>
           ) : null}
