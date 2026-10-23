@@ -12,7 +12,7 @@ export function ArenaToday({ card }: { card: ArenaCard }) {
     <section id="arena" className="mb-4 rounded-xl border border-[#6b4b1c] bg-[#18130e] p-4 text-[#f6efe3]" data-testid="today-arena" data-kind={card.kind}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold text-[#f2c766]">🏛️ {card.title}</h2>
-        <Link href="/arena" className="btn btn-sm min-h-11 border-[#6b4b1c] text-[#f2c766] hover:bg-[#2a2016]" data-testid="today-arena-open">
+        <Link href="/arena" className="btn btn-sm min-h-11! border-[#6b4b1c]! text-[#f2c766] hover:bg-[#2a2016]" data-testid="today-arena-open">
           {card.kind === "invite" ? "What it is →" : "The Arena →"}
         </Link>
       </div>

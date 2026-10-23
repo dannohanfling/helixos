@@ -16,7 +16,7 @@ export function HoldingUp({ items }: { items: { what: string; fix: { href: strin
           <li key={it.what} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1" data-testid="holding-up-item">
             <span className="text-ink-2">{it.what}</span>
             {first[i] ? (
-              <Link href={it.fix.href} className="btn btn-ghost btn-sm min-h-11" data-testid="holding-up-fix">
+              <Link href={it.fix.href} className="btn btn-ghost btn-sm min-h-11!" data-testid="holding-up-fix">
                 {it.fix.label} →
               </Link>
             ) : null}

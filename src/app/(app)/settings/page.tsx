@@ -226,7 +226,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {leaderboard ? (
             <p className="mt-2 text-sm" data-testid="switched-loyalty-link">
               Loyalty leaderboard:{" "}
-              <Link href="/loyalty" className="btn btn-ghost btn-sm min-h-11">
+              <Link href="/loyalty" className="btn btn-ghost btn-sm min-h-11!">
                 Open →
               </Link>
             </p>
@@ -256,7 +256,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Tabs current={tab} items={tabsFor(v.role).map((t) => ({ key: t.key, label: t.label, href: `/settings?tab=${t.key}` }))} />
       </div>
       {at("connections") ? (<>
-      <Card id="publishing" className="mb-4 scroll-mt-20" title={GHL_COPY.title} action={<Link href="/connect-tools" className="btn btn-ghost btn-sm min-h-11" data-testid="settings-connect-tools">Connect your tools, step by step →</Link>}>
+      <Card id="publishing" className="mb-4 scroll-mt-20" title={GHL_COPY.title} action={<Link href="/connect-tools" className="btn btn-ghost btn-sm min-h-11!" data-testid="settings-connect-tools">Connect your tools, step by step →</Link>}>
         {conn?.mediaScopeMissingAt ? (
           <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" role="status" data-testid="ghl-add-permission">
             {ADD_PERMISSION}
@@ -427,10 +427,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             )}
             <p className="mt-2 text-xs text-ink-3">Reports are reviewed within 24 hours.</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Link href="/reports" className="btn btn-ghost btn-sm min-h-11" data-testid="settings-my-reports">
+              <Link href="/reports" className="btn btn-ghost btn-sm min-h-11!" data-testid="settings-my-reports">
                 📬 My reports
               </Link>
-              <Link href="/support" className="btn btn-ghost btn-sm min-h-11" data-testid="settings-support">
+              <Link href="/support" className="btn btn-ghost btn-sm min-h-11!" data-testid="settings-support">
                 Help and support
               </Link>
             </div>
@@ -690,7 +690,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         ) : null}
         </>) : null}
         {at("connections") ? (<>
-        <Card id="connected-apps" title="Connected apps" action={<Link href="/connect" className="btn btn-ghost btn-sm min-h-11" data-testid="settings-connect-claude">Connect to Claude, step by step →</Link>}>
+        <Card id="connected-apps" title="Connected apps" action={<Link href="/connect" className="btn btn-ghost btn-sm min-h-11!" data-testid="settings-connect-claude">Connect to Claude, step by step →</Link>}>
           {/* The MCP server (rev 224): the apps this member let act as them, and the way to cut each one. */}
           {appsNote ? <p className="mb-2 text-sm text-good" data-testid="apps-note">{appsNote}</p> : null}
           {v.role === "coach" ? (
@@ -732,7 +732,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           ) : (
             <div data-testid="connected-apps-empty">
               <p className="text-sm text-ink-2">None yet. Connect HelixOS to Claude to read and write your own HelixOS from a chat.</p>
-              <Link href="/connect" className="btn btn-accent mt-2 min-h-11" data-testid="connected-apps-connect">
+              <Link href="/connect" className="btn btn-accent mt-2 min-h-11!" data-testid="connected-apps-connect">
                 Connect HelixOS to Claude
               </Link>
             </div>

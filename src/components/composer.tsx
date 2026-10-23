@@ -300,7 +300,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                     ✨ AI: shape for every channel
                   </button>
                 ) : (
-                  <a href="/settings?tab=connections#ai" className="btn btn-ghost btn-sm min-h-11" title="Connect your own Anthropic or OpenAI key" data-testid="composer-connect-ai">
+                  <a href="/settings?tab=connections#ai" className="btn btn-ghost btn-sm min-h-11!" title="Connect your own Anthropic or OpenAI key" data-testid="composer-connect-ai">
                     ✨ Connect your AI key in Settings
                   </a>
                 )}

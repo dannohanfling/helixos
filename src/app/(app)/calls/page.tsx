@@ -100,7 +100,7 @@ export default async function CallsPage() {
         </span>
         <span className="flex flex-wrap items-center gap-2">
           <CallJoin startIso={o.startIso} liveEndIso={o.liveEndIso} link={o.link} tz={v.tz} initial={state} />
-          <a href={`/calls/${o.call.id}/calendar`} className="btn btn-ghost btn-sm min-h-11" data-testid="calls-calendar">
+          <a href={`/calls/${o.call.id}/calendar`} className="btn btn-ghost btn-sm min-h-11!" data-testid="calls-calendar">
             Add to calendar
           </a>
         </span>

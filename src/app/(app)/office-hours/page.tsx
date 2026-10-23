@@ -173,7 +173,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
             {v.workspace.oohLink ? (
               <>
                 {" "}
-                <a href={v.workspace.oohLink} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm ml-1 min-h-11" data-testid="ooh-join">Join the call ↗</a>
+                <a href={v.workspace.oohLink} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm ml-1 min-h-11!" data-testid="ooh-join">Join the call ↗</a>
               </>
             ) : null}
           </>
@@ -224,13 +224,13 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                     {r.responsible ? <p className="mt-1 text-xs text-ink-3">With {r.responsible}</p> : null}
                     {/* Add to calendar (H-457): the session as UTC instants, which every calendar shows in its owner's time. */}
                     {r.friday >= hToday && sessionStart(r.friday, session) ? (
-                      <a href={`/office-hours/calendar?day=${r.friday}`} className="btn btn-ghost btn-sm mt-2 min-h-11" data-testid="ooh-calendar">
+                      <a href={`/office-hours/calendar?day=${r.friday}`} className="btn btn-ghost btn-sm mt-2 min-h-11!" data-testid="ooh-calendar">
                         Add to calendar
                       </a>
                     ) : null}
                     {open && oohCanEdit(r, who, hToday, r.friday) ? (
                       <details className="mt-2">
-                        <summary className="btn btn-ghost btn-sm min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden" data-testid="ooh-edit">Change this request</summary>
+                        <summary className="btn btn-ghost btn-sm min-h-11! cursor-pointer list-none [&::-webkit-details-marker]:hidden" data-testid="ooh-edit">Change this request</summary>
                         <div className="mt-2">
                           <RequestForm fridays={fridays} categories={v.workspace.oohCategories} request={r} owner={v.actor.id} people={people} session={session} tz={v.tz} />
                         </div>

@@ -299,7 +299,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               Passcode: <b className="tabular">{nextCall.passcode}</b>
             </span>
           ) : null}
-          <Link href="/calls" className="btn btn-ghost btn-sm ml-auto min-h-11" data-testid="today-next-call-week">
+          <Link href="/calls" className="btn btn-ghost btn-sm ml-auto min-h-11!" data-testid="today-next-call-week">
             See this week →
           </Link>
         </div>
@@ -348,7 +348,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         <div>
           <div className="text-sm text-ink-2">{formatDate(v.today, { weekday: "long", month: "long", day: "numeric" })}</div>
           <h1 className="text-2xl font-bold tracking-tight">{greeting(v.hour, v.user.name)}</h1>
-          <Link href="/pathway" className="btn btn-ghost btn-sm mt-2 min-h-11 max-w-full whitespace-normal text-left" data-testid="road">
+          <Link href="/pathway" className="btn btn-ghost btn-sm mt-2 min-h-11! max-w-full whitespace-normal! text-left" data-testid="road">
             🛣️ {d.road}
           </Link>
         </div>
@@ -821,7 +821,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               <Progress value={d.tier.pct} height={6} />
             </div>
             <div className="mt-1.5 text-xs text-ink-3">{d.tier.next ? `${d.tier.toNext.toLocaleString()} to ${d.tier.next.name}` : "Top tier reached"}</div>
-            <Link href="/rewards" className="btn btn-ghost btn-sm mt-3 min-h-11" data-testid="today-see-rewards">
+            <Link href="/rewards" className="btn btn-ghost btn-sm mt-3 min-h-11!" data-testid="today-see-rewards">
               See rewards →
             </Link>
             {d.goal && d.goal.target > 0 ? (
@@ -845,7 +845,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             ) : (
               <div className="mt-4 border-t pt-3 text-xs text-ink-3">
                 <p>Your one goal shows here, filled by the cash you log in the close.</p>
-                <Link href="/settings" className="btn btn-ghost btn-sm mt-2 min-h-11" data-testid="today-set-goal">
+                <Link href="/settings" className="btn btn-ghost btn-sm mt-2 min-h-11!" data-testid="today-set-goal">
                   Set your one goal
                 </Link>
               </div>

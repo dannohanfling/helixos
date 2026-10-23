@@ -29,7 +29,7 @@ export default async function HarvestPage({ searchParams }: { searchParams: Prom
         <Card>
           <div data-testid="harvest-needs-key">
             <p className="text-sm">Fathom isn&apos;t connected yet. Paste your Fathom API key in Settings and your recordings appear here.</p>
-            <Link href="/settings?tab=connections#fathom" className="btn btn-accent mt-3 min-h-11" data-testid="harvest-connect-fathom">
+            <Link href="/settings?tab=connections#fathom" className="btn btn-accent mt-3 min-h-11!" data-testid="harvest-connect-fathom">
               Connect your Fathom key
             </Link>
           </div>
