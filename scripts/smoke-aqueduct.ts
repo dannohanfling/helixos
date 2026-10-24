@@ -262,9 +262,12 @@ async function main() {
     const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
     const sp = await still.newPage();
     await sp.goto(url(), { waitUntil: "networkidle" });
-    must((await sp.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationName)) === "none", "reduced motion stops all animation");
+    // At an arch with a filmed leak (H-1734, H-1952) the fall is the photo's own, under the held clip: nothing drawn to stop.
+    const filmedFall = (await sp.locator('[data-testid="aqueduct-scene"]').getAttribute("data-loop")) === "1";
+    const drawnFallStill = filmedFall || ((await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationName)) === "none");
+    must((await sp.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && drawnFallStill, "reduced motion stops all animation");
     // The still still looks like water: the body and its layers are drawn, with no front.
-    must((await sp.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0" && (await sp.locator("[data-flow]").count()) === 28 && (await sp.locator(".aq-core").count()) === 7 && (await sp.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1, "reduced motion: the same water, still, with no front");
+    must((await sp.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0" && (await sp.locator("[data-flow]").count()) === 28 && (await sp.locator(".aq-core").count()) === 7 && (await sp.locator('[data-testid="aqueduct-fall-sheet"]').count()) === (filmedFall ? 0 : 1), "reduced motion: the same water, still, with no front");
     await sp.screenshot({ path: "screenshots/aqueduct-reduced-1440.png" });
     await still.close();
     await page.goto(url(), { waitUntil: "networkidle" });
