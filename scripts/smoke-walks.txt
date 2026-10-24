@@ -12,6 +12,7 @@ composer
 library
 wizards
 ladders
+laddertitles
 teaching
 features
 voice

@@ -10,6 +10,7 @@ import type { Viewer } from "@/lib/auth";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { graphicStep, makeGraphic } from "@/lib/graphic";
 import { headlineChoices } from "@/lib/engine/graphic";
+import { ladderTitle } from "@/lib/engine/ladder";
 
 const member = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id });
 
@@ -19,7 +20,7 @@ export async function ladderFor(v: Viewer, words: string) {
   const rows = await db.query.ladders.findMany({ where: and(eq(schema.ladders.workspaceId, v.workspace.id), eq(schema.ladders.userId, v.user.id)) });
   const byId = rows.find((l) => l.id === w);
   if (byId) return byId;
-  const some = rows.filter((l) => l.topic.toLowerCase().includes(w) || l.postName.toLowerCase().includes(w));
+  const some = rows.filter((l) => l.topic.toLowerCase().includes(w) || l.postName.toLowerCase().includes(w) || ladderTitle(l.postName, l.topic).toLowerCase().includes(w));
   if (some.length === 1) return some[0];
   if (!some.length) throw new Error(`No ladder matches "${words}". The member's ladders: ${rows.map((l) => l.topic).join("; ") || "none yet"}.`);
   throw new Error(`"${words}" fits ${some.length} ladders: ${some.map((l) => l.topic).join("; ")}. Say which.`);
