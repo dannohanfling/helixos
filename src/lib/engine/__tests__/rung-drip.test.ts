@@ -152,7 +152,7 @@ describe("Ship's rungs-only hand-off (rev 625, the contract Community Loyalty ma
     const p = rungsPayload({ userNs: "f52594u1", rungs: ["The first move.\nIts second line.", "2. Already numbered.", "  ", "Third."], fbPostId: "fb1", igMediaId: "ig1" });
     expect(p.rungs).toEqual(["1. The first move.\nIts second line.", "2. Already numbered.", "3. Third."]);
     expect([p.user_ns, p.rung_fb_post_id, p.rung_ig_media_id, p.target, p.gap_minutes]).toEqual(["f52594u1", "fb1", "ig1", "both", ""]);
-    expect(Object.keys(p).sort()).toEqual(["gap_minutes", "rung_fb_post_id", "rung_ig_media_id", "rungs", "target", "user_ns"]);
+    expect(Object.keys(p).sort()).toEqual(["gap_minutes", "pin_last", "rung_fb_post_id", "rung_ig_media_id", "rungs", "target", "user_ns"]);
     expect(JSON.stringify(p)).not.toMatch(/"post"|first_comment/);
     expect(rungsPayload({ userNs: "u", rungs: ["a"], fbPostId: "fb1", igMediaId: null }).target).toBe("facebook");
     expect(rungsPayload({ userNs: "u", rungs: ["a"], fbPostId: "", igMediaId: "ig1" })).toMatchObject({ target: "instagram", rung_fb_post_id: "" });

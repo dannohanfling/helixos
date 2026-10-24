@@ -2448,7 +2448,7 @@ export const certSubmissions = sqliteTable(
 
 /* ───────────────────────── Content ladders (skins) ───────────────────────── */
 
-export const LADDER_FORMAT_KEYS = ["loss_rebuild", "method_resource", "milestone", "authority_anchor", "tool_stack", "mistakes", "screenshot", "objection", "numbers_teardown", "bait_correct", "community", "origin_story", "roadmap"] as const;
+export const LADDER_FORMAT_KEYS = ["loss_rebuild", "method_resource", "milestone", "authority_anchor", "tool_stack", "mistakes", "screenshot", "objection", "numbers_teardown", "bait_correct", "community", "origin_story", "roadmap", "reel"] as const;
 export const LADDER_STATUSES = ["draft", "ready", "live", "done"] as const;
 export const LADDER_AUDIENCES = ["warm", "cold"] as const;
 
@@ -2527,6 +2527,12 @@ export const ladders = sqliteTable(
     generatedBy: text("generated_by").notNull().default("scaffold"),
     status: text("status", { enum: LADDER_STATUSES }).notNull().default("draft"),
     launchedAt: text("launched_at"),
+    /** Reel to Post (H-1948, plan H-1953): where the ladder came from. A reel's transcript is its source; the reel package's own parts. */
+    sourceType: text("source_type", { enum: ["topic", "reel"] }).notNull().default("topic"),
+    sourceTranscript: text("source_transcript"),
+    hookOptions: text("hook_options", { mode: "json" }).$type<{ text: string; pick: boolean }[]>().notNull().default([]),
+    onScreenText: text("on_screen_text"),
+    reelFlags: text("reel_flags", { mode: "json" }).$type<{ kind: string; text: string; from: "code" | "writer" }[]>().notNull().default([]),
     createdAt: createdAt(),
   },
   (t) => [index("ladders_user").on(t.userId, t.status)],

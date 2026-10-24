@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 373,
+    date: "2026-10-24",
+    title: "New from a reel: your reel's words in, a ready-to-post package out",
+    lines: [
+      "Content → New from a reel: paste what you say in the reel (or describe what's on screen) and press Create post. You get three hooks with one picked, the caption, 5 comment rungs, a cover frame and on-screen text, saved as a draft in Ladders.",
+      "Before you post, it lists anything to check: numbers, prices or names you said on camera that aren't in your proof, and a keyword you said that isn't on your facts. Those stay out of the copy until you add them.",
+      "Ship drips a reel's 5 rungs about five minutes apart and asks for the last one to be pinned. Uploading the video and transcribing it on your phone come next.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 372,
     date: "2026-10-24",
     title: "Filmed water at the third and fourth arches of the Aqueduct",

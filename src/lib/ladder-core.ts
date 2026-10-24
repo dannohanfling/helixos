@@ -12,7 +12,8 @@ import { pushKeywordFields } from "@/lib/community-loyalty";
 import { nowIso } from "@/lib/dates";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { evidenceLines } from "@/lib/engine/evidence";
-import { LADDER_FORMATS, channelBodies, checklist, formatFor, keywordOf, masterBlock, outputContract, parseLadderOutput, perPostInput, publishBlockers, scaffold, targetWords, withoutKeyword, type Brief, type LadderFormatKey, type Parsed } from "@/lib/engine/ladder";
+import { LADDER_FORMATS, channelBodies, checklist, formatFor, isReel, keywordOf, masterBlock, outputContract, parseLadderOutput, perPostInput, publishBlockers, scaffold, targetWords, withoutKeyword, type Brief, type LadderFormatKey, type Parsed } from "@/lib/engine/ladder";
+import { mergeFlags, parseReelOutput, reelContract, reelFlags, reelFormatSection, reelInput, reelScaffold, type HookOption, type ReelFlag } from "@/lib/engine/reel";
 import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { rungsQueuedLine } from "@/lib/engine/rung-drip";
 import { shipRuns } from "@/lib/engine/ship";
@@ -54,7 +55,10 @@ export function scrub(parsed: Parsed): Parsed {
   return note ? { ...out, notes: [out.notes, note].filter(Boolean).join("\n") } : out;
 }
 
-export async function generate(workspaceId: string, userId: string, brief: Brief, viewer?: Viewer): Promise<{ parsed: Parsed; generatedBy: string; offered: Offered[] }> {
+/** A reel's own parts (Reel to Post, H-1948), beside the ladder fields every ladder has. */
+export type ReelParts = { hookOptions: HookOption[]; onScreen: string; flags: ReelFlag[] };
+
+export async function generate(workspaceId: string, userId: string, brief: Brief, viewer?: Viewer): Promise<{ parsed: Parsed; generatedBy: string; offered: Offered[]; reel?: ReelParts }> {
   const [profile, proofs, membership, user, evidence] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, workspaceId), eq(schema.ladderProfiles.userId, userId)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }),
@@ -64,14 +68,27 @@ export async function generate(workspaceId: string, userId: string, brief: Brief
   ]);
   const member = { name: user?.name ?? "the coach", businessName: membership?.businessName, bigPromise: membership?.bigPromise };
   const noKeyword = !brief.keyword || brief.keyword.toUpperCase() === "NONE";
-  const system = `${masterBlock(profile ?? null, proofs, member, evidenceLines(evidence), noKeyword)}\n\n${outputContract()}`;
+  // Reel to Post (H-1948): the same writer, voice and rules, with the reel's FORMAT section, contract and input; the code's
+  // flags come from the transcript before anything is written.
+  const reel = isReel(brief);
+  const codeFlags = reel ? reelFlags(brief.sourceMaterial ?? "", profile ?? null, proofs) : [];
+  const system = `${masterBlock(profile ?? null, proofs, member, evidenceLines(evidence), noKeyword, reel ? reelFormatSection(member.name.split(" ")[0]) : undefined)}\n\n${reel ? reelContract() : outputContract()}`;
   // Who the post is for: the member's Primary avatar in their own words, when they've written one (rev 501 §6).
   const avatar = await draftAvatarBrief({ workspaceId, userId }, null);
   // The teaching library and story bank (rev 618): the coach's own ladders only. A client's ladder never reads any of it.
   const material = membership?.role === "coach" ? await materialFor(userId, { topic: brief.topic, formatName: formatFor(brief.format).name, target: brief.keyword !== "NONE" ? targetWords(keywordOf(profile ?? null, brief.keyword), brief.leadMagnet?.title) : null, source: brief.sourceMaterial }, workspaceId).catch(() => null) : null;
   const offered = material ? offeredOf(material) : [];
   const library = material ? libraryBlock(material.teaching, material.stories, frameworkBlock(material.frameworks)) : "";
-  const text = await draft(system, [perPostInput(brief), avatar, library].filter(Boolean).join("\n\n"), 8000, { feature: "ladder", viewer });
+  const text = await draft(system, [reel ? reelInput(brief) : perPostInput(brief), avatar, library].filter(Boolean).join("\n\n"), 8000, { feature: "ladder", viewer });
+  if (reel) {
+    const sk = reelScaffold(brief, profile ?? null);
+    const skParts = { hookOptions: sk.hookOptions, onScreen: sk.onScreen, flags: codeFlags };
+    if (!text) return { parsed: sk, generatedBy: "scaffold", offered: [], reel: skParts };
+    const rp = parseReelOutput(text);
+    const parsed = noKeyword ? withoutKeyword(scrub(rp), profile ?? null) : scrub(rp);
+    if (parsed.rungs.length >= 3 && parsed.copy) return { parsed, generatedBy: "claude", offered, reel: { hookOptions: rp.hookOptions, onScreen: rp.onScreen, flags: mergeFlags(codeFlags, rp.writerFlags) } };
+    return { parsed: { ...sk, notes: `Claude did not return a full reel package. Its answer:\n${text.slice(0, 2000)}` }, generatedBy: "claude-partial", offered: [], reel: skParts };
+  }
   if (text) {
     // NONE means none (rev 838): whatever the writer did, no keyword, call to action or price is kept, and the field says NONE.
     const parsed = noKeyword ? withoutKeyword(scrub(parseLadderOutput(text)), profile ?? null) : scrub(parseLadderOutput(text));
@@ -116,7 +133,7 @@ export type Member = { workspaceId: string; userId: string };
 /** A new ladder from a brief: written (or the skeleton without an AI key), saved as a draft, and what it drew on recorded. */
 export async function createLadder(m: Member, brief: Brief & { leadMagnetId: string | null }, viewer?: Viewer): Promise<{ id: string; parsed: Parsed; generatedBy: string }> {
   const { leadMagnet, leadMagnetId, ...rest } = brief;
-  const { parsed, generatedBy, offered } = await generate(m.workspaceId, m.userId, { ...rest, leadMagnet }, viewer);
+  const { parsed, generatedBy, offered, reel } = await generate(m.workspaceId, m.userId, { ...rest, leadMagnet }, viewer);
   const id = newId();
   await db.insert(schema.ladders).values({
     id,
@@ -136,6 +153,7 @@ export async function createLadder(m: Member, brief: Brief & { leadMagnetId: str
     threadsChain: parsed.threadsChain,
     notes: [parsed.screenshotText ? `SCREENSHOT TEXT:\n${parsed.screenshotText}` : "", parsed.notes].filter(Boolean).join("\n\n") || null,
     generatedBy,
+    ...(reel ? { sourceType: "reel" as const, sourceTranscript: rest.sourceMaterial ?? null, hookOptions: reel.hookOptions, onScreenText: reel.onScreen || null, reelFlags: reel.flags } : {}),
   });
   await recordMaterial(m.workspaceId, m.userId, id, offered, parsed.materialUsed);
   return { id, parsed, generatedBy };
@@ -230,7 +248,9 @@ export async function updateLadderPart(v: Viewer, l: schema.Ladder, part: Ladder
       db.query.users.findFirst({ where: eq(schema.users.id, l.userId) }),
     ]);
     const member = { name: user?.name ?? "the coach", businessName: v.membership.businessName, bigPromise: v.membership.bigPromise };
-    const what = part === "rung" ? `rung ${n} of a comment ladder (40 to 90 words, ending with one short quotable line on its own line)` : part === "headline" ? 'the ladder\'s headline (8 to 14 words, ALL CAPS, two lines separated by " / ", one phrase marked "(gold: PHRASE)")' : part === "body" ? "the ladder's post body (hook, the read-them-in-order line, the save line, one open question; no keyword prompt)" : "the ladder's Instagram caption";
+    // A reel's parts are described as a reel's (H-1948): the cover frame, the caption, a rung with no "message me" line.
+    const reel = isReel(l);
+    const what = part === "rung" ? `rung ${n} of ${reel ? "a reel's 5 comment rungs" : "a comment ladder"} (40 to 90 words, ending with one short quotable line on its own line${reel ? '; a CTA is the one line "Comment KEYWORD and I\'ll send …", never a "message me" fallback' : ""})` : part === "headline" ? (reel ? 'the reel\'s cover frame (ALL CAPS, two lines separated by " / ", one phrase marked "(gold: PHRASE)" on the number or the payoff word)' : 'the ladder\'s headline (8 to 14 words, ALL CAPS, two lines separated by " / ", one phrase marked "(gold: PHRASE)")') : part === "body" ? (reel ? "the reel's caption (the hook on line 1, one sentence per paragraph, the read-them-in-order line, a save line, one open question last; never the keyword)" : "the ladder's post body (hook, the read-them-in-order line, the save line, one open question; no keyword prompt)") : "the ladder's Instagram caption";
     const task = `${masterBlock(profile ?? null, proofs, member, [], !l.keyword || l.keyword.toUpperCase() === "NONE")}\n\nYou are changing ONE part of an existing ladder: ${what}. Apply the member's instruction to it and keep everything else about it. Return only the new text of that part, nothing before or after it.`;
     const out = await draft(task, `TOPIC: ${l.topic}\n\nTHE PART NOW:\n${current}\n\nTHE MEMBER'S INSTRUCTION: ${change.instruction.trim()}`, 1500, { feature: "ladder", viewer: v });
     if (!out) return { ok: false, error: "The writer didn't answer (no AI key, or today's AI limit is reached). Say the new words instead, or change it in HelixOS." };

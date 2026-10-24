@@ -17,7 +17,7 @@ import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
-import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, keywordOf, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, targetWords, threadsText } from "@/lib/engine/ladder";
+import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, isReel, keywordOf, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, targetWords, threadsText } from "@/lib/engine/ladder";
 import { AiFormStatus } from "@/components/ai-status";
 import { GraphicMaker } from "@/components/graphic-maker";
 import { graphicStep, ownImage } from "@/lib/graphic";
@@ -28,6 +28,7 @@ import { materialUsedFor } from "@/lib/teaching";
 import { STATUS_WORDS, momentOf, type StoryStatus } from "@/lib/engine/teaching";
 import { ItemGone } from "@/components/item-gone";
 import { numberRung } from "@/lib/engine/rung-number";
+import { ReelPackage } from "@/components/reel-package";
 
 function HeadlinePreview({ headline, handle }: { headline: string; handle?: string | null }) {
   const h = headlineParts(headline);
@@ -62,7 +63,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return ownTitle(async (v) => (await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)), columns: { topic: true } }))?.topic, "Ladders");
 }
 
-export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string; graphic?: string; photo?: string; ship?: string; ran?: string; keywordBlocked?: string }> }) {
+export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string; graphic?: string; photo?: string; ship?: string; ran?: string; keywordBlocked?: string; part?: string; reel?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
@@ -82,7 +83,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
   const ready = readyToPost(checks);
   const blockers = publishBlockers(checks);
   const blocked = blockers.length > 0;
-  const { blocked: refused, pushed, ghl, graphic: graphicNotice, photo: photoParam, ship: shipNotice, ran, keywordBlocked } = await searchParams;
+  const { blocked: refused, pushed, ghl, graphic: graphicNotice, photo: photoParam, ship: shipNotice, ran, keywordBlocked, part: partNote } = await searchParams;
   // Ship (rev 583 #1): what one press runs now, what is done, what is held and why.
   const ship = await shipFacts(v, l, { keywordBlocked: keywordBlocked ?? null });
   const shipReady = shipRuns(ship.steps);
@@ -163,6 +164,11 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
               Push the update to GoHighLevel
             </SubmitButton>
           </form>
+        </div>
+      ) : null}
+      {isReel(l) ? (
+        <div className="mb-4">
+          <ReelPackage id={l.id} hookOptions={l.hookOptions} onScreen={l.onScreenText} cover={l.headline} flags={l.reelFlags} transcript={l.sourceTranscript} rungs={l.rungs.length} ai={ai} note={partNote ?? null} />
         </div>
       ) : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
@@ -347,11 +353,11 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
             <p className="mt-2 text-[11px] text-ink-3">{score.pass}/{score.total} passing. Warnings don&apos;t block; failures do. Things no checker can see: every stat cited plainly, no contempt, the photo argues the headline.</p>
           </Card>
           <Card title={LIVE_POSTING_HOUR}>
-            <p className="mb-2 text-xs text-ink-2">Post the body. Then copy each rung and post it as your own comment, one every {rungGapMinutes(l.rungs.length)} minutes. Tick them as they go up.</p>
+            <p className="mb-2 text-xs text-ink-2">Post the body. Then copy each rung and post it as your own comment, one every {rungGapMinutes(l.rungs.length, l.format)} minutes. Tick them as they go up.</p>
             {(() => {
               const posted = l.rungs.filter((r) => r.postedAt);
               const next = l.rungs.find((r) => !r.postedAt) ?? null;
-              const gap = rungGapMinutes(l.rungs.length);
+              const gap = rungGapMinutes(l.rungs.length, l.format);
               return (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">

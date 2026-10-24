@@ -44,16 +44,24 @@ export const LADDER_FORMATS: LadderFormat[] = [
   { key: "roadmap", name: "Roadmap", oneLiner: "Day blocks that overlap, like a real plan.", structure: "Each rung is a phase with day ranges. Phases may overlap (Days 13–20 alongside Days 10–20). It reads as a real plan, not a tidy sequence." },
 ];
 
-export const formatFor = (key: string): LadderFormat => LADDER_FORMATS.find((f) => f.key === key) ?? LADDER_FORMATS[1];
+/** Reel to Post (H-1948): a reel's format. Not one of the 13 a member picks; a reel ladder is made from New from a reel. */
+export const REEL_FORMAT: LadderFormat = {
+  key: "reel",
+  name: "Reel",
+  oneLiner: "A reel you filmed, turned into a caption and five comment rungs.",
+  structure: "Exactly 5 rungs: 1 the moment, 2 the problem or the edge, 3 the turn, 4 a how-to the reader can use today, 5 who it's for, plus the CTA.",
+};
+export const isReel = (l: { format: string }) => l.format === "reel";
+export const formatFor = (key: string): LadderFormat => (key === "reel" ? REEL_FORMAT : (LADDER_FORMATS.find((f) => f.key === key) ?? LADDER_FORMATS[1]));
 
 const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 /** A dash between parts of a post name: an em or en dash, or a hyphen with a space on each side (so "SKIN-care" stays). */
 const NAME_DASH = String.raw`(?:\s*[\u2014\u2013]\s*|\s+-\s+)`;
 const SKIN_PREFIX = new RegExp(`^SKIN${NAME_DASH}`, "i");
-const FORMAT_PREFIX = new RegExp(`^(?:${LADDER_FORMATS.map((f) => escapeRe(f.name)).join("|")})${NAME_DASH}`, "i");
+const FORMAT_PREFIX = new RegExp(`^(?:${[...LADDER_FORMATS, REEL_FORMAT].map((f) => escapeRe(f.name)).join("|")})${NAME_DASH}`, "i");
 /**
  * A ladder's title as people read it (H-1941): the topic only. Takes off a leading "SKIN —" and then a leading format name
- * (one of the 13, matched exactly) with its dash; the format shows as its own tag. Anything else stays as written, so a
+ * (one of the 13, or Reel, matched exactly) with its dash; the format shows as its own tag. Anything else stays as written, so a
  * topic that only contains a dash is untouched. Falls back to the topic when nothing is left.
  */
 export function ladderTitle(postName: string | null | undefined, topic = ""): string {
@@ -169,7 +177,8 @@ function testimonialLines(proofs: Proof[]): string[] {
 /** Section A, adapted: the same rules, written from this client's facts instead of Danno's. */
 /** `evidence`: the client's citable studies as "claim (citation)" lines, from src/lib/engine/evidence; nothing unverified ever reaches here. */
 /** `noKeyword` (rev 838): the post's keyword is NONE, so the product, its price and the keywords are kept out of the prompt's selling parts. */
-export function masterBlock(profile: LadderProfile | null, proofs: Proof[], member: Member, evidence: string[] = [], noKeyword = false): string {
+/** `formatSection` (Reel to Post, H-1948): replaces the ladder's FORMAT section, for a reel; every rule after it stays. */
+export function masterBlock(profile: LadderProfile | null, proofs: Proof[], member: Member, evidence: string[] = [], noKeyword = false, formatSection?: string): string {
   const keywords = (profile?.keywords ?? []).filter((k) => k.keyword);
   const stats = (profile?.verifiedStats ?? []).filter((s) => s.stat);
   const banned = [...DEFAULT_BANNED, ...(profile?.bannedPhrases ?? [])];
@@ -177,7 +186,8 @@ export function masterBlock(profile: LadderProfile | null, proofs: Proof[], memb
   const product = profile?.productName?.trim() || "the offer";
   return [
     `You are writing social content for ${member.name}${member.businessName ? `, ${member.businessName}` : ""}.${member.bigPromise ? ` Their promise: ${member.bigPromise}` : ""}`,
-    `## THE FORMAT
+    formatSection ??
+      `## THE FORMAT
 A "skin" is a complete post package: a designed graphic, a sparse post body, and 9–11 numbered author comments called "rungs" that ${member.name.split(" ")[0]} posts themselves, one every 3–6 minutes over the first hour.
 
 POST BODY
@@ -361,8 +371,12 @@ export type Parsed = {
 };
 
 function sections(text: string): Record<string, string> {
+  return sectionsOf(text, OUTPUT_FIELDS);
+}
+/** The writer's answer split into its named fields (FIELD on its own line, or FIELD: with text after). */
+export function sectionsOf(text: string, fields: readonly string[]): Record<string, string> {
   const out: Record<string, string> = {};
-  const re = new RegExp(`^[ \\t]*\\**(${OUTPUT_FIELDS.join("|")})\\**[ \\t]*:?[ \\t]*(.*)$`, "gm");
+  const re = new RegExp(`^[ \\t]*\\**(${fields.join("|")})\\**[ \\t]*:?[ \\t]*(.*)$`, "gm");
   const hits: { key: string; start: number; end: number; inline: string }[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) hits.push({ key: m[1], start: m.index, end: m.index + m[0].length, inline: m[2] });
@@ -549,6 +563,9 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   const keyword = l.keyword && l.keyword.toUpperCase() !== "NONE" ? l.keyword.toUpperCase() : "";
   const banned = [...DEFAULT_BANNED, ...(profile?.bannedPhrases ?? [])].map((b) => b.toLowerCase()).filter(Boolean);
   const lower = all.toLowerCase();
+  // Reel to Post (H-1948): the same checks with the reel's rules: exactly 5 rungs, no "message me" fallback, a cover frame
+  // in place of the headline (shorter than 8 words is fine), and no Threads chain.
+  const reel = isReel(l);
 
   // Post body
   add("question", "Post body ends in an open question, not a keyword", /\?\s*$/.test(lastLine(l.copy)), "The last line of the body must be a question.");
@@ -556,7 +573,8 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   add("order", "Body sends people to the comments in order", /read them in order/i.test(l.copy), "Add: \"The whole plan is in the comments. Read them in order. 👇\"", "warn");
 
   // Rungs
-  add("count", `${rungs.length} rungs (5–11)`, rungs.length >= 5 && rungs.length <= 11, rungs.length ? "Aim for 9–11; never fewer than 5." : "No rungs yet.");
+  if (reel) add("count", `${rungs.length} rungs (a reel has 5)`, rungs.length === 5, rungs.length ? "A reel has exactly 5 rungs: the moment, the problem, the turn, a how-to, who it's for with the CTA." : "No rungs yet.");
+  else add("count", `${rungs.length} rungs (5–11)`, rungs.length >= 5 && rungs.length <= 11, rungs.length ? "Aim for 9–11; never fewer than 5." : "No rungs yet.");
   const long = rungs.filter((r) => words(r.body) > 90).map((r) => r.n);
   const short = rungs.filter((r) => words(r.body) < 40).map((r) => r.n);
   add("length", "Every rung is 40–90 words", !long.length && !short.length, [long.length ? `Too long: ${long.join(", ")}` : "", short.length ? `Too short: ${short.join(", ")}` : ""].filter(Boolean).join(" · "), "warn");
@@ -564,7 +582,12 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   add("quotable", "Each rung ends with one short quotable line", !noQuote.length, `Last line is too long to quote in rung ${noQuote.join(", ")}.`, "warn");
   const final = rungs[rungs.length - 1]?.body ?? "";
   if (keyword) {
-    add("cta", `Final rung has "${keyword}" and the fallback line`, new RegExp(`comment\\s+${keyword}`, "i").test(final) && new RegExp(`message me\\s+${keyword}`, "i").test(final), `Final rung needs "Comment ${keyword} and I'll ${keywordOf(profile, keyword)?.target?.kind === "conversation" ? "message you" : "send you the link"}." and "If nothing happens, message me ${keyword}."`);
+    const verb = keywordOf(profile, keyword)?.target?.kind === "conversation" ? "message you" : "send you the link";
+    if (reel) {
+      // A reel's CTA is one line, with no "message me" fallback (H-1948 note 1); a fallback left in is flagged, not required.
+      add("cta", `Final rung has "Comment ${keyword}"`, new RegExp(`comment\\s+${keyword}`, "i").test(final), `Final rung needs "Comment ${keyword} and I'll ${verb}."`);
+      add("reel-fallback", "No \"message me\" fallback line (reels don't carry it)", !new RegExp(`message me\\s+${keyword}`, "i").test(final), `Drop "If nothing happens, message me ${keyword}." A reel's CTA is the one Comment line.`, "warn");
+    } else add("cta", `Final rung has "${keyword}" and the fallback line`, new RegExp(`comment\\s+${keyword}`, "i").test(final) && new RegExp(`message me\\s+${keyword}`, "i").test(final), `Final rung needs "Comment ${keyword} and I'll ${verb}." and "If nothing happens, message me ${keyword}."`);
     add("keyword-once", "Keyword appears only in the final rung", !rungs.slice(0, -1).some((r) => new RegExp(`comment\\s+${keyword}`, "i").test(r.body)), "Earlier rungs prompt the keyword. Keep it for the fulfilment rung.", "warn");
     // L1 (rev 562): a keyword knows what it fetches; until it does, the ladder cannot go ready. A magnet picked on the ladder is its own target.
     const k = keywordOf(profile, keyword);
@@ -626,9 +649,10 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   // Headline
   const h = headlineParts(l.headline);
   const wc = words(h.text);
-  add("headline-lines", "Headline breaks into exactly two lines", h.lines.length === 2, `${h.lines.length} line(s). Separate the two lines with " / ".`, "warn");
-  add("headline-words", `Headline is 8–14 words (${wc})`, wc >= 8 && wc <= 14, "Trim or extend it so it fills two big lines.", "warn");
-  add("headline-gold", "Exactly one gold phrase, and it appears in the headline", h.gold.length === 1 && h.text.toUpperCase().includes(h.gold[0].toUpperCase()), h.gold.length === 1 ? "The gold phrase must be part of the headline text." : `${h.gold.length} gold markers. Mark one with (gold: PHRASE).`, "warn");
+  const head = reel ? "Cover frame" : "Headline";
+  add("headline-lines", `${head} breaks into exactly two lines`, h.lines.length === 2, `${h.lines.length} line(s). Separate the two lines with " / ".`, "warn");
+  if (!reel) add("headline-words", `Headline is 8–14 words (${wc})`, wc >= 8 && wc <= 14, "Trim or extend it so it fills two big lines.", "warn");
+  add("headline-gold", `Exactly one gold phrase, and it appears in the ${head.toLowerCase()}`, h.gold.length === 1 && h.text.toUpperCase().includes(h.gold[0].toUpperCase()), h.gold.length === 1 ? "The gold phrase must be part of the headline text." : `${h.gold.length} gold markers. Mark one with (gold: PHRASE).`, "warn");
   add("headline-strand", "No single word stranded on the second line", h.lines.length !== 2 || words(h.lines[1]) > 1, "Rebalance the break so the second line has at least two words.", "warn");
 
   // Platform limits
@@ -643,7 +667,7 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   const igMax = limitOf(CHANNEL_SPECS, "instagram");
   const bodyMax = Math.min(limitOf(CHANNEL_SPECS, "fb_personal"), limitOf(CHANNEL_SPECS, "fb_page"));
   const overThreads = l.threadsChain.filter((t) => t.length > threadsMax).length;
-  add("threads", `Threads posts under ${threadsMax} characters`, !overThreads, `${overThreads} post(s) over ${threadsMax}. Warn, don't truncate.`, "warn");
+  if (!reel) add("threads", `Threads posts under ${threadsMax} characters`, !overThreads, `${overThreads} post(s) over ${threadsMax}. Warn, don't truncate.`, "warn");
   add("ig", `Instagram caption under ${igMax} characters (${l.igCaption.length})`, l.igCaption.length <= igMax, "Cut a rung from the caption.", "warn");
   add("body", `Post body under ${bodyMax} characters (${l.copy.length}), the tighter of the two Facebook limits`, l.copy.length <= bodyMax, "Trim the body; it posts to the page as well as the profile.", "warn");
   return checks;
@@ -725,7 +749,9 @@ export function cadenceNotes(proposedIso: string, tz: string, lastLaunchIso?: st
 }
 
 /** Suggested gap between rungs during the live hour: 3–6 minutes, stretched across the rungs you have. */
-export function rungGapMinutes(count: number): number {
+export function rungGapMinutes(count: number, format?: string): number {
+  // A reel's five rungs go up about five minutes apart, all in by about 25 minutes (H-1948 note 6).
+  if (format === "reel") return 5;
   if (count <= 0) return 5;
   return Math.max(3, Math.min(6, Math.round(55 / count)));
 }

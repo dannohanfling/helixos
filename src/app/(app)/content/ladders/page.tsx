@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { createLadderAction, deleteLadderAction } from "@/lib/actions/ladders";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
-import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, ladderTitle, targetWords } from "@/lib/engine/ladder";
+import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, formatFor, ladderTitle, targetWords } from "@/lib/engine/ladder";
 import { addDays, formatDate, formatDateTime, weekday } from "@/lib/dates";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -187,7 +187,7 @@ export default async function LaddersPage() {
                     </Link>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                       <Badge tone={st.tone}>{st.label}</Badge>
-                      <span className="text-xs text-ink-3">{LADDER_FORMATS.find((f) => f.key === l.format)?.name} · {l.rungs.length} rungs · {score.fails ? `${score.fails} to fix` : "checklist clear"}</span>
+                      <span className="text-xs text-ink-3">{formatFor(l.format).name} · {l.rungs.length} rungs · {score.fails ? `${score.fails} to fix` : "checklist clear"}</span>
                       {l.launchedAt ? <span className="text-xs text-ink-3">· {formatDateTime(l.launchedAt, v.tz)}</span> : null}
                       <form action={deleteLadderAction}>
                         <input type="hidden" name="id" value={l.id} />

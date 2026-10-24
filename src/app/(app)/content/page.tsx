@@ -108,6 +108,7 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
         action={
           <div className="flex items-center gap-2">
             <Link href="/content/compose" className="btn btn-primary btn-sm">✍️ New post</Link>
+            <Link href="/content/reel" className="btn btn-ghost btn-sm" data-testid="new-from-reel">🎬 New from a reel</Link>
             <Disclosure summary={<span className="btn btn-ghost btn-sm">Quick idea</span>}>
               <div className="card p-4">
                 <ContentForm today={v.today} />

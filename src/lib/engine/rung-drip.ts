@@ -42,12 +42,13 @@ export function dripPayload(input: { userNs: string; post: string; rungs: string
  * numbered on its first line, and the two posts' ids to pin them to. Never the post itself: HelixOS has published it already.
  * The channel targeted is the one whose id is there ("" for a channel not shipped); a fixed gap only when one is set.
  */
-export type RungsPayload = { user_ns: string; rungs: string[]; rung_fb_post_id: string; rung_ig_media_id: string; target: "both" | "facebook" | "instagram"; gap_minutes: string };
-export function rungsPayload(input: { userNs: string; rungs: string[]; fbPostId?: string | null; igMediaId?: string | null; gapMinutes?: number | null }): RungsPayload {
+/** `pin_last` (Reel to Post, H-1948 note 6): "1" when the last rung should be pinned; a Dripper that doesn't map it yet ignores it. */
+export type RungsPayload = { user_ns: string; rungs: string[]; rung_fb_post_id: string; rung_ig_media_id: string; target: "both" | "facebook" | "instagram"; gap_minutes: string; pin_last: string };
+export function rungsPayload(input: { userNs: string; rungs: string[]; fbPostId?: string | null; igMediaId?: string | null; gapMinutes?: number | null; pinLast?: boolean }): RungsPayload {
   const rungs = numberRungs(input.rungs.map((r) => r.trim()).filter(Boolean));
   const fb = (input.fbPostId ?? "").trim();
   const ig = (input.igMediaId ?? "").trim();
-  return { user_ns: input.userNs, rungs, rung_fb_post_id: fb, rung_ig_media_id: ig, target: fb && ig ? "both" : fb ? "facebook" : "instagram", gap_minutes: input.gapMinutes ? String(input.gapMinutes) : "" };
+  return { user_ns: input.userNs, rungs, rung_fb_post_id: fb, rung_ig_media_id: ig, target: fb && ig ? "both" : fb ? "facebook" : "instagram", gap_minutes: input.gapMinutes ? String(input.gapMinutes) : "", pin_last: input.pinLast ? "1" : "" };
 }
 /** What Ship says once Community Loyalty has the rungs (a 200 is "queued"): the first one goes up about five minutes later. */
 export const rungsQueuedLine = (n: number): string => `Rungs queued: ${n}, first one in about 5 minutes`;
@@ -64,8 +65,8 @@ export function scheduleAtProblem(iso: string | null | undefined, nowIso: string
 }
 
 /** One drip per coach at a time: the state lives on one Community Loyalty contact and a second drip would clobber the queue. */
-export function estimateDripEnd(handedAtIso: string, rungCount: number): string {
-  return new Date(new Date(handedAtIso).getTime() + (5 + Math.max(rungCount, 1) * 12) * 60_000).toISOString();
+export function estimateDripEnd(handedAtIso: string, rungCount: number, gapMinutes?: number | null): string {
+  return new Date(new Date(handedAtIso).getTime() + (5 + Math.max(rungCount, 1) * (gapMinutes ?? 12)) * 60_000).toISOString();
 }
 export function dripLock(handoffs: { expiresAt: string }[], nowIso: string): { active: true; until: string } | { active: false } {
   const now = new Date(nowIso).getTime();
