@@ -15,6 +15,8 @@ describe("the app's offline screen (H-1813)", () => {
     expect(html).toContain('window.addEventListener("online", again)');
     expect(html).toContain("SplashScreen");
     expect(html).not.toContain("—");
+    // H-1966: the Golden hour medallion, bundled beside the page (no network when this shows).
+    expect(html).toContain('src="golden-medallion.webp"');
   });
 
   it("shows only when HelixOS can't be reached: the iPhone ignores interrupted loads and retries once", () => {
