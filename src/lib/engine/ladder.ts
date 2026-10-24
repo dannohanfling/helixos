@@ -46,6 +46,21 @@ export const LADDER_FORMATS: LadderFormat[] = [
 
 export const formatFor = (key: string): LadderFormat => LADDER_FORMATS.find((f) => f.key === key) ?? LADDER_FORMATS[1];
 
+const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+/** A dash between parts of a post name: an em or en dash, or a hyphen with a space on each side (so "SKIN-care" stays). */
+const NAME_DASH = String.raw`(?:\s*[\u2014\u2013]\s*|\s+-\s+)`;
+const SKIN_PREFIX = new RegExp(`^SKIN${NAME_DASH}`, "i");
+const FORMAT_PREFIX = new RegExp(`^(?:${LADDER_FORMATS.map((f) => escapeRe(f.name)).join("|")})${NAME_DASH}`, "i");
+/**
+ * A ladder's title as people read it (H-1941): the topic only. Takes off a leading "SKIN —" and then a leading format name
+ * (one of the 13, matched exactly) with its dash; the format shows as its own tag. Anything else stays as written, so a
+ * topic that only contains a dash is untouched. Falls back to the topic when nothing is left.
+ */
+export function ladderTitle(postName: string | null | undefined, topic = ""): string {
+  const t = (postName ?? "").trim().replace(SKIN_PREFIX, "").replace(FORMAT_PREFIX, "").trim();
+  return t || topic.trim();
+}
+
 /** Phrases the spec bans for everyone. A client's profile adds their own (name puns, hype they've been told to drop). */
 export const DEFAULT_BANNED = ["but here's the real magic", "here's the real magic", "this isn't just about", "isn't just about", "game changer", "game-changer", "secret sauce"];
 const REVENUE_GUARANTEE = /\b(guarantee[ds]?|sure[- ]fire|sure thing|can't fail|cannot fail|will make you \$|risk[- ]free income)\b/i;
@@ -271,7 +286,7 @@ export function outputContract(specs: ChannelSpec[] = CHANNEL_SPECS): string {
   return `Return these fields, each on its own line as the field name in capitals followed by a colon, then the content on the following lines. Match the names exactly.
 
 POST_NAME
-Format: "SKIN — [Format] — [short descriptor]"
+The topic in a few plain words, as a title someone would scan for. No "SKIN", no format name, no dashes in front.
 
 HEADLINE
 8–14 words. ALL CAPS. Exactly TWO lines separated by " / ". Mark ONE phrase for gold with (gold: PHRASE). Never strand a single word on the last line. Gold goes on the number or the payoff word, never a vague phrase.
@@ -376,7 +391,7 @@ const listLines = (text: string): string[] =>
 export function parseLadderOutput(text: string): Parsed {
   const s = sections(text);
   return {
-    postName: s.POST_NAME ?? "",
+    postName: ladderTitle((s.POST_NAME ?? "").split("\n")[0]),
     headline: (s.HEADLINE ?? "").split("\n")[0]?.trim() ?? "",
     altHeadlines: (s.ALT_HEADLINES ?? "").split("\n").map((l) => l.trim()).filter(Boolean),
     hook: (s.HOOK ?? "").split("\n")[0]?.trim() ?? "",
@@ -460,7 +475,7 @@ export function scaffold(brief: Brief, profile: LadderProfile | null, proofs: Pr
   const opening = brief.format === "screenshot" ? "Wrote this out for a client this morning.\n" : brief.format === "loss_rebuild" ? "[I would NOT do X.]\n[I would NOT do Y.]\n[I would NOT do Z.]\n" : "";
   const topic = brief.topic.trim();
   return {
-    postName: `SKIN — ${f.name} — ${topic.slice(0, 40)}`,
+    postName: topic,
     headline: `[FIRST LINE OF HEADLINE] / [SECOND LINE] (gold: [PAYOFF WORD])`,
     altHeadlines: [],
     hook: `[HOOK: the first line about ${topic}]`,
