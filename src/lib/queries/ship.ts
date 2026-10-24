@@ -27,6 +27,8 @@ export async function shipFacts(v: Viewer, ladder: schema.Ladder, opts: { keywor
     const o = outcomes.find((x) => x.channel === channel);
     if (!o) return { state: "none", reason: null };
     if (o.state === "published") return { state: "published", reason: null };
+    // Posted by hand (H-1910: no account chosen): nothing went to the Planner, so a later mapping can still send it.
+    if (o.state === "manual") return { state: "none", reason: null };
     if (o.state === "failed" || o.state === "unknown") return { state: "failed", reason: o.reason };
     return { state: "sent", reason: null };
   };

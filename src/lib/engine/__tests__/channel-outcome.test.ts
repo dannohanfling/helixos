@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SENDING_CUTOFF_MINUTES, UNMAPPED_FAILURE, outcomeOf, outcomesFor, summarize, whenText, type OutcomeRow } from "../channel-outcome";
 import { explainPlatformError } from "../ghl-errors";
+import { isNotMappedNote, noAccountLine, notMappedReason } from "../ghl-map";
 
 const now = { wall: "2026-09-15T21:00:00", iso: "2026-09-16T04:00:00.000Z", today: "2026-09-15", tz: "America/Los_Angeles" };
 const row = (over: Partial<OutcomeRow>): OutcomeRow => ({ id: "v", channel: "fb_page", groupId: "", status: "scheduled", postAt: null, postedAt: null, externalId: "p1", externalStatus: null, externalError: null, externalSyncedAt: null, createdAt: "2026-09-16T03:59:00.000Z", ...over });
@@ -30,9 +31,26 @@ describe("per-channel outcome: the worst state wins, a reason on every failure, 
     expect(s.worst).toBe("published");
   });
   it("a fixable refusal that was stored as manual is a failure with its reason, not a pasted channel", () => {
-    const o = outcomeOf(row({ channel: "instagram", externalId: null, externalStatus: "manual", externalError: "No Instagram business account chosen for this channel in Settings" }), now);
+    const o = outcomeOf(row({ channel: "instagram", externalId: null, externalStatus: "manual", externalError: "Add your GHL user ID on Settings → Publishing; the Social Planner won't take a post without it" }), now);
     expect(o.state).toBe("failed");
-    expect(o.reason).toContain("chosen for this channel");
+    expect(o.reason).toContain("GHL user ID");
+  });
+  it("no account chosen for a channel is Copy and paste with the reason, never a red Didn't send (H-1910), old rows too", () => {
+    for (const [status, note] of [
+      ["manual", notMappedReason("instagram")],
+      ["failed", "No Instagram business account chosen for this channel in Settings"],
+      ["manual", "No Instagram business account chosen for this channel in Settings"],
+    ] as const) {
+      const o = outcomeOf(row({ channel: "instagram", externalId: null, externalStatus: status, externalError: note }), now);
+      expect(o.state).toBe("manual");
+      expect(o.word).toBe("Copy and paste");
+      expect(o.reason).toBe(notMappedReason("instagram"));
+      expect(o.fix).toBeUndefined();
+    }
+    // Marked posted by the member: posted by them, as any pasted channel.
+    expect(outcomeOf(row({ channel: "instagram", status: "posted", postedAt: "2026-10-23T10:00:00Z", externalStatus: "manual", externalError: notMappedReason("instagram") }), now).word).toBe("Posted by you");
+    // A real refusal on the same channel stays red.
+    expect(outcomeOf(row({ channel: "instagram", externalStatus: "failed", externalError: "Instagram needs reconnecting in GoHighLevel." }), now).state).toBe("failed");
   });
   it("an unmapped platform error still produces a client sentence, and the vendor's words never appear in it", () => {
     const raw = "OAuthException: Error validating access token: Session has expired on Monday (#190) {\"trace\":\"abc\"}";
@@ -65,5 +83,22 @@ describe("per-channel outcome: the worst state wins, a reason on every failure, 
     expect(o.state).toBe("scheduled");
     expect(o.when).toBe("Dec 15 10:30 AM");
     expect(whenText("2026-09-16T08:00:00", "2026-09-15")).toBe("Tomorrow 8:00 AM");
+  });
+});
+
+describe("no account chosen for a channel (H-1907, plan H-1910)", () => {
+  it("names the account in the picker's line and the stored reason", () => {
+    expect(noAccountLine("instagram")).toBe("No Instagram account in your GoHighLevel Social Planner yet. Connect it there, then press Check again.");
+    expect(noAccountLine("stories")).toContain("No Instagram account");
+    expect(noAccountLine("threads")).toContain("No Threads account");
+    expect(noAccountLine("linkedin")).toContain("No LinkedIn account");
+    expect(noAccountLine("fb_page")).toContain("No Facebook business page");
+    expect(notMappedReason("instagram")).toBe("Not set to auto-publish: no Instagram account chosen on Settings → Publishing. Copy and paste it, or connect Instagram and pick it there.");
+  });
+  it("knows today's note and the one stored as a failure before, and nothing else", () => {
+    expect(isNotMappedNote(notMappedReason("linkedin"))).toBe(true);
+    expect(isNotMappedNote("No LinkedIn profile or page chosen for this channel in Settings")).toBe(true);
+    expect(isNotMappedNote("Instagram needs reconnecting in GoHighLevel.")).toBe(false);
+    expect(isNotMappedNote(null)).toBe(false);
   });
 });

@@ -42,6 +42,21 @@ describe("Ship a ladder", () => {
     expect(shipSteps({ ...ok(), keyword: { set: true, token: true, pushed: false, blocked: "Your bot has no keyword router yet." } }).find((x) => x.key === "keywords")?.why).toBe("Your bot has no keyword router yet.");
     expect(Object.keys(LABEL)).toEqual(["graphic", "page", "instagram", "drip", "keywords"]);
   });
+  it("no Instagram account chosen: Instagram is by hand, nothing waits on it, and the drip runs once the page post is published (H-1910)", () => {
+    const noIg = { ...ok(), ghl: { connected: true, userId: true, page: true, instagram: false } };
+    const s = shipSteps(noIg);
+    expect(s.find((x) => x.key === "instagram")).toMatchObject({ state: "byhand" });
+    expect(s.find((x) => x.key === "instagram")?.why).toContain("post it there yourself");
+    expect(shipRuns(s)).toEqual(["page", "keywords"]);
+    expect(s.find((x) => x.key === "drip")?.why).toBe("The Facebook page post has to be confirmed by GoHighLevel first: the rungs land on it.");
+    const pagePublished = shipSteps({ ...noIg, posts: { page: { state: "published", reason: null }, instagram: { state: "none", reason: null } } });
+    expect(pagePublished.find((x) => x.key === "drip")?.state).toBe("ready");
+    const done = shipSteps({ ...noIg, posts: { page: { state: "published", reason: null }, instagram: { state: "none", reason: null } }, drip: { setUp: true, handed: true, locked: null }, keyword: { set: true, token: true, pushed: true, blocked: null } });
+    expect(shipLine(done)).toBe("Shipped: every step is done.");
+    // Not connected, or no user picked: those still hold Instagram where they are fixed.
+    expect(shipSteps({ ...ok(), ghl: { connected: false, userId: false, page: false, instagram: false } }).find((x) => x.key === "instagram")?.state).toBe("held");
+    expect(shipSteps({ ...ok(), ghl: { connected: true, userId: false, page: true, instagram: false } }).find((x) => x.key === "instagram")?.state).toBe("held");
+  });
   it("the drip payload carries Ship's keys as strings, empty when unknown, and the five keys it always had", () => {
     const base = dripPayload({ userNs: "u1", post: "P", rungs: ["1. a", "2. b"], fbIgPublisher: "helixos" });
     expect(base).toMatchObject({ user_ns: "u1", post: "P", first_comment: "1. a", schedule_at: "", target: "both", rung_fb_post_id: "", rung_ig_media_id: "", gap_minutes: "", pin_last: "" });
