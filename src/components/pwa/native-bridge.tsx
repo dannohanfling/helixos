@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { AppOpening } from "@/components/pwa/app-opening";
+import { useRouter } from "next/navigation";
+import { AppOpening, PUSH_OPEN_EVENT } from "@/components/pwa/app-opening";
 import { PullRefresh } from "@/components/pwa/pull-refresh";
 
 /**
@@ -49,6 +50,7 @@ async function record(c: Cap, token?: string) {
 }
 
 export function NativeBridge() {
+  const router = useRouter();
   const [ask, setAsk] = useState<{ hour: number } | null>(null);
   // Inside the store app or not: fixed for the page's life, false while server-rendering.
   const native = useSyncExternalStore(noSubscribe, () => cap() !== null, () => false);
@@ -73,7 +75,11 @@ export function NativeBridge() {
       listeners.push(
         push.addListener("pushNotificationActionPerformed", (e) => {
           const path = e.notification?.data?.path;
-          if (typeof path === "string" && path.startsWith("/")) window.location.assign(path);
+          if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) return;
+          // H-1988: the opening steps aside, and the app moves to the push's page in place. A full page load showed a black
+          // gap, and on a cold start replayed the opening after the page had shown.
+          window.dispatchEvent(new Event(PUSH_OPEN_EVENT));
+          router.push(path);
         }),
       );
       // Already said yes on this phone: register again on each open, so a changed token reaches HelixOS.
@@ -88,7 +94,7 @@ export function NativeBridge() {
     return () => {
       for (const l of listeners) void l.then((x) => x.remove());
     };
-  }, []);
+  }, [router]);
 
   if (!native) return null;
   return (
