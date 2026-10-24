@@ -5,7 +5,7 @@ import { DeskSettings } from "@/components/leaderboard/desk-settings";
 import { checkLeaderboardAction, saveLeaderboardAction, setIssuePassesAction } from "@/lib/actions/leaderboard";
 import { sendPassMessageAction, setInvitesAction, setSyncModeAction } from "@/lib/actions/points-sync";
 import { PASS_MESSAGE_DEFAULT, PASS_MESSAGE_MAX, passMessageWords } from "@/lib/engine/pass-message";
-import { fixMyPassAction, setNameFixAction } from "@/lib/actions/pass-fix";
+import { fixMyPassAction, remakeMyPassAction, setNameFixAction } from "@/lib/actions/pass-fix";
 import { CLIENT_NAME_FIX_OPEN, fixWords } from "@/lib/engine/pass-fix";
 import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
 
@@ -14,7 +14,7 @@ import { INVITES, INVITE_KEYS } from "@/lib/engine/points-sync";
  * sealed eLoyalty key, shown by its last four, the host and the pass template), the "Issue passes" switch that opens
  * "Get my pass" to clients, the coach's own pass, and the Points desk's settings for the add-and-deduct check.
  */
-export function OwnProgramCard({ membershipId, feed, ownPass, passMessage, passFix }: { membershipId: string; feed: schema.LeaderboardFeed | null; ownPass: { made: boolean; installed: boolean; addressed?: boolean; lastMessageAt?: string | null }; passMessage?: string; passFix?: string }) {
+export function OwnProgramCard({ membershipId, feed, ownPass, passMessage, passFix, passRemade }: { membershipId: string; feed: schema.LeaderboardFeed | null; ownPass: { made: boolean; installed: boolean; addressed?: boolean; lastMessageAt?: string | null }; passMessage?: string; passFix?: string; passRemade?: string }) {
   const ready = Boolean(feed?.keyEncrypted && feed.templateId && feed.lastCheckOk);
   return (
     <Card className="mb-4" title="🎫 Your own program: the Evolve Omega pass" id="own-program">
@@ -51,6 +51,7 @@ export function OwnProgramCard({ membershipId, feed, ownPass, passMessage, passF
         </a>
         {feed && ready && ownPass.addressed ? <PassMessage lastMessageAt={ownPass.lastMessageAt ?? null} outcome={passMessage} /> : null}
         {feed && ready && ownPass.addressed ? <PassFix feed={feed} outcome={passFix} /> : null}
+        {feed && ready && (ownPass.made || passRemade) ? <RemakePass outcome={passRemade} made={ownPass.made} /> : null}
         {feed ? (
           <form action={setIssuePassesAction} className="mt-2 flex flex-wrap items-center gap-2">
             <input type="hidden" name="id" value={feed.id} />
@@ -184,6 +185,41 @@ function PassFix({ feed, outcome }: { feed: schema.LeaderboardFeed; outcome?: st
       ) : (
         <p className="mt-1 text-ink-3" data-testid="client-fix-locked">Fixing clients&apos; passes is shut for now: a fix can take the pass out of their Wallet.</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Make my pass again (H-1906): the coach's own pass only, for a move to a new template. Paste the new template's id above and
+ * Connect and check first; then this, then Get my pass on Rewards. The old pass stays where it is until it's removed.
+ */
+function RemakePass({ outcome, made }: { outcome?: string; made: boolean }) {
+  const said =
+    outcome === "yes"
+      ? { good: true, text: "Done. Now press Get my pass on Rewards: your new pass is made on the template above, and the next sync sends your points to it." }
+      : outcome === "confirm"
+        ? { good: false, text: "Tick the box first." }
+        : outcome === "no"
+          ? { good: false, text: "Not while you're in a client's HelixOS." }
+          : null;
+  return (
+    <div className="mt-2 text-xs" data-testid="own-pass-remake">
+      {made ? (
+        <form action={remakeMyPassAction} className="flex flex-wrap items-center gap-2">
+          <label>
+            <input type="checkbox" name="confirm" data-testid="own-pass-remake-confirm" /> I&apos;m switching to the new template above
+          </label>
+          <SubmitButton className="btn btn-soft min-h-11" pendingText="Clearing…" data-testid="own-pass-remake-run">
+            Make my pass again
+          </SubmitButton>
+          <span className="w-full text-ink-3">HelixOS forgets your current pass so Get my pass makes a new one, and your points go to the new one. Your current pass stays in Wallet until you remove it.</span>
+        </form>
+      ) : null}
+      {said ? (
+        <p className={`mt-1 ${said.good ? "text-good" : "text-danger"}`} role="status" data-testid="own-pass-remake-result">
+          {said.text}
+        </p>
+      ) : null}
     </div>
   );
 }

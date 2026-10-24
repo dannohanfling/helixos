@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 366,
+    date: "2026-10-23",
+    title: "Make your own pass again on a new template",
+    lines: [
+      "Coach has Make my pass again under your own program: after you put a new template's id in, it lets Get my pass make you a fresh pass on it, and the next sync puts all your points on the new one. Your old pass stays in Wallet until you remove it.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 365,
     date: "2026-10-23",
     title: "The HelixOS app only says you're offline when you are",

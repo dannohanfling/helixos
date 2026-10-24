@@ -54,7 +54,7 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string; passFix?: string; passFixRow?: string; moveLink?: string; moveFeed?: string; moveToken?: string }> }) {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string; passMessage?: string; passFix?: string; passFixRow?: string; moveLink?: string; moveFeed?: string; moveToken?: string; passRemade?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const claimsShown = sp.claims === "done" ? "done" : "open";
@@ -358,7 +358,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
             ) : null}
           </p>
         ) : null}
-        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt), addressed: Boolean(v.membership.eoPassSerial && v.membership.eoPassTypeId), lastMessageAt: v.membership.eoPassLastPushAt }} passMessage={sp.passMessage} passFix={sp.passFix} /> : null}
+        {!v.switchedInto ? <OwnProgramCard membershipId={v.membership.id} feed={feedOf.get(v.membership.id) ?? null} ownPass={{ made: Boolean(v.membership.eoCustomerId || v.membership.eoPassUrl), installed: Boolean(v.membership.eoPassInstalledAt), addressed: Boolean(v.membership.eoPassSerial && v.membership.eoPassTypeId), lastMessageAt: v.membership.eoPassLastPushAt }} passMessage={sp.passMessage} passFix={sp.passFix} passRemade={sp.passRemade} /> : null}
         {fixWords(sp.passFixRow) ? (
           <p className={`mb-2 text-sm ${fixWords(sp.passFixRow)!.good ? "text-good" : "text-danger"}`} data-testid="member-pass-fix-result">
             {fixWords(sp.passFixRow)!.text}
