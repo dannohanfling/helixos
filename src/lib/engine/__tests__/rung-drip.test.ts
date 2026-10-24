@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIRST_COMMENT_LOCKED, HANDED_NOTE, HANDOFF_FALLBACK, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, rungsPayload, rungsQueuedLine, firstCommentRefusal, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
+import { FIRST_COMMENT_LOCKED, HANDED_NOTE, HANDOFF_FALLBACK, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, rungsPayload, rungsQueuedLine, firstCommentRefusal, handoffReasons, joinRungs, RUNG_SEPARATOR, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
 import { handoffOutcome, outcomesFor, summarize, OUTCOME_WORD } from "../channel-outcome";
 import { matchPlannerPost, needsCheck, orderForCheck, reconcileWindow } from "../planner-match";
 import { normaliseTargets } from "../compose";
@@ -12,11 +12,13 @@ const now = { wall: "2026-09-15T13:00:00", iso: "2026-09-15T20:00:00.000Z", toda
 describe("handing a ladder to the Rung Dripper", () => {
   it("when HelixOS published Facebook and Instagram, rungs start at rung 1 and first_comment is rung 1 for the Threads post; when Community Loyalty publishes them, rungs start at rung 2", () => {
     const ours = dripPayload({ userNs: "f52594u50757435", post: "Raw post.", rungs, fbIgPublisher: "helixos" });
-    expect(ours.first_comment).toBe(rungs[0]);
+    // H-1944: every rung carries its number by place; the escaped "1\\." becomes "1. ".
+    expect(ours.first_comment).toBe("1. Mistake one.\n\nSecond line of it.");
     expect(splitRungs(ours.rungs)).toHaveLength(3);
     expect(ours.schedule_at).toBe("");
     const theirs = dripPayload({ userNs: "f52594u50757435", post: "Raw post.", rungs, fbIgPublisher: "community_loyalty" });
-    expect(theirs.first_comment).toBe(rungs[0]);
+    expect(theirs.first_comment).toBe("1. Mistake one.\n\nSecond line of it.");
+    expect(theirs.rungs.split(RUNG_SEPARATOR)).toEqual(["2. Mistake two.", "3. Mistake three."]);
     expect(splitRungs(theirs.rungs)).toEqual(["Mistake two.", "Mistake three."]);
     expect(theirs.rungs).not.toContain("Mistake one");
   });
