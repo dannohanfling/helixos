@@ -5,6 +5,7 @@ import { streakFor } from "@/lib/queries/daily";
 import { dueDaily, type PushType } from "@/lib/engine/push";
 import { sendPush, type SendOutcome, type Transport } from "@/lib/push/send";
 import { reportError } from "@/lib/report-error";
+import { arenaNudgeFor } from "@/lib/arena";
 
 /**
  * The daily pushes (H-767), run by the push cron every 5 minutes: morning lock-in, evening close and the streak waiting on
@@ -36,7 +37,9 @@ export async function runDailyPushes(now: Date = new Date(), transport?: Transpo
         activeToday: read.activity.active.has(today),
         streak: read.running,
       });
-      for (const d of due) out.push({ type: d.type, outcome: await sendPush({ id: m.id, userId: m.userId, tz }, d.type, d.key, { streak: d.streak }, { now, transport }) });
+      // 30 Days in the Arena (PR C): the evening push carries the Arena line when the coach has turned the nudge on.
+      const arena = due.some((d) => d.type === "evening") ? await arenaNudgeFor(ws.id, m.userId, m.id, now) : null;
+      for (const d of due) out.push({ type: d.type, outcome: await sendPush({ id: m.id, userId: m.userId, tz }, d.type, d.key, { streak: d.streak, arena: d.type === "evening" ? arena : null }, { now, transport }) });
     } catch (e) {
       // One member's failure never stops the run.
       reportError(e, { job: "cron:push-daily" });

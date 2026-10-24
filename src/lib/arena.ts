@@ -3,11 +3,11 @@
  * are read from their daily logs (their own dates, so "close by midnight, your time" holds), and their points from the ledger
  * between the window's two instants. Nothing is copied, so a correction to either shows here at once.
  */
-import { and, asc, eq, gte, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { ARENA, ARENA_ENDS_AT, ARENA_HUDDLES, ARENA_STARTS_AT, HUDDLE_POINTS, arenaCard, canEnter, dateIn, fillPods, huddleLive, huddleWhen, leaderWeek, placed, weekInstants, weekWords, type ArenaCard } from "@/lib/engine/arena";
+import { ARENA, ARENA_ENDS_AT, ARENA_HUDDLES, ARENA_STARTS_AT, HUDDLE_POINTS, arenaCard, arenaNudgeLine, canEnter, dateIn, fillPods, huddleLive, huddleWhen, leaderWeek, placed, weekInstants, weekWords, type ArenaCard } from "@/lib/engine/arena";
 import { A_MEMBER, shortName, type BlockSet } from "@/lib/engine/blocks";
 import { award } from "@/lib/queries/points";
 
@@ -296,4 +296,37 @@ async function weeklyLeader(workspaceId: string, c: schema.ArenaChallenge, roste
   const row = best ? roster.find((r) => r.userId === best.userId) : undefined;
   if (!row || Number(best.total) <= 0) return null;
   return { name: boardLabel(row, blocks, viewerUserId), points: Number(best.total), week: weekWords(week) };
+}
+
+/*
+ * PR C (plan H-1563): finishing and the nudge.
+ */
+
+/** Marks every entry that has reached the target as finished, once; the prize itself is applied by hand by the coach. */
+export async function markFinished(c: schema.ArenaChallenge, roster: ArenaRow[]): Promise<void> {
+  const done = roster.filter((r) => r.daysClosed >= c.targetDays).map((r) => r.membershipId);
+  if (!done.length) return;
+  await db
+    .update(schema.arenaEntries)
+    .set({ finishedAt: nowIso() })
+    .where(and(eq(schema.arenaEntries.challengeId, c.id), isNull(schema.arenaEntries.finishedAt), inArray(schema.arenaEntries.membershipId, done)));
+}
+
+/** The coach's switch for the nudge. Off until they turn it on; off again stops it at once. */
+export async function setNudge(c: schema.ArenaChallenge, on: boolean): Promise<void> {
+  await db.update(schema.arenaChallenges).set({ nudgeOn: on }).where(eq(schema.arenaChallenges.id, c.id));
+}
+
+/**
+ * The Arena line for a member's evening reminder, or null: only with the coach's nudge on, for a member who is in, inside the
+ * window. Reads only; the reminder itself decides whether anything goes (not yet closed, emails or a phone on).
+ */
+export async function arenaNudgeFor(workspaceId: string, userId: string, membershipId: string, now: Date = new Date()): Promise<string | null> {
+  const c = await arenaIfAny(workspaceId);
+  if (!c?.nudgeOn) return null;
+  const entry = await entryFor(c.id, membershipId);
+  if (!entry) return null;
+  const today = dateIn(ARENA.timezone, now);
+  const { daysClosed } = await closesFor(workspaceId, userId, c, today);
+  return arenaNudgeLine(c, today, daysClosed);
 }

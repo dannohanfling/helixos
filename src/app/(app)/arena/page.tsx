@@ -5,13 +5,13 @@
  */
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
-import { arenaBoard, arenaFor, arenaRoster, entryFor, huddlesFor, myHuddles, placePods, podsFor } from "@/lib/arena";
+import { arenaBoard, arenaFor, arenaRoster, entryFor, huddlesFor, markFinished, myHuddles, placePods, podsFor } from "@/lib/arena";
 import { blockedFor } from "@/lib/blocks";
 import { ArenaHuddleCheckin, ArenaLeaderboard, ArenaPod } from "@/components/arena-board";
 import { joinArenaAction } from "@/lib/actions/arena";
 import { ArenaCountdown } from "@/components/arena-countdown";
 import { SubmitButton } from "@/components/submit-button";
-import { ARENA, arenaPhase, canEnter, canSee, countdownNow, dateIn, huddleLive, joinOpen, nextHuddle } from "@/lib/engine/arena";
+import { ARENA, arenaPhase, canEnter, canSee, countdownNow, dateIn, finishedLine, huddleLive, joinOpen, nextHuddle } from "@/lib/engine/arena";
 import { arenaDisplay } from "./fonts";
 import "./arena.css";
 
@@ -56,6 +56,9 @@ export default async function ArenaPage({ searchParams }: { searchParams: Promis
     entry?.podId ? podsFor(v.workspace.id, c, roster) : Promise.resolve([]),
     entry ? myHuddles(c, v.membership.id) : Promise.resolve(new Set<string>()),
   ]);
+  const myRow = entry ? roster.find((r) => r.membershipId === entry!.membershipId) : undefined;
+  const finished = Boolean(myRow && myRow.daysClosed >= c.targetDays);
+  if (finished) await markFinished(c, roster);
   const myPod = entry?.podId ? (pods.find((p) => p.id === entry!.podId) ?? null) : null;
   const live = huddleLive(now, huddles);
   const comingHuddle = nextHuddle(now, huddles);
@@ -92,6 +95,7 @@ export default async function ArenaPage({ searchParams }: { searchParams: Promis
         <div className="ar-arches"></div>
         <div className="ar-wrap">
           {note ? <p className="ar-note" data-testid="arena-note">{note}</p> : null}
+          {finished ? <p className="ar-note" data-testid="arena-finished">{finishedLine(v.membership.programTier, c.targetDays)}</p> : null}
           <div className="ar-dates">Evolve Omega members · <b>Fri 27 Nov to Sat 26 Dec</b></div>
           <h1><span className="ar-num">Thirty Days in the</span><span className="ar-gold">Arena</span></h1>
           <p className="ar-sub">I&apos;m going to Egypt for a month. You&apos;re coming with me. Not on the plane. In the arena.</p>

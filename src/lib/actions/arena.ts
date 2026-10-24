@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ctx, str } from "@/lib/action-helpers";
 import { requireCoach } from "@/lib/auth";
-import { arenaFor, checkInHuddle, enroll, movePod, newPod, placePods, setCaptain } from "@/lib/arena";
+import { arenaFor, checkInHuddle, enroll, movePod, newPod, placePods, setCaptain, setNudge } from "@/lib/arena";
 import { ARENA, canEnter, dateIn, joinOpen } from "@/lib/engine/arena";
 
 export async function joinArenaAction(formData: FormData): Promise<void> {
@@ -67,4 +67,14 @@ export async function newPodAction(): Promise<void> {
   await newPod(c);
   revalidatePath("/coach/arena");
   redirect(podsBack("new"));
+}
+
+/** PR C: the coach turns the Arena nudge on or off. Built off; turning it on is the coach's own decision, here. */
+export async function nudgeAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const c = await arenaFor(v.workspace.id);
+  const on = str(formData, "on") === "1";
+  await setNudge(c, on);
+  revalidatePath("/coach/arena");
+  redirect(`/coach/arena?nudge=${on ? "on" : "off"}#nudge`);
 }

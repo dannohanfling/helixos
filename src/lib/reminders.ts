@@ -10,6 +10,7 @@ import { brandedEmail } from "@/lib/branded-email";
 import { totalPoints } from "@/lib/queries/points";
 import { sendEmail } from "@/lib/email";
 import { canEmail } from "@/lib/email-gate";
+import { arenaNudgeFor } from "@/lib/arena";
 
 /** The comeback email. Monday is restart day; on any other day the restart is today. Shared with the coach's nudge button. */
 export function comebackEmail(first: string, hours: { morning: number; evening: number }, appUrl: string): { subject: string; text: string; html: string } {
@@ -95,7 +96,9 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
       if (wantsEvening && !target.same && !targetLog?.eveningDoneAt) {
         // The days already closed; the copy says what tonight's close makes it. The bonus is the weekly escalation for that close.
         const bonus = bonusFor(read.activity.ladder, target.date, m.workDays).points;
-        const e = brandedEmail(eveningCopy({ first, streak, bonus, hours }), { base: appUrl });
+        // 30 Days in the Arena (PR C): one line when the coach has turned the nudge on and this member is in.
+        const arena = await arenaNudgeFor(ws.id, m.userId, m.id, now);
+        const e = brandedEmail(eveningCopy({ first, streak, bonus, hours, arena }), { base: appUrl });
         await deliver(out, m, user.email, "evening", e.subject, e.text, e.html);
       }
     }

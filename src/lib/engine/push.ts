@@ -60,14 +60,15 @@ export function isQuiet(hour: number, prefs: Pick<Prefs, "quietStart" | "quietEn
 /** The words of each push. Plain and warm, no em dashes, no exclamation marks, never health data (H-767). */
 export function pushCopy(
   type: PushType,
-  v: { streak?: number; time?: string; day?: string; rank?: string; coach?: string; step?: "morning" | "soon" | "live" } = {},
+  v: { streak?: number; time?: string; day?: string; rank?: string; coach?: string; step?: "morning" | "soon" | "live"; arena?: string | null } = {},
 ): { title: string; body: string } {
   const title = "HelixOS";
   switch (type) {
     case "morning":
       return { title, body: "Your three moves for today are ready." };
     case "evening":
-      return { title, body: "Close out the day. Your +20 is waiting." };
+      // 30 Days in the Arena (PR C): the Arena line in place of the usual one, only when the coach has turned the nudge on.
+      return { title, body: v.arena ? v.arena : "Close out the day. Your +20 is waiting." };
     case "streak":
       return { title, body: `Your ${v.streak ?? 0}-day streak is waiting on you.` };
     case "call":

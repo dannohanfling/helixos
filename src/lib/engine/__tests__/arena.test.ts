@@ -170,3 +170,30 @@ describe("Arena PR B: pods, the leaderboard and the Huddle check-in (H-1563)", (
     expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 101].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st"]);
   });
 });
+
+describe("Arena PR C: finishing and the nudge (H-1563)", () => {
+  it("the nudge line says the day and the closes, inside the window only", async () => {
+    const { arenaNudgeLine } = await import("@/lib/engine/arena");
+    expect(arenaNudgeLine(ARENA, "2026-11-26", 0)).toBeNull();
+    expect(arenaNudgeLine(ARENA, "2026-12-27", 20)).toBeNull();
+    expect(arenaNudgeLine(ARENA, "2026-12-08", 9)).toBe("Arena day 12 of 30: 9 of 24 closed. Close today to count it.");
+    expect(arenaNudgeLine(ARENA, "2026-12-22", 24)).toBe("Arena day 26 of 30: you've completed the challenge. Every close still earns points.");
+  });
+  it("a finisher's prize: Elite gets a private session, everyone else a month at their level", async () => {
+    const { finisherPrize, finishedLine } = await import("@/lib/engine/arena");
+    expect(finisherPrize("Elite")).toBe("A private strategy session with Danno");
+    expect(finisherPrize("Academy")).toBe("One free month at Academy");
+    expect(finishedLine("Accelerator", 24)).toBe("You've completed the challenge: 24 days closed. Your free month is added after 26 Dec.");
+    expect(finishedLine("Elite", 24)).toContain("private strategy session");
+  });
+  it("the evening push and email carry the Arena line only when it's given", async () => {
+    const { pushCopy } = await import("@/lib/engine/push");
+    const { eveningCopy } = await import("@/lib/engine/reminder-copy");
+    expect(pushCopy("evening").body).toBe("Close out the day. Your +20 is waiting.");
+    expect(pushCopy("evening", { arena: null }).body).toBe("Close out the day. Your +20 is waiting.");
+    expect(pushCopy("evening", { arena: "Arena day 12 of 30: 9 of 24 closed. Close today to count it." }).body).toContain("Arena day 12");
+    const hours = { morning: 8, evening: 19 };
+    expect(eveningCopy({ first: "Maya", streak: 0, bonus: 0, hours }).stateLine).toBeNull();
+    expect(eveningCopy({ first: "Maya", streak: 3, bonus: 0, hours, arena: "Arena day 12 of 30: 9 of 24 closed. Close today to count it." }).stateLine).toBe("Arena day 12 of 30: 9 of 24 closed. Close today to count it. Three days behind you. Close today and it's four.");
+  });
+});
