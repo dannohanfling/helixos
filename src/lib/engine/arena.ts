@@ -207,3 +207,120 @@ export function challengeView(c: Pick<ArenaConfig, "slug" | "name" | "startDate"
     rewards: copy?.rewards ?? [],
   };
 }
+
+/*
+ * PR B (plan H-1563): the leaderboard, pods and the Huddle check-in. Pure rules here; the reads and writes are in
+ * src/lib/arena.ts.
+ */
+
+/** Pods of five, filled in join order. */
+export const POD_SIZE = 5;
+/** Points for "I'm here" at a Huddle: the same as a daily check-in. */
+export const HUDDLE_POINTS = 10;
+/** "I'm here" is live from 30 minutes before a Huddle to 90 minutes after it starts. */
+export const HUDDLE_OPENS_BEFORE_MS = 30 * 60_000;
+export const HUDDLE_CLOSES_AFTER_MS = 90 * 60_000;
+
+/** The Huddle whose check-in is live at an instant, or null. */
+export function huddleLive<T extends { startsAt: string }>(now: Date, huddles: readonly T[]): T | null {
+  const t = now.getTime();
+  return huddles.find((h) => {
+    const s = Date.parse(h.startsAt);
+    return t >= s - HUDDLE_OPENS_BEFORE_MS && t <= s + HUDDLE_CLOSES_AFTER_MS;
+  }) ?? null;
+}
+
+/** "7:30 AM Pacific" for when a Huddle's check-in opens. */
+export function huddleOpensWords(startsAt: string): string {
+  const at = new Date(Date.parse(startsAt) - HUDDLE_OPENS_BEFORE_MS);
+  return `${new Intl.DateTimeFormat("en-US", { timeZone: ARENA.timezone, hour: "numeric", minute: "2-digit" }).format(at).replace(":00", "")} Pacific`;
+}
+
+/**
+ * Who goes in which pod: every entry without a pod (or with one that's gone) goes to the first pod with room, in join order,
+ * and a new pod is made when all are full. Existing pods keep who they have, so a coach's moves stand. `pods` come in the
+ * order they were made; a new pod is "Pod N", counting on from the pods there are.
+ */
+export type PodPlan = { create: string[]; assign: { entryId: string; pod: string }[] };
+export function fillPods(entries: readonly { id: string; podId: string | null; joinedAt: string }[], pods: readonly { id: string }[], size = POD_SIZE): PodPlan {
+  const count = new Map<string, number>(pods.map((p) => [p.id, 0]));
+  for (const e of entries) if (e.podId && count.has(e.podId)) count.set(e.podId, count.get(e.podId)! + 1);
+  const order = pods.map((p) => p.id);
+  const create: string[] = [];
+  const assign: { entryId: string; pod: string }[] = [];
+  const waiting = entries.filter((e) => !e.podId || !count.has(e.podId)).sort((a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.id.localeCompare(b.id));
+  for (const e of waiting) {
+    let target = order.find((id) => count.get(id)! < size);
+    if (!target) {
+      target = `new:${create.length}`;
+      create.push(`Pod ${pods.length + create.length + 1}`);
+      order.push(target);
+      count.set(target, 0);
+    }
+    count.set(target, count.get(target)! + 1);
+    assign.push({ entryId: e.id, pod: target });
+  }
+  return { create, assign };
+}
+
+/** Day of the week for a date (0 Sunday, 1 Monday). */
+function weekday(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay();
+}
+function addDays(date: string, n: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** The window's weeks, Monday to Sunday, the first and last cut to the window: 27 to 29 Nov, 30 Nov to 6 Dec, ... 21 to 26 Dec. */
+export function arenaWeeks(c: Pick<ArenaConfig, "startDate" | "endDate">): { from: string; to: string }[] {
+  const weeks: { from: string; to: string }[] = [];
+  let from = c.startDate;
+  while (from <= c.endDate) {
+    const toSunday = (7 - weekday(from)) % 7;
+    const sunday = addDays(from, toSunday);
+    const to = sunday < c.endDate ? sunday : c.endDate;
+    weeks.push({ from, to });
+    from = addDays(to, 1);
+  }
+  return weeks;
+}
+
+/** The week whose leader is named on a date: the last week that has ended, so from Mon 30 Nov onward, and null before. */
+export function leaderWeek(c: Pick<ArenaConfig, "startDate" | "endDate">, today: string): { from: string; to: string } | null {
+  const done = arenaWeeks(c).filter((w) => w.to < today);
+  return done.length ? done[done.length - 1] : null;
+}
+
+/** Midnight at the start of a date in Pacific, as a UTC instant. The window is all in standard time (UTC-8), as ARENA_STARTS_AT. */
+export function pacificMidnight(date: string): string {
+  return `${date}T08:00:00.000Z`;
+}
+
+/** A week's two instants for the ledger: from its first midnight to just before the midnight after its last day. */
+export function weekInstants(w: { from: string; to: string }): { from: string; to: string } {
+  return { from: pacificMidnight(w.from), to: new Date(Date.parse(pacificMidnight(addDays(w.to, 1))) - 1).toISOString() };
+}
+
+/** "27 to 29 Nov" or "30 Nov to 6 Dec" for a week. */
+export function weekWords(w: { from: string; to: string }): string {
+  const fmt = (d: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" }).format(new Date(`${d}T12:00:00Z`));
+  const [a, b] = [fmt(w.from), fmt(w.to)];
+  return a.split(" ")[1] === b.split(" ")[1] ? `${a.split(" ")[0]} to ${b}` : `${a} to ${b}`;
+}
+
+/** Places on the board after the page's rule (rankEntries); equal on all three counts share a place. */
+export function placed<T extends { points: number; daysClosed: number; callsBooked: number }>(rows: readonly T[]): (T & { place: number })[] {
+  const ranked = rankEntries(rows);
+  let place = 0;
+  return ranked.map((r, i) => {
+    const prev = ranked[i - 1];
+    if (!prev || prev.points !== r.points || prev.daysClosed !== r.daysClosed || prev.callsBooked !== r.callsBooked) place = i + 1;
+    return { ...r, place };
+  });
+}
+
+/** "1st", "2nd", "3rd", "11th". */
+export function ordinal(n: number): string {
+  const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${s}`;
+}

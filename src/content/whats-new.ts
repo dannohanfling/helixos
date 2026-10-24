@@ -23,6 +23,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 367,
+    date: "2026-10-24",
+    title: "30 Days in the Arena: the leaderboard, your pod and Huddle check-ins",
+    lines: [
+      "The Arena page now has the leaderboard: points from 27 Nov to 26 Dec only, your own row marked, and from Mon 30 Nov last week's leader at the top.",
+      "Everyone who's in goes into a pod of five with a captain. Your pod card is on the Arena page, and a captain sees their pod's days closed.",
+      "On Huddle days, tap I'm here on the Arena page from 30 minutes before the start for 10 points.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 366,
     date: "2026-10-23",
     title: "Make your own pass again on a new template",
