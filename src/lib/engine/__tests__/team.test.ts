@@ -37,6 +37,7 @@ const OPEN_PAGES = [
   "src/app/(app)/content/ladders/page.tsx",
   "src/app/(app)/content/ladders/profile/page.tsx",
   "src/app/(app)/content/page.tsx",
+  "src/app/(app)/content/reel/page.tsx",
   "src/app/(app)/conversations/[id]/page.tsx",
   "src/app/(app)/conversations/page.tsx",
   "src/app/(app)/conversations/playbook/page.tsx",

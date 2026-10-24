@@ -17,7 +17,8 @@ import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { generateBackground, graphicStep, makeGraphic, ownImage } from "@/lib/graphic";
 import { headlineChoices, OWN_HEADLINE } from "@/lib/engine/graphic";
-import { blockersFor, createLadder, ensureLadderItem, generate, magnetFor, shipLadder } from "@/lib/ladder-core";
+import { blockersFor, createLadder, ensureLadderItem, generate, magnetFor, shipLadder, updateLadderPart } from "@/lib/ladder-core";
+import { spokenKeyword, topicFromTranscript } from "@/lib/engine/reel";
 
 async function assertPublishable(l: schema.Ladder): Promise<void> {
   const blockers = await blockersFor(l);
@@ -131,10 +132,10 @@ export async function regenerateLadderAction(formData: FormData): Promise<void> 
   const l = await own(str(formData, "id"), userId);
   const magnet = await magnetFor(userId, l.leadMagnetId);
   const brief: Brief = { format: l.format, topic: str(formData, "topic") || l.topic, audience: l.audience, keyword: magnet?.keyword ?? l.keyword, sourceMaterial: opt(formData, "sourceMaterial") ?? l.sourceMaterial, realNumbers: opt(formData, "realNumbers") ?? l.realNumbers, leadMagnet: magnet ? { title: magnet.title, promise: magnet.promise } : null };
-  const { parsed, generatedBy, offered } = await generate(workspaceId, userId, brief);
+  const { parsed, generatedBy, offered, reel } = await generate(workspaceId, userId, brief);
   await db
     .update(schema.ladders)
-    .set({ topic: brief.topic, keyword: brief.keyword, sourceMaterial: brief.sourceMaterial ?? null, realNumbers: brief.realNumbers ?? null, postName: parsed.postName, headline: parsed.headline, altHeadlines: parsed.altHeadlines, hook: parsed.hook, copy: parsed.copy, rungs: parsed.rungs, dmKeyword: parsed.dmKeyword, carousel: parsed.carousel, igCaption: parsed.igCaption, threadsChain: parsed.threadsChain, notes: parsed.notes || null, generatedBy, status: "draft", launchedAt: null })
+    .set({ topic: brief.topic, keyword: brief.keyword, sourceMaterial: brief.sourceMaterial ?? null, realNumbers: brief.realNumbers ?? null, postName: parsed.postName, headline: parsed.headline, altHeadlines: parsed.altHeadlines, hook: parsed.hook, copy: parsed.copy, rungs: parsed.rungs, dmKeyword: parsed.dmKeyword, carousel: parsed.carousel, igCaption: parsed.igCaption, threadsChain: parsed.threadsChain, notes: parsed.notes || null, generatedBy, status: "draft", launchedAt: null, ...(reel ? { sourceTranscript: brief.sourceMaterial ?? null, hookOptions: reel.hookOptions, onScreenText: reel.onScreen || null, reelFlags: reel.flags } : {}) })
     .where(eq(schema.ladders.id, l.id));
   await recordMaterial(workspaceId, userId, l.id, offered, parsed.materialUsed);
   refresh();
@@ -334,4 +335,51 @@ export async function revokeGraphicLinkAction(formData: FormData): Promise<void>
   await db.update(schema.ladders).set({ graphicPublicToken: null }).where(and(eq(schema.ladders.id, l.id), eq(schema.ladders.userId, userId)));
   refresh();
   redirect(`/content/ladders/${l.id}?ship=revoked#ship`);
+}
+
+/**
+ * Reel to Post (H-1948, plan H-1953): Create post from a reel's transcript (pasted, or what's on screen when there's no
+ * talking). The keyword: the one picked, or "the one I said on camera" when it's on Ladder facts, else none. Saved as a
+ * ladder draft (format reel) and opened for review.
+ */
+export async function createReelAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ team: "allow" });
+  const transcript = str(formData, "transcript").slice(0, 20000).trim();
+  if (!transcript) redirect("/content/reel?reel=empty");
+  const profile = await db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, workspaceId), eq(schema.ladderProfiles.userId, userId)) });
+  const pick = str(formData, "keyword").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const spoken = spokenKeyword(transcript, profile ?? null);
+  const keyword = pick === "SAID" || !pick ? (spoken?.onFacts ? spoken.keyword : "NONE") : pick;
+  const topic = str(formData, "topic").trim() || topicFromTranscript(transcript);
+  const { id } = await createLadder({ workspaceId, userId }, { format: "reel", topic, audience: LADDER_AUDIENCES.find((a) => a === str(formData, "audience")) ?? "warm", keyword, sourceMaterial: transcript, realNumbers: opt(formData, "realNumbers"), leadMagnet: null, leadMagnetId: null });
+  refresh();
+  redirect(`/content/ladders/${id}?reel=new`);
+}
+
+/** Edit or rewrite one part of a reel package from the ladder page: the new words, or an instruction for the writer. */
+export async function reelPartAction(formData: FormData): Promise<void> {
+  const { v, userId } = await ctx({ team: "allow" });
+  const l = await own(str(formData, "id"), userId);
+  const [raw, rungNo] = str(formData, "part").split(":");
+  const part = (["headline", "body", "rung"] as const).find((p) => p === raw);
+  if (part) {
+    const r = await updateLadderPart(v, l, part, { text: str(formData, "text") || undefined, instruction: str(formData, "instruction") || undefined, rung: Number(rungNo) || undefined });
+    if (!r.ok) redirect(`/content/ladders/${l.id}?part=${encodeURIComponent(r.error)}#reel`);
+    // The caption is also the Instagram caption on a reel.
+    if (part === "body") await db.update(schema.ladders).set({ igCaption: r.after }).where(eq(schema.ladders.id, l.id));
+  } else if (raw === "hook") {
+    const i = Number(str(formData, "pick"));
+    const opts = l.hookOptions.map((h, n) => ({ ...h, pick: n === i }));
+    const chosen = opts[i]?.text;
+    if (chosen) {
+      // The caption's first line is the picked hook.
+      const [, ...rest] = l.copy.split("\n");
+      const copy = [chosen, ...rest].join("\n");
+      await db.update(schema.ladders).set({ hookOptions: opts, hook: chosen, copy, igCaption: copy }).where(eq(schema.ladders.id, l.id));
+    }
+  } else if (raw === "onscreen") {
+    await db.update(schema.ladders).set({ onScreenText: str(formData, "text").trim() || null }).where(eq(schema.ladders.id, l.id));
+  }
+  refresh();
+  redirect(`/content/ladders/${l.id}?part=saved#reel`);
 }

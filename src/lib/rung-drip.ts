@@ -12,6 +12,8 @@ import { redactSecrets } from "@/lib/engine/redact";
 import { dripLock, dripPayload, estimateDripEnd, handoffReasons, rungsPayload, scheduleAtProblem, type HandoffGate } from "@/lib/engine/rung-drip";
 import type { DripExtras } from "@/lib/engine/rung-drip";
 import { logSync } from "@/lib/integrations";
+import { isReel } from "@/lib/engine/ladder";
+import { REEL_GAP_MINUTES } from "@/lib/engine/reel";
 
 export type DripSetup = { on: boolean; userNs: string | null; url: string | null };
 
@@ -35,7 +37,10 @@ export async function queueRungs(v: { workspaceId: string; user: { id: string };
   const setup = rungsSetup(v.membership);
   const url = open(setup.url);
   if (!url || !setup.userNs) return { ok: false, reason: "Community Loyalty isn't connected for comment ladders yet. Evolve Omega sets that up." };
-  const payload = rungsPayload({ userNs: setup.userNs, rungs: ladder.rungs.map((r) => r.body), fbPostId: ids.fbPostId, igMediaId: ids.igMediaId });
+  // A reel's five rungs drip about five minutes apart with the last pinned (H-1948 note 6); a ladder keeps the Dripper's own pace.
+  const reel = isReel(ladder);
+  const gapMinutes = reel ? REEL_GAP_MINUTES : null;
+  const payload = rungsPayload({ userNs: setup.userNs, rungs: ladder.rungs.map((r) => r.body), fbPostId: ids.fbPostId, igMediaId: ids.igMediaId, gapMinutes, pinLast: reel });
   const event = "drip.rungs";
   const logged = { contentItemId: item.id, ladderId: ladder.id, rungs: payload.rungs.length, target: payload.target };
   let status = 0;
@@ -54,7 +59,7 @@ export async function queueRungs(v: { workspaceId: string; user: { id: string };
     return { ok: false, reason: "Community Loyalty didn't accept the rungs. Nothing was queued; the reason is in the sync log." };
   }
   const handedAt = nowIso();
-  await db.insert(schema.dripHandoffs).values({ id: crypto.randomUUID(), workspaceId: v.workspaceId, userId: v.user.id, contentItemId: item.id, ladderId: ladder.id, handedAt, rungCount: payload.rungs.length, threadsAt: null, target: payload.target === "facebook" ? "page" : payload.target, fbPostId: ids.fbPostId, igMediaId: ids.igMediaId, gapMinutes: null, pinLast: false, expiresAt: estimateDripEnd(handedAt, payload.rungs.length), note });
+  await db.insert(schema.dripHandoffs).values({ id: crypto.randomUUID(), workspaceId: v.workspaceId, userId: v.user.id, contentItemId: item.id, ladderId: ladder.id, handedAt, rungCount: payload.rungs.length, threadsAt: null, target: payload.target === "facebook" ? "page" : payload.target, fbPostId: ids.fbPostId, igMediaId: ids.igMediaId, gapMinutes, pinLast: reel, expiresAt: estimateDripEnd(handedAt, payload.rungs.length, gapMinutes), note });
   await logSync({ workspaceId: v.workspaceId, userId: v.user.id, provider: "community_loyalty", direction: "out", event, payload: logged, status: "sent", note });
   return { ok: true, count: payload.rungs.length };
 }

@@ -59,6 +59,25 @@ function reply(system: string, user: string): string {
       confirmation: { ticket_title: "You're in", bring: ["Your calendar", "One question about your business"] },
     });
   }
+  // Reel to Post (H-1948): the reel contract (HOOKS, CAPTION, COVER, ON_SCREEN, FLAGS), five rungs from the transcript, and a
+  // writer flag of its own (a likely mishearing) beside the ones the code finds.
+  if (/^HOOKS$/m.test(system) && /^CAPTION$/m.test(system)) {
+    const keyword = user.match(/^KEYWORD: (.+)$/m)?.[1]?.trim() ?? "NONE";
+    const said = user.match(/TRANSCRIPT[^\n]*\n([\s\S]*?)(?:\n\n[A-Z ]+:|$)/)?.[1]?.trim().split(/(?<=[.?!])\s/)[0] ?? "The moment";
+    const words = (n: number) => Array.from({ length: n }, (_, i) => ["Plan", "the", "week", "on", "Tuesday", "in", "ten", "minutes", "and", "keep", "it", "boring"][i % 12]).join(" ");
+    const rung = (n: number) => `${n}. ${n === 1 ? said : `Rung ${n} of the reel.`}\n\n${words(40)}.\n\n${n === 5 ? (keyword === "NONE" ? "Which one will you try first?" : `Comment ${keyword} and I'll send you the link.`) : "Small and boring wins."}`;
+    return [
+      "POST_NAME", "Planning the week in ten minutes",
+      "HOOKS", "I used to plan for three hours... now it takes ten minutes (pick)\nSunday planning broke me... Tuesday fixed it\nThree hours of planning... gone by Tuesday",
+      "CAPTION", "I used to plan for three hours... now it takes ten minutes\n\nSunday was planning day.\n\nBy Tuesday it was dead.\n\nThe whole story is in the comments. Read them in order. 👇\n\nSave this for Sunday.\n\nWhat day do you plan your week?",
+      "SUPPORTING_COMMENTS", [1, 2, 3, 4, 5].map(rung).join("\n---\n"),
+      "DM_KEYWORD", keyword,
+      "COVER", "THREE HOURS OF PLANNING / DOWN TO (gold: TEN MINUTES)",
+      "ON_SCREEN", "Plan in ten minutes",
+      "FLAGS", "[HEARING] \"meal prop\" was probably \"meal prep\"",
+      "NOTES", "Mock notes.",
+    ].join("\n");
+  }
   if (/SUPPORTING_COMMENTS/.test(system)) {
     const ids = Array.from(user.matchAll(/^\[([TS]\d+)\]/gm)).map((m) => m[1]);
     const used = [ids.find((i) => i.startsWith("T")), ids.find((i) => i.startsWith("S"))].filter(Boolean).join(", ") || "NONE";
