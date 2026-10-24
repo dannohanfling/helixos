@@ -1,16 +1,18 @@
 /**
- * Reel to Post, PR A (H-1948, plan H-1953): New from a reel. The member pastes the reel's transcript (or describes what's on
- * screen when it has no talking), picks a keyword, and Create post writes the package as a ladder draft: hooks, caption, 5
- * rungs, cover frame, on-screen text and the flags to check before posting. Transcribing on the device comes in PR B.
+ * Reel to Post (H-1948, plan H-1953): New from a reel. The member chooses the reel and writes it out on their own device (PR
+ * B), or pastes the transcript (or describes what's on screen when it has no talking), picks a keyword, and Create post
+ * writes the package as a ladder draft: hooks, caption, 5 rungs, cover frame, on-screen text and the flags to check before
+ * posting. The video goes with the post only when they attach it.
  */
 import Link from "next/link";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
-import { createReelAction } from "@/lib/actions/ladders";
-import { Card, Field, PageHeader } from "@/components/ui";
-import { SubmitButton } from "@/components/submit-button";
+import { Card, PageHeader } from "@/components/ui";
+import { ReelForm } from "@/components/reel-form";
+import { proofStorageConfigured } from "@/lib/proof-storage";
+import { reelModelsUrl } from "@/lib/reel-models";
 import { AiFormStatus } from "@/components/ai-status";
 import { targetWords } from "@/lib/engine/ladder";
 
@@ -37,33 +39,14 @@ export default async function NewFromReelPage({ searchParams }: { searchParams: 
               The package is written from your facts: product, keywords, what you may claim. <Link href="/content/ladders/profile" className="underline">Fill them in once</Link> and every reel uses them.
             </p>
           ) : null}
-          <form action={createReelAction} className="grid gap-3" data-testid="reel-form">
-            <Field label="Transcript" hint="Paste what you say in the reel. No talking, only music? Describe what's on screen or what you're teaching instead.">
-              <textarea className="field" name="transcript" rows={10} required data-testid="reel-transcript-input" placeholder="I used to spend Sunday afternoons planning every meal for the week…" />
-            </Field>
-            <Field label="Keyword (optional)" hint="Goes in the last rung only, never the caption.">
-              <select className="field" name="keyword" defaultValue="SAID" data-testid="reel-keyword">
-                <option value="SAID">The one I say on camera, if it&apos;s on my facts</option>
-                {keywords.map((k) => (
-                  <option key={k.keyword} value={k.keyword}>
-                    {k.keyword}: fetches {targetWords(k)}
-                  </option>
-                ))}
-                <option value="NONE">No keyword, end on a question</option>
-              </select>
-            </Field>
-            <Field label="What it's about (optional)" hint="A few words for your list. Blank: taken from your first sentence.">
-              <input className="field" name="topic" />
-            </Field>
-            <div className="flex flex-wrap items-center gap-3">
-              <SubmitButton className="btn btn-accent min-h-11!" pendingText="Writing your post…" data-testid="reel-create">
-                Create post
-              </SubmitButton>
-              <AiFormStatus feature="ladder" enabled={ai} />
-              {!ai ? <span className="text-xs text-ink-3">No AI key connected: you get the package&apos;s shape with every blank marked, and the checks on your transcript.</span> : null}
-            </div>
-            <p className="text-xs text-ink-3">Numbers, prices and people&apos;s names you say on camera stay out of the copy unless they&apos;re in your verified stats or approved proof; you&apos;ll see each one listed to check.</p>
-          </form>
+          <ReelForm
+            keywords={keywords.map((k) => ({ keyword: k.keyword, label: `${k.keyword}: fetches ${targetWords(k)}` }))}
+            modelsUrl={reelModelsUrl()}
+            canAttach={proofStorageConfigured()}
+            owner={{ workspaceId: v.workspace.id, userId: v.user.id }}
+            aiStatus={<AiFormStatus feature="ladder" enabled={ai} />}
+            noAiNote={!ai ? <span className="text-xs text-ink-3">No AI key connected: you get the package&apos;s shape with every blank marked, and the checks on your transcript.</span> : null}
+          />
         </Card>
       </div>
     </>

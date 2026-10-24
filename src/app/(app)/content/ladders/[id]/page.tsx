@@ -74,6 +74,8 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   const ai = await hasAiKey();
+  // Reel to Post, PR B: the reel's own video, when attached (the member's own, so the lookup is by member too).
+  const reelVideo = l.videoId ? await db.query.mediaVideos.findFirst({ where: and(eq(schema.mediaVideos.id, l.videoId), eq(schema.mediaVideos.userId, v.user.id)) }) : null;
   const evidence = await citableEvidence(v.user.id);
   // Material used (rev 618): what the writer drew from the coach's teaching library and story bank. Never on a client's ladder.
   const material = v.role === "coach" && !v.switchedInto ? await materialUsedFor(v.user.id, l.id) : [];
@@ -168,7 +170,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
       ) : null}
       {isReel(l) ? (
         <div className="mb-4">
-          <ReelPackage id={l.id} hookOptions={l.hookOptions} onScreen={l.onScreenText} cover={l.headline} flags={l.reelFlags} transcript={l.sourceTranscript} rungs={l.rungs.length} ai={ai} note={partNote ?? null} />
+          <ReelPackage id={l.id} hookOptions={l.hookOptions} onScreen={l.onScreenText} cover={l.headline} flags={l.reelFlags} transcript={l.sourceTranscript} rungs={l.rungs.length} ai={ai} note={partNote ?? null} video={reelVideo ? { id: reelVideo.id, filename: reelVideo.originalFilename, bytes: reelVideo.bytes, seconds: reelVideo.seconds } : null} />
         </div>
       ) : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">

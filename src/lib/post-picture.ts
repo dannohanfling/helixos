@@ -20,6 +20,14 @@ type Source = { bytes: Buffer; mime: string; kind: "graphic" | "photo" | "video"
 
 /** The picture's own bytes: an Images entry ("img:<id>") or a Proof attachment, the member's own, else null. */
 async function readSource(m: { workspaceId: string; userId: string }, source: string): Promise<Source | null> {
+  // A reel video (Reel to Post, PR B): the member's own, sent as it is.
+  if (source.startsWith("vid:")) {
+    const vid = await db.query.mediaVideos.findFirst({ where: and(eq(schema.mediaVideos.id, source.slice(4)), eq(schema.mediaVideos.workspaceId, m.workspaceId), eq(schema.mediaVideos.userId, m.userId)) });
+    if (!vid) return null;
+    const r = await readProofObject(vid.blobUrl);
+    if (!r.ok) return null;
+    return { bytes: Buffer.from(await r.arrayBuffer()), mime: vid.mime, kind: "video", name: vid.originalFilename.replace(/\.[^.]+$/, "").replace(/[^a-z0-9]+/gi, "-").slice(0, 60) || "reel" };
+  }
   if (source.startsWith("img:")) {
     const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, source.slice(4)), eq(schema.deckImages.workspaceId, m.workspaceId), eq(schema.deckImages.userId, m.userId)) });
     if (!img || !img.mime.startsWith("image/") || img.mime === "image/svg+xml") return null;

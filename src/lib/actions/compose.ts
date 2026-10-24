@@ -57,6 +57,11 @@ const isChannel = (c: string): c is Channel => (CHANNELS as readonly string[]).i
 async function pickedAttachment(id: string | null | undefined, workspaceId: string, userId: string): Promise<{ id: string; showsAResult: boolean } | null> {
   if (!id) return null;
   // An Images entry (friction walk CP1): the member's own, kept under its prefixed id; a proof-kind image shows a result.
+  // A reel video (Reel to Post, PR B): the member's own, under its prefixed id. A reel shows the member, not a result.
+  if (id.startsWith("vid:")) {
+    const vid = await db.query.mediaVideos.findFirst({ where: and(eq(schema.mediaVideos.id, id.slice(4)), eq(schema.mediaVideos.workspaceId, workspaceId), eq(schema.mediaVideos.userId, userId)), columns: { id: true } });
+    return vid ? { id, showsAResult: false } : null;
+  }
   if (id.startsWith("img:")) {
     const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id.slice(4)), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)), columns: { id: true, kind: true } });
     return img ? { id, showsAResult: img.kind === "proof" } : null;

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 374,
+    date: "2026-10-24",
+    title: "New from a reel: choose the video, and it's written out on your phone",
+    lines: [
+      "Content → New from a reel: choose your reel and press Write it out on this device. Your phone or computer listens to it and puts the words in the box, where you fix anything it misheard. The first time, it downloads the listening model (the page says how big; use Wi-Fi); after that it's kept on your device.",
+      "Writing it out happens on your device: your video isn't uploaded for that. Tick Attach this video to the post and it uploads to your private storage when you press Create post, then goes out with the post when you publish. Up to 200 MB.",
+      "A reel that's only music or shows something without talking: it says so, and you describe what's on screen instead.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 373,
     date: "2026-10-24",
     title: "New from a reel: your reel's words in, a ready-to-post package out",
