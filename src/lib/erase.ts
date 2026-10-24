@@ -191,6 +191,10 @@ export async function eraseMember(plan: ErasePlan, ranByUserId: string): Promise
       await db.delete(schema.proofAttachments).where(eq(schema.proofAttachments.id, rowId));
       count("proof_attachments");
     }
+    if (rowId && label === "media_videos") {
+      await db.delete(schema.mediaVideos).where(eq(schema.mediaVideos.id, rowId));
+      count("media_videos");
+    }
     if (rowId && label === "deck_images") {
       await db.delete(schema.deckSlots).where(eq(schema.deckSlots.imageId, rowId));
       await db.delete(schema.deckImages).where(eq(schema.deckImages.id, rowId));

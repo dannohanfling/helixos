@@ -208,10 +208,10 @@ async function main() {
     const stopped = (await page.locator('[data-testid="erase-error"]').innerText()).trim();
     if (!stopped.startsWith(`Stopped at ${A.magnetKey}`)) throw new Error(`a refused delete names the file, got "${stopped}"`);
     const mid = await remaining(A);
-    if (mid.membership !== 1 || mid.lead_magnets !== 1 || mid.proof_attachments !== 0 || mid.deck_images !== 0) throw new Error(`the run stopped at the refusal: files before it gone with their rows, the rest intact, got ${JSON.stringify(mid)}`);
+    if (mid.membership !== 1 || mid.lead_magnets !== 1 || mid.proof_attachments !== 0 || mid.deck_images !== 0 || mid.media_videos !== 0) throw new Error(`the run stopped at the refusal: files before it gone with their rows, the rest intact, got ${JSON.stringify(mid)}`);
     const partial = await db.query.deletionAudits.findFirst({ where: and(eq(schema.deletionAudits.deletedEmail, A.email), eq(schema.deletionAudits.stoppedAt, A.magnetKey)) });
-    if (!partial || partial.objects !== 4 || partial.counts.proof_attachments !== 1 || partial.counts.deck_images !== 1) throw new Error(`the stopped run is on the record with what it removed, got ${JSON.stringify(partial)}`);
-    console.log(`✓ a refused delete: "${stopped.slice(0, 80)}…"; the four files before it went with their rows, the rest is intact, and the stopped run is on the record`);
+    if (!partial || partial.objects !== 5 || partial.counts.proof_attachments !== 1 || partial.counts.deck_images !== 1 || partial.counts.media_videos !== 1) throw new Error(`the stopped run is on the record with what it removed, got ${JSON.stringify(partial)}`);
+    console.log(`✓ a refused delete: "${stopped.slice(0, 80)}…"; the five files before it went with their rows, the rest is intact, and the stopped run is on the record`);
 
     // ── Run again: it finishes. ──
     await fetch(`${blob}/__refuse-delete`, { method: "POST" });
