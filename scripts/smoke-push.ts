@@ -409,6 +409,21 @@ async function main() {
       must(anim === "none", `reduced motion: no sweep or settle over the still (${anim})`);
       await ctx.close();
     }
+    {
+      // H-1966: inside the app no service worker answers for it, so a dropped connection reaches the app's own dark offline
+      // screen. A worker left from an earlier version is removed on the next open.
+      const { ctx, p } = await appCtx();
+      await p.goto(`${base}/today`);
+      await p.evaluate('navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(() => navigator.serviceWorker.ready)');
+      await p.reload();
+      let left = -1;
+      for (let i = 0; i < 20 && left !== 0; i++) {
+        left = (await p.evaluate('navigator.serviceWorker.getRegistrations().then((rs) => rs.length)')) as number;
+        if (left !== 0) await p.waitForTimeout(500);
+      }
+      must(left === 0, `no service worker stays inside the app (${String(left)} left)`);
+      await ctx.close();
+    }
     // The website never shows either.
     await page.goto(`${base}/today`);
     must((await page.getByTestId("app-opening").count()) === 0 && (await page.getByTestId("pull-refresh").count()) === 0, "the website has no opening and no pull");

@@ -28,7 +28,16 @@ export function RegisterServiceWorker() {
     };
     window.addEventListener("beforeinstallprompt", keep);
     window.addEventListener("appinstalled", installed);
-    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+    // Inside the store app (H-1966) the app keeps its own offline screen (mobile/www/offline.html, dark, H-1813). A worker here
+    // would answer a dropped connection with this site's light /offline page first, so the app gets none, and any worker an
+    // earlier version left behind is removed.
+    const inApp = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    if (inApp && "serviceWorker" in navigator) {
+      void navigator.serviceWorker
+        .getRegistrations()
+        .then((rs) => Promise.all(rs.map((r) => r.unregister())))
+        .catch(() => undefined);
+    } else if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => {
         // No worker means no offline screen; the app itself works the same.
       });
