@@ -372,7 +372,7 @@ async function main() {
     // H-1640: the pass never shows the template's name prompt; with the sync off, no opening points are queued at create.
     const shown = ((await (await fetch(`${HOST}/__calls`)).json()) as { passNamesShown: string[] }).passNamesShown;
     must(shown.length === 1 && shown[0].trim().length > 0 && !/enter your|last name/i.test(shown[0]), `the pass shows a real name, never the template's prompt: "${shown[0]}"`);
-    must((await db.query.loyaltyPointsMoves.findMany({ where: eq(schema.loyaltyPointsMoves.source, `sync-open:${coachM.id}`) })).length === 0, "with the sync off, making a pass queues no points");
+    must((await db.query.loyaltyPointsMoves.findMany({ columns: { source: true } })).filter((mv) => mv.source.startsWith(`sync-open:${coachM.id}`)).length === 0, "with the sync off, making a pass queues no points");
     // The redirect after Add (H-1641): landing on /rewards/pass-added marks the pass added and shows "Pass added".
     await page.goto(`${base}/rewards/pass-added`);
     await page.locator('[data-testid="eo-pass-added"]').waitFor({ timeout: 15000 });
@@ -560,6 +560,36 @@ async function main() {
     must(JSON.stringify(ownCheckWrites) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add"]), `one deduct and one add on the coach's own pass: ${ownCheckWrites.join(", ")}`);
     must((await mock()).balances["cus_eo_1"]?.balance === ownBefore, "the coach's balance is back where it was");
     console.log("✓ step E: the desk check on the coach's own pass, without hiding it; stops with words at 0, then 1 off and 1 back");
+    // Make my pass again (H-1906): the coach's own pass only, for a move to a new template. It needs the tick; it forgets the old
+    // pass so Get my pass makes a new one; the next sync sends one opening add of the coach's full HelixOS total to the new pass
+    // and its Level, and nothing more to the old one. Nothing is written by the press itself.
+    const rmStart = (await mock()).writes.length;
+    const oldPass = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!;
+    await page.goto(`${base}/coach?connections=open`);
+    await submit(page, '[data-testid="own-pass-remake-run"]');
+    must((await page.locator('[data-testid="own-pass-remake-result"]').innerText()).startsWith("Tick the box first"), "Make my pass again needs the tick");
+    must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!.eoCustomerId === oldPass.eoCustomerId, "without the tick nothing changes");
+    await page.locator('[data-testid="own-pass-remake-confirm"]').check();
+    await submit(page, '[data-testid="own-pass-remake-run"]');
+    must((await page.locator('[data-testid="own-pass-remake-result"]').innerText()).startsWith("Done. Now press Get my pass"), "the card says to press Get my pass next");
+    const cleared = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!;
+    must(!cleared.eoCustomerId && !cleared.eoPassSerial && !cleared.eoPassUrl && !cleared.eoLevelSent, "the old pass is forgotten");
+    must((await mock()).writes.length === rmStart, "the press writes nothing to the pass service");
+    await page.goto(`${base}/rewards`);
+    await submit(page, '[data-testid="eo-pass-get"]');
+    await page.locator('[data-testid="eo-pass-made"]').waitFor({ timeout: 20000 });
+    const remade = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachM.id) }))!;
+    must(Boolean(remade.eoCustomerId) && remade.eoCustomerId !== oldPass.eoCustomerId, "Get my pass makes a new pass");
+    const remadeTotal = await totalOf(coachM.userId);
+    await runCron();
+    await runCron();
+    const rmAfter = await mock();
+    const remakeWrites = rmAfter.writes.slice(rmStart);
+    must(JSON.stringify([...remakeWrites].sort()) === JSON.stringify([`POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`, "POST /api/public/admin/points/add", `PUT /api/external/v1/passes/pass.com.evolveomega/${remade.eoPassSerial}/values/Level`].sort()), `one create, one opening add and one Level on the new pass: ${remakeWrites.join(", ")}`);
+    must(rmAfter.balances[remade.eoCustomerId!]?.balance === remadeTotal, `the new pass gets the coach's full total (${remadeTotal}), saw ${rmAfter.balances[remade.eoCustomerId!]?.balance}`);
+    must(rmAfter.fields[`${remade.eoPassSerial}/Level`] === rankOf(remade, remadeTotal).name, "the new pass's Level is the coach's rank");
+    must(rmAfter.balances[oldPass.eoCustomerId!]?.balance === sa.balances[oldPass.eoCustomerId!]?.balance, "the old pass gets nothing more");
+    console.log("✓ make my pass again: needs the tick, writes nothing itself, Get my pass makes a new pass, and it gets one opening add of the full total and the rank as Level");
     // Back as it was: both off, the client's program and links restored, the walk's own awards removed.
     await db.update(schema.leaderboardFeeds).set({ syncMode: "off", inviteMode: "off", inviteLinks: {} }).where(eq(schema.leaderboardFeeds.id, syncFeedRow.id));
     await db.update(schema.memberships).set({ programTier: mayaM.programTier, rankKeptLevel: mayaM.rankKeptLevel, eoLevelSent: null, eoTierSent: null, eoOffersSent: [] }).where(eq(schema.memberships.id, mayaM.id));
@@ -689,7 +719,7 @@ async function main() {
     const writes = (await mockCalls()).writes;
     // The only writes are the Points desk's moves (H-493), each an add or a deduct by customer id: never a set, never anything else.
     const create = `POST /api/external/v1/templates/${TEMPLATES[1].id}/pass`;
-    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...fixWrites, ...syncWrites, ...ownCheckWrites, ...moveWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, the one message, the two name writes of Fix my pass, the sync's moves and fields, the check on the coach's own pass, and the pass move's create, level and add: ${writes.join(", ")}`);
+    must(JSON.stringify(writes) === JSON.stringify(["POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", "POST /api/public/admin/points/deduct", "POST /api/public/admin/points/add", create, ...msgWrites, create, ...fixWrites, ...syncWrites, ...ownCheckWrites, ...remakeWrites, ...moveWrites]), `HelixOS writes to eLoyalty only the desk's four moves, as adds and deducts, the two passes made by template, the one message, the two name writes of Fix my pass, the sync's moves and fields, the check on the coach's own pass, the remade pass's create, opening add and Level, and the pass move's create, level and add: ${writes.join(", ")}`);
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nleaderboard walk passed");
   } finally {

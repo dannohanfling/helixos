@@ -12,8 +12,8 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 366,
-    date: "2026-10-23",
+    n: 367,
+    date: "2026-10-24",
     title: "30 Days in the Arena: the leaderboard, your pod and Huddle check-ins",
     lines: [
       "The Arena page now has the leaderboard: points from 27 Nov to 26 Dec only, your own row marked, and from Mon 30 Nov last week's leader at the top.",
@@ -21,6 +21,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "On Huddle days, tap I'm here on the Arena page from 30 minutes before the start for 10 points.",
     ],
     audience: "everyone",
+  },
+  {
+    n: 366,
+    date: "2026-10-23",
+    title: "Make your own pass again on a new template",
+    lines: [
+      "Coach has Make my pass again under your own program: after you put a new template's id in, it lets Get my pass make you a fresh pass on it, and the next sync puts all your points on the new one. Your old pass stays in Wallet until you remove it.",
+    ],
+    audience: "coach",
   },
   {
     n: 365,
