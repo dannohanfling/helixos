@@ -6,8 +6,9 @@
  */
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { ctx } from "@/lib/action-helpers";
-import { arenaFor, enroll } from "@/lib/arena";
+import { ctx, str } from "@/lib/action-helpers";
+import { requireCoach } from "@/lib/auth";
+import { arenaFor, checkInHuddle, enroll, movePod, newPod, placePods, setCaptain } from "@/lib/arena";
 import { ARENA, canEnter, dateIn, joinOpen } from "@/lib/engine/arena";
 
 export async function joinArenaAction(formData: FormData): Promise<void> {
@@ -22,4 +23,48 @@ export async function joinArenaAction(formData: FormData): Promise<void> {
   await enroll({ challengeId: c.id, workspaceId: v.workspace.id, userId: v.user.id, membershipId: v.membership.id });
   revalidatePath("/today");
   redirect(back("in"));
+}
+
+/**
+ * "I'm here" at the live Huddle (H-1563 PR B): the member's own, once per Huddle, 10 points. A coach switched in and a team
+ * member can't tap it for them.
+ */
+export async function huddleHereAction(): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Checking in to a Huddle is the member's own." });
+  const back = (huddle: string) => `/arena?huddle=${encodeURIComponent(huddle)}#huddles`;
+  if (!canEnter({ role: v.role, programTier: v.membership.programTier, team: Boolean(v.team) })) redirect(back("not-yours"));
+  const c = await arenaFor(v.workspace.id);
+  const r = await checkInHuddle({ c, workspaceId: v.workspace.id, userId: v.user.id, membershipId: v.membership.id });
+  revalidatePath("/arena");
+  redirect(back(r.ok ? (r.scored ? "here" : "already") : r.error));
+}
+
+/** The coach's pods (PR B): back to the Pods card with what happened. */
+const podsBack = (note: string) => `/coach/arena?pods=${encodeURIComponent(note)}#pods`;
+
+export async function movePodAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const c = await arenaFor(v.workspace.id);
+  const r = await movePod(c, str(formData, "membershipId"), str(formData, "podId"));
+  revalidatePath("/coach/arena");
+  revalidatePath("/arena");
+  redirect(podsBack(r.ok ? "moved" : r.error!));
+}
+
+export async function captainAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const c = await arenaFor(v.workspace.id);
+  const r = await setCaptain(c, str(formData, "podId"), str(formData, "membershipId"));
+  revalidatePath("/coach/arena");
+  revalidatePath("/arena");
+  redirect(podsBack(r.ok ? "captain" : r.error!));
+}
+
+export async function newPodAction(): Promise<void> {
+  const v = await requireCoach();
+  const c = await arenaFor(v.workspace.id);
+  await placePods(c.id, v.workspace.id);
+  await newPod(c);
+  revalidatePath("/coach/arena");
+  redirect(podsBack("new"));
 }

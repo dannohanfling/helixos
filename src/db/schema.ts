@@ -988,6 +988,8 @@ export const POINT_TYPES = [
   "bonus",
   "redeem",
   "community",
+  /** "I'm here" at a 30 Days in the Arena Huddle (H-1563 PR B). */
+  "huddle",
 ] as const;
 
 export const pointsLedger = sqliteTable(

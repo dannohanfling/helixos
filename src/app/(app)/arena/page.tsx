@@ -5,11 +5,13 @@
  */
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
-import { arenaFor, entryFor } from "@/lib/arena";
+import { arenaBoard, arenaFor, arenaRoster, entryFor, huddlesFor, myHuddles, placePods, podsFor } from "@/lib/arena";
+import { blockedFor } from "@/lib/blocks";
+import { ArenaHuddleCheckin, ArenaLeaderboard, ArenaPod } from "@/components/arena-board";
 import { joinArenaAction } from "@/lib/actions/arena";
 import { ArenaCountdown } from "@/components/arena-countdown";
 import { SubmitButton } from "@/components/submit-button";
-import { ARENA, canEnter, canSee, countdownNow, dateIn, joinOpen } from "@/lib/engine/arena";
+import { ARENA, arenaPhase, canEnter, canSee, countdownNow, dateIn, huddleLive, joinOpen, nextHuddle } from "@/lib/engine/arena";
 import { arenaDisplay } from "./fonts";
 import "./arena.css";
 
@@ -25,7 +27,7 @@ const NOTES: Record<string, string> = {
   "not-yours": "The Arena is for Accelerator, Academy and Elite members.",
 };
 
-export default async function ArenaPage({ searchParams }: { searchParams: Promise<{ arena?: string }> }) {
+export default async function ArenaPage({ searchParams }: { searchParams: Promise<{ arena?: string; huddle?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const who = { role: v.role, programTier: v.membership.programTier, team: Boolean(v.team) };
@@ -38,8 +40,25 @@ export default async function ArenaPage({ searchParams }: { searchParams: Promis
     );
   }
   const c = await arenaFor(v.workspace.id);
-  const entry = v.role === "client" ? await entryFor(c.id, v.membership.id) : undefined;
-  const open = joinOpen(c, dateIn(ARENA.timezone, new Date()));
+  let entry = v.role === "client" ? await entryFor(c.id, v.membership.id) : undefined;
+  // PR A's entries had no pod: placing them is once, on the first read after PR B.
+  if (entry && !entry.podId) {
+    await placePods(c.id, v.workspace.id);
+    entry = await entryFor(c.id, v.membership.id);
+  }
+  const now = new Date();
+  const today = dateIn(ARENA.timezone, now);
+  const open = joinOpen(c, today);
+  const phase = arenaPhase(c, today);
+  const [roster, blocks, huddles] = await Promise.all([arenaRoster(v.workspace.id, c), blockedFor(v), huddlesFor(c)]);
+  const [board, pods, mine] = await Promise.all([
+    arenaBoard(v, c, blocks, { today, roster }),
+    entry?.podId ? podsFor(v.workspace.id, c, roster) : Promise.resolve([]),
+    entry ? myHuddles(c, v.membership.id) : Promise.resolve(new Set<string>()),
+  ]);
+  const myPod = entry?.podId ? (pods.find((p) => p.id === entry!.podId) ?? null) : null;
+  const live = huddleLive(now, huddles);
+  const comingHuddle = nextHuddle(now, huddles);
   const note = sp.arena ? (NOTES[sp.arena] ?? null) : null;
   const join =
     v.role === "coach" ? (
@@ -85,6 +104,8 @@ export default async function ArenaPage({ searchParams }: { searchParams: Promis
         </div>
       </header>
       <div className="ar-key"></div>
+
+      <ArenaLeaderboard board={board} phase={phase} />
 
 
       <section id="how"><div className="ar-wrap">
@@ -186,6 +207,7 @@ export default async function ArenaPage({ searchParams }: { searchParams: Promis
           <div className="ar-card ar-hud"><div className="ar-w">Wed</div><div className="ar-d">23 Dec</div><p>The final stretch</p></div>
         </div>
         <p className="ar-tz">8 AM Pacific · 11 AM Eastern · 6 PM Cairo. Recorded for anyone who can&apos;t make it live.</p>
+        {entry ? <ArenaHuddleCheckin live={live} next={comingHuddle} here={live ? mine.has(live.id) : false} note={sp.huddle ?? null} /> : null}
         <div className="ar-agenda">
           <div><b>10 min</b><span>Leaderboard and shout-outs</span></div>
           <div><b>10 min</b><span>A postcard from Egypt</span></div>
@@ -227,6 +249,7 @@ export default async function ArenaPage({ searchParams }: { searchParams: Promis
             <p style={{ color: "var(--ink2)" }}>Ask My Board in HelixOS for a business decision, ask the Ask Danno bot about the program, or ask your captain. Someone always answers.</p>
           </div>
         </div>
+        {myPod ? <ArenaPod pod={myPod} captainView={myPod.captainMembershipId === v.membership.id} /> : null}
       </div></section>
 
 

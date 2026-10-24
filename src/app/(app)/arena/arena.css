@@ -227,3 +227,24 @@
 .ar .ar-note{margin:0 auto 18px;max-width:640px;border:1px solid #6b4b1c;border-radius:14px;padding:10px 16px;color:var(--ink);background:rgba(42,33,24,.85);font-size:15px}
 .ar .ar-coach{display:block;text-align:center;margin-top:14px;font-size:14px;color:var(--gold2);text-decoration:underline}
 @media (max-width:860px){.ar .ar-nav .ar-btn{display:none}.ar footer{padding-bottom:28px}}
+/* PR B (H-1563): the leaderboard, your pod and the Huddle check-in. */
+.ar .ar-leader{margin:24px auto 0;max-width:640px;text-align:center;color:var(--ink2);font-size:16px}
+.ar .ar-leader b{color:var(--gold2)}
+.ar .ar-board{list-style:none;margin:28px auto 0;max-width:640px;padding:6px 0}
+.ar .ar-board li{display:grid;grid-template-columns:2.2em 1fr auto auto;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid var(--line)}
+.ar .ar-board li:first-child{border-top:0}
+.ar .ar-board .ar-place{font-family:var(--ar-display),Georgia,serif;color:var(--gold2);font-size:18px}
+.ar .ar-board .ar-who{min-width:0;overflow-wrap:anywhere}
+.ar .ar-board .ar-who em{color:var(--ink3);font-style:normal;font-size:14px}
+.ar .ar-board .ar-days{color:var(--ink3);font-size:14px;white-space:nowrap}
+.ar .ar-board .ar-pts{color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;min-width:3.5em}
+.ar .ar-board li.ar-you{background:rgba(221,163,56,.10);box-shadow:inset 3px 0 0 var(--gold)}
+.ar .ar-mypod{margin-top:18px}
+.ar .ar-mypod h3{font-size:21px;margin-bottom:8px}
+.ar .ar-mypod-line{color:var(--ink2)}
+.ar .ar-podlist{list-style:none;margin-top:14px;padding:0}
+.ar .ar-podlist li{display:flex;flex-wrap:wrap;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line);color:var(--ink2)}
+.ar .ar-podlist li span:first-child{color:var(--ink);font-weight:600;min-width:8em}
+.ar .ar-podlist .ar-last{color:var(--ink3)}
+.ar .ar-checkin{margin-top:22px;display:flex;flex-direction:column;align-items:center;gap:10px}
+@media (max-width:520px){.ar .ar-board li{grid-template-columns:2em 1fr auto;padding:12px 14px}.ar .ar-board .ar-days{display:none}}
