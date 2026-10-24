@@ -83,7 +83,7 @@ async function main() {
     // Write without publish: the ship tools aren't there; whoami says what is allowed.
     const writer = await connect(["content", "content:write"]);
     const listed = ((await (await rpc(writer, "tools/list")).json()) as { result?: { tools?: { name: string }[] } }).result?.tools?.map((t) => t.name) ?? [];
-    for (const n of ["ladders_list", "ladder_read", "images_find", "ladder_create", "ladder_update", "ladder_make_graphic"]) must(listed.includes(n), `content and content:write list ${n}`);
+    for (const n of ["ladders_list", "ladder_read", "images_find", "ladder_create", "ladder_update", "ladder_make_graphic", "reel_create"]) must(listed.includes(n), `content and content:write list ${n}`);
     must(!listed.includes("ladder_ship") && !listed.includes("ladder_ship_preview"), "no ship tool without Content: publish");
     must((await tool(writer, "whoami")).text.includes("Allowed: Content, Content: write."), "whoami names what this connection may do");
     console.log("✓ scopes: Content and Content: write list the writing tools and no ship tool; whoami says what is allowed");
@@ -97,6 +97,21 @@ async function main() {
     must(!last.includes("FROM YOUR TEACHING LIBRARY"), "a client's ladder is never given the coach's library");
     const ladderId = String(created.data?.id);
     console.log("✓ ladder_create: one sentence first, numbered headlines, no id spoken, no library for a client");
+
+    // Reel to Post, PR C: reel_create writes the reel package with the page's Reel mode and saves a draft; nothing posts.
+    const reel = await tool(writer, "reel_create", { transcript: "I used to plan three hours every Sunday and by Tuesday it was dead. My client Quentin doubled his bookings in a month. It's $297 a month. Comment SYSTEM and I'll send it.", notes: "Keep it about Tuesday planning." });
+    must(!reel.isError && reel.text.startsWith("Reel package ready: 5 rungs, keyword none"), `reel_create leads with one sentence: ${reel.text.slice(0, 160)}`);
+    must(reel.text.includes("Picked hook: ") && reel.text.includes("Cover: ") && reel.text.includes("Before you post:\n1. "), `the hook, cover and numbered checks are read back: ${reel.text.slice(0, 400)}`);
+    must(/\$297/.test(reel.text) && reel.text.includes("Quentin") && reel.text.includes("SYSTEM"), "the flags name what was said on camera");
+    must(!/[0-9a-f]{8}-[0-9a-f]{4}/.test(reel.text.split("Open it:")[0]), "no id in the spoken part of reel_create");
+    const reelRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, String(reel.data?.id)) }))!;
+    must(reelRow.format === "reel" && reelRow.sourceType === "reel" && reelRow.rungs.length === 5 && reelRow.keyword === "NONE" && !reelRow.shippedAt && !reelRow.contentItemId, "a reel draft with 5 rungs and no keyword, nothing posted");
+    const reelLast = ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { user: string }).user;
+    must(reelLast.includes("NOTES FROM THE MEMBER") && reelLast.includes("Tuesday planning"), "the notes reach the writer as notes");
+    const badKw = await tool(writer, "reel_create", { transcript: "A reel about planning the week in ten minutes on a Tuesday afternoon.", keyword: "NOPE" });
+    must(badKw.isError && /isn't a keyword on their Ladder facts/.test(badKw.text), `a keyword not on their facts is refused: ${badKw.text}`);
+    await db.delete(schema.ladders).where(eq(schema.ladders.id, reelRow.id));
+    console.log("✓ reel_create: one sentence first, the picked hook, cover and numbered checks read back, a reel draft saved, nothing posted");
 
     // Change rung 3 by instruction, swap the headline for alternate 1, find a photo, make the graphic.
     const rung = await tool(writer, "ladder_update", { ladder: "three calls", part: "rung", rung: 3, instruction: "make it shorter" });

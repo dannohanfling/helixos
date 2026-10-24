@@ -127,7 +127,7 @@ export function withoutKeyword(p: Parsed, profile: Pick<LadderProfile, "keywords
 const STAT = /(\d+(?:\.\d+)?\s?%)|\b(?:studies|research|data|surveys?)\s+(?:show|shows|found|say|says|prove|proves)\b/gi;
 
 /** `leadMagnet`: the magnet the keyword fetches. It is named in the final rung only, as fulfilment; the body never mentions it. */
-export type Brief = { format: LadderFormatKey; topic: string; audience: "warm" | "cold"; keyword: string; sourceMaterial?: string | null; realNumbers?: string | null; leadMagnet?: { title: string; promise: string } | null };
+export type Brief = { format: LadderFormatKey; topic: string; audience: "warm" | "cold"; keyword: string; sourceMaterial?: string | null; realNumbers?: string | null; leadMagnet?: { title: string; promise: string } | null; /** A reel's notes from the member (reel_create): an angle or what to keep, never facts. */ notes?: string | null };
 
 /** The profile's keyword by name, however it was typed. */
 export function keywordOf(profile: Pick<LadderProfile, "keywords"> | null, keyword: string | null | undefined): LadderKeyword | null {

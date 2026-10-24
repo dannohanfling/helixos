@@ -11,7 +11,8 @@ describe("Voice to Ship tools", () => {
   it("read, write and publish are three ticks", () => {
     expect(names(["content"])).toEqual(expect.arrayContaining(["ladders_list", "ladder_read", "images_find"]));
     expect(names(["content"])).not.toEqual(expect.arrayContaining(["ladder_create"]));
-    expect(names(["content", "content:write"])).toEqual(expect.arrayContaining(["ladder_create", "ladder_update", "ladder_make_graphic"]));
+    expect(names(["content", "content:write"])).toEqual(expect.arrayContaining(["ladder_create", "ladder_update", "ladder_make_graphic", "reel_create"]));
+    expect(names(["content"])).not.toContain("reel_create");
     for (const n of ["ladder_ship_preview", "ladder_ship"]) {
       expect(names(["content", "content:write"])).not.toContain(n);
       expect(names(["content:publish"])).toContain(n);

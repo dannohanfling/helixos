@@ -107,6 +107,7 @@ export function reelInput(brief: Brief): string {
     none ? 'NO KEYWORD ON THIS POST, A HARD RULE: no keyword anywhere, no "comment" or "message me" call to action, no product pitch and no price. DM_KEYWORD is NONE. Rung 5 closes with a question.' : "",
     `TRANSCRIPT (what the member said on camera, or what they described when the reel has no talking):\n${(brief.sourceMaterial ?? "").trim()}`,
     brief.realNumbers?.trim() ? `REAL NUMBERS (use exactly, nothing else may be presented as real):\n${brief.realNumbers.trim()}` : "",
+    brief.notes?.trim() ? `NOTES FROM THE MEMBER (an angle or what to keep; never a number, name or result to present as real):\n${brief.notes.trim()}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");

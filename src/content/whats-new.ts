@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 375,
+    date: "2026-10-24",
+    title: "Make a reel post from Claude",
+    lines: [
+      "Through the HelixOS connector, paste or say a reel's words in Claude and it makes the same package as New from a reel: three hooks with one picked, the caption, 5 comment rungs, the cover frame and what to check before posting.",
+      "It's saved as a draft in Ladders and read back to you. Nothing is posted.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 373,
     date: "2026-10-24",
     title: "New from a reel: your reel's words in, a ready-to-post package out",

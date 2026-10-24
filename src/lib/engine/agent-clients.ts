@@ -62,6 +62,7 @@ const TOOL_WORDS: Record<string, { action: string; page: string }> = {
   ladder_create: { action: "Created a ladder", page: "Ladders" },
   ladder_update: { action: "Updated a ladder", page: "Ladders" },
   ladder_make_graphic: { action: "Made a ladder graphic", page: "Ladders" },
+  reel_create: { action: "Created a reel post", page: "Ladders" },
   action_step_to_task: { action: "Turned an action step into a task", page: "Recordings" },
   board_apply: { action: "Applied the Board's setup", page: "My Board" },
   board_ask: { action: "Asked the Board", page: "My Board" },
