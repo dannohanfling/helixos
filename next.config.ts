@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { execSync } from "node:child_process";
 import { buildInfo } from "./src/lib/build-info";
+import { reelModelsOrigin } from "./src/lib/reel-models";
 
 const dev = process.env.NODE_ENV !== "production";
 // A lead magnet file goes from the browser straight to the bucket, so the bucket's API is the one cross-origin connection the
@@ -26,16 +27,23 @@ const chatHosts = "https://communityloyalty.io https://*.communityloyalty.io";
 // geo lookup from ipapi.co (handoff rev 266, read from the loaded widget). Named here, not found by guessing.
 const chatSdkHosts = "https://sdk.dfktv2.com https://ipapi.co";
 const chatFrameHosts = "https://sdk.dfktv2.com";
+// Reel to Post, PR B: HelixOS's own model store (REEL_MODELS_URL). The listening worker imports the speech runtime from it and
+// reads the model files; WebAssembly needs 'wasm-unsafe-eval' to compile (not 'unsafe-eval'). Named by origin, nothing broader.
+const reelModels = reelModelsOrigin();
+const reelScript = reelModels ? ` 'wasm-unsafe-eval' ${reelModels}` : "";
+const reelConnect = reelModels ? ` ${reelModels}` : "";
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${chatHosts} ${chatSdkHosts}${dev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' ${chatHosts} ${chatSdkHosts}${reelScript}${dev ? " 'unsafe-eval'" : ""}`,
+  // The listening worker is this app's own file (public/reel-listen.worker.js); the speech runtime may start one from a blob.
+  "worker-src 'self' blob:",
   // The kit's Google faces, for the Deck step's thumbnails (first-deck §6): the stylesheet host and the font files' host, by name.
   `style-src 'self' 'unsafe-inline' ${chatHosts} https://fonts.googleapis.com`,
   "img-src 'self' data: blob: https:",
   "media-src 'self' https:",
   `font-src 'self' data: ${chatHosts} https://fonts.gstatic.com`,
   // Rev 843: the SDK's live connection for replies (Ask Danno froze, replies came later); by name, like the rest.
-  `connect-src 'self' ${blobApiSource} ${chatHosts} ${chatSdkHosts} wss://communityloyalty.io wss://*.communityloyalty.io wss://sdk.dfktv2.com${dev ? " ws: wss:" : ""}`,
+  `connect-src 'self' ${blobApiSource}${reelConnect} ${chatHosts} ${chatSdkHosts} wss://communityloyalty.io wss://*.communityloyalty.io wss://sdk.dfktv2.com${dev ? " ws: wss:" : ""}`,
   // Hermes: the thank-you video on a HelixOS-hosted Magic funnel page, an unlisted YouTube video played from youtube-nocookie.com.
   `frame-src 'self' ${chatHosts} ${chatFrameHosts} https://www.youtube-nocookie.com https://www.youtube.com`,
   "object-src 'none'",

@@ -2533,10 +2533,35 @@ export const ladders = sqliteTable(
     hookOptions: text("hook_options", { mode: "json" }).$type<{ text: string; pick: boolean }[]>().notNull().default([]),
     onScreenText: text("on_screen_text"),
     reelFlags: text("reel_flags", { mode: "json" }).$type<{ kind: string; text: string; from: "code" | "writer" }[]>().notNull().default([]),
+    /** Reel to Post, PR B: the reel's own video, when the member attached it. It becomes the post's media ("vid:<id>"). */
+    videoId: text("video_id"),
     createdAt: createdAt(),
   },
   (t) => [index("ladders_user").on(t.userId, t.status)],
 );
+
+/**
+ * Reel to Post, PR B (H-1948, plan H-1953): a reel video the member attached to a post. Uploaded straight from the browser
+ * into the private store (never through a function, never for transcription, which runs on the device), read back and
+ * sniffed before this row is written. The post carries it as "vid:<id>"; it is the member's own and nobody else's.
+ */
+export const mediaVideos = sqliteTable(
+  "media_videos",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    blobKey: text("blob_key").notNull(),
+    blobUrl: text("blob_url").notNull(),
+    mime: text("mime").notNull(),
+    bytes: integer("bytes").notNull(),
+    seconds: integer("seconds"),
+    originalFilename: text("original_filename").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("media_videos_user").on(t.userId, t.createdAt)],
+);
+export type MediaVideo = typeof mediaVideos.$inferSelect;
 
 /* ───────────────────────── Bring-your-own AI ───────────────────────── */
 

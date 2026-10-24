@@ -100,6 +100,8 @@ export const MEMBER_TABLES = {
   ai_credentials: schema.aiCredentials,
   ai_usage: schema.aiUsage,
   deck_images: schema.deckImages,
+  // Reel to Post, PR B: the reel videos a member attached to their posts; in their export, erased with them, files included.
+  media_videos: schema.mediaVideos,
   // The brand kit is the member's (rev 568): in their export, erased with them.
   brand_kits: schema.brandKits,
   drip_handoffs: schema.dripHandoffs,

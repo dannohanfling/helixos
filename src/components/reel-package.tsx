@@ -3,7 +3,7 @@
  * "Before you post" flags first, then the three hooks (pick one; the caption's first line follows), the on-screen text and
  * the cover frame, each with Copy, and Change a part: new words or an instruction for the writer, the checks run again.
  */
-import { reelPartAction } from "@/lib/actions/ladders";
+import { reelPartAction, removeReelVideoAction } from "@/lib/actions/ladders";
 import { CopyButton } from "@/components/copy-button";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, Disclosure } from "@/components/ui";
@@ -20,16 +20,18 @@ type Props = {
   rungs: number;
   ai: boolean;
   note: string | null;
+  /** The reel's own video, when attached (PR B): the post carries it. */
+  video: { id: string; filename: string; bytes: number; seconds: number | null } | null;
 };
 
-export function ReelPackage({ id, hookOptions, onScreen, cover, flags, transcript, rungs, ai, note }: Props) {
+export function ReelPackage({ id, hookOptions, onScreen, cover, flags, transcript, rungs, ai, note, video }: Props) {
   const coverText = headlineParts(cover).lines.join("\n");
   return (
     <Card id="reel" title="Your reel package" action={<span className="text-xs text-ink-3">From your reel&apos;s words</span>}>
       <div className="space-y-4" data-testid="reel-package">
         {note ? (
           <p className="rounded-lg bg-surface-2 p-2 text-xs" data-testid="reel-note" role="status">
-            {note === "saved" ? "Saved. The checks ran again." : note}
+            {note === "saved" ? "Saved. The checks ran again." : note === "video-removed" ? "The video is removed from the post and from your storage." : note}
           </p>
         ) : null}
         <section>
@@ -48,6 +50,27 @@ export function ReelPackage({ id, hookOptions, onScreen, cover, flags, transcrip
             </p>
           )}
         </section>
+        {video ? (
+          <section data-testid="reel-attached">
+            <h3 className="text-sm font-semibold">Your video</h3>
+            <div className="mt-1 grid gap-2 sm:grid-cols-[minmax(0,12rem)_1fr] sm:items-start">
+              <video className="w-full max-w-48 rounded-lg bg-black" controls preload="metadata" playsInline src={`/api/reel-videos/${video.id}`} data-testid="reel-attached-player" />
+              <div className="grid gap-2 text-xs text-ink-2">
+                <span className="[overflow-wrap:anywhere]">
+                  {video.filename} · {(video.bytes / 1_000_000).toFixed(1)} MB
+                  {video.seconds ? ` · ${Math.floor(video.seconds / 60)}:${String(video.seconds % 60).padStart(2, "0")}` : ""}
+                </span>
+                <span>It goes out with the post when you publish. Kept in your private storage.</span>
+                <form action={removeReelVideoAction}>
+                  <input type="hidden" name="id" value={id} />
+                  <SubmitButton className="btn btn-ghost btn-xs" pendingText="Removing…" data-testid="reel-video-remove">
+                    Remove the video
+                  </SubmitButton>
+                </form>
+              </div>
+            </div>
+          </section>
+        ) : null}
         <section>
           <h3 className="text-sm font-semibold">Hooks</h3>
           <ul className="mt-1 space-y-1">

@@ -111,6 +111,14 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
     const known = new Set(deckRows.map((d) => d.blobKey));
     for (const o of await listProofObjects(`deck/${workspaceId}/${m.userId}/`)) if (!known.has(o.key)) objects.push({ store: "proof", key: o.key, url: o.url, label: "deck_images", rowId: "" });
   }
+  // Reel videos (Reel to Post, PR B): every row's object, and anything else under the member's own reels/ folder (an upload
+  // that was never recorded). The rows go with the member's other rows below.
+  const videoRows = ids.media_videos?.length ? await db.query.mediaVideos.findMany({ where: inArray(schema.mediaVideos.id, ids.media_videos) }) : [];
+  for (const r of videoRows) objects.push({ store: "proof", key: r.blobKey, url: r.blobUrl, label: "media_videos", rowId: r.id });
+  if (proofStorageConfigured()) {
+    const known = new Set(videoRows.map((r) => r.blobKey));
+    for (const o of await listProofObjects(`reels/${workspaceId}/${m.userId}/`)) if (!known.has(o.key)) objects.push({ store: "proof", key: o.key, url: o.url, label: "media_videos", rowId: "" });
+  }
   // A report's screenshot (rev 432), in the private store under reports/, with the report that points at it.
   if (ids.member_reports.length) {
     for (const r of await db.query.memberReports.findMany({ where: inArray(schema.memberReports.id, ids.member_reports) })) if (r.screenshotKey && r.screenshotUrl) objects.push({ store: "proof", key: r.screenshotKey, url: r.screenshotUrl, label: "member_reports", rowId: r.id });
@@ -182,6 +190,10 @@ export async function eraseMember(plan: ErasePlan, ranByUserId: string): Promise
       await db.delete(schema.proofAttachmentReads).where(eq(schema.proofAttachmentReads.attachmentId, rowId));
       await db.delete(schema.proofAttachments).where(eq(schema.proofAttachments.id, rowId));
       count("proof_attachments");
+    }
+    if (rowId && label === "media_videos") {
+      await db.delete(schema.mediaVideos).where(eq(schema.mediaVideos.id, rowId));
+      count("media_videos");
     }
     if (rowId && label === "deck_images") {
       await db.delete(schema.deckSlots).where(eq(schema.deckSlots.imageId, rowId));

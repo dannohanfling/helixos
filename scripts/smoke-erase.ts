@@ -81,10 +81,12 @@ async function main() {
     const displayKey = `proofs/${ws}/${newId()}-erase-${who}-display.jpg`;
     const deckKey = `deck/${ws}/${userId}/${randomUUID()}.png`;
     const orphanKey = `deck/${ws}/${userId}/never-recorded-${RUN}.png`;
+    // A reel video (Reel to Post, PR B) under the member's own reels/ folder.
+    const reelKey = `reels/${ws}/${userId}/${randomUUID()}.mp4`;
     const slug = `erase-${who}-${RUN}`;
     const magnetKey = `public/magnets/${slug}/${newId()}-${slug}.pdf`;
-    const urls = { attach: await put(attachKey, "private"), display: await put(displayKey, "private"), deck: await put(deckKey, "private"), orphan: await put(orphanKey, "private"), magnet: await put(magnetKey, "public") };
-    keys.push(attachKey, displayKey, deckKey, orphanKey, magnetKey);
+    const urls = { attach: await put(attachKey, "private"), display: await put(displayKey, "private"), deck: await put(deckKey, "private"), orphan: await put(orphanKey, "private"), magnet: await put(magnetKey, "public"), reel: await put(reelKey, "private") };
+    keys.push(attachKey, displayKey, deckKey, orphanKey, magnetKey, reelKey);
     await db.insert(schema.files).values({ key: magnetKey, workspaceId: ws, contentType: "application/pdf", url: urls.magnet, size: 20, isPublic: true });
 
     // A recording step hangs off a workspace recording (Recordings R1): one coach's recording for the step to point at.
@@ -97,6 +99,7 @@ async function main() {
       lesson_progress: { lessonId },
       certification_submissions: { deliverableId },
       deck_images: { blobKey: deckKey, blobUrl: urls.deck, mime: "image/png" },
+      media_videos: { blobKey: reelKey, blobUrl: urls.reel, mime: "video/mp4", bytes: 20 },
       lead_magnets: { slug, pdfKey: magnetKey, keyword: marker },
       // A member's own row in board_seats is a custom seat (the library's rows have no user).
       board_seats: { kind: "custom" },
@@ -143,7 +146,7 @@ async function main() {
   if (seeded !== expected || Object.values(await remaining(A)).some((n) => n !== 1)) throw new Error(`A has one row in every listed table: ${seeded} of ${expected}`);
   const objectsBefore = await stored();
   for (const k of [...A.keys, ...B.keys]) if (!objectsBefore.includes(k)) throw new Error(`seeded file missing: ${k}`);
-  console.log(`✓ seeded A and B: a row in each of ${seeded} tables and ${A.keys.length} files each (proof, display, deck, an unrecorded deck upload, a public PDF)`);
+  console.log(`✓ seeded A and B: a row in each of ${seeded} tables and ${A.keys.length} files each (proof, display, deck, an unrecorded deck upload, a public PDF, a reel video)`);
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -205,10 +208,10 @@ async function main() {
     const stopped = (await page.locator('[data-testid="erase-error"]').innerText()).trim();
     if (!stopped.startsWith(`Stopped at ${A.magnetKey}`)) throw new Error(`a refused delete names the file, got "${stopped}"`);
     const mid = await remaining(A);
-    if (mid.membership !== 1 || mid.lead_magnets !== 1 || mid.proof_attachments !== 0 || mid.deck_images !== 0) throw new Error(`the run stopped at the refusal: files before it gone with their rows, the rest intact, got ${JSON.stringify(mid)}`);
+    if (mid.membership !== 1 || mid.lead_magnets !== 1 || mid.proof_attachments !== 0 || mid.deck_images !== 0 || mid.media_videos !== 0) throw new Error(`the run stopped at the refusal: files before it gone with their rows, the rest intact, got ${JSON.stringify(mid)}`);
     const partial = await db.query.deletionAudits.findFirst({ where: and(eq(schema.deletionAudits.deletedEmail, A.email), eq(schema.deletionAudits.stoppedAt, A.magnetKey)) });
-    if (!partial || partial.objects !== 4 || partial.counts.proof_attachments !== 1 || partial.counts.deck_images !== 1) throw new Error(`the stopped run is on the record with what it removed, got ${JSON.stringify(partial)}`);
-    console.log(`✓ a refused delete: "${stopped.slice(0, 80)}…"; the four files before it went with their rows, the rest is intact, and the stopped run is on the record`);
+    if (!partial || partial.objects !== 5 || partial.counts.proof_attachments !== 1 || partial.counts.deck_images !== 1 || partial.counts.media_videos !== 1) throw new Error(`the stopped run is on the record with what it removed, got ${JSON.stringify(partial)}`);
+    console.log(`✓ a refused delete: "${stopped.slice(0, 80)}…"; the five files before it went with their rows, the rest is intact, and the stopped run is on the record`);
 
     // ── Run again: it finishes. ──
     await fetch(`${blob}/__refuse-delete`, { method: "POST" });

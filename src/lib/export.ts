@@ -57,6 +57,7 @@ async function storedFiles(workspaceId: string, userId: string): Promise<Row[]> 
     if (a.displayKey && a.displayKey !== a.blobKey) out.push({ store: "private", table: "proof_attachments", rowId: a.id, key: a.displayKey, contentType: "image/jpeg" });
   }
   for (const d of (await memberRows("deck_images", workspaceId, userId)) as schema.DeckImage[]) out.push({ store: "private", table: "deck_images", rowId: d.id, key: d.blobKey, contentType: d.mime });
+  for (const v of (await memberRows("media_videos", workspaceId, userId)) as schema.MediaVideo[]) out.push({ store: "private", table: "media_videos", rowId: v.id, key: v.blobKey, contentType: v.mime, size: v.bytes });
   for (const r of (await memberRows("member_reports", workspaceId, userId)) as schema.MemberReport[]) if (r.screenshotKey) out.push({ store: "private", table: "member_reports", rowId: r.id, key: r.screenshotKey, contentType: r.screenshotType });
   for (const m of (await memberRows("lead_magnets", workspaceId, userId)) as schema.LeadMagnet[]) {
     const files = await db.query.files.findMany({ where: and(eq(schema.files.workspaceId, workspaceId), like(schema.files.key, `public/magnets/${m.slug}/%`)) });

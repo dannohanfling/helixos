@@ -32,6 +32,9 @@ export async function composerContext(v: Viewer) {
   // private read route as a proof's file. A proof-kind image shows a result, so it carries the illustrative rule.
   const library = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: (t, { desc }) => [desc(t.createdAt)] });
   media.push(...library.map((img) => libraryMedia(img)));
+  // The member's reel videos (Reel to Post, PR B), newest first, under their prefixed id and their own read route.
+  const videos = await db.query.mediaVideos.findMany({ where: and(eq(schema.mediaVideos.workspaceId, v.workspace.id), eq(schema.mediaVideos.userId, v.user.id)), orderBy: (t, { desc }) => [desc(t.createdAt)] });
+  media.push(...videos.map((vid) => reelVideoMedia(vid)));
   const snippets = {
     hooks: lib.filter((p) => p.kind === "hook").map((p) => ({ id: p.id, title: p.title, text: p.hook ?? p.body })),
     ctas: lib.filter((p) => p.kind === "cta").map((p) => ({ id: p.id, title: p.title, text: p.cta ?? p.body })),
@@ -64,3 +67,6 @@ export async function composerContext(v: Viewer) {
 
 /** An Images entry as the composer offers it. Its id is prefixed, so the saved post can tell it from a proof's file. */
 export const libraryMedia = (img: { id: string; kind: string; caption: string | null; createdAt: string }): ComposerMedia => ({ id: `img:${img.id}`, proofId: "", proofTitle: "Images", kind: "image", label: `Images · ${img.caption?.trim() || img.kind} · ${img.createdAt.slice(0, 10)}`, url: `/api/deck-images/${img.id}`, downloadUrl: `/api/deck-images/${img.id}`, hasAlt: Boolean(img.caption?.trim()), showsAResult: img.kind === "proof" });
+
+/** A reel video as the composer offers it (Reel to Post, PR B): the member's own, read through its own private route. */
+export const reelVideoMedia = (vid: { id: string; originalFilename: string; createdAt: string }): ComposerMedia => ({ id: `vid:${vid.id}`, proofId: "", proofTitle: "Reels", kind: "video", label: `Reels · ${vid.originalFilename} · ${vid.createdAt.slice(0, 10)}`, url: `/api/reel-videos/${vid.id}`, downloadUrl: `/api/reel-videos/${vid.id}?download=1`, hasAlt: true, showsAResult: false });

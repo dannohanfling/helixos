@@ -19,6 +19,7 @@ import { generateBackground, graphicStep, makeGraphic, ownImage } from "@/lib/gr
 import { headlineChoices, OWN_HEADLINE } from "@/lib/engine/graphic";
 import { blockersFor, createLadder, ensureLadderItem, generate, magnetFor, shipLadder, updateLadderPart } from "@/lib/ladder-core";
 import { spokenKeyword, topicFromTranscript } from "@/lib/engine/reel";
+import { ownVideo, recordReelVideo, removeReelVideo, videoInUse, type RecordVideo } from "@/lib/reel-videos";
 
 async function assertPublishable(l: schema.Ladder): Promise<void> {
   const blockers = await blockersFor(l);
@@ -253,6 +254,8 @@ export async function deleteLadderAction(formData: FormData): Promise<void> {
   const { userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   await db.delete(schema.ladders).where(eq(schema.ladders.id, l.id));
+  // A reel's video goes with its ladder, unless a post still carries it.
+  if (l.videoId && !(await videoInUse(l.workspaceId, l.videoId))) await removeReelVideo({ workspaceId: l.workspaceId, userId }, l.videoId);
   refresh();
   redirect("/content/ladders");
 }
@@ -352,6 +355,9 @@ export async function createReelAction(formData: FormData): Promise<void> {
   const keyword = pick === "SAID" || !pick ? (spoken?.onFacts ? spoken.keyword : "NONE") : pick;
   const topic = str(formData, "topic").trim() || topicFromTranscript(transcript);
   const { id } = await createLadder({ workspaceId, userId }, { format: "reel", topic, audience: LADDER_AUDIENCES.find((a) => a === str(formData, "audience")) ?? "warm", keyword, sourceMaterial: transcript, realNumbers: opt(formData, "realNumbers"), leadMagnet: null, leadMagnetId: null });
+  // PR B: the reel's own video, when the member attached it (recorded already, and only ever their own).
+  const video = str(formData, "videoId") ? await ownVideo({ workspaceId, userId }, str(formData, "videoId")) : null;
+  if (video) await db.update(schema.ladders).set({ videoId: video.id }).where(eq(schema.ladders.id, id));
   refresh();
   redirect(`/content/ladders/${id}?reel=new`);
 }
@@ -382,4 +388,23 @@ export async function reelPartAction(formData: FormData): Promise<void> {
   }
   refresh();
   redirect(`/content/ladders/${l.id}?part=saved#reel`);
+}
+
+/**
+ * Reel to Post, PR B: records the reel video the page just uploaded, before Create post is sent. The store is read back and
+ * the bytes sniffed (src/lib/reel-videos.ts); the answer is the video's id, or the sentence to show.
+ */
+export async function recordReelVideoAction(input: { key: string; seconds: number | null; filename: string }): Promise<RecordVideo> {
+  const { workspaceId, userId } = await ctx({ team: "allow" });
+  if (!input || typeof input.key !== "string" || typeof input.filename !== "string") return { ok: false, error: "That upload couldn't be recorded. Choose the video again." };
+  return recordReelVideo({ workspaceId, userId }, { key: input.key, seconds: typeof input.seconds === "number" ? input.seconds : null, filename: input.filename });
+}
+
+/** Removes the reel's video from the post and from storage (the member's own file, at their word). */
+export async function removeReelVideoAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ team: "allow" });
+  const l = await own(str(formData, "id"), userId);
+  const ok = l.videoId ? await removeReelVideo({ workspaceId, userId }, l.videoId) : true;
+  refresh();
+  redirect(`/content/ladders/${l.id}?part=${ok ? "video-removed" : encodeURIComponent("The video couldn't be removed just now. Try again in a minute.")}#reel`);
 }

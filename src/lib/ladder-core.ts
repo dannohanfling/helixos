@@ -112,7 +112,7 @@ export async function ensureLadderItem(l: schema.Ladder, workspaceId: string, us
   const existing = itemId ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }) : null;
   // The ladder composes the post and its channel bodies from what the coach built: rule, never gated.
   // The ladder's graphic is the post's picture on every image channel (rev 515): picked here, no re-upload; a remake follows.
-  const item = { title: l.postName || l.topic, hook: l.hook || null, body: l.copy || null, hasCta: l.keyword !== "NONE", contentType: "Comment Ladder", notes: l.notes, origin: "rule" as const, ...(l.graphicImageId ? { mediaAttachmentId: `img:${l.graphicImageId}` } : {}) };
+  const item = { title: l.postName || l.topic, hook: l.hook || null, body: l.copy || null, hasCta: l.keyword !== "NONE", contentType: "Comment Ladder", notes: l.notes, origin: "rule" as const, ...(l.videoId ? { mediaAttachmentId: `vid:${l.videoId}` } : l.graphicImageId ? { mediaAttachmentId: `img:${l.graphicImageId}` } : {}) };
   if (existing) await db.update(schema.contentItems).set(item).where(eq(schema.contentItems.id, existing.id));
   else {
     itemId = newId();
