@@ -134,6 +134,8 @@ export function ReelForm({ keywords, modelsUrl, canAttach, owner, aiStatus, noAi
         const silent = heardAlmostNothing(words, secs);
         setTranscript(words);
         setListen({ phase: "done", silent });
+        // The browser keeps the model now: the next reel says so instead of the download size.
+        setKept(await modelKept(`${modelsUrl}${manifest.models}`, manifest.tiers[t]!.model));
         if (silent) textRef.current?.focus();
         return;
       } catch (e) {
