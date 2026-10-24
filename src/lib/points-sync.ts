@@ -51,7 +51,9 @@ export async function queueMemberMoves(feed: schema.LeaderboardFeed, m: Member):
     columns: { id: true, points: true, type: true },
   });
   if (!rows.length) return 0;
-  const openingSource = `sync-open:${m.id}`;
+  // The opening is per pass (H-1906): a member who makes their pass again gets one opening add on the new one, never a second
+  // on the same pass. Only unsent ledger rows count, so an opening never repeats points a pass already has.
+  const openingSource = `sync-open:${m.id}:${customerId}`;
   const opened = await db.query.loyaltyPointsMoves.findFirst({ where: eq(schema.loyaltyPointsMoves.source, openingSource), columns: { id: true } });
   const move = (source: string, delta: number, reason: string) => {
     const id = newId();

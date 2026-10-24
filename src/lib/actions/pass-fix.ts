@@ -53,3 +53,23 @@ export async function setNameFixAction(formData: FormData): Promise<void> {
     .where(eq(schema.leaderboardFeeds.id, feed.id));
   refresh();
 }
+
+/**
+ * Make my pass again (H-1905, plan H-1906 approved in H-1916): the coach's own pass only, to move to a new template. HelixOS
+ * forgets the old pass's ids so Get my pass makes a new one, marks the coach's points as not sent yet so the next sync sends
+ * one opening add of the full total to the new pass, and clears the pass's sent marks. Nothing is written to or deleted
+ * from the pass service; the old pass and its record stay there.
+ */
+export async function remakeMyPassAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) redirect("/coach?passRemade=no&connections=open#own-program");
+  if (formData.get("confirm") !== "on") redirect("/coach?passRemade=confirm&connections=open#own-program");
+  const m = coach.membership;
+  await db
+    .update(schema.memberships)
+    .set({ eoCustomerId: null, eoPassSerial: null, eoPassTypeId: null, eoPassUrl: null, eoPassInstalledAt: null, eoPassLastPushAt: null, eoLevelSent: null, eoTierSent: null, eoNameNeedsFix: false, eoOffersSent: [] })
+    .where(and(eq(schema.memberships.id, m.id), eq(schema.memberships.workspaceId, coach.workspace.id)));
+  await db.update(schema.pointsLedger).set({ eoMirrored: false }).where(and(eq(schema.pointsLedger.workspaceId, coach.workspace.id), eq(schema.pointsLedger.userId, coach.user.id)));
+  console.log("[pass-fix] own pass to be made again");
+  redirect("/coach?passRemade=yes&connections=open#own-program");
+}
