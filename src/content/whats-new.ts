@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 371,
+    date: "2026-10-24",
+    title: "Every rung starts with its number",
+    lines: [
+      "On a ladder, each rung now starts \"1. \", \"2. \" and so on, on the same line as its first sentence: in the rungs box, Copy all, the Copy beside each rung, and the comments handed to Community Loyalty.",
+      "The number follows the rung's place, so moving, adding or removing rungs keeps them 1, 2, 3 in order, and a number is never doubled.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 369,
     date: "2026-10-24",
     title: "30 Days in the Arena: finishing, and an evening nudge you switch on",

@@ -9,6 +9,7 @@
  * starts at rung 2, or rung 1 lands twice. The choice is encoded, not hard-coded.
  */
 import { LIVE_POSTING_HOUR } from "./ladder";
+import { numberRungs } from "./rung-number";
 export type Publisher = "helixos" | "community_loyalty";
 /**
  * The payload the Rung Dripper reads. The five keys it has always read, then the keys Ship adds (L2's Instagram-only drip,
@@ -29,7 +30,8 @@ export const splitRungs = (ladder: string): string[] =>
     .filter(Boolean);
 
 export function dripPayload(input: { userNs: string; post: string; rungs: string[]; fbIgPublisher: Publisher; scheduleAt?: string | null } & DripExtras): DripPayload {
-  const rungs = input.rungs.map((r) => r.trim()).filter(Boolean);
+  // H-1944: numbered by place before the first is split off, so the drip's rungs read 2., 3. … after a first comment of 1.
+  const rungs = numberRungs(input.rungs.map((r) => r.trim()).filter(Boolean));
   const first = rungs[0] ?? "";
   const dripped = input.fbIgPublisher === "helixos" ? rungs : rungs.slice(1);
   return { user_ns: input.userNs, post: input.post, first_comment: first, schedule_at: input.scheduleAt ?? "", rungs: joinRungs(dripped), target: input.target ?? "both", rung_fb_post_id: input.fbPostId ?? "", rung_ig_media_id: input.igMediaId ?? "", gap_minutes: input.gapMinutes ? String(input.gapMinutes) : "", pin_last: input.pinLast ? "1" : "" };
@@ -42,7 +44,7 @@ export function dripPayload(input: { userNs: string; post: string; rungs: string
  */
 export type RungsPayload = { user_ns: string; rungs: string[]; rung_fb_post_id: string; rung_ig_media_id: string; target: "both" | "facebook" | "instagram"; gap_minutes: string };
 export function rungsPayload(input: { userNs: string; rungs: string[]; fbPostId?: string | null; igMediaId?: string | null; gapMinutes?: number | null }): RungsPayload {
-  const rungs = input.rungs.map((r) => r.replace(/^\s*\d{1,2}\\?[.)]\s*/, "").trim()).filter(Boolean).map((r, i) => `${i + 1}. ${r}`);
+  const rungs = numberRungs(input.rungs.map((r) => r.trim()).filter(Boolean));
   const fb = (input.fbPostId ?? "").trim();
   const ig = (input.igMediaId ?? "").trim();
   return { user_ns: input.userNs, rungs, rung_fb_post_id: fb, rung_ig_media_id: ig, target: fb && ig ? "both" : fb ? "facebook" : "instagram", gap_minutes: input.gapMinutes ? String(input.gapMinutes) : "" };

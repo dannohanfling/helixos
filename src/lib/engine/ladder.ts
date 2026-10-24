@@ -8,6 +8,7 @@ import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { CHANNEL_SPECS, type Channel, type ChannelSpec } from "./repurpose";
 import { explainFabricated, findFabricated } from "./blacklist";
 import { originRungs, usedIds } from "./teaching";
+import { numberRungs } from "./rung-number";
 
 export type LadderFormatKey = (typeof LADDER_FORMAT_KEYS)[number];
 
@@ -285,7 +286,7 @@ COPY
 The post body only. Hook, "read them in order" line, save line, one open question. No keyword prompt.${sectionTone(specs, "fb_personal")}${sectionFormat(specs, ["fb_personal", "fb_page"])}${sectionBound(specs, ["fb_personal", "fb_page"], "body")}
 
 SUPPORTING_COMMENTS
-The rungs. Number each as "1." "2." etc. on its own first line. Separate rungs with --- on its own line. Each rung 40–90 words ending with ONE short quotable line on its own line.${sectionFormat(specs, ["fb_personal", "fb_page"])}
+The rungs. Start each with its number, "1. " "2. " and so on, on the same line as its first sentence, never on a line by itself. Separate rungs with --- on its own line. Each rung 40–90 words ending with ONE short quotable line on its own line.${sectionFormat(specs, ["fb_personal", "fb_page"])}
 
 DM_KEYWORD
 The keyword, or NONE with a short reason.
@@ -646,7 +647,7 @@ export function rungsForAirtable(rungs: LadderRung[]): string {
 }
 /** Plain numbering for editing and for posting. */
 export function rungsPlain(rungs: LadderRung[]): string {
-  return rungs.map((r) => `${r.n}. ${r.body}`).join("\n---\n");
+  return numberRungs(rungs.map((r) => r.body)).join("\n---\n");
 }
 export function threadsText(chain: string[]): string {
   return chain.join("\n\n");
