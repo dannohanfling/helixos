@@ -18,14 +18,14 @@ import { shoppingList, type ShopFood } from "@/lib/engine/body-shopping";
 import { calendarWeeks, perWeek, stripBounds, type Bounds } from "@/lib/engine/body-range";
 import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type CoachBodyCell, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
-import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, toUnit, weekTally, type WeightUnit } from "@/lib/engine/body-training";
+import { bestSet, fmtSet, heatLevel, historyOf, lastSameWorkout, lastTime, nextSetDefaults, prFlags, routineForDay, sameAsLast, sessionPlan, toUnit, weekTally, type ExerciseKind, type LastSets, type LoggedSet, type WeightUnit } from "@/lib/engine/body-training";
 import { dayRead, defaultStep, gymGroup, learnedStep, sameTopRun, workoutRead, type DayRead, type ReadExercise, type WorkoutRead } from "@/lib/engine/body-reads";
 import { isLifting } from "@/lib/engine/body-whoop";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 import { goalsNow } from "@/lib/body-goals";
 import { goalTomorrow } from "@/lib/engine/body-goals";
 import { feelingLine } from "@/lib/engine/body-voice";
-import { EMPTY_PLAN, liftTypeIds, mainMuscles, planDays, planLine, planSetUp, roughLength, typeLabel, type PlanDay, type TrainingPlanSettings } from "@/lib/engine/body-plan";
+import { EMPTY_PLAN, liftTypeIds, liftedName, mainMuscles, planDays, planSetUp, roughLength, todayWorkoutLine, type PlanDay, type TrainingPlanSettings } from "@/lib/engine/body-plan";
 
 /**
  * Body ships dark (rev 195): a member whose Body is off gets a 404 from every Body page and from the Body export, as if Body did
@@ -206,10 +206,11 @@ export async function todayBody(v: Viewer) {
   // The one-tap chips (B7, placed by rev 201): only the habits due today, done-type ones toggle in place, measured ones open Practices.
   const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak, difficulty: h.difficulty }));
   // Rev 648: "Lift · Back Day · 6 exercises" once a training plan is set up.
+  // H-1546 §2: Today's one line from the training plan, or the ask to set one up.
   const plan = await trainingPlanView(v.workspace.id, v.user.id, v.today);
   const day = plan?.setUp ? plan.days[0] : null;
-  const training = day ? planLine({ ...day, typeName: typeLabel(day) }) : null;
-  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag, meds, training };
+  const workout = todayWorkoutLine(day ? { ...day, refeed: !!d.settings.refeedDayTypeId && day.dayTypeId === d.settings.refeedDayTypeId } : null, !!plan?.setUp);
+  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag, meds, workout };
 }
 
 /* ───────── B2, workouts (rev 182) ───────── */
@@ -233,13 +234,28 @@ export type TrainingLibrary = Awaited<ReturnType<typeof trainingLibrary>>;
 /** Sets in the order they were logged: created_at has whole seconds, so two quick sets tie and SQLite's rowid breaks it. */
 const setOrder = [asc(schema.bodySets.createdAt), asc(sql`rowid`)];
 
-/** Every set of these exercises, oldest first: what last time, the PR and the history read from. */
-async function setsOf(workspaceId: string, userId: string, exerciseIds: string[]) {
+/** Every set of these exercises, oldest first: what last time, the PR and the history read from. Warm-ups only when asked (H-1790). */
+async function setsOf(workspaceId: string, userId: string, exerciseIds: string[], opts: { warmups?: boolean } = {}) {
   if (!exerciseIds.length) return [];
   return db.query.bodySets.findMany({
-    where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), inArray(schema.bodySets.exerciseId, exerciseIds)),
+    where: and(opts.warmups ? undefined : eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), inArray(schema.bodySets.exerciseId, exerciseIds)),
     orderBy: [asc(schema.bodySets.date), ...setOrder],
   });
+}
+
+/** The member's sessions before a date, small columns only: what H-1790's "last time of this workout" picks from. */
+async function sessionsBefore(workspaceId: string, userId: string, date: string) {
+  return db.query.bodySessions.findMany({
+    columns: { id: true, date: true, routineId: true, routineName: true, completedAt: true },
+    where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), lt(schema.bodySessions.date, date)),
+  });
+}
+
+/** Last time's sets as Training shows them: "70 × 10" strings, warm-ups apart, with where they came from. */
+function lastView<S extends LoggedSet>(l: LastSets<S> | null, unit: WeightUnit, kind: ExerciseKind) {
+  if (!l) return null;
+  const f = (s: S) => fmtSet(s, unit, kind);
+  return { from: l.from, date: l.date, routineName: l.routineName, warmups: l.warmups.map(f), working: l.working.map(f) };
 }
 
 /**
@@ -265,7 +281,10 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
     ? await db.query.bodySets.findMany({ where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), eq(schema.bodySets.sessionId, session.id)), orderBy: setOrder })
     : [];
   const ids = [...new Set([...(routine?.lines.map((l) => l.exerciseId) ?? []), ...daySets.map((s) => s.exerciseId)])].filter((id) => lib.byId.has(id));
-  const history = await setsOf(workspaceId, userId, ids);
+  const [allSets, sessions] = await Promise.all([setsOf(workspaceId, userId, ids, { warmups: true }), sessionsBefore(workspaceId, userId, date)]);
+  const history = allSets.filter((s) => !s.warmup);
+  // H-1790: last time is this workout's last finished session, warm-ups first; an exercise not in it falls back to its own last day.
+  const lastSame = lastSameWorkout(sessions, allSets, session?.routineId ?? null, date);
   // Phase 3: the routine's lines against what's logged, and whether the session was finished.
   // Rev 653: a warm-up shows with the day's sets, marked, and counts toward nothing: not the plan, a PR, last time or next weight.
   const plan = sessionPlan(routine?.lines ?? [], daySets.filter((s) => !s.warmup));
@@ -276,8 +295,8 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
     const prIds = new Set(all.filter((_, i) => flags[i]).map((s) => s.id));
     const today = daySets.filter((s) => s.exerciseId === id).map((s) => ({ ...s, pr: prIds.has(s.id) }));
     const working = today.filter((s) => !s.warmup);
-    const before = all.filter((s) => s.date < date);
-    const last = lastTime(before, date);
+    const lastSets = lastSame.forExercise(id);
+    const last = lastSets?.working ?? [];
     // The PR as of this day, the day's own sets included (rev 293): a PR set today is today's PR, not last month's.
     const pr = bestSet(all.filter((s) => s.date <= date), unit);
     return {
@@ -285,7 +304,14 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
       target: routine?.lines.find((l) => l.exerciseId === id) ?? null,
       today,
       last: last.map((s) => fmtSet(s, unit, exercise.kind)),
-      lastDate: last[0]?.date ?? null,
+      lastDate: lastSets?.date ?? null,
+      lastSets: lastView(lastSets, unit, exercise.kind),
+      lastWorking: last,
+      // The set from last time matching today's next one, for "Same as last" (H-1790).
+      sameAsLast: (() => {
+        const m = sameAsLast(lastSets, today.length);
+        return m ? { weight: m.weight == null ? null : toUnit(m.weight, m.unit, unit), reps: m.reps, warmup: m.warmup } : null;
+      })(),
       pr: pr ? { text: fmtSet(pr, unit, exercise.kind), date: pr.date } : null,
       // A weight the member accepted from a post-workout read (rev 471) opens the session's first set.
       next: (() => {
@@ -304,6 +330,7 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
     off: !!day?.off,
     session,
     routineName: session?.routineName ?? null,
+    lastSession: lastSame.session ? { date: lastSame.session.date, routineName: lastSame.session.routineName ?? routine?.name ?? null } : null,
     completedAt: session?.completedAt ?? null,
     note: session?.note ?? null,
     plan,
@@ -346,7 +373,7 @@ export async function trainingWeeks(workspaceId: string, userId: string, today: 
     }),
   }));
   const thisWeek = rangeDays(weekStart, addDays(weekStart, 6));
-  return { weeks, weekStart, tally: weekTally(thisWeek, (d) => (setsOn.get(d) ?? 0) > 0, offered) };
+  return { weeks, weekStart, tally: weekTally(thisWeek, (d) => (setsOn.get(d) ?? 0) > 0, offered), lifted: await liftedDays(workspaceId, userId, weekStart, addDays(weekStart, 6)) };
 }
 
 /* ───────── The training plan (rev 648) ───────── */
@@ -436,10 +463,12 @@ export type TrainingPlanView = NonNullable<Awaited<ReturnType<typeof trainingPla
  * read, else what the next set's form would open with), last time and the PR, as Training shows them once it's going.
  */
 export async function routinePreview(workspaceId: string, userId: string, routine: TrainingLibrary["routines"][number], date: string, unit: WeightUnit) {
-  const history = await setsOf(workspaceId, userId, routine.lines.map((l) => l.exerciseId));
+  const [allSets, sessions] = await Promise.all([setsOf(workspaceId, userId, routine.lines.map((l) => l.exerciseId), { warmups: true }), sessionsBefore(workspaceId, userId, date)]);
+  const lastSame = lastSameWorkout(sessions, allSets, routine.id, date);
   return routine.lines.map((l) => {
-    const before = history.filter((s) => s.exerciseId === l.exerciseId && s.date < date);
-    const last = lastTime(before, date);
+    const before = allSets.filter((s) => s.exerciseId === l.exerciseId && s.date < date && !s.warmup);
+    const lastSets = lastSame.forExercise(l.exerciseId);
+    const last = lastSets?.working ?? [];
     const pr = bestSet(before, unit);
     const next = nextSetDefaults([], last, unit);
     return {
@@ -448,7 +477,9 @@ export async function routinePreview(workspaceId: string, userId: string, routin
       reps: l.reps,
       weight: l.weight ?? next.weight,
       last: last.map((s) => fmtSet(s, unit, l.exercise.kind)),
-      lastDate: last[0]?.date ?? null,
+      lastDate: lastSets?.date ?? null,
+      lastSets: lastView(lastSets, unit, l.exercise.kind),
+      lastSession: lastSame.session ? { date: lastSame.session.date, routineName: lastSame.session.routineName ?? routine.name } : null,
       pr: pr ? fmtSet(pr, unit, l.exercise.kind) : null,
     };
   });
@@ -475,8 +506,9 @@ export async function exerciseContext(workspaceId: string, userId: string, exerc
   const settings = await bodySettingsFor(workspaceId, userId);
   if (!settings) return null;
   const unit = settings.weightUnit;
-  const [history, routine] = await Promise.all([setsOf(workspaceId, userId, [exerciseId]), routineOfDay(workspaceId, userId, date, today)]);
-  const last = lastTime(history.filter((s) => s.date < date), date);
+  const [history, routine, sessions] = await Promise.all([setsOf(workspaceId, userId, [exerciseId], { warmups: true }), routineOfDay(workspaceId, userId, date, today), sessionsBefore(workspaceId, userId, date)]);
+  // H-1790: "same as last time" means this workout's last session when the exercise was in it, else the exercise's own last day.
+  const last = lastSameWorkout(sessions, history, routine?.id ?? null, date).forExercise(exerciseId)?.working ?? [];
   const line = routine?.lines.find((l) => l.exerciseId === exerciseId) ?? null;
   return {
     unit,
@@ -690,6 +722,23 @@ export async function daysInRange(workspaceId: string, userId: string, from: str
 
 /* ───────── The weekly rollup (rev 237 phase 6) ───────── */
 
+/**
+ * The days lifted between two dates (H-1546): a day counts when it has a working set; its name is the session's routine, else the
+ * main muscle groups of its exercises, else "Workout". Oldest first.
+ */
+export async function liftedDays(workspaceId: string, userId: string, from: string, to: string): Promise<{ date: string; name: string }[]> {
+  const [sets, sessions, exercises] = await Promise.all([
+    db.query.bodySets.findMany({ columns: { date: true, exerciseId: true }, where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from), lte(schema.bodySets.date, to)) }),
+    db.query.bodySessions.findMany({ columns: { date: true, routineName: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, from), lte(schema.bodySessions.date, to)) }),
+    db.query.bodyExercises.findMany({ columns: { id: true, name: true }, where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) }),
+  ]);
+  const nameOf = new Map(exercises.map((e) => [e.id, e.name]));
+  const routineOn = new Map(sessions.map((x) => [x.date, x.routineName]));
+  const byDate = new Map<string, string[]>();
+  for (const x of sets) byDate.set(x.date, [...(byDate.get(x.date) ?? []), nameOf.get(x.exerciseId) ?? ""]);
+  return [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, names]) => ({ date, name: liftedName(routineOn.get(date), [...new Set(names.filter(Boolean))]) }));
+}
+
 /** One week's training, for the rollup: days with a set logged, of the days a routine was offered; the sets; the PRs. */
 async function trainingWeek(workspaceId: string, userId: string, monday: string, settings: schema.BodySettings) {
   const sunday = addDays(monday, 6);
@@ -712,7 +761,7 @@ async function trainingWeek(workspaceId: string, userId: string, monday: string,
     const flags = prFlags(own, settings.weightUnit);
     prs += own.filter((s, i) => flags[i] && s.date >= monday && s.date <= sunday).length;
   }
-  return { sessions: tally.done, planned: tally.planned, sets: sets.length, prs };
+  return { sessions: tally.done, planned: tally.planned, sets: sets.length, prs, lifted: await liftedDays(workspaceId, userId, monday, sunday) };
 }
 
 /**
@@ -1384,7 +1433,8 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
     const byDate = new Map<string, typeof all>();
     for (const s of all) byDate.set(s.date, [...(byDate.get(s.date) ?? []), s]);
     const sessions = [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([, ss]) => ss.map(inUnit));
-    const last = lastTime(all, date);
+    // H-1790: up / held / down against the same last time Training shows (this workout's last session, else the exercise's last day).
+    const last = x.lastWorking;
     const pr = bestSet(all, unit);
     return {
       exerciseId: x.exercise.id,

@@ -8,9 +8,12 @@ import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
 import { activitiesOn, habitsDay, requireBodyEnabled, restrictedNow, routinePreview, trainingDay, trainingPlanView, trainingWeeks, workoutReadFor, type TrainingDayView } from "@/lib/queries/body";
 import { TodayPlanCard, WeekPlanList } from "@/components/body/training-plan";
+import { liftedLine } from "@/lib/engine/body-plan";
 import { isLifting, zonesText } from "@/lib/engine/body-whoop";
 import { gymGroup } from "@/lib/engine/body-reads";
 import { WorkoutReadCard } from "@/components/body/workout-read";
+import { LastSessionLine, LastSetsLine } from "@/components/body/last-time";
+import { SameAsLastButton } from "@/components/body/same-as-last";
 import { fmtDistanceIn, isMeasures } from "@/lib/engine/body-measures";
 import { deleteSetAction, finishSessionAction, logSetAction, reopenSessionAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
 
@@ -44,13 +47,7 @@ function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exerc
         </span>
       </div>
       <p className="mt-1 text-sm text-ink-2" data-testid="training-last">
-        {x.last.length ? (
-          <>
-            <span className="text-ink-3">Last time ({formatDate(x.lastDate!, { month: "short", day: "numeric" })}):</span> {x.last.join(" · ")}
-          </>
-        ) : (
-          <span className="text-ink-3">First time: no sets before this.</span>
-        )}
+        <LastSetsLine last={x.lastSets} />
       </p>
       {x.today.length ? (
         <ol className="mt-2 flex flex-wrap gap-2" data-testid="training-sets">
@@ -94,6 +91,9 @@ function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exerc
         <SubmitButton className="btn btn-humanos" pendingText="Logging…" data-testid="training-log-set">
           Log set
         </SubmitButton>
+        {x.sameAsLast ? (
+          <SameAsLastButton weight={x.sameAsLast.weight} reps={x.sameAsLast.reps} warmup={x.sameAsLast.warmup} label={`${fmtSet({ ...x.sameAsLast, unit: unit as "lb" | "kg" }, unit as "lb" | "kg", x.exercise.kind)}${x.sameAsLast.warmup ? " warm-up" : ""}`} />
+        ) : null}
       </form>
     </section>
   );
@@ -292,6 +292,9 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
               </span>
             ) : null}
           </div>
+          <div className="mt-1">
+            <LastSessionLine last={t.lastSession} routineName={t.routineName} />
+          </div>
           {t.plan.plannedSets ? (
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={Math.min(100, Math.round((t.plan.doneSets / t.plan.plannedSets) * 100))} aria-valuemin={0} aria-valuemax={100}>
               <div className="h-full rounded-full bg-humanos transition-[width] duration-500" style={{ width: `${Math.min(100, Math.round((t.plan.doneSets / t.plan.plannedSets) * 100))}%` }} />
@@ -378,6 +381,12 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
             </b>{" "}
             this week{weeks.tally.planned == null ? ". Tie a routine to a day type and this counts the days planned." : "."}
           </p>
+          {weeks.lifted.length ? (
+            /* H-1546 §1: this week's lifted days, each named. */
+            <p className="mb-2 text-xs text-ink-2" data-testid="training-week-lifted">
+              🏋️ {liftedLine(weeks.lifted)}
+            </p>
+          ) : null}
           <div data-testid="training-heat">
             <StreakCalendar weeks={weeks.weeks} rows={7} tone="humanos" labelFor={(m) => (weeks.weeks.findIndex((w) => w.monday === m) % 4 === 0 ? formatDate(m, { month: "short" }) : "")} />
           </div>

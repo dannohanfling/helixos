@@ -362,6 +362,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
+      {/* H-1546 §2: what today is in HumanOS, from the training plan (the member's own; never in a switched-in or team view). */}
+      {body ? (
+        <Link href={body.workout.href} className="card mb-5 flex flex-wrap items-center gap-2 p-3 text-sm hover:underline" data-testid="today-workout" data-state={body.workout.state}>
+          <span aria-hidden>{body.workout.state === "rest" ? "😴" : "🏋️"}</span>
+          <span className="min-w-0 flex-1 font-medium">{body.workout.text}</span>
+          <span aria-hidden className="text-ink-3">→</span>
+        </Link>
+      ) : null}
+
       {/* H-626: "Add HelixOS to your home screen", for a client on a phone's browser from their third day; it decides on the phone. */}
       {v.role === "client" && !v.switchedInto && !v.team && !d.firstSession ? <InstallCard today={v.today} /> : null}
 
@@ -727,11 +736,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               <Link href="/body#log" className="btn btn-humanos btn-sm" data-testid="today-log-meal">
                 Log a meal
               </Link>
-              {body.training ? (
-                <Link href="/body/training" className="w-full text-sm hover:underline" data-testid="today-training">
-                  🏋️ <span className="font-medium">{body.training}</span> →
-                </Link>
-              ) : null}
               {body.habits.length ? (
                 /* B7 habits (rev 196), placed by rev 201: one row of one-tap chips inside this same card, below the line. */
                 <div className="flex w-full flex-wrap items-center gap-1.5" data-testid="today-habits" data-kept={body.habits.filter((h) => h.kept).length} data-due={body.habits.length}>

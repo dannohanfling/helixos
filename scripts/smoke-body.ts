@@ -561,6 +561,59 @@ async function main() {
     await client.goto(`${base}/body/training`);
     await client.locator('[data-testid="training-finished"]').waitFor({ timeout: 30000 });
     console.log(`✓ post-workout read (revs 471, 486): ${readWant.lines.length} lines, the query's own, the note in them; bench up to a PR keeps 190 for next time; the member types 195 over it, it becomes the routine's target and the bench learns a step of 5; Today shows the read`);
+    // ── H-1790: last time is the routine's last finished session, warm-ups first and muted; an exercise missing from it falls
+    // back to its own last day, labelled; "Same as last" fills the next set from it. Seeded sessions, removed after. ──
+    {
+      const { newId: lid } = await import("@/lib/ids");
+      const { trainingDay: dayOf } = await import("@/lib/queries/body");
+      const pushId = readWant.routineId!;
+      const benchPressId = exRows.find((r) => r.name === "Bench press")!.id;
+      const pullId = exRows.find((r) => r.name === "Pull-up")!.id;
+      const d3 = addDays(today, -3);
+      const d5 = addDays(today, -5);
+      const same = lid();
+      const back = lid();
+      const row = (sessionId: string, date: string, exerciseId: string, weight: number | null, reps: number, warmup: boolean, sec: number) => ({ id: lid(), workspaceId: mem.workspaceId, userId: maya.id, sessionId, exerciseId, date, weight, unit: "lb" as const, reps, warmup, createdAt: `${date}T17:00:${String(sec).padStart(2, "0")}Z` });
+      await db.insert(schema.bodySessions).values([
+        { id: same, workspaceId: mem.workspaceId, userId: maya.id, date: d3, routineId: pushId, routineName: ROUTINE.name, completedAt: `${d3}T18:00:00Z` },
+        { id: back, workspaceId: mem.workspaceId, userId: maya.id, date: d5, routineId: null, routineName: "Back Day", completedAt: `${d5}T18:00:00Z` },
+      ]);
+      await db.insert(schema.bodySets).values([row(same, d3, benchPressId, 95, 10, true, 1), row(same, d3, benchPressId, 135, 5, true, 2), row(same, d3, benchPressId, 175, 5, false, 3), row(back, d5, pullId, null, 9, false, 1)]);
+      try {
+        const t = (await dayOf(mem.workspaceId, maya.id, today))!;
+        if (t.lastSession?.date !== d3 || t.lastSession.routineName !== ROUTINE.name) throw new Error(`the last session is the routine's last finished one, not yesterday's open one: ${JSON.stringify(t.lastSession)}`);
+        const qb = t.exercises.find((x) => x.exercise.id === benchPressId)!;
+        if (qb.lastSets?.from !== "same" || qb.lastSets.warmups.join(" · ") !== "95 × 10 · 135 × 5" || qb.lastSets.working.join(" · ") !== "175 × 5") throw new Error(`the bench shows that session's sets, warm-ups first: ${JSON.stringify(qb.lastSets)}`);
+        if (qb.pr?.text !== "190 × 5" || qb.lastWorking.some((s) => s.warmup)) throw new Error("warm-ups count toward no PR and no comparison");
+        await client.goto(`${base}/body/training`);
+        const lastLine = client.locator('[data-testid="training-session"] [data-testid="training-last-session"]');
+        await lastLine.waitFor({ timeout: 30000 });
+        if ((await lastLine.getAttribute("data-date")) !== d3 || !((await lastLine.textContent()) ?? "").startsWith(`Last ${ROUTINE.name}:`)) throw new Error(`the workout says "Last ${ROUTINE.name}: <date>": ${await lastLine.textContent()}`);
+        const benchSets = client.locator(`${card("Bench press")} [data-testid="training-last-sets"]`);
+        const benchText = (await benchSets.textContent()) ?? "";
+        if ((await benchSets.getAttribute("data-from")) !== "same" || !benchText.includes("Warm-up 95 × 10 · 135 × 5 | 175 × 5")) throw new Error(`the bench's last time, warm-ups first: "${benchText}"`);
+        if (!((await client.locator(`${card("Bench press")} [data-testid="training-last-warmups"]`).getAttribute("class")) ?? "").includes("text-ink-3")) throw new Error("warm-ups are muted");
+        const pullSets = client.locator(`${card("Pull-up")} [data-testid="training-last-sets"]`);
+        const pullText = (await pullSets.textContent()) ?? "";
+        if ((await pullSets.getAttribute("data-from")) !== "other" || !pullText.includes("Back Day") || !pullText.includes("9 reps")) throw new Error(`an exercise not in that session shows its own last day and routine: "${pullText}"`);
+        // Bench has one set today, so "Same as last" offers last time's second: the 135 × 5 warm-up.
+        const sameBtn = client.locator(`${card("Bench press")} [data-testid="training-same-as-last"]`);
+        if (!((await sameBtn.textContent()) ?? "").includes("135 × 5 warm-up")) throw new Error(`Same as last offers the matching set: ${await sameBtn.textContent()}`);
+        if (((await sameBtn.boundingBox())?.height ?? 0) < 44) throw new Error("Same as last is a real button, 44 px tall");
+        await sameBtn.click();
+        const form = `${card("Bench press")} [data-testid="training-log-form"]`;
+        await client.waitForFunction((f) => (document.querySelector(`${f} input[name="weight"]`) as HTMLInputElement | null)?.value === "135", form, { timeout: 10000 });
+        if ((await client.locator(`${form} input[name="reps"]`).inputValue()) !== "5" || !(await client.locator(`${form} [data-testid="training-warmup"]`).isChecked())) throw new Error("Same as last fills weight, reps and the warm-up mark");
+        if ((await setsIn("Bench press").count()) !== 1) throw new Error("Same as last only fills the form; nothing is logged");
+        await noSideScroll(client, "/body/training with last time's warm-ups");
+        console.log(`✓ H-1790: "Last ${ROUTINE.name}" is the last finished one (${d3}), the bench shows its warm-ups muted then its working set, Pull-up falls back to Back Day labelled, Same as last fills 135 × 5 warm-up, nothing logged, no side scroll`);
+      } finally {
+        await db.delete(schema.bodySets).where(inArray(schema.bodySets.sessionId, [same, back]));
+        await db.delete(schema.bodySessions).where(inArray(schema.bodySessions.id, [same, back]));
+      }
+      await client.goto(`${base}/body/training`);
+      await client.locator('[data-testid="training-session"]').waitFor({ timeout: 30000 });
+    }
     // ── Merge exercises (rev 507): an import's "Bench" with two old sets folds into Bench press after a preview that is the
     // module's own; the sets move with their dates, the duplicate is archived and listed with Undo; Undo puts it all back. ──
     {
@@ -1621,6 +1674,7 @@ async function main() {
     const tieTool = await tool("body_log_set").handler(await viewerFor(), { exercise: "bench", weight: 190, reps: 5 });
     if (!tieTool.text.includes("Today's PR stands at 190 × 5")) throw new Error(`a second 190 × 5 today reads today's PR, not an older one: "${tieTool.text}"`);
     const tieDay = await tool("body_training").handler(await viewerFor(), {});
+    if (!tieDay.text.includes(`last done ${yesterday} (${ROUTINE.name}): 185 × 5, 185 × 5`)) throw new Error(`body_training says last time with its day and routine (H-1790): "${tieDay.text.slice(0, 400)}"`);
     if (!tieDay.text.includes("190 × 5") || /PR[^\n]*2026-0[1-8]/.test(tieDay.text)) throw new Error(`the day's summary names today's PR: "${tieDay.text.slice(0, 300)}"`);
     const tieSet = (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, today)) })).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     await db.delete(schema.bodySets).where(eq(schema.bodySets.id, tieSet.id));
@@ -1729,6 +1783,21 @@ async function main() {
     // a swap of two days and back, Today's line, and the connector reading the same plan. Everything goes back as it was after.
     {
       const before = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!;
+      // H-1546: before a plan, Today asks for one; the week names each lifted day (today's Push A), on Week and on Training.
+      await client.goto(`${base}/today`);
+      const noPlan = client.locator('[data-testid="today-workout"]');
+      await noPlan.waitFor({ timeout: 30000 });
+      if ((await noPlan.getAttribute("data-state")) !== "no_plan" || !(await noPlan.innerText()).includes("Set your training plan to see today's workout here") || !(await noPlan.getAttribute("href"))?.includes("/body/settings#training-plan")) throw new Error("with no plan, Today's line asks for one and links to it");
+      await noSideScroll(client, "/today with the workout line");
+      await client.goto(`${base}/body/week`);
+      await client.locator('[data-testid="week-lifted"]').waitFor({ timeout: 30000 });
+      if (!(await client.locator('[data-testid="week-lifted"]').innerText()).includes(ROUTINE.name) || !(await client.locator(`[data-testid="week-day"][data-date="${today}"] [data-testid="week-day-lifted"]`).innerText()).includes(ROUTINE.name)) throw new Error("the week names today's lifted day by its routine, in the list and on the day");
+      await noSideScroll(client, "/body/week with the lifted days");
+      await client.goto(`${base}/body/training`);
+      if (!(await client.locator('[data-testid="training-week-lifted"]').innerText()).includes(ROUTINE.name)) throw new Error("Training's Consistency card names this week's lifted days");
+      const weekTool = await tool("body_week").handler(await viewerFor(), {});
+      if (!weekTool.text.includes(`Lifted: `) || !weekTool.text.includes(ROUTINE.name)) throw new Error(`body_week names the lifted days: ${weekTool.text.slice(0, 300)}`);
+      console.log("✓ H-1546: with no plan Today asks for one; Week, Training and body_week name each lifted day by its routine");
       const liftType = types0[0];
       const pushA = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.name === ROUTINE.name)!;
       const backId = crypto.randomUUID();
@@ -1799,8 +1868,8 @@ async function main() {
 
       // Today's line, and the connector's week: the same plan.
       await client.goto(`${base}/today`);
-      const line = await client.locator('[data-testid="today-training"]').innerText();
-      if (!line.includes(todayWhy === "done" ? `Done · ${ROUTINE.name}` : `· ${ROUTINE.name} · going`)) throw new Error(`Today's HumanOS line names the day's training: "${line}"`);
+      const line = await client.locator('[data-testid="today-workout"]').innerText();
+      if (!line.includes(todayWhy === "done" ? `Today: ${ROUTINE.name} ✓` : `Today: ${ROUTINE.name}, in progress`)) throw new Error(`Today's top line says today's workout (H-1546): "${line}"`);
       const weekPlan = await tool("body_week_plan").handler(await viewerFor(), {});
       const toolDays = (weekPlan.data as { days: { date: string; routine: string | null }[] }).days;
       await client.goto(`${base}/body/training`);

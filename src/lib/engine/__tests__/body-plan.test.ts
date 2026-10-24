@@ -150,3 +150,28 @@ describe("the training plan (rev 648)", () => {
     expect(read("src/lib/queries/body.ts")).toMatch(/const plan = await trainingPlanView\(v\.workspace\.id, v\.user\.id, v\.today\);\n  const day = plan\?\.setUp \? plan\.days\[0\] : null;/);
   });
 });
+
+describe("H-1546: the week names each workout, and Today says what today is", () => {
+  it("a lifted day is named by its routine, else its main muscle groups, else Workout", async () => {
+    const { liftedName, liftedLine, liftedSpoken } = await import("@/lib/engine/body-plan");
+    expect(liftedName("Chest Day", ["Bench Press"])).toBe("Chest Day");
+    expect(liftedName(null, ["Bench Press", "Cable Fly", "Triceps Pushdown"])).toBe("Chest · Triceps");
+    expect(liftedName(null, ["Mystery machine"])).toBe("Workout");
+    const days = [{ date: "2026-10-21", name: "Leg Day" }, { date: "2026-10-19", name: "Chest Day" }];
+    expect(liftedLine(days)).toBe("Mon · Chest Day · Wed · Leg Day");
+    expect(liftedSpoken(days)).toBe("Lifted: Mon Chest Day, Wed Leg Day.");
+    expect(liftedLine([])).toBe("");
+  });
+
+  it("Today's line: no plan asks for one; lift, rest, refeed, going and done each read plainly", async () => {
+    const { todayWorkoutLine, SET_PLAN_LINE } = await import("@/lib/engine/body-plan");
+    const day = { lift: true, why: "rotation" as const, name: "Leg Day", exercises: 6, muscles: ["Quads", "Glutes"], refeed: false };
+    expect(todayWorkoutLine(null, false)).toEqual({ text: SET_PLAN_LINE, href: "/body/settings#training-plan", state: "no_plan" });
+    expect(todayWorkoutLine(day, true).text).toBe("Today: Leg Day at the gym · 6 exercises · Quads · Glutes");
+    expect(todayWorkoutLine({ ...day, refeed: true }, true).text).toBe("Today: Refeed · Leg Day at the gym · 6 exercises · Quads · Glutes");
+    expect(todayWorkoutLine({ ...day, lift: false, why: "rest", name: null }, true).text).toBe("Today: Rest day");
+    expect(todayWorkoutLine({ ...day, lift: false, why: "rest", name: null, refeed: true }, true).text).toBe("Today: Refeed");
+    expect(todayWorkoutLine({ ...day, why: "done", name: "Chest Day" }, true)).toMatchObject({ text: "Today: Chest Day ✓", state: "done" });
+    expect(todayWorkoutLine({ ...day, why: "started", name: "Chest Day" }, true).text).toBe("Today: Chest Day, in progress");
+  });
+});
