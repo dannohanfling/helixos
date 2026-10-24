@@ -27,6 +27,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { materialUsedFor } from "@/lib/teaching";
 import { STATUS_WORDS, momentOf, type StoryStatus } from "@/lib/engine/teaching";
 import { ItemGone } from "@/components/item-gone";
+import { numberRung } from "@/lib/engine/rung-number";
 
 function HeadlinePreview({ headline, handle }: { headline: string; handle?: string | null }) {
   const h = headlineParts(headline);
@@ -362,11 +363,11 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                     </form>
                   </div>
                   <ol className="divide-y rounded-lg border">
-                    {l.rungs.map((r) => (
+                    {l.rungs.map((r, i) => (
                       <li key={r.n} className={`flex items-start gap-2 p-2 text-sm ${r.postedAt ? "opacity-60" : next?.n === r.n ? "bg-surface-2" : ""}`} data-testid={`rung-${r.n}`}>
                         <span className="w-6 shrink-0 text-right font-semibold tabular">{r.n}.</span>
                         <span className="min-w-0 flex-1 break-words">{r.body.split("\n")[0]}</span>
-                        <CopyButton text={r.body} label="Copy" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} />
+                        <CopyButton text={numberRung(r.body, i + 1)} label="Copy" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} testId="rung-copy" />
                         <form action={markRungAction}>
                           <input type="hidden" name="id" value={l.id} />
                           <input type="hidden" name="n" value={r.n} />

@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { createLadderAction, deleteLadderAction } from "@/lib/actions/ladders";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
-import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, targetWords } from "@/lib/engine/ladder";
+import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, ladderTitle, targetWords } from "@/lib/engine/ladder";
 import { addDays, formatDate, formatDateTime, weekday } from "@/lib/dates";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -144,32 +144,6 @@ export default async function LaddersPage() {
               </div>
             </form>
           </Card>
-          <Card title="Your ladders">
-            {list.length ? (
-              <ul className="divide-y">
-                {list.map((l) => {
-                  const score = checkScore(checklist(l, profile ?? null, proofs));
-                  const st = STATUS[l.status];
-                  return (
-                    <li key={l.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                      <Link href={`/content/ladders/${l.id}`} className="min-w-0 flex-1 break-words font-medium hover:underline">
-                        {l.postName || l.topic}
-                      </Link>
-                      <Badge tone={st.tone}>{st.label}</Badge>
-                      <span className="text-xs text-ink-3">{LADDER_FORMATS.find((f) => f.key === l.format)?.name} · {l.rungs.length} rungs · {score.fails ? `${score.fails} to fix` : "checklist clear"}</span>
-                      {l.launchedAt ? <span className="text-xs text-ink-3">· {formatDateTime(l.launchedAt, v.tz)}</span> : null}
-                      <form action={deleteLadderAction}>
-                        <input type="hidden" name="id" value={l.id} />
-                        <ConfirmDelete what="this comment ladder" label="Delete" className="text-xs text-ink-3 underline" />
-                      </form>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <Empty icon="🪜" title="No ladders yet" hint="Pick a format, give it a topic, and the whole package comes back: body, rungs, headline, carousel, caption, Threads chain." />
-            )}
-          </Card>
         </div>
         <div className="space-y-4">
           <Card title="Cadence">
@@ -197,6 +171,37 @@ export default async function LaddersPage() {
             <p className="mt-2 text-xs text-ink-2">Meta classifies comment-keyword prompts as engagement bait and demotes them. An open question is exempt and earns better reach. The keyword belongs in the final rung, where it reads as fulfilment for someone who already read the whole thread. On a personal profile comment automation can&apos;t fire, so the final rung also says &quot;If nothing happens, message me KEYWORD.&quot;</p>
           </Disclosure>
         </div>
+      </div>
+      <div className="mt-4" data-testid="ladders-list">
+        <Card title="Your ladders">
+          {list.length ? (
+            <ul className="divide-y">
+              {list.map((l) => {
+                const score = checkScore(checklist(l, profile ?? null, proofs));
+                const st = STATUS[l.status];
+                return (
+                  <li key={l.id} className="py-2 text-sm" data-testid="ladder-row">
+                    {/* H-1941: the title on its own line, wrapping between words only; the meta underneath. */}
+                    <Link href={`/content/ladders/${l.id}`} className="block font-medium [overflow-wrap:break-word] [word-break:normal] hover:underline" data-testid="ladder-row-title">
+                      {ladderTitle(l.postName, l.topic)}
+                    </Link>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Badge tone={st.tone}>{st.label}</Badge>
+                      <span className="text-xs text-ink-3">{LADDER_FORMATS.find((f) => f.key === l.format)?.name} · {l.rungs.length} rungs · {score.fails ? `${score.fails} to fix` : "checklist clear"}</span>
+                      {l.launchedAt ? <span className="text-xs text-ink-3">· {formatDateTime(l.launchedAt, v.tz)}</span> : null}
+                      <form action={deleteLadderAction}>
+                        <input type="hidden" name="id" value={l.id} />
+                        <ConfirmDelete what="this comment ladder" label="Delete" className="text-xs text-ink-3 underline" />
+                      </form>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <Empty icon="🪜" title="No ladders yet" hint="Pick a format, give it a topic, and the whole package comes back: body, rungs, headline, carousel, caption, Threads chain." />
+          )}
+        </Card>
       </div>
     </>
   );

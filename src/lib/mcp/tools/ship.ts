@@ -26,6 +26,7 @@ import { shipFacts } from "@/lib/queries/ship";
 import { connectionFor } from "@/lib/ghl";
 import { checkPreviewToken, issuePreviewToken } from "@/lib/ship-preview";
 import { stampDate } from "@/lib/dates";
+import { numberRung, numberRungs } from "@/lib/engine/rung-number";
 
 const appUrl = siteUrl;
 const linkTo = (id: string) => `${appUrl()}/content/ladders/${id}`;
@@ -61,11 +62,11 @@ defineTool({
       `"${l.topic}": ${l.rungs.length} rungs, ${stateOf(l)}, ${checksLine(checks)}.`,
       `Headline and alternates:\n${numbered(alts)}`,
       `Body:\n${l.copy}`,
-      `Rungs:\n${numbered(l.rungs.map((r) => r.body.replace(/\n+/g, " ")))}`,
+      `Rungs:\n${numberRungs(l.rungs.map((r) => r.body.replace(/\n+/g, " "))).join("\n")}`,
       l.igCaption ? `Instagram caption:\n${l.igCaption}` : "",
       `Open it: ${linkTo(l.id)}`,
     ].filter(Boolean).join("\n\n");
-    return { text, data: { id: l.id, status: stateOf(l), graphicImageId: l.graphicImageId, shippedAt: l.shippedAt, headlines: alts, rungs: l.rungs.map((r) => ({ n: r.n, body: r.body })), checks: checks.filter((c) => !c.ok).map((c) => ({ key: c.key, label: c.label, level: c.level, note: c.note })) } };
+    return { text, data: { id: l.id, status: stateOf(l), graphicImageId: l.graphicImageId, shippedAt: l.shippedAt, headlines: alts, rungs: l.rungs.map((r, i) => ({ n: r.n, body: r.body, text: numberRung(r.body, i + 1) })), checks: checks.filter((c) => !c.ok).map((c) => ({ key: c.key, label: c.label, level: c.level, note: c.note })) } };
   },
 });
 

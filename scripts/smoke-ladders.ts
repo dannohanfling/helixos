@@ -190,7 +190,7 @@ async function main() {
 
     // The finished demo ladder clears the checklist
     await page.goto(`${base}/content/ladders`);
-    await page.click('a:has-text("SKIN — Mistakes Ladder")');
+    await page.click('a[data-testid="ladder-row-title"]:has-text("quit by week three")');
     await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+$/i);
     c = await checks(page);
     const failing = Object.entries(c).filter(([, ok]) => !ok).map(([k]) => k);
@@ -248,6 +248,22 @@ async function main() {
     const clip = await page.evaluate(() => navigator.clipboard.readText());
     if (!clip.startsWith("1\\. Mistake one.") || !clip.includes("\n---\n2\\. ")) throw new Error(`Airtable copy not escaped: ${clip.slice(0, 40)}`);
     console.log("✓ Airtable copy escapes rung numbers");
+
+    // Rung numbers (H-1944): every place a rung's text is used starts "N. " on its first sentence, numbered by place.
+    if (!(await page.locator('textarea[data-testid="rungs"]').inputValue()).startsWith("1. Mistake one.")) throw new Error("the rungs box starts 1. on rung 1");
+    await page.click('button:has-text("Copy all")');
+    const all = await page.evaluate(() => navigator.clipboard.readText());
+    if (!all.startsWith("1. Mistake one.") || !all.includes("\n---\n2. Mistake two.")) throw new Error(`Copy all is numbered: ${all.slice(0, 40)}`);
+    await page.getByTestId("rung-copy").first().click();
+    const one = await page.evaluate(() => navigator.clipboard.readText());
+    if (!one.startsWith("1. Mistake one.\n")) throw new Error(`one rung's Copy starts 1.: ${one.slice(0, 40)}`);
+    {
+      const { rungsPayload } = await import("@/lib/engine/rung-drip");
+      const row = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+      const sent = rungsPayload({ userNs: "walk", rungs: row.rungs.map((r) => r.body), fbPostId: "fb", igMediaId: null }).rungs;
+      if (!sent[0].startsWith("1. Mistake one.") || !sent[1].startsWith("2. ")) throw new Error(`the Ship hand-off is numbered: ${sent[0].slice(0, 30)}`);
+    }
+    console.log("✓ rung numbers: the rungs box, Copy all, one rung's Copy and the Ship hand-off all start 1. on rung 1");
 
     // ── Make the graphic (rev 513, 514, 515, 524): Maya's own photo, the template, one 2× master, the 1080 copy on request, a remake. ──
     const { putDeckObject, readProofObject } = await import("@/lib/proof-storage");
@@ -449,8 +465,10 @@ async function main() {
     await page.goto(`${base}/content`);
     await page.click('a:has-text("Ladders")');
     await page.waitForURL(/\/content\/ladders/);
-    await expectText(page, "SKIN — Mistakes Ladder", "list shows demo");
-    await expectText(page, "SKIN — Loss / Rebuild", "list shows new");
+    // H-1941: the list shows each ladder by its topic, without the SKIN and format prefix.
+    await expectText(page, "quit by week three", "list shows demo");
+    await expectText(page, "If I lost every client tomorrow", "list shows new");
+    if (await page.locator('[data-testid="ladder-row-title"]:has-text("SKIN")').count()) throw new Error("no list title carries SKIN");
     await expectText(page, "Next good slot", "cadence");
     await page.screenshot({ path: "screenshots/ld04-list.png", fullPage: true });
     console.log("✓ list and cadence");
