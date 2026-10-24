@@ -108,17 +108,19 @@ describe("the water (H-966)", () => {
 });
 
 describe("the filmed loops (H-1180)", () => {
-  it("lists Golden hour with no leak and with a leak at the first two arches (H-1734), with versioned files, and nothing else yet", () => {
+  it("lists Golden hour with no leak and with a leak at the first four arches (H-1734, H-1952), with versioned files, and nothing else yet", () => {
     const day = loopFor(pictureFor("day", null));
     expect(day).toEqual({ mp4: "/aqueduct/aqueduct-day-none-loop.mp4?v=1", webm: "/aqueduct/aqueduct-day-none-loop.webm?v=1", poster: "/aqueduct/aqueduct-day-none-loop-poster.jpg?v=1" });
     const leakAt = (step: number) => ({ step, nowRate: 0.1, wasRate: 0.4, drop: 0.3 });
     expect(loopFor(pictureFor("day", leakAt(0)))).toEqual({ mp4: "/aqueduct/aqueduct-day-0-loop.mp4?v=1", webm: "/aqueduct/aqueduct-day-0-loop.webm?v=1", poster: "/aqueduct/aqueduct-day-0-loop-poster.jpg?v=1" });
     expect(loopFor(pictureFor("day", leakAt(1)))?.mp4).toBe("/aqueduct/aqueduct-day-1-loop.mp4?v=1");
+    expect(loopFor(pictureFor("day", leakAt(2)))?.mp4).toBe("/aqueduct/aqueduct-day-2-loop.mp4?v=1");
+    expect(loopFor(pictureFor("day", leakAt(3)))?.webm).toBe("/aqueduct/aqueduct-day-3-loop.webm?v=1");
     expect(loopFor(pictureFor("night", null))).toBeNull();
     expect(loopFor(pictureFor("night", leakAt(0)))).toBeNull();
-    for (const step of [2, 3, 4, 5]) expect(loopFor(pictureFor("day", leakAt(step)))).toBeNull();
+    for (const step of [4, 5]) expect(loopFor(pictureFor("day", leakAt(step)))).toBeNull();
   });
   it("every listed loop has its three files in public/", () => {
-    for (const p of ["/aqueduct/aqueduct-day-none", "/aqueduct/aqueduct-day-0", "/aqueduct/aqueduct-day-1"]) for (const end of ["-loop.mp4", "-loop.webm", "-loop-poster.jpg"]) expect(readFileSync(`public${p}${end}`).length).toBeGreaterThan(1000);
+    for (const p of ["/aqueduct/aqueduct-day-none", "/aqueduct/aqueduct-day-0", "/aqueduct/aqueduct-day-1", "/aqueduct/aqueduct-day-2", "/aqueduct/aqueduct-day-3"]) for (const end of ["-loop.mp4", "-loop.webm", "-loop-poster.jpg"]) expect(readFileSync(`public${p}${end}`).length).toBeGreaterThan(1000);
   });
 });
