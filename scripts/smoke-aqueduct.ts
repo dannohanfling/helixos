@@ -244,7 +244,11 @@ async function main() {
     await page.waitForLoadState("networkidle");
     await page.click('[data-testid="aqueduct-pause"]');
     must((await page.locator('[data-testid="aqueduct-scene"]').getAttribute("data-paused")) === "1", "Pause the water holds it");
-    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused" && (await page.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused", "every stroke pauses, the channel and the fall");
+    // The fall is drawn, or (at an arch with a filmed leak, H-1734/H-1952) it is the loop, which Pause holds the same way.
+    const fallPaused = (await page.locator('[data-testid="aqueduct-fall-streak"]').count())
+      ? (await page.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused"
+      : (await page.locator('[data-testid="aqueduct-scene"]').getAttribute("data-loop")) === "1" && (await page.locator('[data-testid="aqueduct-loop"]').evaluate((v: HTMLVideoElement) => v.paused));
+    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused" && fallPaused, "every stroke pauses, the channel and the fall (drawn or filmed)");
     await page.waitForTimeout(400);
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.aqueductPaused, "Pause is remembered");
     // Left paused, the scene opens full and still: no front waiting on a Play.
