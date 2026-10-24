@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 370,
+    date: "2026-10-24",
+    title: "Your ladders list reads in full, by topic",
+    lines: [
+      "Content → Ladders: the list of your ladders now runs the full width of the page, each title on its own line with its status, format and date underneath, so long titles no longer squeeze into a column of single letters.",
+      "Titles show the topic only, without \"SKIN\" and the format name in front; the format is still its own tag. New ladders are saved that way too.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 369,
     date: "2026-10-24",
     title: "30 Days in the Arena: finishing, and an evening nudge you switch on",

@@ -117,7 +117,8 @@ THREADS_CHAIN
 NOTES
 Verify Sarah's quote.`;
     const p = parseLadderOutput(text);
-    expect(p.postName).toBe("SKIN — Mistakes — week three");
+    // H-1941: SKIN comes off; "Mistakes" is not one of the 13 format names, so it stays.
+    expect(p.postName).toBe("Mistakes — week three");
     expect(p.headline).toContain("(gold: WEEK THREE)");
     expect(p.altHeadlines).toEqual(["ALT ONE / ALT TWO (gold: TWO)"]);
     expect(p.hook).toBe("I quit every diet by week three.");
