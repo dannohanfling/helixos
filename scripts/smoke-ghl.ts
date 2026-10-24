@@ -461,7 +461,7 @@ async function main() {
 
     // The comment ladder handoff: HelixOS publishes the Facebook page and Instagram posts, Community Loyalty posts Threads and drips the rungs
     await page.goto(`${base}/content/ladders`);
-    await page.click('a:has-text("SKIN — Mistakes Ladder")');
+    await page.click('a[data-testid="ladder-row-title"]:has-text("quit by week three")');
     await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+$/i);
     const { db: dbl, schema: sl } = await import("@/db");
     const { eq: eql } = await import("drizzle-orm");

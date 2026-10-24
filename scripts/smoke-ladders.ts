@@ -190,7 +190,7 @@ async function main() {
 
     // The finished demo ladder clears the checklist
     await page.goto(`${base}/content/ladders`);
-    await page.click('a:has-text("SKIN — Mistakes Ladder")');
+    await page.click('a[data-testid="ladder-row-title"]:has-text("quit by week three")');
     await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+$/i);
     c = await checks(page);
     const failing = Object.entries(c).filter(([, ok]) => !ok).map(([k]) => k);
@@ -449,8 +449,10 @@ async function main() {
     await page.goto(`${base}/content`);
     await page.click('a:has-text("Ladders")');
     await page.waitForURL(/\/content\/ladders/);
-    await expectText(page, "SKIN — Mistakes Ladder", "list shows demo");
-    await expectText(page, "SKIN — Loss / Rebuild", "list shows new");
+    // H-1941: the list shows each ladder by its topic, without the SKIN and format prefix.
+    await expectText(page, "quit by week three", "list shows demo");
+    await expectText(page, "If I lost every client tomorrow", "list shows new");
+    if (await page.locator('[data-testid="ladder-row-title"]:has-text("SKIN")').count()) throw new Error("no list title carries SKIN");
     await expectText(page, "Next good slot", "cadence");
     await page.screenshot({ path: "screenshots/ld04-list.png", fullPage: true });
     console.log("✓ list and cadence");
