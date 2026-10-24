@@ -324,3 +324,28 @@ export function ordinal(n: number): string {
   const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
   return `${n}${s}`;
 }
+
+/*
+ * PR C (plan H-1563): finishing and the nudge. Pure. The nudge is one line the evening reminder carries (email, and push where
+ * the app is installed) for a member who is in and hasn't closed; it is built off and goes only once the coach turns it on.
+ */
+
+/** One Arena line for tonight's reminder, or null outside the window. Short enough for a push. */
+export function arenaNudgeLine(c: Pick<ArenaConfig, "startDate" | "endDate" | "targetDays">, today: string, daysClosed: number): string | null {
+  const day = arenaDay(c, today);
+  if (day == null) return null;
+  const total = daysBetween(c.startDate, c.endDate);
+  if (daysClosed >= c.targetDays) return `Arena day ${day} of ${total}: you've completed the challenge. Every close still earns points.`;
+  return `Arena day ${day} of ${total}: ${daysClosed} of ${c.targetDays} closed. Close today to count it.`;
+}
+
+/** What a finisher earned, for the coach to apply by hand after the window: Elite gets a private session, everyone else a month. */
+export function finisherPrize(level: string): string {
+  return level === "Elite" ? "A private strategy session with Danno" : `One free month at ${level || "their level"}`;
+}
+
+/** The member's own words once they finish, with the same prize rule. */
+export function finishedLine(level: string, targetDays: number): string {
+  const prize = level === "Elite" ? "Your private strategy session with Danno follows after 26 Dec." : "Your free month is added after 26 Dec.";
+  return `You've completed the challenge: ${targetDays} days closed. ${prize}`;
+}

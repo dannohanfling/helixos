@@ -1,0 +1,1 @@
+ALTER TABLE `arena_challenges` ADD `nudge_on` integer DEFAULT false NOT NULL;

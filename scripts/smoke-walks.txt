@@ -98,3 +98,4 @@ push
 arena
 challenges
 arenapods
+arenafinish

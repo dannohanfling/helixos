@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { requireCoach } from "@/lib/auth";
 import { Card, Empty, PageHeader } from "@/components/ui";
-import { arenaFor, arenaRoster, huddleAttendance, huddlesFor, placePods, podsFor } from "@/lib/arena";
-import { captainAction, movePodAction, newPodAction } from "@/lib/actions/arena";
+import { arenaFor, arenaRoster, huddleAttendance, huddlesFor, markFinished, placePods, podsFor } from "@/lib/arena";
+import { captainAction, movePodAction, newPodAction, nudgeAction } from "@/lib/actions/arena";
 import { SubmitButton } from "@/components/submit-button";
-import { huddleWhen } from "@/lib/engine/arena";
+import { finisherPrize, huddleWhen } from "@/lib/engine/arena";
 import { ARENA, ARENA_DAYS, arenaDay, arenaPhase, dateIn, rankEntries } from "@/lib/engine/arena";
 import { stampDate } from "@/lib/dates";
 
@@ -18,12 +18,13 @@ export const metadata = { title: "30 Days in the Arena: who's in" };
  */
 const POD_NOTES: Record<string, string> = { moved: "Moved.", captain: "Captain named.", new: "A new pod is ready. Move members into it." };
 
-export default async function CoachArenaPage({ searchParams }: { searchParams: Promise<{ pods?: string }> }) {
+export default async function CoachArenaPage({ searchParams }: { searchParams: Promise<{ pods?: string; nudge?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const c = await arenaFor(v.workspace.id);
   await placePods(c.id, v.workspace.id);
   const roster = await arenaRoster(v.workspace.id, c);
+  await markFinished(c, roster);
   const rows = rankEntries(roster);
   const [pods, huddles, attendance] = await Promise.all([podsFor(v.workspace.id, c, roster), huddlesFor(c), huddleAttendance(c)]);
   const podName = new Map(pods.map((p) => [p.id, p.name]));
@@ -183,6 +184,47 @@ export default async function CoachArenaPage({ searchParams }: { searchParams: P
             ))}
           </ul>
           <p className="mt-3 text-xs text-ink-3">Members tap I&apos;m here on the Arena page from 30 minutes before to 90 minutes after each Huddle starts, once each, for 10 points.</p>
+        </Card>
+      </div>
+
+      <div id="finishers" className="mt-4">
+        <Card title="Finishers">
+          {rows.filter((r) => r.daysClosed >= c.targetDays).length ? (
+            <ul className="divide-y text-sm" data-testid="coach-arena-finishers">
+              {rows
+                .filter((r) => r.daysClosed >= c.targetDays)
+                .map((r) => (
+                  <li key={r.membershipId} className="flex flex-wrap items-baseline justify-between gap-2 py-2" data-testid="coach-arena-finisher">
+                    <span>
+                      {r.name} <span className="text-xs text-ink-3">{r.level}</span>
+                    </span>
+                    <span className="text-ink-2">{finisherPrize(r.level)}</span>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-ink-3">Nobody has reached {c.targetDays} days yet. Members show here the day they do.</p>
+          )}
+          <p className="mt-3 text-xs text-ink-3">Apply these by hand after Sat 26 Dec. Nothing here changes anyone&apos;s billing.</p>
+        </Card>
+      </div>
+
+      <div id="nudge" className="mt-4">
+        <Card title="Evening nudge">
+          <div className="flex flex-wrap items-center gap-3 text-sm" data-testid="coach-arena-nudge" data-on={c.nudgeOn ? "1" : "0"}>
+            <p className="min-w-0 flex-1">
+              {c.nudgeOn
+                ? "On. From Fri 27 Nov, each member who is in and hasn't closed gets one Arena line in their evening reminder, by email and by push where the app is installed, at their own reminder time."
+                : "Off. Nothing extra goes to members. Turned on, each member who is in and hasn't closed gets one Arena line in their evening reminder, by email and by push where the app is installed, at their own reminder time. No new messages: the line rides on the reminder they already get."}
+            </p>
+            <form action={nudgeAction}>
+              <input type="hidden" name="on" value={c.nudgeOn ? "0" : "1"} />
+              <SubmitButton className={`btn ${c.nudgeOn ? "btn-ghost" : "btn-accent"} min-h-11!`} pendingText="Saving…" data-testid="coach-arena-nudge-toggle">
+                {c.nudgeOn ? "Turn the nudge off" : "Turn the nudge on"}
+              </SubmitButton>
+            </form>
+          </div>
+          <p className="mt-2 text-xs text-ink-3">The line reads like: &ldquo;Arena day 12 of 30: 9 of 24 closed. Close today to count it.&rdquo; Members who turned reminder emails or notifications off get nothing.</p>
         </Card>
       </div>
     </>

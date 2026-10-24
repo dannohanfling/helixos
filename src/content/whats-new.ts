@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 369,
+    date: "2026-10-24",
+    title: "30 Days in the Arena: finishing, and an evening nudge you switch on",
+    lines: [
+      "Close your day on 24 of the 30 and the Arena page says you've completed it, with what you've earned.",
+      "Coach → Arena lists everyone who finished with their prize, to apply by hand after 26 Dec, and has an evening nudge switch: off until you turn it on.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 368,
     date: "2026-10-24",
     title: "No Instagram connected? Your posts say Copy and paste, not Didn't send",

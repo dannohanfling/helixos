@@ -8,7 +8,7 @@
 export type ReminderHours = { morning: number; evening: number };
 export type MorningState = { first: string; streak: number; brokenYesterday: boolean; points: number; nextTier: { name: string; minPoints: number } | null; hours: ReminderHours };
 /** `streak` is the days already closed; tonight's close makes it one more. */
-export type EveningState = { first: string; streak: number; bonus: number; hours: ReminderHours };
+export type EveningState = { first: string; streak: number; bonus: number; hours: ReminderHours; /** Arena PR C: one line, only when the nudge is on. */ arena?: string | null };
 import type { EmailSection } from "@/lib/engine/email-template";
 
 export type EmailCopy = { subject: string; preheader: string; greeting: string; stateLine: string | null; asks: string[]; buttonLabel: string; pointsLine: string; path: string; footerText: string; sections?: EmailSection[] };
@@ -68,7 +68,7 @@ export function eveningCopy(s: EveningState): EmailCopy {
     subject: s.streak > 0 ? `${s.first} — make it ${numberWords(s.streak + 1)}` : `${s.first}, close the day`,
     preheader: "Numbers in, one win named. Ninety seconds.",
     greeting: `Evening, ${s.first}.`,
-    stateLine: s.streak > 0 ? `${cap(numberWords(s.streak))} ${s.streak === 1 ? "day" : "days"} behind you. Close today and it's ${numberWords(s.streak + 1)}.` : null,
+    stateLine: [s.arena ?? null, s.streak > 0 ? `${cap(numberWords(s.streak))} ${s.streak === 1 ? "day" : "days"} behind you. Close today and it's ${numberWords(s.streak + 1)}.` : null].filter(Boolean).join(" ") || null,
     asks: ["Log your numbers.", "Name the win.", "Ninety seconds."],
     buttonLabel: "Close my day",
     pointsLine: s.bonus > 0 ? `+20 points. +${s.bonus} more for the streak.` : "+20 points.",

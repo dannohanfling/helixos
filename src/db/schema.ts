@@ -5573,6 +5573,8 @@ export const arenaChallenges = sqliteTable(
     joinBy: text("join_by").notNull(),
     timezone: text("timezone").notNull(),
     targetDays: integer("target_days").notNull(),
+    /** PR C: the evening reminder carries one Arena line for members who are in and haven't closed. Off until the coach turns it on. */
+    nudgeOn: integer("nudge_on", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("arena_challenges_slug").on(t.workspaceId, t.slug)],
