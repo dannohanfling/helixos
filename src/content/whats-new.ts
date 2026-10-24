@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 373,
+    date: "2026-10-24",
+    title: "Test every kind of notification on your own phone",
+    lines: [
+      "Settings, Notifications now has Send me a test series. Your own phones get one notification of each kind, three minutes apart, with the real words and the real page a tap opens. Close the app and watch them arrive.",
+      "It goes only to you, never counts toward the daily limit, and Stop the test series cancels the rest.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 372,
     date: "2026-10-24",
     title: "Filmed water at the third and fourth arches of the Aqueduct",

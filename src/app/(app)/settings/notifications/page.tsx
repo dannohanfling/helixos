@@ -3,9 +3,10 @@ import { desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { formatDateTime } from "@/lib/dates";
-import { PUSH_TYPES, wants } from "@/lib/engine/push";
+import { PUSH_TYPES, TEST_GAP_MINUTES, wants } from "@/lib/engine/push";
 import { prefsFor } from "@/lib/push/send";
-import { savePushPrefsAction, sendTestPushAction } from "@/lib/actions/push";
+import { savePushPrefsAction, sendTestPushAction, startTestSeriesAction, stopTestSeriesAction } from "@/lib/actions/push";
+import { seriesState } from "@/lib/push/test-series";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { PhonePushSwitch } from "@/components/pwa/phone-push-switch";
@@ -34,18 +35,26 @@ function HourSelect({ name, value, label, testId }: { name: string; value: numbe
  * Settings → Notifications (H-767, plan H-877): the HelixOS app's pushes. The main switch, each kind with an example of its
  * words, the lock-in and close times (the same ones the reminder emails use), quiet hours, and this member's phones.
  */
-export default async function NotificationsPage({ searchParams }: { searchParams: Promise<{ saved?: string; test?: string }> }) {
+export default async function NotificationsPage({ searchParams }: { searchParams: Promise<{ saved?: string; test?: string; series?: string }> }) {
   const [v, sp] = await Promise.all([requireViewer(), searchParams]);
   const locked = Boolean(v.switchedInto || v.team);
   const prefs = await prefsFor(v.membership.id);
   const devices = await db.query.pushDevices.findMany({ where: eq(schema.pushDevices.membershipId, v.membership.id), orderBy: desc(schema.pushDevices.lastSeenAt) });
   const tz = v.membership.timezone || v.workspace.timezone;
   const withToken = devices.filter((d) => d.token && !d.disabledAt);
+  // A coach's test series (H-1967): one of each type, a few minutes apart, to their own phones.
+  const coach = v.membership.role === "coach" && !locked;
+  const series = coach ? await seriesState(v.membership.id) : null;
   return (
     <>
       <PageHeader title="Notifications" subtitle={<Link href="/settings" className="hover:underline">← Settings</Link>} />
       <div className="max-w-2xl space-y-4" data-testid="notifications-page">
         {sp.saved ? <p className="text-sm text-good" role="status" data-testid="notifications-saved">Saved.</p> : null}
+        {sp.test === "soon" ? (
+          <p className="text-sm text-good" role="status" data-testid="notifications-test-soon">
+            Sending in 5 seconds. Close the app now to see it arrive, then tap it to come back here.
+          </p>
+        ) : null}
         {sp.test === "sent" ? <p className="text-sm text-good" role="status" data-testid="notifications-test-sent">Sent. It should be on your phone now.</p> : null}
         {sp.test === "failed" ? <p className="text-sm text-danger" role="status">The test didn&apos;t reach your phone. Check that notifications are on for HelixOS in your phone&apos;s settings.</p> : null}
         {sp.test === "none" ? <p className="text-sm text-ink-2" role="status">No phone has notifications on yet.</p> : null}
@@ -114,6 +123,33 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                 Send me a test
               </SubmitButton>
             </form>
+          ) : null}
+          {coach && withToken.length ? (
+            <div className="mt-4 space-y-2 border-t pt-3 text-sm" data-testid="notifications-series">
+              <p className="text-ink-2">
+                Test every kind: {PUSH_TYPES.length} pushes, one of each, {TEST_GAP_MINUTES} minutes apart, to your own phones only. Close the app and
+                watch them arrive; tap one to check it opens the right page.
+              </p>
+              {series?.nextAt ? (
+                <>
+                  <p data-testid="notifications-series-status">
+                    {series.sent} of {series.total} sent. Next at {formatDateTime(series.nextAt, tz)}.
+                  </p>
+                  {/* An important step is a button, never a small link (H-1794). */}
+                  <form action={stopTestSeriesAction}>
+                    <SubmitButton className="btn min-h-11" pendingText="Stopping…" data-testid="notifications-series-stop">
+                      Stop the test series
+                    </SubmitButton>
+                  </form>
+                </>
+              ) : (
+                <form action={startTestSeriesAction}>
+                  <SubmitButton className="btn btn-primary min-h-11" pendingText="Starting…" data-testid="notifications-series-start">
+                    Send me a test series
+                  </SubmitButton>
+                </form>
+              )}
+            </div>
           ) : null}
         </Card>
       </div>
