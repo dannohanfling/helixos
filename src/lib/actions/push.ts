@@ -2,12 +2,14 @@
 
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { db, schema } from "@/db";
 import { ctx, num, refresh } from "@/lib/action-helpers";
 import { nowIso } from "@/lib/dates";
 import { PUSH_TYPES } from "@/lib/engine/push";
 import { ensurePrefs } from "@/lib/push/prefs";
-import { sendTestPush } from "@/lib/push/send";
+import { countPushPhones, sendTestPush } from "@/lib/push/send";
+import { startTestSeries, stopTestSeries } from "@/lib/push/test-series";
 
 const hour = (n: number, fallback: number) => (Number.isInteger(n) && n >= 0 && n <= 23 ? n : fallback);
 
@@ -40,8 +42,32 @@ export async function savePushPrefsAction(formData: FormData): Promise<void> {
   redirect("/settings/notifications?saved=1");
 }
 
+/** Seconds between the tap and the push, so the member can close the app and watch it land (H-1987). */
+const TEST_PUSH_DELAY_SECONDS = 5;
+
 export async function sendTestPushAction(): Promise<void> {
   const { v } = await ctx({ whileSwitched: "refuse", reason: "Only the member can send themselves a test.", team: "refuse" });
-  const r = await sendTestPush(v.membership.id);
-  redirect(`/settings/notifications?test=${r.delivered > 0 ? "sent" : r.phones > 0 ? "failed" : "none"}`);
+  const phones = await countPushPhones(v.membership.id);
+  if (!phones) redirect("/settings/notifications?test=none");
+  const membershipId = v.membership.id;
+  // After the answer: the page says "close the app now", and the push follows a few seconds later.
+  after(async () => {
+    await new Promise((r) => setTimeout(r, TEST_PUSH_DELAY_SECONDS * 1000));
+    await sendTestPush(membershipId).catch(() => undefined);
+  });
+  redirect("/settings/notifications?test=soon");
+}
+
+/** A coach's test series (H-1967, Approve H-1968): ten pushes to their own phones, 3 minutes apart. Coaches only, as themselves. */
+export async function startTestSeriesAction(): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Only the coach can send themselves a test series.", team: "refuse" });
+  if (v.membership.role !== "coach") redirect("/settings/notifications");
+  await startTestSeries({ id: v.membership.id, userId: v.user.id });
+  redirect("/settings/notifications?series=on");
+}
+
+export async function stopTestSeriesAction(): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Only the coach can stop their own test series.", team: "refuse" });
+  await stopTestSeries(v.membership.id);
+  redirect("/settings/notifications?series=stopped");
 }

@@ -1,8 +1,8 @@
-import { and, desc, eq, gte, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, notLike } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { hourInTz, nowIso, todayInTz, wallTimeToUtc } from "@/lib/dates";
 import { newId } from "@/lib/ids";
-import { DEFAULT_PREFS, PUSH_PATH, mayPush, pushCopy, type Prefs, type PushType } from "@/lib/engine/push";
+import { DEFAULT_PREFS, PUSH_PATH, TEST_KEY_PREFIX, mayPush, pushCopy, type Prefs, type PushType } from "@/lib/engine/push";
 import { apnsConfigured, sendApns } from "@/lib/push/apns";
 import { fcmConfigured, sendFcm } from "@/lib/push/fcm";
 
@@ -29,10 +29,12 @@ export async function prefsFor(membershipId: string): Promise<Prefs> {
   return row ? { enabled: row.enabled, types: row.types ?? {}, quietStart: row.quietStart, quietEnd: row.quietEnd } : DEFAULT_PREFS;
 }
 
-/** The types already sent to this member since their own local midnight. */
+/** The types already sent to this member since their own local midnight. A coach's test series never counts (H-1967). */
 export async function sentToday(m: Member, now: Date): Promise<PushType[]> {
   const since = wallTimeToUtc(`${todayInTz(m.tz, now)}T00:00`, m.tz) ?? new Date(now.getTime() - 86400000).toISOString();
-  const rows = await db.query.pushSends.findMany({ where: and(eq(schema.pushSends.membershipId, m.id), gte(schema.pushSends.sentAt, since)) });
+  const rows = await db.query.pushSends.findMany({
+    where: and(eq(schema.pushSends.membershipId, m.id), gte(schema.pushSends.sentAt, since), notLike(schema.pushSends.key, `${TEST_KEY_PREFIX}%`)),
+  });
   return rows.map((r) => r.type as PushType);
 }
 
@@ -79,6 +81,14 @@ export async function sendPush(
 /** Sends older than 30 days aren't needed for any cap: removed by the push cron. */
 export async function pruneSends(now: Date = new Date()): Promise<void> {
   await db.delete(schema.pushSends).where(lt(schema.pushSends.sentAt, new Date(now.getTime() - 30 * 86400000).toISOString()));
+}
+
+/** How many of this member's phones can take a push right now. */
+export async function countPushPhones(membershipId: string): Promise<number> {
+  const devices = await db.query.pushDevices.findMany({
+    where: and(eq(schema.pushDevices.membershipId, membershipId), isNotNull(schema.pushDevices.token), isNull(schema.pushDevices.disabledAt)),
+  });
+  return devices.length;
 }
 
 /**

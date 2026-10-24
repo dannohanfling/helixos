@@ -20,7 +20,9 @@ describe("the crons", () => {
     expect(crons).toContainEqual({ path: "/api/cron/forum-watch", schedule: "*/5 * * * *" });
     // The app's push notifications (H-877): every five minutes, so a call reminder 15 minutes before lands on time.
     expect(crons).toContainEqual({ path: "/api/cron/push", schedule: "*/5 * * * *" });
-    expect(crons).toHaveLength(6);
+    // A coach's test series (H-1967): every minute, so each of its pushes lands on its 3-minute mark.
+    expect(crons).toContainEqual({ path: "/api/cron/push-test", schedule: "* * * * *" });
+    expect(crons).toHaveLength(7);
   });
   it("the health route reads the database, so the ping warms the connection too, and returns no data", () => {
     const route = readFileSync(join(process.cwd(), "src/app/api/health/route.ts"), "utf8");

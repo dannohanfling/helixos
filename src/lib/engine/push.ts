@@ -104,6 +104,25 @@ export const PUSH_PATH: Record<PushType, string> = {
   webinar: "/webinars",
 };
 
+/**
+ * A coach's test series (H-1967, Approve H-1968): one push of each type to their own phones, TEST_GAP_MINUTES apart, with
+ * the real words and the real page a tap opens. Titled "Test: HelixOS"; outside the cap and quiet hours, and never counted.
+ */
+export const TEST_GAP_MINUTES = 3;
+export const TEST_KEY_PREFIX = "test:";
+
+/** The series in order, with when each is due after the start and its words (sample details where a real one has them). */
+export function testSeries(start: Date): { type: PushType; dueAt: Date; title: string; body: string; path: string }[] {
+  const sample = { streak: 12, step: "soon" as const, day: "Tuesday", time: "2:00 PM", rank: "Sentinel", coach: "Your coach" };
+  return PUSH_TYPES.map((t, i) => ({
+    type: t.type,
+    dueAt: new Date(start.getTime() + i * TEST_GAP_MINUTES * 60000),
+    title: "Test: HelixOS",
+    body: pushCopy(t.type, sample).body,
+    path: PUSH_PATH[t.type],
+  }));
+}
+
 /** What the cron knows about one member right now, in their own time zone. */
 export type DailyState = {
   hour: number;

@@ -256,6 +256,44 @@ async function main() {
     }
     console.log("✓ Settings → Notifications: no Allow row on the website; in the app Off → Allow → On, the token recorded and the card answered; a phone that said no is sent to its settings");
 
+    // ── 4f. A coach's test series (H-1967, Approve H-1968): one of each kind, 3 minutes apart, to their own phones only. ──
+    {
+      const { startTestSeries, runTestSeries, seriesState } = await import("@/lib/push/test-series");
+      const { sentToday } = await import("@/lib/push/send");
+      const coachM = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, m.workspaceId), eq(schema.memberships.role, "coach")) }))!;
+      const coachToken = "c0ach0123456789abcdef0123456789ab";
+      await db.delete(schema.pushDevices).where(eq(schema.pushDevices.installId, "walk-coach-install"));
+      await db.insert(schema.pushDevices).values({ id: "walk-coach-device", workspaceId: m.workspaceId, membershipId: coachM.id, userId: coachM.userId, platform: "ios", installId: "walk-coach-install", token: coachToken, lastSeenAt: new Date().toISOString() });
+      sent.length = 0;
+      gone = false;
+      const t0 = new Date();
+      const first = await startTestSeries({ id: coachM.id, userId: coachM.userId }, t0, fake);
+      const titled = sent as { token: string; title?: string; body: string; path: string }[];
+      must(first.total === 10 && first.sent === 1 && sent.length === 1 && titled[0].title === "Test: HelixOS" && sent[0].path === "/calls", `the first goes at once, titled as a test: ${JSON.stringify(first)}`);
+      must((await runTestSeries(new Date(t0.getTime() + 2 * 60000), fake)).sent === 0, "nothing more before 3 minutes");
+      must((await runTestSeries(new Date(t0.getTime() + 3 * 60000), fake)).sent === 1 && sent[1].path === "/today#checkin", "the second, morning, at 3 minutes with its real page");
+      must((await runTestSeries(new Date(t0.getTime() + 3 * 60000), fake)).sent === 0, "never twice");
+      must(sent.every((x) => x.token === coachToken), "only the coach's own phone");
+      must(!(await sentToday({ id: coachM.id, userId: coachM.userId, tz }, t0)).length, "a test series never counts toward the daily cap");
+      const cp = await (await browser.newContext()).newPage();
+      await login(cp, "As the coach");
+      await cp.goto(`${base}/settings/notifications`);
+      must(/2 of 10 sent/.test(await cp.getByTestId("notifications-series-status").innerText()), "Settings shows how far the series is");
+      // H-1987: Send me a test answers at once and sends a few seconds later, so the app can be closed first.
+      await Promise.all([cp.waitForURL(/test=soon/), cp.getByTestId("notifications-test").click()]);
+      must(/Close the app now/.test(await cp.getByTestId("notifications-test-soon").innerText()), "Send me a test says to close the app, and sends a few seconds later");
+      await Promise.all([cp.waitForURL(/series=stopped/), cp.getByTestId("notifications-series-stop").click()]);
+      must((await seriesState(coachM.id)).nextAt === null && (await cp.getByTestId("notifications-series-start").count()) === 1, "Stop cancels the rest; the start button is back");
+      await cp.context().close();
+      await page.goto(`${base}/settings/notifications`);
+      must((await page.getByTestId("notifications-series").count()) === 0, "a member never sees the test series");
+      must((await page.request.get(`${base}/api/cron/push-test`)).status() === 401, "the test-series cron answers only with the cron secret");
+      await db.delete(schema.pushDevices).where(eq(schema.pushDevices.installId, "walk-coach-install"));
+      await db.delete(schema.pushSends).where(eq(schema.pushSends.membershipId, coachM.id));
+      sent.length = 0;
+    }
+    console.log("✓ a coach's test series: one of each kind 3 minutes apart with its real page, only to their own phone, never counted, shown and stoppable in Settings, hidden from members");
+
     // ── 4e. The app's start and pull to refresh (H-1759, H-1761, plan H-1768), with a fake bridge that records calls. ──
     // golden: a build 7 app, whose logo screen is the Golden hour still and whose user agent says so (H-1824).
     const appCtx = async (opts: { reducedMotion?: "reduce" | "no-preference"; golden?: boolean; platform?: "ios" | "android" } = {}) => {
