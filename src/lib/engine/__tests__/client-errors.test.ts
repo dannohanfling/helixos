@@ -135,7 +135,8 @@ describe("client-facing errors: what happened and what to do next, never our int
       }
     }
     expect(hits, `an environment-variable name reached a string a client can see:\n${hits.join("\n")}`).toEqual([]);
-  });
+    // Parses every source file with TypeScript: about 4 s alone and over 5 s in a full run (H-1986), so it gets its own limit.
+  }, 30_000);
 
   it("every allowlisted variable exception still exists, so a stale entry cannot hide a future leak", () => {
     for (const a of ENV_ALLOW) expect(readFileSync(join(ROOT, a.file), "utf8"), `${a.file} no longer mentions ${a.token}; drop the allowlist entry`).toContain(a.token);
