@@ -5,7 +5,8 @@
  * action agree. Never the personal profile, never a group.
  */
 export type ShipStepKey = "graphic" | "page" | "instagram" | "drip" | "keywords";
-export type ShipState = "done" | "ready" | "held";
+/** "byhand" (H-1910): Instagram with no account chosen; the member posts it themself, and nothing waits on it. */
+export type ShipState = "done" | "ready" | "held" | "byhand";
 /** A held step the member can clear themself carries where (rev 850: "What's holding this up", with Fix it). */
 export type ShipFix = { href: string; label: string };
 export type ShipStep = { key: ShipStepKey; label: string; state: ShipState; why: string | null; fix?: ShipFix };
@@ -43,16 +44,20 @@ export function shipSteps(f: ShipFacts): ShipStep[] {
     const post = f.posts[key];
     if (post.state === "published") { steps.push({ key, label: LABEL[key], state: "done", why: null }); continue; }
     if (post.state === "sent") { steps.push({ key, label: LABEL[key], state: "done", why: "Sent to the Social Planner; Check status reads it back." }); continue; }
+    if (key === "instagram" && f.ghl.connected && f.ghl.userId && !f.ghl.instagram) { steps.push({ key, label: LABEL[key], state: "byhand", why: "No Instagram account chosen: post it there yourself. Connect Instagram in your GoHighLevel Social Planner and pick it on Settings → Publishing to have it go out for you.", fix: FIX_PUBLISHING }); continue; }
     if (!f.hasGraphic) { steps.push({ key, label: LABEL[key], state: "held", why: "Needs the graphic." }); continue; }
     if (!f.ghl.connected) { steps.push({ key, label: LABEL[key], state: "held", why: `${GHL_FIX}.`, fix: FIX_GHL }); continue; }
     if (!f.ghl.userId) { steps.push({ key, label: LABEL[key], state: "held", why: "Pick which GoHighLevel user you are on Settings → Publishing; the Social Planner won't take a post without it.", fix: FIX_PUBLISHING }); continue; }
     if (!f.ghl[key]) { steps.push({ key, label: LABEL[key], state: "held", why: `No ${key === "page" ? "Facebook business page" : "Instagram account"} chosen for this channel on Settings → Publishing.`, fix: FIX_PUBLISHING }); continue; }
     steps.push({ key, label: LABEL[key], state: "ready", why: post.state === "failed" ? post.reason : null });
   }
+  // With Instagram by hand, the rungs go on the Facebook page post alone (the drip targets Facebook when no Instagram id goes).
+  const igByHand = steps.some((s) => s.key === "instagram" && s.state === "byhand");
   if (f.drip.handed) steps.push({ key: "drip", label: LABEL.drip, state: "done", why: null });
   else if (!f.drip.setUp) steps.push({ key: "drip", label: LABEL.drip, state: "held", why: "Community Loyalty isn't connected for comment ladders yet. Evolve Omega sets that up." });
   else if (f.drip.locked) steps.push({ key: "drip", label: LABEL.drip, state: "held", why: `A ladder is already dripping until about ${f.drip.locked}. One at a time.` });
-  else if (f.posts.page.state !== "published" || f.posts.instagram.state !== "published") steps.push({ key: "drip", label: LABEL.drip, state: "held", why: "Facebook page and Instagram have to be confirmed by GoHighLevel first: the rungs land on the newest one on each." });
+  else if (igByHand && f.posts.page.state !== "published") steps.push({ key: "drip", label: LABEL.drip, state: "held", why: "The Facebook page post has to be confirmed by GoHighLevel first: the rungs land on it." });
+  else if (!igByHand && (f.posts.page.state !== "published" || f.posts.instagram.state !== "published")) steps.push({ key: "drip", label: LABEL.drip, state: "held", why: "Facebook page and Instagram have to be confirmed by GoHighLevel first: the rungs land on the newest one on each." });
   else steps.push({ key: "drip", label: LABEL.drip, state: "ready", why: null });
   if (!f.keyword.set) steps.push({ key: "keywords", label: LABEL.keywords, state: "held", why: "This ladder has no keyword (NONE): nothing to write to the bot." });
   else if (f.keyword.pushed) steps.push({ key: "keywords", label: LABEL.keywords, state: "done", why: null });
@@ -68,7 +73,7 @@ export const shipRuns = (steps: readonly ShipStep[]): ShipStepKey[] => steps.fil
 /** One line for the card: all done, what Ship will run, or why it is held. */
 export function shipLine(steps: readonly ShipStep[]): string {
   const ready = shipRuns(steps);
-  if (steps.every((s) => s.state === "done")) return "Shipped: every step is done.";
+  if (steps.every((s) => s.state === "done" || s.state === "byhand")) return "Shipped: every step is done.";
   if (ready.length) return `Ship runs: ${ready.map((k) => LABEL[k].toLowerCase()).join(", ")}.`;
   const held = steps.find((s) => s.state === "held");
   return held ? `Held: ${held.why}` : "Nothing to run.";

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 368,
+    date: "2026-10-24",
+    title: "No Instagram connected? Your posts say Copy and paste, not Didn't send",
+    lines: [
+      "When a channel has no account to pick on Connect your tools, a line under it now says so and what to do: connect it in your GoHighLevel Social Planner, then press Check again.",
+      "A channel set to Don't auto-publish, or with no account, now shows Copy and paste on your posts, not a red Didn't send. Earlier posts read the same way.",
+      "Ship a ladder without Instagram: the Instagram step says to post it yourself, and your comment rungs go out once the Facebook page post is live.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 367,
     date: "2026-10-24",
     title: "30 Days in the Arena: the leaderboard, your pod and Huddle check-ins",

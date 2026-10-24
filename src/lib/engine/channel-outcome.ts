@@ -10,7 +10,7 @@
  * carries a sentence, and the sentence is the one stored on the row (already a client sentence, see ghl-errors.ts); when the
  * row has none, the fallback says plainly that we do not know.
  */
-import { PUBLISHABLE, platformName } from "./ghl-map";
+import { PUBLISHABLE, isNotMappedNote, notMappedReason, platformName } from "./ghl-map";
 import { CHANNEL_SPECS, type Channel } from "./repurpose";
 import { formatDateTime, nowWallInTz, relativeDay } from "@/lib/dates";
 import { HANDED_NOTE, HANDOFF_WORDS, HANDOFF_FALLBACK } from "./rung-drip";
@@ -78,16 +78,19 @@ export function whenText(wall: string, today: string): string {
 
 const isManual = (row: OutcomeRow) => row.groupId !== "" || !PUBLISHABLE[row.channel as Channel]?.via;
 /** A HelixOS-side refusal the client can fix was once stored as "manual"; it is a failure with a reason, not a pasted channel. */
-const fixableSkip = (note: string | null) => Boolean(note && /chosen for this channel|Connect your GoHighLevel|GHL user ID|schedule time couldn't be read|need a photo or video/i.test(note));
+const fixableSkip = (note: string | null) => Boolean(note && !isNotMappedNote(note) && /Connect your GoHighLevel|GHL user ID|schedule time couldn't be read|need a photo or video/i.test(note));
 
 export function outcomeOf(row: OutcomeRow, now: Now, cutoffMinutes = SENDING_CUTOFF_MINUTES): ChannelOutcome {
   const label = labelOf(row.channel);
   const base = { id: row.id, channel: row.channel, label, canCheck: Boolean(row.externalId) || row.externalStatus === "accepted" };
   const platform = platformName(row.channel);
   const ext = row.externalStatus;
-  if (isManual(row) || (ext === "manual" && !fixableSkip(row.externalError))) {
+  // No account chosen for the channel (H-1910): posted by hand, whether stored that way or, before, as a failure.
+  const notMapped = (ext === "manual" || ext === "failed") && isNotMappedNote(row.externalError);
+  if (isManual(row) || notMapped || (ext === "manual" && !fixableSkip(row.externalError))) {
     if (row.status === "posted") return { ...base, state: "published", word: "Posted by you", when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : null, reason: null };
-    return { ...base, state: "manual", word: OUTCOME_WORD.manual, when: null, reason: row.groupId ? "Groups are posted by hand." : (PUBLISHABLE[row.channel as Channel]?.note ?? "Not something we can publish for you.") };
+    const reason = row.groupId ? "Groups are posted by hand." : notMapped ? notMappedReason(row.channel) : (PUBLISHABLE[row.channel as Channel]?.note ?? "Not something we can publish for you.");
+    return { ...base, state: "manual", word: OUTCOME_WORD.manual, when: null, reason };
   }
   // Published with a note the readback left (9 Oct: "Posted without the picture"): still published, and the note is said beside it.
   if (ext === "published") return { ...base, canRepost: true, state: "published", word: OUTCOME_WORD.published, when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : row.externalSyncedAt ? formatDateTime(row.externalSyncedAt, now.tz) : null, reason: row.externalError?.trim() || null };
