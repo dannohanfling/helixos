@@ -270,7 +270,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                     <span className="font-medium">{st.label}</span>
                     {st.why ? <span className="block text-xs text-ink-2">{st.why}</span> : null}
                   </span>
-                  <Badge tone={st.state === "done" ? "good" : st.state === "ready" ? "accent" : "neutral"}>{st.state === "done" ? "done" : st.state === "ready" ? "runs on Ship" : "held"}</Badge>
+                  <Badge tone={st.state === "done" ? "good" : st.state === "ready" ? "accent" : "neutral"}>{st.state === "done" ? "done" : st.state === "ready" ? "runs on Ship" : st.state === "byhand" ? "by hand" : "held"}</Badge>
                 </li>
               ))}
             </ul>

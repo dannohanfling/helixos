@@ -24,6 +24,30 @@ export const PUBLISHABLE: Record<Channel, { via: "facebook" | "instagram" | "lin
 const PLATFORM_NAMES: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", threads: "Threads", linkedin: "LinkedIn" };
 export const platformName = (channel: string): string => PLATFORM_NAMES[PUBLISHABLE[channel as Channel]?.via ?? ""] ?? "the platform";
 
+/** What a channel publishes to, as a member would say it: "Instagram account", "Facebook business page". */
+function accountWords(channel: string): string {
+  return channel === "fb_page" ? "Facebook business page" : `${platformName(channel)} account`;
+}
+
+/** The line under a channel's picker when the Social Planner has no account of that kind (H-1907). */
+export function noAccountLine(channel: string): string {
+  return `No ${accountWords(channel)} in your GoHighLevel Social Planner yet. Connect it there, then press Check again.`;
+}
+
+/**
+ * The reason a channel with no account chosen is stored with (H-1907, plan H-1910): the member's choice, or no such account in
+ * their Social Planner, so it is posted by hand. A choice, never a failure.
+ */
+export function notMappedReason(channel: string): string {
+  return `Not set to auto-publish: no ${accountWords(channel)} chosen on Settings → Publishing. Copy and paste it, or connect ${platformName(channel)} and pick it there.`;
+}
+
+/** A stored note that says no account was chosen: today's sentence, or the one stored as a failure before H-1910. */
+export function isNotMappedNote(note: string | null | undefined): boolean {
+  const n = (note ?? "").trim();
+  return n.startsWith("Not set to auto-publish:") || /^No .+ chosen for this channel in Settings\.?$/.test(n);
+}
+
 /** The Social Planner post type for a channel. */
 export function postTypeFor(channel: Channel): "post" | "story" | "reel" {
   return channel === "stories" ? "story" : "post";

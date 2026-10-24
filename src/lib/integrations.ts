@@ -205,10 +205,12 @@ export async function pushContact(ctx: { workspaceId: string; userId: string }, 
  */
 export async function pushSocialPost(ctx: { workspaceId: string; userId: string; tz: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; picture?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
   const { connectionFor, createPost, updatePost, freshAccounts } = await import("@/lib/ghl");
-  const { PUBLISHABLE, healAccountId, mediaTypeFor, postTypeFor, shortAccountId } = await import("@/lib/engine/ghl-map");
+  const { PUBLISHABLE, healAccountId, mediaTypeFor, notMappedReason, postTypeFor, shortAccountId } = await import("@/lib/engine/ghl-map");
   const { refusedField } = await import("@/lib/engine/ghl-errors");
   const channel = post.channel as keyof typeof PUBLISHABLE;
-  // "manual" is a channel that is pasted by design; "failed" is something the client can fix, said beside the post: a missing connection, account or user id is a failure, never "paste by hand".
+  // "manual" is a channel that is pasted by design, or one with no account chosen (H-1910: the member's choice, or no such
+  // account in their Social Planner); "failed" is something the client can fix, said beside the post: a missing connection or
+  // user id, a missing picture, or the platform's own refusal.
   const skip = async (note: string, as: "manual" | "failed" = "manual") => {
     await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note });
     await db.update(schema.contentVariants).set({ externalStatus: as, externalError: note, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
@@ -237,12 +239,13 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
     accountId = healed;
     return true;
   };
+  // No account chosen for this channel: it is posted by hand, before any check that only matters for a post that goes out.
+  if (!accountId) return skip(notMappedReason(channel), "manual");
   if (channel === "stories" && !post.mediaUrl && !post.picture) return skip("Stories need a photo or video", "failed");
   if (channel === "instagram" && !post.mediaUrl && !post.picture) return skip("Instagram needs a picture with the post, and none went with it. Make the graphic or pick one, then send it again.", "failed");
   // The Social Planner requires the posting user (CreatePostDTO: type, accountIds, userId). Without one the post is refused
   // with a validation error, so it is refused here first, with the place to fix it.
   if (!conn.ghlUserId?.trim()) return skip("Add your GHL user ID on Settings → Publishing; the Social Planner won't take a post without it", "failed");
-  if (!accountId) return skip(`No ${PUBLISHABLE[channel].note} chosen for this channel in Settings`, "failed");
   // postAt is a wall time in the member's own zone; the Social Planner wants the UTC instant, with milliseconds and a Z.
   const scheduleDate = post.postAt ? wallTimeToUtc(post.postAt, ctx.tz) : null;
   if (post.postAt && !scheduleDate) return skip("The schedule time couldn't be read. Set the date and time again and re-schedule.", "failed");

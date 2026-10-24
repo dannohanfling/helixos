@@ -494,6 +494,20 @@ async function main() {
     let states = await stepStates();
     if (states.graphic !== "done" || states.page !== "ready" || states.instagram !== "ready" || states.drip !== "held" || states.keywords !== "ready") throw new Error(`before Ship: ${JSON.stringify(states)}`);
     if (!(await page.locator('[data-testid="ship-line"]').innerText()).startsWith("Ship runs: facebook page post, instagram post, keyword on your bot")) throw new Error(`the line names what Ship runs: ${await page.locator('[data-testid="ship-line"]').innerText()}`);
+    // H-1910: with no Instagram account chosen, Instagram is by hand and Ship runs the page post alone; mapped again, it runs.
+    await db.update(schema.socialConnections).set({ mapping: { ...conn.mapping, instagram: "" } }).where(eq(schema.socialConnections.userId, maya.id));
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="ship-steps"]').waitFor({ timeout: 20000 });
+    states = await stepStates();
+    if (states.instagram !== "byhand" || states.page !== "ready" || states.drip !== "held") throw new Error(`no Instagram chosen: ${JSON.stringify(states)}`);
+    if (!(await page.locator('[data-step="instagram"]').innerText()).includes("by hand")) throw new Error("the Instagram step reads by hand");
+    if ((await page.locator('[data-testid="ship-line"]').innerText()).includes("instagram")) throw new Error("Ship does not run Instagram when none is chosen");
+    await db.update(schema.socialConnections).set({ mapping: conn.mapping }).where(eq(schema.socialConnections.userId, maya.id));
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="ship-steps"]').waitFor({ timeout: 20000 });
+    states = await stepStates();
+    if (states.instagram !== "ready") throw new Error(`Instagram chosen again runs on Ship: ${JSON.stringify(states)}`);
+    console.log("✓ Ship: no Instagram account chosen reads Instagram by hand and runs the page alone; chosen again, Instagram runs");
     if (await page.locator('[data-testid="ship-public-link"]').count()) throw new Error("no public address before Ship");
     await Promise.all([page.waitForURL(/ship=ran/, { timeout: 90000 }), page.locator('[data-testid="ship-button"]').click()]);
     await page.locator('[data-testid="ship-ran"]').waitFor({ timeout: 20000 });

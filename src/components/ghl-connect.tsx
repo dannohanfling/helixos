@@ -1,6 +1,6 @@
 import type { SocialConnection } from "@/db/schema";
 import { connectGhlAction, disconnectGhlAction, refreshGhlAccountsAction, setGhlMappingAction } from "@/lib/actions/social";
-import { PUBLISHABLE, candidates, manualChannelsSentence, readiness } from "@/lib/engine/ghl-map";
+import { candidates, manualChannelsSentence, noAccountLine, PUBLISHABLE, readiness } from "@/lib/engine/ghl-map";
 import { GHL_SCOPES } from "@/lib/engine/ghl-scopes";
 import { CHANNEL_SPECS, type Channel } from "@/lib/engine/repurpose";
 import { formatDateTime } from "@/lib/dates";
@@ -92,6 +92,11 @@ export function GhlConnect({ conn, tz, users = [] }: { conn: SocialConnection | 
                           </option>
                         ))}
                       </select>
+                      {opts.length === 0 ? (
+                        <span className="mt-1 block text-xs text-ink-3" data-testid="ghl-no-account" data-channel={c}>
+                          {noAccountLine(c)}
+                        </span>
+                      ) : null}
                     </label>
                   );
                 })}
