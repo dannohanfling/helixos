@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { liftedLine } from "@/lib/engine/body-plan";
 import { requireViewer } from "@/lib/auth";
 import { Card, Stat } from "@/components/ui";
 import { HumanosHeader } from "@/components/body/humanos-header";
@@ -141,6 +142,12 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
         <Stat label="Sets" value={String(w.training.sets)} sub={<Delta value={w.training.sets - w.prevTraining.sets} better="up" />} />
         <Stat label="PRs" value={String(w.training.prs)} sub={w.training.prs ? "🏆" : "A set that beats everything before it"} />
       </div>
+      {w.training.lifted.length ? (
+        /* H-1546 §1: each lifted day named, its routine or its main muscle groups. */
+        <p className="-mt-2 mb-4 text-sm text-ink-2" data-testid="week-lifted">
+          🏋️ {liftedLine(w.training.lifted)}
+        </p>
+      ) : null}
 
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">Weight</h2>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="week-weight" data-avg={w.weigh.avg ?? ""} data-days={w.weigh.days}>
@@ -188,6 +195,7 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
               <Link href={`/body?date=${d.date}`} className="hover:underline">
                 {formatDate(d.date, { weekday: "short", month: "short", day: "numeric" })} <span className="text-xs text-ink-3">{d.dayType ?? ""}</span>
                 {d.flag && isDayFlag(d.flag) ? <span className="ml-1" title={d.flag} data-testid="week-day-flag">{FLAG_ICON[d.flag]}</span> : null}
+                {w.training.lifted.find((x) => x.date === d.date) ? <span className="ml-1 text-xs text-humanos-ink" data-testid="week-day-lifted">🏋️ {w.training.lifted.find((x) => x.date === d.date)!.name}</span> : null}
               </Link>
               <span className="tabular text-xs text-ink-2">{d.logged ? `${fmtMacro("cal", d.totals.cal)} cal · ${fmtMacro("p", d.totals.p)} P · ${fmtMacro("f", d.totals.f)} F${d.worst ? ` ${MARK_ICON[d.worst]}` : ""}` : "—"}</span>
             </li>

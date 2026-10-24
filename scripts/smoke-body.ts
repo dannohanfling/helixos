@@ -1729,6 +1729,21 @@ async function main() {
     // a swap of two days and back, Today's line, and the connector reading the same plan. Everything goes back as it was after.
     {
       const before = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!;
+      // H-1546: before a plan, Today asks for one; the week names each lifted day (today's Push A), on Week and on Training.
+      await client.goto(`${base}/today`);
+      const noPlan = client.locator('[data-testid="today-workout"]');
+      await noPlan.waitFor({ timeout: 30000 });
+      if ((await noPlan.getAttribute("data-state")) !== "no_plan" || !(await noPlan.innerText()).includes("Set your training plan to see today's workout here") || !(await noPlan.getAttribute("href"))?.includes("/body/settings#training-plan")) throw new Error("with no plan, Today's line asks for one and links to it");
+      await noSideScroll(client, "/today with the workout line");
+      await client.goto(`${base}/body/week`);
+      await client.locator('[data-testid="week-lifted"]').waitFor({ timeout: 30000 });
+      if (!(await client.locator('[data-testid="week-lifted"]').innerText()).includes(ROUTINE.name) || !(await client.locator(`[data-testid="week-day"][data-date="${today}"] [data-testid="week-day-lifted"]`).innerText()).includes(ROUTINE.name)) throw new Error("the week names today's lifted day by its routine, in the list and on the day");
+      await noSideScroll(client, "/body/week with the lifted days");
+      await client.goto(`${base}/body/training`);
+      if (!(await client.locator('[data-testid="training-week-lifted"]').innerText()).includes(ROUTINE.name)) throw new Error("Training's Consistency card names this week's lifted days");
+      const weekTool = await tool("body_week").handler(await viewerFor(), {});
+      if (!weekTool.text.includes(`Lifted: `) || !weekTool.text.includes(ROUTINE.name)) throw new Error(`body_week names the lifted days: ${weekTool.text.slice(0, 300)}`);
+      console.log("✓ H-1546: with no plan Today asks for one; Week, Training and body_week name each lifted day by its routine");
       const liftType = types0[0];
       const pushA = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.name === ROUTINE.name)!;
       const backId = crypto.randomUUID();
@@ -1799,8 +1814,8 @@ async function main() {
 
       // Today's line, and the connector's week: the same plan.
       await client.goto(`${base}/today`);
-      const line = await client.locator('[data-testid="today-training"]').innerText();
-      if (!line.includes(todayWhy === "done" ? `Done · ${ROUTINE.name}` : `· ${ROUTINE.name} · going`)) throw new Error(`Today's HumanOS line names the day's training: "${line}"`);
+      const line = await client.locator('[data-testid="today-workout"]').innerText();
+      if (!line.includes(todayWhy === "done" ? `Today: ${ROUTINE.name} ✓` : `Today: ${ROUTINE.name}, in progress`)) throw new Error(`Today's top line says today's workout (H-1546): "${line}"`);
       const weekPlan = await tool("body_week_plan").handler(await viewerFor(), {});
       const toolDays = (weekPlan.data as { days: { date: string; routine: string | null }[] }).days;
       await client.goto(`${base}/body/training`);

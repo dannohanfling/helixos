@@ -8,6 +8,7 @@ import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
 import { activitiesOn, habitsDay, requireBodyEnabled, restrictedNow, routinePreview, trainingDay, trainingPlanView, trainingWeeks, workoutReadFor, type TrainingDayView } from "@/lib/queries/body";
 import { TodayPlanCard, WeekPlanList } from "@/components/body/training-plan";
+import { liftedLine } from "@/lib/engine/body-plan";
 import { isLifting, zonesText } from "@/lib/engine/body-whoop";
 import { gymGroup } from "@/lib/engine/body-reads";
 import { WorkoutReadCard } from "@/components/body/workout-read";
@@ -378,6 +379,12 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
             </b>{" "}
             this week{weeks.tally.planned == null ? ". Tie a routine to a day type and this counts the days planned." : "."}
           </p>
+          {weeks.lifted.length ? (
+            /* H-1546 §1: this week's lifted days, each named. */
+            <p className="mb-2 text-xs text-ink-2" data-testid="training-week-lifted">
+              🏋️ {liftedLine(weeks.lifted)}
+            </p>
+          ) : null}
           <div data-testid="training-heat">
             <StreakCalendar weeks={weeks.weeks} rows={7} tone="humanos" labelFor={(m) => (weeks.weeks.findIndex((w) => w.monday === m) % 4 === 0 ? formatDate(m, { month: "short" }) : "")} />
           </div>

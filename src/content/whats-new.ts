@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 374,
+    date: "2026-10-23",
+    title: "HumanOS names each workout, and Today says what today is",
+    lines: [
+      "Your week in HumanOS now says what each lifting day was, like \"Mon · Chest Day · Wed · Leg Day\", on the Week page and in Training. A session without a routine shows its main muscle groups.",
+      "The top of Today says what today is from your training plan: \"Today: Leg Day at the gym\", a rest day, or a tick once it's done. Set your plan in HumanOS Settings, Training plan, to see it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 373,
     date: "2026-10-24",
     title: "New from a reel: your reel's words in, a ready-to-post package out",

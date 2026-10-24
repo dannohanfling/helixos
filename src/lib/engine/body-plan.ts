@@ -162,3 +162,48 @@ export function roughLength(sessions: { first: string; last: string }[]): number
 
 /** SQLite's "2026-10-11 07:30:12" (UTC) as a time. */
 const stamp = (s: string) => Date.parse(`${s.replace(" ", "T")}${/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? "" : "Z"}`);
+
+/* ───────── H-1546: the week names each workout, and Today says what today is ───────── */
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** A lifted day's name: its routine, else the main muscle groups its exercises name, else "Workout". */
+export function liftedName(routineName: string | null | undefined, exerciseNames: string[]): string {
+  if (routineName?.trim()) return routineName.trim();
+  const m = mainMuscles(exerciseNames);
+  return m.length ? m.join(" · ") : "Workout";
+}
+
+/** "Mon · Chest Day · Wed · Leg Day": the days lifted, in date order. Empty when none. */
+export function liftedLine(days: { date: string; name: string }[]): string {
+  return [...days]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((d) => `${WEEKDAY[new Date(`${d.date}T00:00:00Z`).getUTCDay()]} · ${d.name}`)
+    .join(" · ");
+}
+
+/** "Lifted: Mon Chest Day, Wed Leg Day", for the connector. */
+export function liftedSpoken(days: { date: string; name: string }[]): string {
+  const s = [...days].sort((a, b) => a.date.localeCompare(b.date)).map((d) => `${WEEKDAY[new Date(`${d.date}T00:00:00Z`).getUTCDay()]} ${d.name}`);
+  return s.length ? `Lifted: ${s.join(", ")}.` : "Lifted: no sessions yet.";
+}
+
+export const SET_PLAN_LINE = "Set your training plan to see today's workout here";
+
+/**
+ * Today's one line at the top of Today (H-1546 §2): the plan's day, said plainly. No plan yet: the line asks for one and links to
+ * it. A refeed says so, before the routine when the refeed is also a lift day.
+ */
+export function todayWorkoutLine(
+  d: { lift: boolean; why: PlanDay["why"]; name: string | null; exercises: number; muscles: string[]; refeed: boolean } | null,
+  setUp: boolean,
+): { text: string; href: string; state: "no_plan" | "done" | "going" | "lift" | "rest" | "none" } {
+  if (!setUp || !d) return { text: SET_PLAN_LINE, href: "/body/settings#training-plan", state: "no_plan" };
+  const refeed = d.refeed ? "Refeed · " : "";
+  if (d.why === "done") return { text: `Today: ${refeed}${d.name ?? "Workout"} ✓`, href: "/body/training", state: "done" };
+  if (d.why === "started") return { text: `Today: ${refeed}${d.name ?? "Workout"}, in progress`, href: "/body/training", state: "going" };
+  if (!d.lift) return { text: d.refeed ? "Today: Refeed" : "Today: Rest day", href: "/body/training", state: "rest" };
+  if (!d.name) return { text: `Today: ${refeed}Lift day, nothing planned yet`, href: "/body/settings#training-plan", state: "none" };
+  const extra = [d.exercises ? `${d.exercises} exercise${d.exercises === 1 ? "" : "s"}` : "", ...d.muscles].filter(Boolean);
+  return { text: `Today: ${refeed}${d.name} at the gym${extra.length ? ` · ${extra.join(" · ")}` : ""}`, href: "/body/training", state: "lift" };
+}
