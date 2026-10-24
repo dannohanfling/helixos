@@ -268,12 +268,18 @@ async function main() {
       await ctx.addInitScript({
         content: `(() => {
           window.__calls = [];
+          window.__listeners = {};
           const rec = (n) => async (o) => { window.__calls.push(n); return {}; };
           window.Capacitor = { isNativePlatform: () => true, getPlatform: () => ${JSON.stringify(opts.platform ?? "ios")}, Plugins: {
             SplashScreen: { hide: rec("splash.hide") },
             Haptics: { impact: rec("haptic") },
             PushNotifications: { checkPermissions: async () => ({ receive: "granted" }), requestPermissions: async () => ({ receive: "granted" }),
-              register: async () => {}, addListener: async () => ({ remove: () => undefined }) },
+              register: async () => {}, addListener: async (event, cb) => {
+                (window.__listeners[event] = window.__listeners[event] || []).push(cb);
+                // Like the phone: a push tapped to open the app is held until the app listens for it.
+                if (event === "pushNotificationActionPerformed" && window.__pendingAction) { const a = window.__pendingAction; window.__pendingAction = null; setTimeout(() => cb(a), 0); }
+                return { remove: () => undefined };
+              } },
           } };
         })();`,
       });
@@ -422,6 +428,29 @@ async function main() {
         if (left !== 0) await p.waitForTimeout(500);
       }
       must(left === 0, `no service worker stays inside the app (${String(left)} left)`);
+      await ctx.close();
+    }
+    {
+      // H-1988: tapping a push moves the app to its page in place (no full load, so no black gap), and opened by a push the
+      // opening never plays, now or after the page has shown.
+      const tap = (p: Page, path: string) =>
+        p.evaluate(`(() => { for (const cb of (window.__listeners.pushNotificationActionPerformed || [])) cb({ notification: { data: { path: ${JSON.stringify(path)} } } }); })()`);
+      const { ctx, p } = await appCtx({ golden: true, platform: "android" });
+      await p.goto(`${base}/today`);
+      await p.waitForTimeout(1500);
+      const before = await p.evaluate(() => performance.timeOrigin);
+      await tap(p, "/settings/notifications");
+      await p.waitForURL(/\/settings\/notifications/, { timeout: 10_000 });
+      must((await p.evaluate(() => performance.timeOrigin)) === before, "a tapped push opens its page in place, with no full page load");
+      // A cold start opened by a push: the push arrives as the app starts, before the opening shows.
+      await p.evaluate(() => sessionStorage.clear());
+      await p.addInitScript({ content: `window.__pendingAction = { notification: { data: { path: "/settings/notifications" } } };` });
+      await p.goto(`${base}/today`);
+      await p.waitForURL(/\/settings\/notifications/, { timeout: 10_000 });
+      await p.waitForTimeout(2000);
+      must((await p.getByTestId("app-opening").count()) === 0, "opened by a push, the opening doesn't play");
+      must((await calls(p)).includes("splash.hide"), "the splash still hides");
+      must((await p.evaluate(() => sessionStorage.getItem("helix.app.opened"))) === "1", "and it won't play later in this run of the app");
       await ctx.close();
     }
     // The website never shows either.

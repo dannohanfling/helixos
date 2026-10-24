@@ -33,6 +33,12 @@ export const FORGED = {
 const MEDALLION = "/app-opening/medallion.webp";
 
 /**
+ * Sent by native-bridge.tsx when the app was opened by tapping a push (H-1988): the person came for that page, so the opening
+ * steps aside (it never starts, or fades at once) and doesn't play later in this run of the app.
+ */
+export const PUSH_OPEN_EVENT = "helix:push-open";
+
+/**
  * The next painted frame, or `ms` at the latest. Android holds its system splash by not drawing the app underneath, and a web
  * view that isn't drawing may not run frame callbacks, so a timer backs each one up and the splash can always hide.
  */
@@ -84,6 +90,7 @@ export function openingMode(look: Look, reducedMotion: boolean): Mode {
 export function AppOpening({ onFirstFrame }: { onFirstFrame: () => void }) {
   const [s, setS] = useState<{ phase: Phase; look: Look; mode: Mode; src: string }>({ phase: "off", look: "medallion", mode: "drawn", src: "" });
   const video = useRef<HTMLVideoElement>(null);
+  const skipped = useRef(false);
   // Never back from done: a late timer or event can only move the opening forward.
   const to = useCallback((phase: Phase) => setS((p) => (p.phase === "done" || (phase === "out" && p.phase !== "on") ? p : { ...p, phase })), []);
 
@@ -114,7 +121,7 @@ export function AppOpening({ onFirstFrame }: { onFirstFrame: () => void }) {
         if (!live) return;
         if (r === "ok")
           frameOr(100, () => {
-            if (!live) return;
+            if (!live || skipped.current) return;
             // Marked seen only when it really shows, so a re-run of this effect (React's dev double run) can't skip it.
             try {
               store?.setItem(SEEN, "1");
@@ -128,6 +135,22 @@ export function AppOpening({ onFirstFrame }: { onFirstFrame: () => void }) {
     return () => {
       live = false;
     };
+  }, [onFirstFrame]);
+
+  // Opened by a push: no opening now or later in this run; the splash hides and the push's page shows.
+  useEffect(() => {
+    const skip = () => {
+      skipped.current = true;
+      try {
+        window.sessionStorage.setItem(SEEN, "1");
+      } catch {
+        /* nothing to keep */
+      }
+      setS((p) => (p.phase === "on" ? { ...p, phase: "out" } : p.phase === "off" ? { ...p, phase: "done" } : p));
+      onFirstFrame();
+    };
+    window.addEventListener(PUSH_OPEN_EVENT, skip);
+    return () => window.removeEventListener(PUSH_OPEN_EVENT, skip);
   }, [onFirstFrame]);
 
   // The overlay is painted: the native splash can hide now without a jump. Whatever happens next, it is gone by CAP_MS.
