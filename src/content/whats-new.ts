@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 372,
+    date: "2026-10-24",
+    title: "Filmed water at the third and fourth arches of the Aqueduct",
+    lines: [
+      "In Golden hour, a leak at the third or fourth arch now shows filmed water falling into its pool, like the first two. The last two arches and Night follow.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 371,
     date: "2026-10-24",
     title: "Every rung starts with its number",

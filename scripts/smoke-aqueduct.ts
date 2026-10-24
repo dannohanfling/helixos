@@ -244,7 +244,11 @@ async function main() {
     await page.waitForLoadState("networkidle");
     await page.click('[data-testid="aqueduct-pause"]');
     must((await page.locator('[data-testid="aqueduct-scene"]').getAttribute("data-paused")) === "1", "Pause the water holds it");
-    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused" && (await page.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused", "every stroke pauses, the channel and the fall");
+    // The fall is drawn, or (at an arch with a filmed leak, H-1734/H-1952) it is the loop, which Pause holds the same way.
+    const fallPaused = (await page.locator('[data-testid="aqueduct-fall-streak"]').count())
+      ? (await page.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused"
+      : (await page.locator('[data-testid="aqueduct-scene"]').getAttribute("data-loop")) === "1" && (await page.locator('[data-testid="aqueduct-loop"]').evaluate((v: HTMLVideoElement) => v.paused));
+    must((await page.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationPlayState)) === "paused" && fallPaused, "every stroke pauses, the channel and the fall (drawn or filmed)");
     await page.waitForTimeout(400);
     must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.aqueductPaused, "Pause is remembered");
     // Left paused, the scene opens full and still: no front waiting on a Play.
@@ -258,9 +262,12 @@ async function main() {
     const still = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", storageState: await ctx.storageState() });
     const sp = await still.newPage();
     await sp.goto(url(), { waitUntil: "networkidle" });
-    must((await sp.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationName)) === "none", "reduced motion stops all animation");
+    // At an arch with a filmed leak (H-1734, H-1952) the fall is the photo's own, under the held clip: nothing drawn to stop.
+    const filmedFall = (await sp.locator('[data-testid="aqueduct-scene"]').getAttribute("data-loop")) === "1";
+    const drawnFallStill = filmedFall || ((await sp.locator(".aq-ripple").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && (await sp.locator('[data-testid="aqueduct-fall-streak"]').first().evaluate((el) => getComputedStyle(el).animationName)) === "none");
+    must((await sp.locator(".aq-streak-a").first().evaluate((el) => getComputedStyle(el).animationName)) === "none" && drawnFallStill, "reduced motion stops all animation");
     // The still still looks like water: the body and its layers are drawn, with no front.
-    must((await sp.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0" && (await sp.locator("[data-flow]").count()) === 28 && (await sp.locator(".aq-core").count()) === 7 && (await sp.locator('[data-testid="aqueduct-fall-sheet"]').count()) === 1, "reduced motion: the same water, still, with no front");
+    must((await sp.locator('[data-testid="aqueduct-water"]').getAttribute("data-filling")) === "0" && (await sp.locator("[data-flow]").count()) === 28 && (await sp.locator(".aq-core").count()) === 7 && (await sp.locator('[data-testid="aqueduct-fall-sheet"]').count()) === (filmedFall ? 0 : 1), "reduced motion: the same water, still, with no front");
     await sp.screenshot({ path: "screenshots/aqueduct-reduced-1440.png" });
     await still.close();
     await page.goto(url(), { waitUntil: "networkidle" });
