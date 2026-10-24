@@ -155,7 +155,7 @@ async function main() {
       await page.getByTestId("reel-listen").waitFor({ timeout: 15000 });
       const sizeLine = await page.getByTestId("reel-model-size").innerText();
       must(/First time only/.test(sizeLine) && /Use Wi-Fi/.test(sizeLine) && sizeLine.includes(`about ${Math.round(manifest.tiers.base.bytes / 10_000_000) * 10} MB`), `the download size shows before the first run: ${sizeLine}`);
-      await page.getByTestId("reel-attach").uncheck();
+      must(!(await page.getByTestId("reel-attach").count()), "a sound file can be written out but isn't offered as the post's video");
       const started = Date.now();
       await page.getByTestId("reel-listen").click();
       await page.getByTestId("reel-listen-progress").waitFor({ timeout: 15000 });

@@ -20,6 +20,8 @@ type Keyword = { keyword: string; label: string };
 type Listen = { phase: "idle" } | { phase: "sound"; pct: number } | { phase: "download"; pct: number } | { phase: "listening"; pct: number } | { phase: "done"; silent: boolean } | { phase: "error"; message: string };
 
 const mbText = (n: number) => `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)} MB`;
+/** Only a video goes with a post; a sound file can be written out but not attached. */
+const isVideo = (f: File) => f.type.startsWith("video/") || /\.(mp4|mov|m4v)$/i.test(f.name);
 const timeText = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 export function ReelForm({ keywords, modelsUrl, canAttach, owner, aiStatus, noAiNote }: { keywords: Keyword[]; modelsUrl: string | null; canAttach: boolean; owner: { workspaceId: string; userId: string }; aiStatus: ReactNode; noAiNote: ReactNode }) {
@@ -78,7 +80,7 @@ export function ReelForm({ keywords, modelsUrl, canAttach, owner, aiStatus, noAi
     setError(null);
     setListen({ phase: "idle" });
     setSeconds(f ? await mediaSeconds(f) : null);
-    if (f) setAttach(canAttach && !fileNotes({ bytes: f.size, seconds: null }).tooLargeToAttach);
+    if (f) setAttach(canAttach && isVideo(f) && !fileNotes({ bytes: f.size, seconds: null }).tooLargeToAttach);
   };
 
   const notes = file ? fileNotes({ bytes: file.size, seconds }) : null;
@@ -151,7 +153,7 @@ export function ReelForm({ keywords, modelsUrl, canAttach, owner, aiStatus, noAi
 
   /** Create post: with a video to attach and not yet uploaded, upload and record it first, then send the form with its id. */
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    if (!file || !attach || !canAttach || videoId || notes?.tooLargeToAttach) return;
+    if (!file || !attach || !canAttach || !isVideo(file) || videoId || notes?.tooLargeToAttach) return;
     e.preventDefault();
     if (!transcript.trim()) {
       textRef.current?.reportValidity();
@@ -235,7 +237,7 @@ export function ReelForm({ keywords, modelsUrl, canAttach, owner, aiStatus, noAi
             ) : null}
           </div>
         ) : null}
-        {file && canAttach ? (
+        {file && canAttach && isVideo(file) ? (
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={attach && !notes?.tooLargeToAttach} disabled={Boolean(notes?.tooLargeToAttach) || uploading !== null} onChange={(e) => setAttach(e.currentTarget.checked)} data-testid="reel-attach" />
             <span>
